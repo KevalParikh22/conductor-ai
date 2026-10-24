@@ -1,0 +1,15 @@
+{
+  "name": "conductor-ai",
+  "version": "0.1.0",
+  "description": "Use Claude (or any agent) as the controller and delegate coding, tests, docs and reviews to Gemini, Codex, OpenCode, OpenRouter free models, Kimi, local models and more, with automatic fallback.",
+  "type": "module",
+  "bin": { "conductor": "bin/conductor.js" },
+  "files": ["bin", "src", "templates", "README.md", "LICENSE"],
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "ui": "node bin/conductor.js ui"
+  },
+  "keywords": ["claude", "claude-code", "gemini", "codex", "opencode", "openrouter", "llm", "orchestrator", "multi-agent", "mcp", "ai-coding"],
+  "license": "MIT"
+}

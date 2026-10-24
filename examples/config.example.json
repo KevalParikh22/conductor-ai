@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "controller": "claude-code",
+  "roles": {
+    "build": ["gemini-cli", "codex-cli", "opencode"],
+    "fix": ["codex-cli", "gemini-cli"],
+    "test": ["opencode", "openrouter-free", "gemini-api"],
+    "docs": ["openrouter-free", "opencode", "gemini-api"],
+    "review": ["codex-cli", "gemini-cli"],
+    "ask": ["gemini-cli", "gemini-api"]
+  },
+  "providers": {
+    "openrouter-free": { "model": "openrouter/free" },
+    "ollama": { "enabled": true, "model": "qwen3-coder" },
+    "kimi-api": { "enabled": true }
+  },
+  "settings": { "cooldownMinutes": 20, "verify": "npm run lint && npm test" }
+}
