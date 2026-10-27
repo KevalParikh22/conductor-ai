@@ -114,6 +114,7 @@ export const CONTROLLERS = {
 export const DEFAULT_SETTINGS = {
   timeoutSec: 1200,
   protectedBranches: ['main', 'master'],
+  protectedPaths: [], // extra regexes for files workers must never write, e.g. "^app/etc/env\\.php$"
   requireCleanTree: true,
   verify: '',
   autoVerify: true,

@@ -77,6 +77,7 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | `timeoutSec` | 1200 | Max seconds per attempt; then the next provider runs |
 | `cooldownMinutes` | 30 | How long a rate-limited provider is skipped (or its `Retry-After`) |
 | `protectedBranches` | `["main","master"]` | Write roles refuse to run on these |
+| `protectedPaths` | `[]` | Extra regexes (repo-relative paths) workers may never write, e.g. `"^app/etc/env\\.php$"`. Built in: AGENTS/CLAUDE/GEMINI/HANDOFF.md, plans, `.claude/`, `.gemini/`, `.conductor/`, `.git/`, `.env*`, `auth.json`, `node_modules/` |
 | `requireCleanTree` | true | Write roles need a clean tree (enables stash-on-failure) |
 | `verify` | `""` | Verify command. Empty = `AGENTS.md` Verify line, then auto-detect |
 | `autoVerify` | true | Run verify after each write task |
