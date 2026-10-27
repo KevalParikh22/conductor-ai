@@ -54,6 +54,9 @@ test('isProtected', () => {
   assert.ok(isProtected('CLAUDE.md'));
   assert.ok(isProtected('.claude/commands/x.md'));
   assert.ok(isProtected('web/.env.local'));
+  assert.ok(isProtected('auth.json'));
+  assert.ok(isProtected('app/etc/env.php', ['^app/etc/env\\.php$']));
+  assert.ok(!isProtected('app/etc/env.php'));
   assert.ok(!isProtected('src/claude.js'));
 });
 

@@ -15,8 +15,12 @@ export class UsageError extends Error {}
 
 // Files workers must never touch (agents are told; chat output is filtered).
 const PROTECTED = [/^AGENTS\.md$/, /^CLAUDE\.md$/, /^GEMINI\.md$/, /^HANDOFF\.md$/, /^docs\/plan\//, /^\.claude\//, /^\.gemini\//,
-  /^\.conductor\//, /^\.git\//, /^\.mcp\.json$/, /(^|\/)node_modules\//, /(^|\/)\.env(\.|$)/];
-export const isProtected = (p) => PROTECTED.some((re) => re.test(p.replaceAll('\\', '/')));
+  /^\.conductor\//, /^\.git\//, /^\.mcp\.json$/, /(^|\/)node_modules\//, /(^|\/)\.env(\.|$)/, /(^|\/)auth\.json$/];
+/** `extra`: regex strings from settings.protectedPaths (e.g. "^app/etc/env\\.php$"). */
+export const isProtected = (p, extra = []) => {
+  const norm = p.replaceAll('\\', '/');
+  return PROTECTED.some((re) => re.test(norm)) || extra.some((src) => new RegExp(src).test(norm));
+};
 
 // ---------------- cooldowns (shared across projects) ----------------
 const STATE = () => path.join(GLOBAL_DIR, 'state.json');
@@ -79,13 +83,13 @@ export function parseFileBlocks(text) {
   return blocks;
 }
 
-export function applyFileBlocks(root, blocks) {
+export function applyFileBlocks(root, blocks, extraProtected = []) {
   const applied = [], rejected = [];
   for (const b of blocks) {
     const norm = path.normalize(b.path).replaceAll('\\', '/');
     const abs = path.resolve(root, norm);
     if (path.isAbsolute(b.path) || norm.startsWith('..') || !abs.startsWith(path.resolve(root) + path.sep)) { rejected.push(`${b.path} (outside repo)`); continue; }
-    if (isProtected(norm)) { rejected.push(`${b.path} (protected)`); continue; }
+    if (isProtected(norm, extraProtected)) { rejected.push(`${b.path} (protected)`); continue; }
     fs.mkdirSync(path.dirname(abs), { recursive: true });
     fs.writeFileSync(abs, b.content);
     applied.push(norm);
@@ -219,7 +223,7 @@ export async function dispatch(cfg, opts) {
 
     if (res.ok && kind === 'chat' && mode === 'write') {
       const blocks = parseFileBlocks(res.text);
-      const { applied, rejected } = applyFileBlocks(root, blocks);
+      const { applied, rejected } = applyFileBlocks(root, blocks, settings.protectedPaths || []);
       summary.rejected.push(...rejected);
       if (!applied.length) res = { ...res, ok: false, reason: rejected.length ? 'only protected/outside files returned' : 'no file blocks in reply' };
       else summary.applied = applied;
@@ -260,7 +264,7 @@ export async function dispatch(cfg, opts) {
 
   if (mode === 'write') {
     summary.changed = git.changedFiles(root);
-    const touched = summary.changed.filter(isProtected);
+    const touched = summary.changed.filter((f) => isProtected(f, settings.protectedPaths || []));
     if (touched.length) summary.warnings.push(`worker modified protected files: ${touched.join(', ')}`);
     if (settings.autoVerify !== false && !opts.noVerify) {
       emit({ type: 'verify' });
