@@ -33,11 +33,13 @@ Check it worked: `conductor --version`.
 
 Install the ones you plan to use. Everything is optional; conductor skips what isn't installed.
 
-**Gemini CLI** (daily driver, uses your Google account or Gemini Pro):
+**Antigravity CLI** (`agy`, daily driver, uses your Google account or Google AI Pro):
 ```bash
-npm install -g @google/gemini-cli
+curl -fsSL https://antigravity.google/cli/install.sh | bash
 ```
-Run `gemini` once and choose **Login with Google**.
+Run `agy` once and sign in with Google. Headless runs reuse that login.
+
+> Gemini CLI stopped serving personal Google accounts on 18 June 2026; Antigravity CLI replaced it. If you have a Gemini API key or a Code Assist licence, Gemini CLI still works: enable `gemini-cli` in the UI.
 
 **Codex CLI** (daily driver, uses your ChatGPT account or an API key):
 ```bash
@@ -53,6 +55,8 @@ curl -fsSL https://opencode.ai/install | bash
 ```
 Run `opencode auth login` if your chosen model needs it.
 
+**No install needed:** `kilo-free` (Kilo Gateway free models) works without a key or CLI, so `test` and `docs` have a free fallback from the start.
+
 **Optional:** Kimi Code CLI (`kimi`, then `/login`), or Claude Code as a worker (spends Claude quota). Their install commands are listed in `conductor doctor` and in the UI under **Install & setup**.
 
 ## 3. Add API keys (optional, for cloud models)
@@ -66,8 +70,11 @@ Go to **API keys** and paste the keys you have. They're stored in `~/.config/con
 |---|---|---|
 | `GEMINI_API_KEY` | https://aistudio.google.com/apikey | Free tier |
 | `OPENROUTER_API_KEY` | https://openrouter.ai/keys | `:free` models: 20 req/min; 50/day, or 1000/day after a one-time $10 credit |
+| `KILO_API_KEY` | https://app.kilo.ai | Optional: `kilo-free` works without it |
+| `OPENCODE_API_KEY` | https://opencode.ai/zen | `-free` models through the OpenCode Zen API |
+| `CEREBRAS_API_KEY`, `GROQ_API_KEY`, `MISTRAL_API_KEY`, `NVIDIA_API_KEY` | provider dashboards | Free tiers (enable the provider in the UI) |
 | `MOONSHOT_API_KEY` | https://platform.moonshot.ai | Kimi API |
-| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY`, `GROQ_API_KEY` | provider dashboards | Paid or free tiers |
+| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY` | provider dashboards | Paid |
 
 Real environment variables always take priority over `secrets.env`.
 
@@ -81,9 +88,9 @@ conductor init
 ```
 For a different controller, pass it explicitly:
 ```bash
-conductor init --controller gemini-cli
+conductor init --controller antigravity
 ```
-Other options: `codex-cli`, `opencode`.
+Other options: `codex-cli`, `opencode`, `gemini-cli`.
 
 | File | Purpose | Overwrites yours? |
 |---|---|---|
@@ -91,7 +98,8 @@ Other options: `codex-cli`, `opencode`.
 | `CLAUDE.md` / `GEMINI.md` | Controller instructions (imports AGENTS.md) | No: marked block only |
 | `.claude/commands/conduct-*.md` | Slash commands (Claude Code) | Owned by conductor |
 | `.gemini/commands/conduct-*.toml` | Slash commands (if the controller is Gemini CLI) | Owned by conductor |
-| `.mcp.json` / `.gemini/settings.json` / `opencode.json` | MCP server entry | Merged, never replaced |
+| `.agents/skills/conduct-*/SKILL.md` | Skills that play the `/conduct-*` role (if the controller is Antigravity) | Owned by conductor |
+| `.mcp.json` / `.agents/mcp_config.json` / `.gemini/settings.json` / `opencode.json` | MCP server entry | Merged, never replaced |
 | `.conductor/config.json` | Project overrides (controller, roles…) | Kept |
 | `.conductor/ORCHESTRATOR.md` | Controller playbook | Owned by conductor |
 | `docs/plan/_TEMPLATE.md`, `HANDOFF.md`, `docs/architecture.md` | Plan format and shared state | Kept |
@@ -157,9 +165,9 @@ conductor init
 
 To uninstall, remove conductor's files from a project:
 ```bash
-rm -rf .conductor .claude/commands/conduct-*.md .gemini/commands/conduct-*.toml
+rm -rf .conductor .claude/commands/conduct-*.md .gemini/commands/conduct-*.toml .agents/skills/conduct-*
 ```
-Then delete the `<!-- conductor:… -->` blocks from `CLAUDE.md`, `GEMINI.md` and `AGENTS.md`, and the `conductor` entry in `.mcp.json`. To remove it globally:
+Then delete the `<!-- conductor:… -->` blocks from `CLAUDE.md`, `GEMINI.md` and `AGENTS.md`, and the `conductor` entry in `.mcp.json` (or `.agents/mcp_config.json`). To remove it globally:
 ```bash
 npm uninstall -g conductor-ai && rm -rf ~/.config/conductor
 ```

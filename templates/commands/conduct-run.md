@@ -11,7 +11,7 @@ For each task with `status: todo`, in dependency order, follow the procedure in 
 
 While running:
 - Keep your context small: read the summary, the RESULT block and the task's `git diff`, never full logs.
-- After each task, report one line: `T3 ✓ gemini-cli · verify PASS · a1b2c3d`.
+- After each task, report one line: `T3 ✓ antigravity-cli · verify PASS · a1b2c3d`.
 - **Stop and ask** if a task needs a design decision the plan doesn't cover, a worker leaves its scope twice, or verify fails for reasons outside the task.
 - If exit code 3 happens on two tasks in a row (everything rate-limited), stop, update `HANDOFF.md`, and report what is left.
 

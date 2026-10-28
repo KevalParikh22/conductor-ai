@@ -10,15 +10,27 @@
  * `stdin: true` pipes the prompt to the process.
  */
 export const CLI_PRESETS = {
+  antigravity: {
+    label: 'Antigravity CLI (agy)',
+    bin: 'agy',
+    // agy takes the prompt only through -p (no plain-text stdin). Very long prompts are swapped for a
+    // pointer to {promptFile} by runCli. Shell commands are soft-denied in headless mode unless allowed.
+    write: ['{modelArgs}', '--dangerously-skip-permissions', '--print-timeout', '0', '-p', '{prompt}'],
+    read: ['{modelArgs}', '--mode', 'plan', '--print-timeout', '0', '-p', '{prompt}'],
+    modelArgs: ['--model', '{model}'],
+    install: 'curl -fsSL https://antigravity.google/cli/install.sh | bash',
+    login: 'agy   (sign in with Google once; headless runs reuse the cached login)',
+    docs: 'https://antigravity.google/docs/cli/headless/',
+  },
   gemini: {
-    label: 'Gemini CLI',
+    label: 'Gemini CLI (API key / Code Assist only)',
     bin: 'gemini',
     stdin: true, // -p text is appended to stdin, so the long prompt goes through stdin
     write: ['{modelArgs}', '--approval-mode', 'yolo', '-p', 'Follow the instructions above exactly.'],
     read: ['{modelArgs}', '--approval-mode', 'default', '-p', 'Follow the instructions above exactly.'],
     modelArgs: ['-m', '{model}'],
     install: 'npm install -g @google/gemini-cli',
-    login: 'gemini   (choose "Login with Google"), or set GEMINI_API_KEY',
+    login: 'set GEMINI_API_KEY (or a Code Assist licence); personal Google logins stopped working on 18 June 2026',
     docs: 'https://github.com/google-gemini/gemini-cli',
   },
   codex: {
@@ -67,7 +79,8 @@ export const CLI_PRESETS = {
 
 /** Default provider registry. type: cli | openai (any OpenAI-compatible API) | anthropic */
 export const DEFAULT_PROVIDERS = {
-  'gemini-cli': { type: 'cli', preset: 'gemini', enabled: true, model: '', notes: 'Daily driver. Uses your Google login (Gemini Pro quota) or GEMINI_API_KEY.' },
+  'antigravity-cli': { type: 'cli', preset: 'antigravity', enabled: true, model: '', notes: 'Daily driver. Google\'s agent CLI (agy), uses your Google AI Pro login. Replaced Gemini CLI for personal accounts on 18 June 2026.' },
+  'gemini-cli': { type: 'cli', preset: 'gemini', enabled: false, model: '', notes: 'Stopped serving personal Google accounts (Free/Pro/Ultra) on 18 June 2026. Still works with GEMINI_API_KEY or a Code Assist licence.' },
   'codex-cli': { type: 'cli', preset: 'codex', enabled: true, model: '', notes: 'Daily driver. Uses your ChatGPT login or an OpenAI API key.' },
   'opencode': { type: 'cli', preset: 'opencode', enabled: true, model: 'opencode/big-pickle', notes: 'Free models through OpenCode. Good for tests and docs.' },
   'kimi-cli': { type: 'cli', preset: 'kimi', enabled: false, model: '' },
@@ -78,7 +91,12 @@ export const DEFAULT_PROVIDERS = {
   'openai-api': { type: 'openai', enabled: false, baseUrl: 'https://api.openai.com/v1', apiKeyEnv: 'OPENAI_API_KEY', model: 'gpt-6-luna' },
   'kimi-api': { type: 'openai', enabled: false, baseUrl: 'https://api.moonshot.ai/v1', apiKeyEnv: 'MOONSHOT_API_KEY', model: 'kimi-latest' },
   'deepseek-api': { type: 'openai', enabled: false, baseUrl: 'https://api.deepseek.com/v1', apiKeyEnv: 'DEEPSEEK_API_KEY', model: 'deepseek-chat' },
-  'groq-api': { type: 'openai', enabled: false, baseUrl: 'https://api.groq.com/openai/v1', apiKeyEnv: 'GROQ_API_KEY', model: '' },
+  'kilo-free': { type: 'openai', enabled: true, baseUrl: 'https://api.kilo.ai/api/gateway', apiKeyEnv: 'KILO_API_KEY', apiKeyOptional: true, model: 'kilo-auto/free', notes: 'Kilo Gateway free models. Works without a key (about 200 req/hour per IP). Free routes may log prompts.' },
+  'opencode-zen': { type: 'openai', enabled: true, baseUrl: 'https://opencode.ai/zen/v1', apiKeyEnv: 'OPENCODE_API_KEY', model: 'deepseek-v4.1-flash-free', notes: 'OpenCode Zen API: the same "-free" models as the OpenCode CLI, without the CLI. Key from opencode.ai/zen.' },
+  'groq-api': { type: 'openai', enabled: false, baseUrl: 'https://api.groq.com/openai/v1', apiKeyEnv: 'GROQ_API_KEY', model: '', notes: 'Free tier, very fast. About 30 req/min, 1000/day. Pick a model with: conductor models groq-api' },
+  'cerebras-api': { type: 'openai', enabled: false, baseUrl: 'https://api.cerebras.ai/v1', apiKeyEnv: 'CEREBRAS_API_KEY', model: '', notes: 'Free tier, very fast. Pick a model with: conductor models cerebras-api' },
+  'mistral-api': { type: 'openai', enabled: false, baseUrl: 'https://api.mistral.ai/v1', apiKeyEnv: 'MISTRAL_API_KEY', model: 'codestral-latest', notes: 'Free "Experiment" plan includes Codestral. Prompts may be used for training.' },
+  'nvidia-nim': { type: 'openai', enabled: false, baseUrl: 'https://integrate.api.nvidia.com/v1', apiKeyEnv: 'NVIDIA_API_KEY', model: '', notes: 'Free developer access, about 40 req/min. Pick a model with: conductor models nvidia-nim' },
   'claude-api': { type: 'anthropic', enabled: false, baseUrl: 'https://api.anthropic.com', apiKeyEnv: 'ANTHROPIC_API_KEY', model: 'claude-sonnet-5-5' },
   'ollama': { type: 'openai', enabled: false, baseUrl: 'http://localhost:11434/v1', apiKeyEnv: '', model: 'qwen3-coder', notes: 'Local model, free, private.' },
   'lmstudio': { type: 'openai', enabled: false, baseUrl: 'http://localhost:1234/v1', apiKeyEnv: '', model: '' },
@@ -95,17 +113,18 @@ export const ROLES = {
 };
 
 export const DEFAULT_ROLES = {
-  build: ['gemini-cli', 'codex-cli', 'opencode'],
-  fix: ['codex-cli', 'gemini-cli', 'opencode'],
-  test: ['opencode', 'openrouter-free', 'gemini-cli'],
-  docs: ['openrouter-free', 'opencode', 'gemini-api', 'gemini-cli'],
-  review: ['codex-cli', 'gemini-cli', 'gemini-api'],
-  ask: ['gemini-cli', 'gemini-api', 'openrouter-free'],
+  build: ['antigravity-cli', 'codex-cli', 'opencode'],
+  fix: ['codex-cli', 'antigravity-cli', 'opencode'],
+  test: ['opencode', 'kilo-free', 'openrouter-free', 'antigravity-cli'],
+  docs: ['openrouter-free', 'kilo-free', 'opencode-zen', 'opencode', 'gemini-api', 'antigravity-cli'],
+  review: ['codex-cli', 'antigravity-cli', 'gemini-api'],
+  ask: ['antigravity-cli', 'gemini-api', 'kilo-free', 'openrouter-free'],
 };
 
 /** Who plans, reviews and commits. `conductor init` writes the matching instruction files. */
 export const CONTROLLERS = {
   'claude-code': { label: 'Claude Code', file: 'CLAUDE.md' },
+  'antigravity': { label: 'Antigravity CLI', file: 'GEMINI.md' },
   'gemini-cli': { label: 'Gemini CLI', file: 'GEMINI.md' },
   'codex-cli': { label: 'Codex CLI', file: 'AGENTS.md' },
   'opencode': { label: 'OpenCode', file: 'AGENTS.md' },

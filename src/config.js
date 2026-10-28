@@ -97,7 +97,7 @@ export function providerReadiness(name, p) {
     const bin = preset.bin;
     return which(bin) ? { ready: true, reason: 'installed' } : { ready: false, reason: `"${bin}" not installed` };
   }
-  if (p.apiKeyEnv && !process.env[p.apiKeyEnv]) return { ready: false, reason: `${p.apiKeyEnv} not set` };
+  if (p.apiKeyEnv && !p.apiKeyOptional && !process.env[p.apiKeyEnv]) return { ready: false, reason: `${p.apiKeyEnv} not set` };
   if (!p.model) return { ready: false, reason: 'no model set' };
-  return { ready: true, reason: 'key present' };
+  return { ready: true, reason: p.apiKeyEnv && process.env[p.apiKeyEnv] ? 'key present' : 'no key needed' };
 }

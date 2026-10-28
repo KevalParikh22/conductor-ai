@@ -2,7 +2,7 @@
 
 Read by whichever AI is the controller (Claude Code by default; change it in `conductor ui` → Controller).
 
-**Backup controller:** if the controller is out of usage, open another agent (e.g. `gemini`) in this repo and say:
+**Backup controller:** if the controller is out of usage, open another agent (e.g. `agy` or `codex`) in this repo and say:
 "Read HANDOFF.md and act as the controller described in .conductor/ORCHESTRATOR.md."
 
 ## Division of labour

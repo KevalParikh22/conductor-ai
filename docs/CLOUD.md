@@ -19,12 +19,13 @@ Cloud sessions clone your repo, so `.claude/commands/conduct-*`, `.mcp.json` and
    ```bash
    npm install -g github:YOUR-GITHUB-USER/conductor-ai
    ```
-   Optionally add `npm install -g @google/gemini-cli @openai/codex`.
-2. **Provide keys** as environment variables or network secrets in the cloud environment settings: `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, and so on. Gemini CLI and Codex CLI also run headless with `GEMINI_API_KEY` and `CODEX_API_KEY`/`OPENAI_API_KEY`.
+   Optionally add `npm install -g @openai/codex`. (Antigravity CLI needs an interactive Google sign-in, so in the cloud use API providers instead.)
+2. **Provide keys** as environment variables or network secrets in the cloud environment settings: `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, and so on. Gemini CLI (still fine with an API key) and Codex CLI also run headless with `GEMINI_API_KEY` and `CODEX_API_KEY`/`OPENAI_API_KEY`. `kilo-free` needs no key at all.
 3. **Allow the hosts.** The default "Trusted" network level reaches `*.googleapis.com` (Gemini). For `openrouter.ai`, `api.openai.com`, `api.moonshot.ai` and similar, choose Custom/Full network access or add a network secret for those hosts.
 4. Optionally use a project config tuned for cloud, e.g. `.conductor/config.json`:
    ```json
-   { "roles": { "build": ["gemini-cli", "gemini-api", "openrouter-free"], "docs": ["openrouter-free", "gemini-api"] } }
+   { "providers": { "gemini-cli": { "enabled": true } },
+     "roles": { "build": ["gemini-cli", "codex-cli", "gemini-api"], "docs": ["kilo-free", "openrouter-free", "gemini-api"] } }
    ```
 
 ## GitHub Actions
@@ -34,7 +35,7 @@ Example: have Claude implement an issue with conductor workers. See [`examples/g
 ```yaml
 - uses: actions/setup-node@v4
   with: { node-version: 22 }
-- run: npm install -g github:YOUR-GITHUB-USER/conductor-ai @google/gemini-cli
+- run: npm install -g github:YOUR-GITHUB-USER/conductor-ai
 - uses: anthropics/claude-code-action@v1
   with:
     anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -48,7 +49,7 @@ Standalone (no Claude), e.g. a free-model docs refresh on every merge:
 ```yaml
 - run: |
     git switch -c docs/auto-${{ github.run_id }}   # workers never write on main
-    conductor run docs "Update README usage section to match src/cli" --files src/cli.js,README.md --chain openrouter-free,gemini-api
+    conductor run docs "Update README usage section to match src/cli" --files src/cli.js,README.md --chain kilo-free,openrouter-free,gemini-api
 ```
 
 ## Remote server
@@ -65,6 +66,6 @@ conductor ui --no-open
 
 Chains can mix kinds freely; the first ready provider wins:
 ```json
-{ "roles": { "test": ["ollama", "opencode", "openrouter-free", "gemini-api"] } }
+{ "roles": { "test": ["ollama", "opencode", "kilo-free", "openrouter-free"] } }
 ```
 On your laptop Ollama runs first. In CI, Ollama and OpenCode are skipped (not installed) and the cloud APIs take over.

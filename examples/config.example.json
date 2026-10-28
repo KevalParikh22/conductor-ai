@@ -2,12 +2,12 @@
   "version": 1,
   "controller": "claude-code",
   "roles": {
-    "build": ["gemini-cli", "codex-cli", "opencode"],
-    "fix": ["codex-cli", "gemini-cli"],
-    "test": ["opencode", "openrouter-free", "gemini-api"],
-    "docs": ["openrouter-free", "opencode", "gemini-api"],
-    "review": ["codex-cli", "gemini-cli"],
-    "ask": ["gemini-cli", "gemini-api"]
+    "build": ["antigravity-cli", "codex-cli", "opencode"],
+    "fix": ["codex-cli", "antigravity-cli"],
+    "test": ["opencode", "kilo-free", "openrouter-free"],
+    "docs": ["kilo-free", "openrouter-free", "opencode-zen", "gemini-api"],
+    "review": ["codex-cli", "antigravity-cli"],
+    "ask": ["antigravity-cli", "gemini-api", "kilo-free"]
   },
   "providers": {
     "openrouter-free": { "model": "openrouter/free" },

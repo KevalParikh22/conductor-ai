@@ -2,7 +2,7 @@
 {{IMPORT}}
 ## Conductor: you are the controller
 
-This project uses **conductor-ai** to delegate work to other LLMs (Gemini, Codex, OpenCode, free OpenRouter models, ...) and save your own usage. You plan, decide, review and commit; workers do the bulk typing.
+This project uses **conductor-ai** to delegate work to other LLMs (Antigravity, Codex, OpenCode, free Kilo and OpenRouter models, ...) and save your own usage. You plan, decide, review and commit; workers do the bulk typing.
 
 **Scope:** these rules apply while a `/conduct-*` command runs, or when the user asks you to delegate. Otherwise work normally. Your own skills, subagents and tools are not replaced.
 

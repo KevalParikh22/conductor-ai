@@ -21,7 +21,10 @@ function expandArgs(template, vars, modelArgs) {
   return out;
 }
 
-/** Run a CLI agent (gemini, codex, opencode, kimi, claude, or a custom one). */
+// Linux caps one argv string at 128 KiB; stay well below it.
+const MAX_PROMPT_ARG = 100_000;
+
+/** Run a CLI agent (antigravity, gemini, codex, opencode, kimi, claude, or a custom one). */
 export async function runCli(name, p, { mode, prompt, cwd, timeoutMs, runDir, quotaRe }) {
   const preset = { ...(CLI_PRESETS[p.preset] || {}), ...p };
   if (!which(preset.bin)) return { ok: false, text: '', reason: 'not installed', log: '' };
@@ -30,7 +33,10 @@ export async function runCli(name, p, { mode, prompt, cwd, timeoutMs, runDir, qu
   fs.writeFileSync(promptFile, prompt);
   fs.writeFileSync(outFile, '');
   const template = (mode === 'write' ? preset.write : preset.read) || preset.write;
-  const args = expandArgs(template, { prompt, promptFile, outFile, model: p.model }, preset.modelArgs || []);
+  // A prompt too long for argv is replaced by a pointer to the prompt file (inside the repo, so agents may read it).
+  const promptArg = prompt.length > MAX_PROMPT_ARG
+    ? `Read the file ${promptFile} and follow the instructions in it exactly. Do not modify that file.` : prompt;
+  const args = expandArgs(template, { prompt: promptArg, promptFile, outFile, model: p.model }, preset.modelArgs || []);
   const env = { ...process.env, ...(p.env || {}) };
   const r = await run(preset.bin, args, { cwd, input: preset.stdin ? prompt : undefined, timeoutMs, env });
   const log = `$ ${preset.bin} ${args.map((a) => (a.length > 80 ? JSON.stringify(a.slice(0, 77) + '...') : a)).join(' ')}\n` +
@@ -73,10 +79,10 @@ function classifyHttp(r) {
   return { reason: `http ${r.status}` };
 }
 
-/** Any OpenAI-compatible chat API: Gemini, OpenRouter, OpenAI, Moonshot/Kimi, DeepSeek, Groq, Ollama, LM Studio... */
+/** Any OpenAI-compatible chat API: Gemini, OpenRouter, Kilo, OpenCode Zen, Groq, Ollama, LM Studio... */
 export async function runOpenAI(name, p, { system, prompt, timeoutMs }) {
   const key = p.apiKeyEnv ? process.env[p.apiKeyEnv] : '';
-  if (p.apiKeyEnv && !key) return { ok: false, text: '', reason: `${p.apiKeyEnv} not set`, log: '' };
+  if (p.apiKeyEnv && !key && !p.apiKeyOptional) return { ok: false, text: '', reason: `${p.apiKeyEnv} not set`, log: '' };
   const headers = { ...(p.headers || {}) };
   if (key) headers.authorization = `Bearer ${key}`;
   if (p.baseUrl.includes('openrouter.ai')) headers['X-Title'] ||= 'conductor-ai'; // app name on OpenRouter dashboards

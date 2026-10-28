@@ -83,15 +83,15 @@ export function initProject(root, { controller = 'claude-code', mcp = true } = {
   const ctrlFile = CONTROLLERS[controller].file;
   const imports = { 'CLAUDE.md': '@AGENTS.md', 'GEMINI.md': '@./AGENTS.md', 'AGENTS.md': '' };
   let block = tpl('controller-block.md').replace('{{IMPORT}}', imports[ctrlFile]);
-  if (ctrlFile === 'AGENTS.md') {
-    // AGENTS.md is also read by workers: make the controller section conditional
+  if (ctrlFile !== 'CLAUDE.md') {
+    // AGENTS.md / GEMINI.md are also read by workers: make the controller section conditional
     block = block.replace('## Conductor: you are the controller',
       `## Conductor: controller instructions (${CONTROLLERS[controller].label} only)\n\n` +
       '_Workers: ignore this section; follow your WORKER prompt. It applies only when the user runs you directly as the controller._');
   }
   mergeMarkedBlock(path.join(root, ctrlFile), block, '<!-- conductor:start -->', '<!-- conductor:end -->', log);
 
-  // Gemini reads GEMINI.md by default: make sure it also gets AGENTS.md when used as a worker
+  // Gemini CLI and Antigravity read GEMINI.md: make sure it also points at AGENTS.md
   const geminiMd = path.join(root, 'GEMINI.md');
   if (!fs.existsSync(geminiMd)) { fs.writeFileSync(geminiMd, '# Gemini instructions\n\n@./AGENTS.md\n'); log('added', 'GEMINI.md (imports AGENTS.md)'); }
   else if (!fs.readFileSync(geminiMd, 'utf8').includes('AGENTS.md')) { fs.appendFileSync(geminiMd, '\n@./AGENTS.md\n'); log('merged', 'GEMINI.md (imports AGENTS.md)'); }
@@ -107,6 +107,15 @@ export function initProject(root, { controller = 'claude-code', mcp = true } = {
       writeOwned(root, `.gemini/commands/${f.replace(/\.md$/, '.toml')}`, `description = ${JSON.stringify(meta.description || '')}\nprompt = ${tomlString(prompt)}\n`, log);
     }
   }
+  if (controller === 'antigravity') {
+    // agy has no custom slash commands; workspace skills in .agents/skills/ play that part
+    for (const f of fs.readdirSync(cmdDir).filter((x) => x.endsWith('.md')).sort()) {
+      const { meta, body } = parseCommand(fs.readFileSync(new URL(f, cmdDir), 'utf8'));
+      const name = f.replace(/\.md$/, '');
+      const text = body.replaceAll('$ARGUMENTS', 'the arguments the user gave').replaceAll('.claude/commands/conduct-build.md', `.agents/skills/conduct-build/SKILL.md`);
+      writeOwned(root, `.agents/skills/${name}/SKILL.md`, `---\nname: ${name}\ndescription: ${JSON.stringify(meta.description || name)}\n---\n\n${text}\n`, log);
+    }
+  }
   if (controller === 'codex-cli' || controller === 'opencode') {
     writeOwned(root, '.conductor/commands/README.md', '# Controller prompts\n\nThese prompts mirror the Claude `/conduct-*` commands. Paste or reference them in your controller.\n', log);
     for (const f of fs.readdirSync(cmdDir).filter((x) => x.endsWith('.md'))) {
@@ -118,6 +127,7 @@ export function initProject(root, { controller = 'claude-code', mcp = true } = {
   if (mcp) {
     const server = { command: 'conductor', args: ['mcp'] };
     if (controller === 'claude-code') mergeJsonFile(root, '.mcp.json', (d) => { d.mcpServers ||= {}; d.mcpServers.conductor ||= server; }, log);
+    if (controller === 'antigravity') mergeJsonFile(root, '.agents/mcp_config.json', (d) => { d.mcpServers ||= {}; d.mcpServers.conductor ||= server; }, log);
     if (controller === 'gemini-cli') mergeJsonFile(root, '.gemini/settings.json', (d) => { d.mcpServers ||= {}; d.mcpServers.conductor ||= { ...server, timeout: 1800000 }; }, log);
     if (controller === 'opencode') mergeJsonFile(root, 'opencode.json', (d) => { d.$schema ||= 'https://opencode.ai/config.json'; d.mcp ||= {}; d.mcp.conductor ||= { type: 'local', command: ['conductor', 'mcp'], enabled: true }; }, log);
     if (controller === 'codex-cli') notes.push('Codex: add to ~/.codex/config.toml:\n    [mcp_servers.conductor]\n    command = "conductor"\n    args = ["mcp"]');
@@ -153,6 +163,11 @@ export function setupGlobal() {
       '# This file is only readable by you (chmod 600). Never commit it.',
       '# GEMINI_API_KEY=        # https://aistudio.google.com/apikey (free tier)',
       '# OPENROUTER_API_KEY=    # https://openrouter.ai/keys (free ":free" models)',
+      '# KILO_API_KEY=          # optional: kilo-free works without a key (https://app.kilo.ai)',
+      '# OPENCODE_API_KEY=      # https://opencode.ai/zen (OpenCode Zen API, "-free" models)',
+      '# CEREBRAS_API_KEY=      # https://cloud.cerebras.ai (free tier)',
+      '# MISTRAL_API_KEY=       # https://console.mistral.ai (free Experiment plan, Codestral)',
+      '# NVIDIA_API_KEY=        # https://build.nvidia.com (free developer access)',
       '# OPENAI_API_KEY=',
       '# MOONSHOT_API_KEY=      # Kimi API',
       '# ANTHROPIC_API_KEY=',

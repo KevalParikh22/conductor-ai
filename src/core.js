@@ -14,7 +14,7 @@ const loadPrompt = (n) => fs.readFileSync(new URL(`${n}.md`, PROMPTS), 'utf8');
 export class UsageError extends Error {}
 
 // Files workers must never touch (agents are told; chat output is filtered).
-const PROTECTED = [/^AGENTS\.md$/, /^CLAUDE\.md$/, /^GEMINI\.md$/, /^HANDOFF\.md$/, /^docs\/plan\//, /^\.claude\//, /^\.gemini\//,
+const PROTECTED = [/^AGENTS\.md$/, /^CLAUDE\.md$/, /^GEMINI\.md$/, /^HANDOFF\.md$/, /^docs\/plan\//, /^\.claude\//, /^\.gemini\//, /^\.agents\//,
   /^\.conductor\//, /^\.git\//, /^\.mcp\.json$/, /(^|\/)node_modules\//, /(^|\/)\.env(\.|$)/, /(^|\/)auth\.json$/];
 /** `extra`: regex strings from settings.protectedPaths (e.g. "^app/etc/env\\.php$"). */
 export const isProtected = (p, extra = []) => {

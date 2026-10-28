@@ -25,7 +25,7 @@ const TOOLS = [
         task: { type: 'string', description: 'Task description or question (or extra instructions when plan+task_id are given)' },
         plan: { type: 'string', description: 'Path to a plan file, e.g. docs/plan/feature.md' },
         task_id: { type: 'string', description: 'Task id inside the plan, e.g. T3' },
-        provider: { type: 'string', description: 'Try this provider first (e.g. gemini-cli, codex-cli, opencode, openrouter-free)' },
+        provider: { type: 'string', description: 'Try this provider first (e.g. antigravity-cli, codex-cli, opencode, kilo-free)' },
         note: { type: 'string', description: 'Feedback for a retry: what was wrong last time and what to do instead' },
         files: { type: 'array', items: { type: 'string' }, description: 'Extra files to include as context (used by API/chat providers)' },
         base: { type: 'string', description: 'review: git ref to diff against (default: merge-base with main)' },

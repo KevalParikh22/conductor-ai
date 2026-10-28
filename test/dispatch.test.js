@@ -7,8 +7,8 @@ import { isolateHome, makeRepo, fakeBins, PLAN } from './helpers.js';
 
 isolateHome();
 fakeBins({
-  // quota failure after leaving partial work behind
-  gemini: `fs.writeFileSync('src/partial.js','half'); console.error('Error: RESOURCE_EXHAUSTED quota exceeded'); process.exit(1);`,
+  // Antigravity CLI: records its argv, then fails on quota after leaving partial work behind
+  agy: `fs.writeFileSync(process.env.AGY_ARGS_LOG, JSON.stringify(args)); fs.writeFileSync('src/partial.js','half'); console.error('Error: RESOURCE_EXHAUSTED quota exceeded'); process.exit(1);`,
   // succeeds: reads prompt from stdin, writes -o file
   codex: `let p='';process.stdin.on('data',d=>p+=d).on('end',()=>{const o=args[args.indexOf('-o')+1];
     if(p.includes('code review')){fs.writeFileSync(o,'## Findings\\nnone\\n## VERDICT: APPROVE\\n');return;}
@@ -40,6 +40,8 @@ after(() => server.close());
 
 const { loadConfig } = await import('../src/config.js');
 const { dispatch, getCooldowns, clearCooldowns, UsageError } = await import('../src/core.js');
+const { runOpenAI } = await import('../src/providers.js');
+process.env.AGY_ARGS_LOG = path.join(fs.mkdtempSync(path.join(fs.realpathSync(process.env.CONDUCTOR_HOME), 'agy-')), 'args.json');
 
 function cfgFor(dir, extraProviders = {}) {
   const cfg = loadConfig(dir);
@@ -58,7 +60,10 @@ function cfgFor(dir, extraProviders = {}) {
 test('build falls back from a rate-limited agent to the next, stashing partial work', async () => {
   clearCooldowns();
   const { dir, git } = makeRepo({ files: { 'docs/plan/p.md': PLAN, 'src/.keep': '' } });
-  const s = await dispatch(cfgFor(dir), { role: 'build', planPath: 'docs/plan/p.md', taskId: 'T1', chain: ['gemini-cli', 'codex-cli'] });
+  const s = await dispatch(cfgFor(dir), { role: 'build', planPath: 'docs/plan/p.md', taskId: 'T1', chain: ['antigravity-cli', 'codex-cli'] });
+  const agyArgs = JSON.parse(fs.readFileSync(process.env.AGY_ARGS_LOG, 'utf8'));
+  assert.ok(agyArgs.includes('--dangerously-skip-permissions'), 'write mode skips permission prompts');
+  assert.match(agyArgs[agyArgs.indexOf('-p') + 1], /add function/, 'the prompt is passed with -p');
   assert.equal(s.exitCode, 0);
   assert.equal(s.winner, 'codex-cli');
   assert.equal(s.attempts[0].stashed, true);
@@ -67,12 +72,12 @@ test('build falls back from a rate-limited agent to the next, stashing partial w
   assert.deepEqual(s.changed, ['src/add.js']);
   assert.equal(s.verify.status, 'PASS');
   assert.ok(!fs.existsSync(path.join(dir, 'src/partial.js')), 'partial work must be stashed, not left in the tree');
-  assert.match(git('stash', 'list'), /conductor: failed attempt by gemini-cli T1/);
-  assert.ok(getCooldowns()['gemini-cli'], 'rate-limited provider cools down');
+  assert.match(git('stash', 'list'), /conductor: failed attempt by antigravity-cli T1/);
+  assert.ok(getCooldowns()['antigravity-cli'], 'rate-limited provider cools down');
 
   // second run skips the cooling-down provider without calling it
   git('add', '-A'); git('commit', '-qm', 't1');
-  const s2 = await dispatch(cfgFor(dir), { role: 'build', task: 'tweak', chain: ['gemini-cli', 'codex-cli'], noVerify: true });
+  const s2 = await dispatch(cfgFor(dir), { role: 'build', task: 'tweak', chain: ['antigravity-cli', 'codex-cli'], noVerify: true });
   assert.equal(s2.attempts[0].skipped, true);
   assert.match(s2.attempts[0].reason, /cooling down/);
 });
@@ -141,4 +146,28 @@ test('safety: protected branch, dirty tree and missing task are usage errors', a
   const plan = makeRepo({ files: { 'p.md': PLAN } });
   await assert.rejects(dispatch(cfgFor(plan.dir), { role: 'build', planPath: 'p.md', taskId: 'T9' }), /T9.*not found/);
   await assert.rejects(dispatch(cfgFor(plan.dir), { role: 'nope', task: 'x' }), /unknown role/);
+});
+
+test('antigravity read mode uses plan mode; huge prompts go through the prompt file', async () => {
+  clearCooldowns();
+  const { dir } = makeRepo();
+  const big = 'x'.repeat(150_000);
+  await dispatch(cfgFor(dir), { role: 'ask', task: 'what does add do? ' + big, chain: ['antigravity-cli'] });
+  const args = JSON.parse(fs.readFileSync(process.env.AGY_ARGS_LOG, 'utf8'));
+  assert.deepEqual(args.slice(args.indexOf('--mode'), args.indexOf('--mode') + 2), ['--mode', 'plan']);
+  assert.ok(!args.includes('--dangerously-skip-permissions'));
+  assert.match(args[args.indexOf('-p') + 1], /^Read the file .*antigravity-cli\.prompt\.md/);
+});
+
+test('apiKeyOptional: runs without a key and sends one when present', async () => {
+  const p = { type: 'openai', baseUrl: `http://127.0.0.1:${port}/ok`, apiKeyEnv: 'OPTIONAL_TEST_KEY', apiKeyOptional: true, model: 'm' };
+  delete process.env.OPTIONAL_TEST_KEY;
+  const r1 = await runOpenAI('opt', p, { system: 's', prompt: 'p1', timeoutMs: 5000 });
+  assert.equal(r1.ok, true);
+  assert.equal(calls.at(-1).auth, undefined);
+  process.env.OPTIONAL_TEST_KEY = 'k1';
+  await runOpenAI('opt', p, { system: 's', prompt: 'p2', timeoutMs: 5000 });
+  assert.equal(calls.at(-1).auth, 'Bearer k1');
+  const r3 = await runOpenAI('req', { ...p, apiKeyOptional: false, apiKeyEnv: 'MISSING_TEST_KEY' }, { system: 's', prompt: 'p3', timeoutMs: 5000 });
+  assert.equal(r3.reason, 'MISSING_TEST_KEY not set');
 });
