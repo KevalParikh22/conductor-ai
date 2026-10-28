@@ -43,7 +43,12 @@ export async function runCli(name, p, { mode, prompt, cwd, timeoutMs, runDir, qu
     `--- exit ${r.code}${r.timedOut ? ' (timeout)' : ''}\n--- stdout\n${r.stdout}\n--- stderr\n${r.stderr}`;
   let text = '';
   try { text = fs.readFileSync(outFile, 'utf8'); } catch { /* none */ }
-  if (!text.trim()) text = r.stdout.trim() ? r.stdout : r.stderr;
+  if (!text.trim()) text = r.stdout;
+  // exit 0 with nothing on stdout is a failure (e.g. agy auto-denying a tool in headless mode); stderr says why
+  if (!text.trim() && r.code === 0 && !r.timedOut && !r.error) {
+    return { ok: false, text: r.stderr, reason: `empty output${r.stderr.trim() ? ': ' + r.stderr.trim().split('\n').pop().slice(0, 160) : ''}`, log };
+  }
+  if (!text.trim()) text = r.stderr;
 
   if (r.timedOut) return { ok: false, text, reason: 'timeout', log };
   if (r.error) return { ok: false, text, reason: 'spawn error', log };

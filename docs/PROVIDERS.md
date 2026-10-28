@@ -46,7 +46,13 @@ agy
 
 Notes:
 - Write roles run `agy --dangerously-skip-permissions`, the same trust level as Gemini CLI's old `--approval-mode yolo`. conductor still requires a clean tree on a non-main branch and stashes failed attempts. For narrower rights, remove that flag in config and allow commands in `~/.gemini/antigravity-cli/settings.json` (e.g. `command(regex:npm run (build|lint|test))`).
-- Read roles run `agy --mode plan`.
+- Read roles run `agy --mode plan`. In that mode agy can read files but cannot run shell commands unless you allow them, and if it tries anyway it ends with no answer. conductor treats that as a failure and moves to the next provider. To let `review` and `ask` use agy fully, allow read-only commands in `~/.gemini/antigravity-cli/settings.json`:
+  ```json
+  { "permissions": { "allow": [
+    "command(regex:git (diff|log|show|status|blame)( .*)?)",
+    "command(regex:(ls|cat|head|tail|grep|rg|find|wc)( .*)?)"
+  ] } }
+  ```
 - Early `agy` builds printed nothing when stdout was not a terminal. If `conductor doctor --live` shows `antigravity-cli: empty output`, update `agy`.
 
 ## Free options at a glance
