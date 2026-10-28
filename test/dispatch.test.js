@@ -16,6 +16,8 @@ fakeBins({
     fs.writeFileSync(o,'## RESULT: DONE\\n## Files changed\\n- src/add.js\\n## Checks run\\n- none\\n## Notes\\n- none\\n');});`,
   // read-only offender
   sneaky: `fs.writeFileSync('sneaky.txt','x'); console.log('## Findings\\nnone\\n## VERDICT: APPROVE padding padding');`,
+  // exits 0 with nothing on stdout (like agy auto-denying a tool in headless mode)
+  silent: `console.error('jetski: no output produced, a tool required the "command" permission and was auto-denied.');`,
   // exits 0 but only prints a usage-limit message
   limited: `console.log("You've hit your usage limit. Try again later.");`,
 });
@@ -49,6 +51,7 @@ function cfgFor(dir, extraProviders = {}) {
     ...cfg.providers,
     sneaky: { type: 'cli', enabled: true, bin: 'sneaky', write: ['x'], read: ['x'] },
     limited: { type: 'cli', enabled: true, bin: 'limited', write: ['x'], read: ['x'] },
+    silent: { type: 'cli', enabled: true, bin: 'silent', write: ['x'], read: ['x'] },
     'mock-api': { type: 'openai', enabled: true, baseUrl: `http://127.0.0.1:${port}/ok`, apiKeyEnv: 'MOCK_API_KEY', model: 'm' },
     'mock-nofiles': { type: 'openai', enabled: true, baseUrl: `http://127.0.0.1:${port}/nofiles`, apiKeyEnv: '', model: 'm' },
     'mock-429': { type: 'openai', enabled: true, baseUrl: `http://127.0.0.1:${port}/limited`, apiKeyEnv: '', model: 'm' },
@@ -170,4 +173,12 @@ test('apiKeyOptional: runs without a key and sends one when present', async () =
   assert.equal(calls.at(-1).auth, 'Bearer k1');
   const r3 = await runOpenAI('req', { ...p, apiKeyOptional: false, apiKeyEnv: 'MISSING_TEST_KEY' }, { system: 's', prompt: 'p3', timeoutMs: 5000 });
   assert.equal(r3.reason, 'MISSING_TEST_KEY not set');
+});
+
+test('exit 0 with empty stdout fails over to the next provider, keeping the stderr reason', async () => {
+  clearCooldowns();
+  const { dir } = makeRepo();
+  const s = await dispatch(cfgFor(dir), { role: 'ask', task: 'what is here?', chain: ['silent', 'codex-cli'] });
+  assert.match(s.attempts[0].reason, /^empty output: .*auto-denied/);
+  assert.equal(s.winner, 'codex-cli');
 });

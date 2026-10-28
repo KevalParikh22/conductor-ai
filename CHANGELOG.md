@@ -9,6 +9,8 @@
 - Prompts over 100 KB are passed to argv-only CLIs as a pointer to the prompt file.
 - When the controller's file is `GEMINI.md` or `AGENTS.md`, the controller block is marked as controller-only so workers reading the same file ignore it.
 - `.agents/` is protected from worker edits.
+- A CLI that exits 0 with nothing on stdout now counts as `empty output` (with the stderr reason) and falls through to the next provider.
+- Review and ask prompts tell workers they don't need shell commands.
 
 ## 0.1.0 (2026-10-24)
 
