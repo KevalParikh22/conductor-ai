@@ -35,7 +35,7 @@ One AI is the **controller** (default: Claude Code). It plans, delegates, review
 Workers:
 - Do only the task id you were given; read its plan file in `docs/plan/` first.
 - Never `git commit`/`push`/`checkout`/`stash`/`reset`.
-- Never edit `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `HANDOFF.md`, `docs/plan/*`, `.claude/`, `.gemini/`, `.conductor/`.
+- Never edit `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `HANDOFF.md`, `docs/plan/*`, `.claude/`, `.gemini/`, `.agents/`, `.conductor/`.
 - End with the report format given in your prompt (`## RESULT: DONE | PARTIAL | BLOCKED` …).
 
 Shared state: `docs/plan/<feature>.md` (plan, owned by the controller) · `HANDOFF.md` (current state; read it first) · `docs/architecture.md` (codebase map).

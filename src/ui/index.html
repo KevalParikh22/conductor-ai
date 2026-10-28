@@ -231,7 +231,7 @@ const views = {
       <div class="card"><h2>Add a custom provider</h2><p class="note">Any OpenAI-compatible endpoint (Together, Fireworks, Mistral, a company gateway…), or another CLI agent.</p>
         <div class="fields"><div><label class="f">Name</label><input type="text" id="np-name" placeholder="e.g. mistral-api"></div>
         <div><label class="f">Type</label><select id="np-type"><option value="openai">OpenAI-compatible API</option><option value="anthropic">Anthropic API</option><option value="cli">CLI agent</option></select></div>
-        <div><label class="f">Base URL / CLI preset</label><input type="text" id="np-base" placeholder="https://api.example.com/v1  or  gemini|codex|opencode|kimi|claude"></div>
+        <div><label class="f">Base URL / CLI preset</label><input type="text" id="np-base" placeholder="https://api.example.com/v1  or  antigravity|codex|opencode|kimi|claude|gemini"></div>
         <div><label class="f">API key env var</label><input type="text" id="np-key" placeholder="EXAMPLE_API_KEY"></div>
         <div><label class="f">Model</label><input type="text" id="np-model"></div></div>
         <div class="row" style="margin-top:10px"><button class="btn" id="np-add">Add provider</button></div></div>`;
@@ -277,9 +277,9 @@ const views = {
     </table></div>
     <div class="card"><h2>Steps</h2><ol class="steps">
       <li><b>Install conductor</b> (once per machine)${cmd('npm install -g github:<your-user>/conductor-ai\nconductor setup')}</li>
-      <li><b>Install and sign in to your workers</b>: at least the ones enabled in Providers. Daily drivers:${cmd(p.gemini.install)}${cmd(p.codex.install)}<span class="note">Free models for tests and docs: OpenCode, or an OpenRouter key.</span></li>
+      <li><b>Install and sign in to your workers</b>: at least the ones enabled in Providers. Daily drivers (then run <code>agy</code> once to sign in with Google):${cmd(p.antigravity.install)}${cmd(p.codex.install)}<span class="note">Free models for tests and docs: OpenCode, Kilo (no key needed), or an OpenRouter / OpenCode Zen key.</span></li>
       <li><b>Add keys</b> for cloud APIs on the API keys page (Gemini API, OpenRouter, Kimi…).</li>
-      <li><b>Set up each project</b>${cmd('cd my-project\nconductor init            # or: conductor init --controller gemini-cli')}<span class="note">Then fill in section 1 of AGENTS.md (stack and Verify command).</span></li>
+      <li><b>Set up each project</b>${cmd('cd my-project\nconductor init            # or: conductor init --controller antigravity')}<span class="note">Then fill in section 1 of AGENTS.md (stack and Verify command).</span></li>
       <li><b>Check everything</b>${cmd('conductor doctor --live')}</li>
       <li><b>Use it from your controller</b>: in Claude Code: <span class="mono">/conduct-plan add password reset</span>, then <span class="mono">/conduct-run docs/plan/password-reset.md</span></li>
     </ol></div>

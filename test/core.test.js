@@ -8,7 +8,7 @@ isolateHome();
 const { extractTask, extractSection, taskFiles, parseFileBlocks, applyFileBlocks, isProtected } = await import('../src/core.js');
 const { deepDiff } = await import('../src/ui/server.js');
 const { deepMerge } = await import('../src/util.js');
-const { validateConfig, providerLocation } = await import('../src/config.js');
+const { validateConfig, providerLocation, providerReadiness } = await import('../src/config.js');
 const { DEFAULT_CONFIG } = await import('../src/presets.js');
 
 test('extractTask returns only the requested task section', () => {
@@ -55,6 +55,7 @@ test('isProtected', () => {
   assert.ok(isProtected('.claude/commands/x.md'));
   assert.ok(isProtected('web/.env.local'));
   assert.ok(isProtected('auth.json'));
+  assert.ok(isProtected('.agents/skills/x/SKILL.md'));
   assert.ok(isProtected('app/etc/env.php', ['^app/etc/env\\.php$']));
   assert.ok(!isProtected('app/etc/env.php'));
   assert.ok(!isProtected('src/claude.js'));
@@ -77,4 +78,14 @@ test('providerLocation', () => {
   assert.equal(providerLocation({ type: 'cli' }), 'local-agent');
   assert.equal(providerLocation({ type: 'openai', baseUrl: 'http://localhost:11434/v1' }), 'local-model');
   assert.equal(providerLocation({ type: 'openai', baseUrl: 'https://openrouter.ai/api/v1' }), 'cloud-api');
+});
+
+test('default chains use Antigravity and keyless Kilo; Gemini CLI is kept but off', () => {
+  const P = DEFAULT_CONFIG.providers;
+  assert.equal(P['gemini-cli'].enabled, false);
+  assert.equal(P['antigravity-cli'].preset, 'antigravity');
+  assert.ok(!Object.values(DEFAULT_CONFIG.roles).flat().includes('gemini-cli'));
+  assert.ok(DEFAULT_CONFIG.roles.test.includes('kilo-free'));
+  delete process.env.KILO_API_KEY;
+  assert.deepEqual(providerReadiness('kilo-free', P['kilo-free']), { ready: true, reason: 'no key needed' });
 });

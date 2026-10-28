@@ -9,7 +9,7 @@ import { runVerify } from '../src/verify.js';
 import { initProject, setupGlobal } from '../src/init.js';
 import { startMcpServer } from '../src/mcp.js';
 import { testProvider } from '../src/providers.js';
-import { listFreeModels } from '../src/models.js';
+import { listFreeModels, listProviderModels } from '../src/models.js';
 import { CLI_PRESETS, ROLES, CONTROLLERS } from '../src/presets.js';
 import { VERSION } from '../src/version.js';
 import { which } from '../src/util.js';
@@ -37,7 +37,7 @@ Work (normally called by the controller)
   conductor <role> ...                 shortcut for: conductor run <role> ...
   conductor verify                     run the project's verify command
   conductor status [--json]            providers, chains and repo state
-  conductor models [--all]             list free OpenRouter models
+  conductor models [provider] [--all]  list free models (OpenRouter by default, or any API provider)
   conductor cooldown [--clear [name]]  show or clear rate-limit cooldowns
   conductor config path                show config file locations
   conductor mcp                        run as an MCP server (stdio)
@@ -133,6 +133,17 @@ async function main() {
       return s.exitCode;
     }
     case 'models': {
+      if (o._[0] && o._[0] !== 'openrouter-free') {
+        const name = o._[0];
+        const cfg = loadConfig();
+        const p = cfg.providers[name];
+        if (!p || p.type === 'cli') { console.error(`"${name}" is not an API provider. API providers: ${Object.entries(cfg.providers).filter(([, x]) => x.type !== 'cli').map(([k]) => k).join(', ')}`); return 2; }
+        const r = await listProviderModels(p, { freeOnly: !o.all });
+        if (r.error) { console.error(`${name}: ${r.error}`); return 1; }
+        for (const m of r.models) console.log(`${String(m.id).padEnd(55)} ${m.context ? 'ctx ' + String(m.context).padStart(7) : ''}${m.free ? '  free' : ''}`);
+        console.log(`\n${r.models.length} models${o.all ? '' : ' marked free (use --all for every model; providers with a free tier mark none)'}. Set one in conductor ui → Providers → ${name} → model.`);
+        return 0;
+      }
       const models = await listFreeModels({ all: o.all });
       if (!models.length) { console.log('no models returned (network?)'); return 1; }
       for (const m of models) console.log(`${m.id.padEnd(55)} ctx ${String(m.context || '?').padStart(7)}  ${m.tools ? 'tools' : ''}`);

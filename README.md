@@ -1,6 +1,6 @@
 # conductor-ai
 
-**One controller, many models.** Let Claude Code (or any agent you choose) plan, review and commit, while Gemini, Codex, OpenCode, free OpenRouter models, Kimi, local models and more do the bulk of the coding, testing and documentation, with automatic fallback when one hits its limit.
+**One controller, many models.** Let Claude Code (or any agent you choose) plan, review and commit, while Antigravity, Codex, OpenCode, free Kilo / OpenRouter / OpenCode Zen models, Kimi, local models and more do the bulk of the coding, testing and documentation, with automatic fallback when one hits its limit.
 
 ```
                       you ──▶ Controller (Claude Code by default)
@@ -8,9 +8,10 @@
                                         │  conductor run <role>   (CLI or MCP)
      ┌──────────────┬───────────────────┼──────────────────┬──────────────┐
    build           fix                test               docs        review / ask
- gemini-cli →    codex-cli →        opencode →        openrouter-free →  codex-cli →
- codex-cli →     gemini-cli →       openrouter-free →  opencode →        gemini-cli →
- opencode        opencode           gemini-cli         gemini-api        gemini-api
+ antigravity →   codex-cli →        opencode →        openrouter-free →  codex-cli →
+ codex-cli →     antigravity →      kilo-free →        kilo-free →        antigravity →
+ opencode        opencode           openrouter-free →  opencode-zen →     gemini-api
+                                    antigravity        opencode → …
      └──── rate limit / failure → next provider · all failed (exit 3) → controller does it ────┘
 ```
 
@@ -18,11 +19,11 @@
 
 ## Features
 
-- **Controller you can change.** Claude Code by default; Gemini CLI, Codex CLI or OpenCode also work. `conductor init` writes the right instruction file, slash commands and MCP entry for your controller.
+- **Controller you can change.** Claude Code by default; Antigravity CLI, Codex CLI, OpenCode or Gemini CLI also work. `conductor init` writes the right instruction file, slash commands and MCP entry for your controller.
 - **Roles with fallback chains.** `build`, `fix`, `test`, `docs`, `review`, `ask`, each with its own ordered list of providers.
 - **Local and cloud providers.**
-  - **Local agents:** Gemini CLI, Codex CLI, OpenCode, Kimi CLI and Claude Code. They use your logins, edit files and run tests.
-  - **Cloud APIs:** Gemini API, OpenRouter (`:free` models), OpenAI, Kimi/Moonshot, Claude, DeepSeek and Groq, or any OpenAI-compatible endpoint. conductor applies the code they return.
+  - **Local agents:** Antigravity CLI (`agy`), Codex CLI, OpenCode, Kimi CLI, Claude Code and Gemini CLI (API key only). They use your logins, edit files and run tests.
+  - **Cloud APIs:** free tiers from Kilo Gateway (no key needed), OpenCode Zen, OpenRouter (`:free` models), Gemini API, Groq, Cerebras, Mistral (Codestral) and NVIDIA NIM; paid OpenAI, Kimi/Moonshot, Claude and DeepSeek; or any OpenAI-compatible endpoint. conductor applies the code they return.
   - **Local models:** Ollama and LM Studio.
 - **Rate-limit aware.** Detects quota errors (HTTP 429, CLI messages), cools that provider down (honouring `Retry-After`) and moves to the next one.
 - **Safe by default.**
@@ -46,7 +47,7 @@ conductor setup
 ```
 Install and sign in to your workers (at least one):
 ```bash
-npm install -g @google/gemini-cli && gemini
+curl -fsSL https://antigravity.google/cli/install.sh | bash && agy
 ```
 ```bash
 npm install -g @openai/codex && codex login
@@ -99,9 +100,9 @@ Full guide: **[docs/INSTALL.md](docs/INSTALL.md)**.
 |---|---|
 | `conductor run <role> [task] [--plan f --task T1] [--provider p] [--chain a,b] [--note …] [--files a,b] [--json]` | Delegate with fallback |
 | `conductor build\|fix\|test\|docs\|review\|ask …` | Shortcuts for `run <role>` |
-| `conductor init [--controller claude-code\|gemini-cli\|codex-cli\|opencode]` | Set up a project |
+| `conductor init [--controller claude-code\|antigravity\|codex-cli\|opencode\|gemini-cli]` | Set up a project |
 | `conductor ui` · `conductor status` · `conductor doctor [--live]` · `conductor verify` | Manage and check |
-| `conductor models` · `conductor cooldown [--clear]` · `conductor mcp` | Free model list, rate-limit state, MCP server |
+| `conductor models [provider]` · `conductor cooldown [--clear]` · `conductor mcp` | Free model list (OpenRouter, Kilo, OpenCode Zen, …), rate-limit state, MCP server |
 
 Exit codes: `0` ok · `2` usage or unsafe repo state · `3` every provider failed (the controller takes over).
 

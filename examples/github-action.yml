@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
-      - run: npm install -g github:YOUR-GITHUB-USER/conductor-ai @google/gemini-cli
+      - run: npm install -g github:YOUR-GITHUB-USER/conductor-ai
       - run: git switch -c conduct/${{ inputs.plan }}-${{ github.run_id }}
       - uses: anthropics/claude-code-action@v1
         with:

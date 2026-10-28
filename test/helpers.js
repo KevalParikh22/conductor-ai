@@ -9,7 +9,7 @@ export function tmpdir(prefix = 'conductor-test-') { return fs.mkdtempSync(path.
 export function isolateHome() {
   const home = tmpdir('conductor-home-');
   process.env.CONDUCTOR_HOME = home;
-  for (const k of ['GEMINI_API_KEY', 'OPENROUTER_API_KEY', 'OPENAI_API_KEY', 'MOONSHOT_API_KEY', 'ANTHROPIC_API_KEY', 'MOCK_API_KEY']) delete process.env[k];
+  for (const k of ['GEMINI_API_KEY', 'OPENROUTER_API_KEY', 'OPENAI_API_KEY', 'MOONSHOT_API_KEY', 'ANTHROPIC_API_KEY', 'MOCK_API_KEY', 'KILO_API_KEY', 'OPENCODE_API_KEY']) delete process.env[k];
   return home;
 }
 

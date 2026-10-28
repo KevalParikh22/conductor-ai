@@ -36,6 +36,19 @@ test('init (gemini-cli) writes TOML commands and gemini MCP settings', () => {
   assert.match(fs.readFileSync(path.join(dir, 'GEMINI.md'), 'utf8'), /conductor:start/);
 });
 
+test('init (antigravity) writes skills, MCP config and a controller-only GEMINI.md block', () => {
+  const { dir } = makeRepo();
+  initProject(dir, { controller: 'antigravity' });
+  const skill = fs.readFileSync(path.join(dir, '.agents/skills/conduct-plan/SKILL.md'), 'utf8');
+  assert.match(skill, /^---\nname: conduct-plan\ndescription: "/);
+  assert.doesNotMatch(skill, /\$ARGUMENTS/);
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, '.agents/mcp_config.json'), 'utf8')).mcpServers.conductor, { command: 'conductor', args: ['mcp'] });
+  const gemini = fs.readFileSync(path.join(dir, 'GEMINI.md'), 'utf8');
+  assert.match(gemini, /Antigravity CLI only/);
+  assert.match(gemini, /Workers: ignore this section/);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dir, '.conductor/config.json'), 'utf8')).controller, 'antigravity');
+});
+
 test('init (codex-cli) keeps the controller section conditional in AGENTS.md', () => {
   const { dir } = makeRepo();
   const r = initProject(dir, { controller: 'codex-cli' });
