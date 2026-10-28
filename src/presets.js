@@ -117,7 +117,7 @@ export const DEFAULT_ROLES = {
   fix: ['codex-cli', 'antigravity-cli', 'opencode'],
   test: ['opencode', 'kilo-free', 'openrouter-free', 'antigravity-cli'],
   docs: ['openrouter-free', 'kilo-free', 'opencode-zen', 'opencode', 'gemini-api', 'antigravity-cli'],
-  review: ['codex-cli', 'antigravity-cli', 'gemini-api'],
+  review: ['codex-cli', 'antigravity-cli', 'gemini-api', 'kilo-free'],
   ask: ['antigravity-cli', 'gemini-api', 'kilo-free', 'openrouter-free'],
 };
 

@@ -46,13 +46,15 @@ agy
 
 Notes:
 - Write roles run `agy --dangerously-skip-permissions`, the same trust level as Gemini CLI's old `--approval-mode yolo`. conductor still requires a clean tree on a non-main branch and stashes failed attempts. For narrower rights, remove that flag in config and allow commands in `~/.gemini/antigravity-cli/settings.json` (e.g. `command(regex:npm run (build|lint|test))`).
-- Read roles run `agy --mode plan`. In that mode agy can read files but cannot run shell commands unless you allow them, and if it tries anyway it ends with no answer. conductor treats that as a failure and moves to the next provider. To let `review` and `ask` use agy fully, allow read-only commands in `~/.gemini/antigravity-cli/settings.json`:
+- Read roles run `agy --mode plan`. agy can read files there, but shell commands are refused unless allowed, and **the first refused command ends agy's turn with no answer**. conductor reports that as `empty output` and moves to the next provider. Allowing read-only commands in `~/.gemini/antigravity-cli/settings.json` helps a lot:
   ```json
   { "permissions": { "allow": [
-    "command(regex:git (diff|log|show|status|blame)( .*)?)",
-    "command(regex:(ls|cat|head|tail|grep|rg|find|wc)( .*)?)"
+    "command(regex:^git (diff|log|show|status|blame)( [^;&|<>$`]*)?$)",
+    "command(regex:^(ls|cat|head|tail|grep|rg|wc)( [^;&|<>$`]*)?$)"
   ] } }
   ```
+  The character class blocks chaining and redirection (`; & | < > $` and backticks). `find` is left out on purpose, because `-delete` and `-exec` change files.
+  Even with these rules, agy (1.4.9, tested Oct 2026) sometimes reaches for another command (`node -v`, `npm test`) and gives up, roughly half of review runs in testing. That's why `review` ends with `kilo-free` as a fallback. `build` and `fix` are not affected.
 - Early `agy` builds printed nothing when stdout was not a terminal. If `conductor doctor --live` shows `antigravity-cli: empty output`, update `agy`.
 
 ## Free options at a glance

@@ -49,7 +49,7 @@ Merge rules: `providers` and `settings` merge field by field; each role's chain 
 | `fix` | write | codex-cli → antigravity-cli → opencode | Small fixes, review follow-ups |
 | `test` | write | opencode → kilo-free → openrouter-free → antigravity-cli | Writing tests (free models) |
 | `docs` | write | openrouter-free → kilo-free → opencode-zen → opencode → gemini-api → antigravity-cli | README, docs, changelogs |
-| `review` | read | codex-cli → antigravity-cli → gemini-api | Second-opinion review of a diff |
+| `review` | read | codex-cli → antigravity-cli → gemini-api → kilo-free | Second-opinion review of a diff |
 | `ask` | read | antigravity-cli → gemini-api → kilo-free → openrouter-free | Codebase questions, research |
 
 An empty chain means the controller does that role itself. For one run, `--provider x` tries `x` first, and `--chain a,b` replaces the chain.
