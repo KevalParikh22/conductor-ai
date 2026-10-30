@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { loadConfig, findProjectRoot } from './config.js';
 import { dispatch, formatSummary, UsageError } from './core.js';
+import { runBatch, formatBatch } from './batch.js';
 import { statusReport } from './status.js';
 import { runVerify } from './verify.js';
 import { ROLES } from './presets.js';
@@ -33,8 +34,28 @@ const TOOLS = [
         save: { type: 'string', description: 'ask: also save the answer to this path' },
         no_verify: { type: 'boolean' },
         allow_dirty: { type: 'boolean' },
+        worktree: { type: 'boolean', description: 'Write roles: run in an isolated checkout on branch conductor/<task_id> and commit there, so several tasks can run at once. Merge the branch afterwards.' },
+        replace: { type: 'boolean', description: 'With worktree: discard an existing worktree/branch for this task first' },
       },
       required: ['role'],
+    },
+  },
+  {
+    name: 'conductor_batch',
+    description: 'Run several INDEPENDENT plan tasks in parallel, each in its own git worktree on branch conductor/<id>, spread across different providers. ' +
+      'Refuses tasks that depend on each other. Returns one line per task (provider, verify, commit). Review each branch with `git diff HEAD...conductor/<id>` and merge the good ones.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        plan: { type: 'string', description: 'Plan file, e.g. docs/plan/feature.md' },
+        tasks: { type: 'array', items: { type: 'string' }, description: 'Task ids, e.g. ["T1","T2","T3"]' },
+        role: { type: 'string', description: 'Override the role for every task (default: each task\'s role in the plan)' },
+        provider: { type: 'string', description: 'Try this provider first for every task (default: spread across providers)' },
+        concurrency: { type: 'number', description: 'Max tasks at once (default 4)' },
+        replace: { type: 'boolean' },
+        no_verify: { type: 'boolean' },
+      },
+      required: ['plan', 'tasks'],
     },
   },
   { name: 'conductor_status', description: 'Show providers (installed / key set / cooling down), role chains, controller and repo state.', inputSchema: { type: 'object', properties: {} } },
@@ -53,11 +74,24 @@ async function callTool(name, args, root) {
     const v = await runVerify(cfg.root, cfg.settings);
     return text(`verify: ${v.status}${v.cmd ? ` (${v.cmd})` : ''}\n${v.tail || v.note || ''}`, v.status === 'FAIL');
   }
+  if (name === 'conductor_batch') {
+    try {
+      const b = await runBatch(cfg, {
+        planPath: args.plan, tasks: args.tasks, role: args.role, provider: args.provider, concurrency: args.concurrency,
+        replace: args.replace, noVerify: args.no_verify,
+        onEvent: (e) => process.stderr.write(`[conductor ${e.task}] ${e.type} ${e.provider || ''} ${e.reason || ''}\n`),
+      });
+      return text(formatBatch(b), b.ok === 0);
+    } catch (e) {
+      return text(`conductor: ${e.message}`, true);
+    }
+  }
   if (name === 'conductor_run') {
     try {
       const s = await dispatch(cfg, {
         role: args.role, task: args.task, planPath: args.plan, taskId: args.task_id, provider: args.provider, note: args.note,
         files: args.files, base: args.base, focus: args.focus, save: args.save, noVerify: args.no_verify, allowDirty: args.allow_dirty,
+        worktree: args.worktree, worktreeId: args.task_id, replace: args.replace,
         onEvent: (e) => process.stderr.write(`[conductor] ${e.type} ${e.provider || ''} ${e.reason || ''}\n`),
       });
       let out = formatSummary(s);

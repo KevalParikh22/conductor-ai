@@ -39,6 +39,16 @@ conductor run build --plan docs/plan/<slug>.md --task T3
 - Needs a clean tree on a non-protected branch.
 - On failure or quota, the partial work is stashed (`git stash list` → `conductor: failed attempt…`) and the next provider runs. Rate-limited providers cool down automatically.
 
+### 2b. Run independent tasks in parallel
+```bash
+conductor batch --plan docs/plan/<slug>.md --tasks T2,T3,T4
+```
+- Each task gets its own git worktree (a separate checkout outside the repo) on branch `conductor/<id>`. Your working tree is never touched, so your branch and tree state don't matter; the worktrees start from your last commit.
+- Tasks are spread across providers (T2 on the first ready `build` provider, T3 on the second, ...), each keeping the rest of the chain as fallback.
+- conductor verifies and commits each result on its branch. Review with `git diff HEAD...conductor/<id>`, merge with `git merge --no-ff conductor/<id>`, then `conductor worktree rm <id>`. Run `conductor verify` again after merging several.
+- Only batch tasks that don't depend on each other and don't list the same files. conductor refuses dependencies inside a batch and warns about shared files.
+- A single task can also run isolated: `conductor run build --plan … --task T3 --worktree`.
+
 ### 3. Accept or retry
 - **Verify PASS, diff in scope, matches the plan:** `git add -A && git commit -m "<slug>: T3 <title>"`, then mark the task done.
 - **Small issue (<10 lines):** fix it yourself, run `conductor verify`, commit.

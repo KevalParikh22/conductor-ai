@@ -4,6 +4,8 @@ import path from 'node:path';
 import os from 'node:os';
 import { loadConfig, findProjectRoot, validateConfig, GLOBAL_CONFIG, GLOBAL_SECRETS, projectConfigPath, readScope } from '../src/config.js';
 import { dispatch, formatSummary, UsageError, clearCooldowns, getCooldowns } from '../src/core.js';
+import { runBatch, formatBatch } from '../src/batch.js';
+import { listWorktrees, removeWorktree } from '../src/worktree.js';
 import { statusReport, statusData } from '../src/status.js';
 import { runVerify } from '../src/verify.js';
 import { initProject, setupGlobal } from '../src/init.js';
@@ -33,8 +35,15 @@ Work (normally called by the controller)
      --files a,b                 context files for API (chat) providers
      --base <ref> --focus "..."  review options
      --save <file>               ask: save the answer
+     --worktree [--replace]      run in its own checkout on branch conductor/<id> and commit there
+                                 (write roles; lets several tasks run at the same time)
      --no-verify --allow-dirty --json
   conductor <role> ...                 shortcut for: conductor run <role> ...
+  conductor batch --plan <file> --tasks T1,T2,T3 [--concurrency 4] [--role r] [--provider p] [--replace] [--json]
+                                       run independent tasks in parallel, one worktree each,
+                                       spread across different providers
+  conductor worktree [list]            conductor/* worktrees and whether they are merged
+  conductor worktree rm <id>|--all [--force]   remove worktrees (unmerged branches need --force)
   conductor verify                     run the project's verify command
   conductor status [--json]            providers, chains and repo state
   conductor models [provider] [--all]  list free models (OpenRouter by default, or any API provider)
@@ -46,7 +55,7 @@ Exit codes: 0 ok · 2 usage/unsafe state · 3 every provider failed (controller 
 
 function parseArgs(argv) {
   const opts = { _: [] };
-  const flags = new Set(['no-verify', 'allow-dirty', 'json', 'live', 'no-open', 'no-mcp', 'all', 'clear', 'global', 'help', 'version']);
+  const flags = new Set(['no-verify', 'allow-dirty', 'json', 'live', 'no-open', 'no-mcp', 'all', 'clear', 'global', 'help', 'version', 'worktree', 'replace', 'force']);
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '-h') { opts.help = true; continue; }
@@ -123,9 +132,9 @@ async function main() {
         role, task: o._.join(' ') || undefined, planPath: o.plan, taskId: o.task, provider: o.provider,
         chain: o.chain ? o.chain.split(',').map((x) => x.trim()).filter(Boolean) : undefined,
         note: o.note, files: o.files ? o.files.split(',').map((x) => x.trim()) : [], base: o.base, focus: o.focus,
-        save: o.save, noVerify: o['no-verify'], allowDirty: o['allow-dirty'],
+        save: o.save, noVerify: o['no-verify'], allowDirty: o['allow-dirty'], worktree: o.worktree, replace: o.replace,
         onEvent: o.json ? undefined : (e) => {
-          const m = { try: `trying ${e.provider} (${e.kind})…`, skip: `skip ${e.provider}: ${e.reason}`, fail: `${e.provider} failed: ${e.reason}`, ok: `${e.provider} finished`, verify: 'running verify…' }[e.type];
+          const m = { worktree: `working in ${e.dir} (branch ${e.branch})`, try: `trying ${e.provider} (${e.kind})…`, skip: `skip ${e.provider}: ${e.reason}`, fail: `${e.provider} failed: ${e.reason}`, ok: `${e.provider} finished`, verify: 'running verify…' }[e.type];
           if (m) process.stderr.write(`conductor: ${m}\n`);
         },
       });
@@ -149,6 +158,38 @@ async function main() {
       for (const m of models) console.log(`${m.id.padEnd(55)} ctx ${String(m.context || '?').padStart(7)}  ${m.tools ? 'tools' : ''}`);
       console.log(`\n${models.length} models. Use one in conductor ui → Providers → openrouter-free → model.`);
       return 0;
+    }
+    case 'batch': {
+      const cfg = loadConfig();
+      const errs = validateConfig(cfg);
+      if (errs.length) throw new UsageError('config problems:\n  ' + errs.join('\n  '));
+      const tasks = (o.tasks || o._.join(',')).split(',').map((x) => x.trim()).filter(Boolean);
+      const b = await runBatch(cfg, {
+        planPath: o.plan, tasks, role: o.role, provider: o.provider, concurrency: o.concurrency, noVerify: o['no-verify'], replace: o.replace, note: o.note,
+        onEvent: o.json ? undefined : (e) => {
+          const m = { start: `starting (first choice: ${e.provider})`, try: `trying ${e.provider}…`, fail: `${e.provider} failed: ${e.reason}`, ok: `${e.provider} finished`, verify: 'running verify…', done: 'done' }[e.type];
+          if (m) process.stderr.write(`conductor [${e.task}]: ${m}\n`);
+        },
+      });
+      console.log(o.json ? JSON.stringify(b, null, 2) : formatBatch(b));
+      return b.exitCode;
+    }
+    case 'worktree': case 'worktrees': {
+      const root = findProjectRoot();
+      const sub = o._[0] || 'list';
+      if (sub === 'list') {
+        const items = listWorktrees(root);
+        if (!items.length) { console.log('no conductor worktrees'); return 0; }
+        for (const w of items) console.log(`${w.id.padEnd(14)} ${w.merged ? 'merged      ' : `${w.ahead} commit(s)`}${w.dirty ? ' · uncommitted changes' : ''}  ${w.branch}  ${w.dir}`);
+        return 0;
+      }
+      if (sub === 'rm' || sub === 'remove') {
+        const ids = o.all ? listWorktrees(root).map((w) => w.id) : o._.slice(1);
+        if (!ids.length) throw new UsageError('usage: conductor worktree rm <id> [<id>…] | --all [--force]');
+        for (const id of ids) removeWorktree(root, id, { force: o.force }).forEach((l) => console.log(`${id}: ${l}`));
+        return 0;
+      }
+      throw new UsageError('usage: conductor worktree [list] | rm <id>|--all [--force]');
     }
     case 'cooldown': {
       if (o.clear) { clearCooldowns(o._[0] || (typeof o.clear === 'string' ? o.clear : undefined)); console.log('cooldowns cleared'); return 0; }
