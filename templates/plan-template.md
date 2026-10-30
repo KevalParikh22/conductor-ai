@@ -9,9 +9,12 @@
 
 ## Tasks
 
+<!-- Tasks with no unmet `depends on` and no shared files can run in parallel (conductor batch). -->
+
 ### T1: <title>
 - **role:** build | fix | test | docs | controller
 - **status:** todo | done | failed
+- **depends on:** none
 - **files:** `src/...`, `src/....test.ts`
 - **steps:**
   1. ...

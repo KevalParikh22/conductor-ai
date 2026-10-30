@@ -27,13 +27,22 @@ templates/              AGENTS.md, controller block, playbook, plan template, sl
 6. **Success.** The report is saved, the changed files listed, protected-file edits flagged, and verify run.
 7. **Summary.** The controller gets a short text block (or JSON with `--json`, or the MCP tool result) and only reads the full report when it needs to.
 
+## Parallel runs (worktrees)
+
+With `--worktree` (or `conductor batch`, which always uses it), step 1 changes: instead of checking your branch and tree, conductor creates a git worktree from your last commit on a new branch `conductor/<task-id>`. The checkout lives outside the repo, in `~/.config/conductor/worktrees/<repo>-<hash>/<id>`, so test runners and file watchers in your project never see it. Ignored dependency folders (`node_modules`, `vendor`, `.venv`, `venv`) are symlinked in, so verify works without a reinstall.
+
+The worker, file-block writes, stash-on-failure and verify all run inside that worktree. On success conductor commits the result on the branch (with `--no-verify`, since conductor's own verify already ran). On total failure the empty worktree is removed. Plan Design notes are copied into the prompt, because the plan file may not be committed yet. The task's own `verify:` line from the plan is used when present, because the other parallel tasks' code is missing from this checkout; run the full verify after merging. Prompt files go to a folder outside the repo, workers get `PWD` set to the worktree (OpenCode reads it), and conductor compares `git status` of your main checkout before and after, warning if anything appeared there.
+
+`conductor batch` checks the tasks first (they must exist, must not depend on each other, and shared files trigger a warning), gives task *n* of a role the *n*-th ready provider in that role's chain as its first choice, and runs up to `--concurrency` tasks at once. The controller then reviews and merges each `conductor/<id>` branch and removes the worktree with `conductor worktree rm`.
+
 Everything for a run lives in `.conductor/runs/<timestamp>-<role>-<task>/`: the prompt, each provider's log, the report, `verify.log` and `summary.json`. That folder is gitignored.
 
 ## Safety model
 
 | Risk | Mitigation |
 |---|---|
-| Worker breaks main | Write roles refuse protected branches |
+| Worker breaks main | Write roles refuse protected branches; worktree runs write only to their own `conductor/<id>` branch |
+| Parallel workers collide | Each parallel task has its own worktree and branch; the controller merges them one by one |
 | Failed worker leaves a mess | Clean-tree requirement + automatic `git stash push -u` per failed attempt |
 | Worker rewrites the rules or plan | Agents are told not to; chat output is filtered by path (`AGENTS.md`, `CLAUDE.md`, `docs/plan/`, `.claude/`, `.conductor/`, `.git/`, `.env*`, `node_modules/`); changes are flagged in the summary |
 | Path traversal from model output | File blocks must resolve inside the repo |

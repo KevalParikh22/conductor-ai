@@ -6,6 +6,7 @@ import { providerReadiness, providerKind, PROJECT_DIRNAME } from './config.js';
 import { runProvider } from './providers.js';
 import * as git from './git.js';
 import { runVerify } from './verify.js';
+import { createWorktree, commitWorktree, removeWorktree } from './worktree.js';
 import { GLOBAL_DIR, readJSON, writeJSON, timestamp, rel } from './util.js';
 
 const PROMPTS = new URL('./prompts/', import.meta.url);
@@ -130,7 +131,8 @@ function readContextFiles(root, files, budget) {
 // ---------------- dispatch ----------------
 /**
  * Run a role with fallback.
- * opts: role, task, planPath, taskId, provider, chain, note, files, base, focus, save, noVerify, allowDirty, onEvent
+ * opts: role, task, planPath, taskId, provider, chain, note, files, base, focus, save, noVerify, allowDirty, onEvent,
+ *       worktree (run in an isolated checkout on branch conductor/<id> and commit there), worktreeId, replace
  */
 export async function dispatch(cfg, opts) {
   const { root, settings } = cfg;
@@ -140,9 +142,17 @@ export async function dispatch(cfg, opts) {
   const mode = meta.mode;
   const emit = opts.onEvent || (() => {});
   const inRepo = git.isRepo(root);
+  const useWorktree = !!opts.worktree;
+  if (useWorktree && mode !== 'write') throw new UsageError(`--worktree is for write roles (build, fix, test, docs); ${role} is read-only and can already run in parallel`);
+  const preWarnings = [];
 
   // ---- safety
-  if (mode === 'write') {
+  if (mode === 'write' && useWorktree) {
+    // the worker gets its own checkout on its own branch, so the current branch and tree state don't matter
+    if (!inRepo) throw new UsageError('--worktree needs a git repo');
+    if (!git.hasCommits(root)) throw new UsageError('the repo has no commits yet: make an initial commit first');
+    if (git.isDirty(root)) preWarnings.push('your working tree has uncommitted changes; the worktree starts from the last commit and does not include them');
+  } else if (mode === 'write') {
     if (!inRepo) throw new UsageError('write roles need a git repo, so failed attempts can be stashed and diffs reviewed (run: git init && git commit --allow-empty -m init)');
     if (!git.hasCommits(root)) throw new UsageError('the repo has no commits yet: make an initial commit first');
     const b = git.branch(root);
@@ -172,7 +182,10 @@ export async function dispatch(cfg, opts) {
     if (!planText) throw new UsageError('--task needs --plan');
     section = extractTask(planText, opts.taskId);
     if (!section) throw new UsageError(`task "${opts.taskId}" not found in ${opts.planPath} (expected a heading like "### ${opts.taskId}: title")`);
-    body = `Plan file: ${opts.planPath} (read its Design notes)\nYour task id: ${opts.taskId}\n\n${section}\n`;
+    const notes = useWorktree ? extractSection(planText, 'Design notes') : '';
+    body = useWorktree
+      ? `Plan: ${opts.planPath} (its Design notes are copied below; the file itself may not exist in your checkout)\nYour task id: ${opts.taskId}\n\n## Design notes\n${notes || '(none)'}\n\n${section}\n`
+      : `Plan file: ${opts.planPath} (read its Design notes)\nYour task id: ${opts.taskId}\n\n${section}\n`;
     if (opts.task) body += `\nAdditional instructions: ${opts.task}\n`;
   } else if (opts.task) {
     body = opts.task + '\n' + (opts.planPath ? `\nRelated plan file: ${opts.planPath}\n` : '');
@@ -183,14 +196,15 @@ export async function dispatch(cfg, opts) {
 
   const agentPrompt = `${loadPrompt('_worker')}\n${loadPrompt(meta.prompt)}\n---\n# TASK (role: ${role})\n${body}`;
   const chatSystem = `${loadPrompt('_worker')}\n${loadPrompt(meta.prompt)}${mode === 'write' ? '\n' + loadPrompt('_chat_write') : ''}`;
+  let work = root; // where the worker runs: the repo, or its own worktree
   const chatContext = () => {
     let ctx = '';
-    const agents = path.join(root, 'AGENTS.md');
+    const agents = path.join(work, 'AGENTS.md');
     if (fs.existsSync(agents)) ctx += `# AGENTS.md (project rules, authoritative)\n${fs.readFileSync(agents, 'utf8').slice(0, 20000)}\n`;
     const notes = planText && extractSection(planText, 'Design notes');
     if (notes) ctx += `\n# Design notes from ${opts.planPath}\n${notes}\n`;
     const files = [...(opts.files || []), ...taskFiles(section)];
-    if (files.length) ctx += `\n# Relevant files (current content)\n${readContextFiles(root, files, settings.maxContextBytes || 60000)}`;
+    if (files.length) ctx += `\n# Relevant files (current content)\n${readContextFiles(work, files, settings.maxContextBytes || 60000)}`;
     return ctx;
   };
 
@@ -198,14 +212,28 @@ export async function dispatch(cfg, opts) {
   const runsDir = path.join(root, PROJECT_DIRNAME, 'runs');
   fs.mkdirSync(runsDir, { recursive: true });
   if (!fs.existsSync(path.join(runsDir, '.gitignore'))) fs.writeFileSync(path.join(runsDir, '.gitignore'), '*\n');
-  const runDir = path.join(runsDir, `${timestamp()}-${role}${opts.taskId ? '-' + opts.taskId.replace(/[^\w.-]/g, '') : ''}`);
+  const stamp = timestamp();
+  const runDir = path.join(runsDir, `${stamp}-${role}${opts.taskId ? '-' + opts.taskId.replace(/[^\w.-]/g, '') : ''}`);
   fs.mkdirSync(runDir, { recursive: true });
   fs.writeFileSync(path.join(runDir, 'task.md'), body);
 
   const summary = {
     role, mode, task: opts.taskId || null, plan: opts.planPath || null, attempts: [], winner: null, model: null,
-    report: null, status: null, changed: [], applied: [], rejected: [], warnings: [], verify: null, runDir: rel(root, runDir), exitCode: 3,
+    report: null, status: null, changed: [], applied: [], rejected: [], warnings: [...preWarnings], verify: null, runDir: rel(root, runDir), exitCode: 3,
   };
+  let ioDir = runDir; // where CLI workers get their prompt/output files
+  let mainBefore = null;
+  if (useWorktree) {
+    let wt;
+    try { wt = createWorktree(root, opts.worktreeId || opts.taskId || `${role}-${stamp}`, { replace: opts.replace }); } catch (e) { throw new UsageError(e.message); }
+    work = wt.dir;
+    // keep the prompt file out of the main repo: agents that see its path may start working there instead
+    ioDir = path.join(path.dirname(wt.dir), '.io', `${wt.id}-${stamp}`);
+    fs.mkdirSync(ioDir, { recursive: true });
+    mainBefore = new Set(git.status(root).split('\n').filter(Boolean));
+    summary.worktree = { id: wt.id, branch: wt.branch, dir: wt.dir, base: wt.base.slice(0, 7), commit: null, linked: wt.linked };
+    emit({ type: 'worktree', dir: wt.dir, branch: wt.branch });
+  }
   const quotaRe = new RegExp(settings.quotaPattern, 'i');
   const timeoutMs = (settings.timeoutSec || 1200) * 1000;
   const chain = resolveChain(cfg, role, { provider: opts.provider, chain: opts.chain });
@@ -215,21 +243,21 @@ export async function dispatch(cfg, opts) {
     if (c.skip) { summary.attempts.push({ provider: c.name, ok: false, reason: c.skip, skipped: true }); emit({ type: 'skip', provider: c.name, reason: c.skip }); continue; }
     const kind = providerKind(c.p);
     emit({ type: 'try', provider: c.name, kind });
-    const before = inRepo ? git.stateHash(root) : null;
+    const before = inRepo ? git.stateHash(work) : null;
     const t0 = Date.now();
     const userPrompt = kind === 'chat' ? `${chatContext()}\n---\n# TASK (role: ${role})\n${body}` : agentPrompt;
-    let res = await runProvider(c.name, c.p, { mode, prompt: userPrompt, system: chatSystem, cwd: root, timeoutMs, runDir, quotaRe });
+    let res = await runProvider(c.name, c.p, { mode, prompt: userPrompt, system: chatSystem, cwd: work, timeoutMs, runDir: ioDir, quotaRe });
     fs.writeFileSync(path.join(runDir, `${c.name}.log`), res.log || '');
 
     if (res.ok && kind === 'chat' && mode === 'write') {
       const blocks = parseFileBlocks(res.text);
-      const { applied, rejected } = applyFileBlocks(root, blocks, settings.protectedPaths || []);
+      const { applied, rejected } = applyFileBlocks(work, blocks, settings.protectedPaths || []);
       summary.rejected.push(...rejected);
       if (!applied.length) res = { ...res, ok: false, reason: rejected.length ? 'only protected/outside files returned' : 'no file blocks in reply' };
       else summary.applied = applied;
     }
     const attempt = { provider: c.name, kind, ok: res.ok, reason: res.ok ? 'ok' : res.reason, seconds: Math.round((Date.now() - t0) / 100) / 10 };
-    const changedDuringRead = mode === 'read' && inRepo && before !== git.stateHash(root);
+    const changedDuringRead = mode === 'read' && inRepo && before !== git.stateHash(work);
     if (changedDuringRead) summary.warnings.push(`${c.name} changed files during a read-only run. Check git status.`);
 
     if (res.ok) {
@@ -244,14 +272,23 @@ export async function dispatch(cfg, opts) {
       setCooldown(c.name, mins, 'rate limited');
       attempt.reason += ` (cooldown ${mins}m)`;
     }
-    if (mode === 'write' && !opts.allowDirty && git.isDirty(root)) {
-      if (git.stashPush(root, `conductor: failed attempt by ${c.name} ${opts.taskId || role} ${timestamp()}`)) attempt.stashed = true;
+    if (mode === 'write' && (useWorktree || !opts.allowDirty) && git.isDirty(work)) {
+      if (git.stashPush(work, `conductor: failed attempt by ${c.name} ${opts.taskId || role} ${timestamp()}`)) attempt.stashed = true;
     }
     summary.attempts.push(attempt);
     emit({ type: 'fail', provider: c.name, reason: attempt.reason });
   }
 
+  if (useWorktree) {
+    fs.rmSync(ioDir, { recursive: true, force: true });
+    const leaked = git.status(root).split('\n').filter((l) => l && !mainBefore.has(l)).map((l) => l.slice(3));
+    if (leaked.length) {
+      summary.leaked = leaked;
+      summary.warnings.push(`files appeared in your MAIN checkout during this run (from this worker, or another one running at the same time): ${leaked.join(', ')}. Inspect them with git status before merging`);
+    }
+  }
   if (!summary.winner) {
+    if (useWorktree) { removeWorktree(root, summary.worktree.id, { force: true }); summary.worktree.removed = true; }
     writeJSON(path.join(runDir, 'summary.json'), summary);
     return summary;
   }
@@ -263,13 +300,21 @@ export async function dispatch(cfg, opts) {
   summary.exitCode = 0;
 
   if (mode === 'write') {
-    summary.changed = git.changedFiles(root);
+    summary.changed = git.changedFiles(work);
     const touched = summary.changed.filter((f) => isProtected(f, settings.protectedPaths || []));
     if (touched.length) summary.warnings.push(`worker modified protected files: ${touched.join(', ')}`);
     if (settings.autoVerify !== false && !opts.noVerify) {
       emit({ type: 'verify' });
-      summary.verify = await runVerify(root, settings, path.join(runDir, 'verify.log'));
+      // in a worktree, other parallel tasks' work is missing, so prefer the task's own verify line from the plan
+      const taskVerify = useWorktree ? (section.match(/\*\*verify:\*\*\s*`([^`]+)`/i) || [])[1]?.trim() : '';
+      const vs = taskVerify && !taskVerify.includes('<') ? { ...settings, verify: taskVerify } : settings;
+      summary.verify = await runVerify(work, vs, path.join(runDir, 'verify.log'));
+      if (vs !== settings) summary.verify.scope = 'task';
       if (summary.verify.log) summary.verify.log = rel(root, summary.verify.log);
+    }
+    if (useWorktree) {
+      const v = summary.verify ? `verify ${summary.verify.status}` : 'not verified';
+      summary.worktree.commit = commitWorktree(work, `conductor: ${opts.taskId || role} by ${summary.winner} (${v})\n\n${(summary.status || '').replace(/^#+\s*/, '')}`);
     }
   }
   if (opts.save) {
@@ -286,6 +331,7 @@ export function formatSummary(s) {
   const L = [];
   L.push('', '==================== CONDUCTOR RESULT ====================');
   L.push(`role:      ${s.role}${s.task ? `   task: ${s.task}` : ''}${s.plan ? `   plan: ${s.plan}` : ''}`);
+  if (s.worktree) L.push(`worktree:  ${s.worktree.branch}${s.worktree.removed ? ' (removed: nothing to keep)' : `  ${s.worktree.dir}`}`);
   L.push(`attempts:  ${s.attempts.map((a) => `${a.provider}(${a.reason}${a.stashed ? ', stashed' : ''})`).join(' → ') || '(none)'}`);
   if (!s.winner) {
     L.push('worker:    NONE. Every provider failed or was skipped (exit 3).');
@@ -298,9 +344,16 @@ export function formatSummary(s) {
   if (s.applied.length) L.push(`applied:   ${s.applied.join(', ')}`);
   if (s.rejected.length) L.push(`rejected:  ${s.rejected.join(', ')}`);
   if (s.mode === 'write') L.push(`changed:   ${s.changed.join(', ') || '(nothing)'}`);
-  if (s.verify) L.push(`verify:    ${s.verify.status}${s.verify.cmd ? ` (${s.verify.cmd})` : ''}${s.verify.status === 'FAIL' ? `, log: ${s.verify.log}` : ''}${s.verify.note ? `, ${s.verify.note}` : ''}`);
+  if (s.verify) L.push(`verify:    ${s.verify.status}${s.verify.scope === 'task' ? ' [task verify]' : ''}${s.verify.cmd ? ` (${s.verify.cmd})` : ''}${s.verify.status === 'FAIL' ? `, log: ${s.verify.log}` : ''}${s.verify.note ? `, ${s.verify.note}` : ''}`);
   if (s.saved) L.push(`saved:     ${s.saved}`);
+  if (s.worktree?.commit) L.push(`commit:    ${s.worktree.commit} on ${s.worktree.branch} (from ${s.worktree.base})`);
   for (const w of s.warnings) L.push(`WARNING:   ${w}`);
+  if (s.worktree) {
+    L.push(s.worktree.commit
+      ? `next:      orchestrator reviews \`git diff HEAD...${s.worktree.branch}\`, then \`git merge --no-ff ${s.worktree.branch}\` and \`conductor worktree rm ${s.worktree.id}\` (or rm --force to reject)`
+      : `next:      the worker changed nothing; \`conductor worktree rm ${s.worktree.id}\``);
+    return L.join('\n');
+  }
   L.push(s.mode === 'write'
     ? 'next:      orchestrator checks `git diff`, then commits, or retries with --provider <other> --note "<what was wrong>"'
     : 'next:      orchestrator reads the report and triages it. Workers can be wrong.');

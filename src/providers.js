@@ -37,7 +37,8 @@ export async function runCli(name, p, { mode, prompt, cwd, timeoutMs, runDir, qu
   const promptArg = prompt.length > MAX_PROMPT_ARG
     ? `Read the file ${promptFile} and follow the instructions in it exactly. Do not modify that file.` : prompt;
   const args = expandArgs(template, { prompt: promptArg, promptFile, outFile, model: p.model }, preset.modelArgs || []);
-  const env = { ...process.env, ...(p.env || {}) };
+  // PWD must match cwd: some CLIs (OpenCode) take the project folder from $PWD, not from their real working directory
+  const env = { ...process.env, ...(p.env || {}), PWD: cwd };
   const r = await run(preset.bin, args, { cwd, input: preset.stdin ? prompt : undefined, timeoutMs, env });
   const log = `$ ${preset.bin} ${args.map((a) => (a.length > 80 ? JSON.stringify(a.slice(0, 77) + '...') : a)).join(' ')}\n` +
     `--- exit ${r.code}${r.timedOut ? ' (timeout)' : ''}\n--- stdout\n${r.stdout}\n--- stderr\n${r.stderr}`;

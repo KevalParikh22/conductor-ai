@@ -1,6 +1,6 @@
 {
   "name": "conductor-ai",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Use Claude (or any agent) as the controller and delegate coding, tests, docs and reviews to Gemini, Codex, OpenCode, OpenRouter free models, Kimi, local models and more, with automatic fallback.",
   "type": "module",
   "bin": { "conductor": "bin/conductor.js" },

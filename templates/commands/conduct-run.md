@@ -1,21 +1,32 @@
 ---
-description: Execute a whole plan task by task with worker LLMs, then test, document and review
+description: Execute a whole plan with worker LLMs (independent tasks in parallel), then test, document and review
 argument-hint: <plan-file> [from-task-id]
 disable-model-invocation: true
-allowed-tools: Read, Edit, Bash(conductor:*), Bash(git status:*), Bash(git diff:*), Bash(git add:*), Bash(git commit:*), Bash(git log:*), Bash(git stash push:*), Bash(git stash list), Bash(git switch -c:*)
+allowed-tools: Read, Edit, Bash(conductor:*), Bash(git status:*), Bash(git diff:*), Bash(git add:*), Bash(git commit:*), Bash(git log:*), Bash(git merge:*), Bash(git stash push:*), Bash(git stash list), Bash(git switch -c:*)
 ---
 
 You are the controller (see `.conductor/ORCHESTRATOR.md`). Execute `$ARGUMENTS` (from the given task id, if one is given).
 
-For each task with `status: todo`, in dependency order, follow the procedure in `.claude/commands/conduct-build.md` exactly: delegate in the background, check the diff yourself, commit, retry once with another provider, then take over.
+Work in **waves**. A wave is every `status: todo` task whose `depends on` tasks are all done.
+
+- **Wave with one task, or a `controller` task:** follow `.claude/commands/conduct-build.md` exactly (delegate in the background, check the diff, commit, retry once with another provider, then take over). Do controller tasks yourself.
+- **Wave with two or more delegable tasks that don't list the same files:** run them in parallel, in the background:
+  `conductor batch --plan <plan> --tasks T2,T3,T4`
+  Each task runs in its own git worktree on branch `conductor/<id>`, spread across different providers, and conductor commits the result on that branch. When the batch finishes, for each ✓ task:
+  1. `git diff HEAD...conductor/<id>`: in scope? matches the Design notes and acceptance criteria? Check its verify result.
+  2. Good: `git merge --no-ff conductor/<id> -m "<slug>: <id> <title>"`, then `conductor worktree rm <id>` and set `status: done`.
+  3. Bad: `conductor worktree rm <id> --force`, then retry it alone with `conductor run <role> --plan <plan> --task <id> --worktree --provider <different> --note "<what was wrong>"`, or do it yourself.
+  For each ✗ task, retry it alone the same way. If a merge conflicts, resolve it yourself, or abort and retry that task after the others are merged.
+- If tasks in a wave list the same file, run them one after another instead.
 
 While running:
-- Keep your context small: read the summary, the RESULT block and the task's `git diff`, never full logs.
+- Keep your context small: read the summaries, the RESULT blocks and each task's diff, never full logs.
 - After each task, report one line: `T3 ✓ antigravity-cli · verify PASS · a1b2c3d`.
 - **Stop and ask** if a task needs a design decision the plan doesn't cover, a worker leaves its scope twice, or verify fails for reasons outside the task.
-- If exit code 3 happens on two tasks in a row (everything rate-limited), stop, update `HANDOFF.md`, and report what is left.
+- If exit code 3 happens on two waves in a row (everything rate-limited), stop, update `HANDOFF.md`, and report what is left.
 
 When all tasks are done:
-1. `conductor run review --plan <plan>` (background). Triage each finding yourself and fix the real ones (small ones yourself, larger ones with `conductor run fix "<finding>"`), then commit.
-2. `conductor verify`.
-3. Update `HANDOFF.md` and summarise: tasks per provider, review verdict, leftovers.
+1. `conductor verify` on the merged result (parallel tasks were verified separately).
+2. `conductor run review --plan <plan>` (background). Triage each finding yourself and fix the real ones (small ones yourself, larger ones with `conductor run fix "<finding>"`), then commit.
+3. `conductor worktree` should list nothing; remove leftovers.
+4. Update `HANDOFF.md` and summarise: tasks per provider, review verdict, leftovers.

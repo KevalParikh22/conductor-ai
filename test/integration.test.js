@@ -82,7 +82,7 @@ test('MCP server: handshake, tools/list, status and usage errors', async () => {
   const disc = await m.request('server/discover', {});
   assert.ok(disc.result.supportedVersions.includes('2026-07-28'));
   const list = await m.request('tools/list', {});
-  assert.deepEqual(list.result.tools.map((t) => t.name), ['conductor_run', 'conductor_status', 'conductor_verify']);
+  assert.deepEqual(list.result.tools.map((t) => t.name), ['conductor_run', 'conductor_batch', 'conductor_status', 'conductor_verify']);
   const st = await m.request('tools/call', { name: 'conductor_status', arguments: {} });
   assert.match(st.result.content[0].text, /roles \(fallback order/);
   const bad = await m.request('tools/call', { name: 'conductor_run', arguments: { role: 'build', task: 'x' } });
