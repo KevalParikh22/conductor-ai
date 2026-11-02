@@ -26,14 +26,9 @@ test('init (claude-code) adds files, preserves user content, and is idempotent',
   assert.equal((fs.readFileSync(path.join(dir, 'CLAUDE.md'), 'utf8').match(/conductor:start/g) || []).length, 1);
 });
 
-test('init (gemini-cli) writes TOML commands and gemini MCP settings', () => {
+test('init refuses the retired gemini-cli controller', () => {
   const { dir } = makeRepo();
-  initProject(dir, { controller: 'gemini-cli' });
-  const toml = fs.readFileSync(path.join(dir, '.gemini/commands/conduct-plan.toml'), 'utf8');
-  assert.match(toml, /^description = "/);
-  assert.match(toml, /\{\{args\}\}/);
-  assert.ok(JSON.parse(fs.readFileSync(path.join(dir, '.gemini/settings.json'), 'utf8')).mcpServers.conductor);
-  assert.match(fs.readFileSync(path.join(dir, 'GEMINI.md'), 'utf8'), /conductor:start/);
+  assert.throws(() => initProject(dir, { controller: 'gemini-cli' }), /unknown controller "gemini-cli"/);
 });
 
 test('init (antigravity) writes skills, MCP config and a controller-only GEMINI.md block', () => {
@@ -102,11 +97,11 @@ test('UI server: host + token checks, config save writes a minimal diff, secrets
     assert.equal((await fetch(`${base}/api/state`)).status, 401);
     const st = await (await fetch(`${base}/api/state`, { headers: { 'x-conductor-token': 'tok' } })).json();
     assert.equal(st.root, fs.realpathSync(dir));
-    const eff = st.effective; eff.roles.build = ['codex-cli', 'gemini-cli'];
+    const eff = st.effective; eff.roles.build = ['codex-cli', 'opencode'];
     const put = await fetch(`${base}/api/config`, { method: 'PUT', headers: { 'x-conductor-token': 'tok', 'content-type': 'application/json' }, body: JSON.stringify({ scope: 'project', effective: eff }) });
     assert.equal(put.status, 200);
     const saved = JSON.parse(fs.readFileSync(path.join(dir, '.conductor/config.json'), 'utf8'));
-    assert.deepEqual(saved.roles, { build: ['codex-cli', 'gemini-cli'] });
+    assert.deepEqual(saved.roles, { build: ['codex-cli', 'opencode'] });
     assert.equal(saved.providers, undefined, 'unchanged providers are not written');
     eff.roles.build = ['does-not-exist'];
     const badPut = await fetch(`${base}/api/config`, { method: 'PUT', headers: { 'x-conductor-token': 'tok', 'content-type': 'application/json' }, body: JSON.stringify({ scope: 'project', effective: eff }) });

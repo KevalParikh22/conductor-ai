@@ -1,6 +1,6 @@
 # AGENTS.md: rules for every AI working in this repo
 
-Claude Code, Gemini CLI, Codex CLI, OpenCode, Kimi and API models all follow this file. It is the single source of truth.
+Claude Code, Antigravity CLI, Codex CLI, OpenCode, Kimi and API models all follow this file. It is the single source of truth.
 
 ## 1. Project facts (fill in once)
 

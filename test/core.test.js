@@ -80,9 +80,9 @@ test('providerLocation', () => {
   assert.equal(providerLocation({ type: 'openai', baseUrl: 'https://openrouter.ai/api/v1' }), 'cloud-api');
 });
 
-test('default chains use Antigravity and keyless Kilo; Gemini CLI is kept but off', () => {
+test('default chains use Antigravity and keyless Kilo; Gemini CLI is gone', () => {
   const P = DEFAULT_CONFIG.providers;
-  assert.equal(P['gemini-cli'].enabled, false);
+  assert.equal(P['gemini-cli'], undefined);
   assert.equal(P['antigravity-cli'].preset, 'antigravity');
   assert.ok(!Object.values(DEFAULT_CONFIG.roles).flat().includes('gemini-cli'));
   assert.ok(DEFAULT_CONFIG.roles.test.includes('kilo-free'));

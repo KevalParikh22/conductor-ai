@@ -65,7 +65,13 @@ test('build falls back from a rate-limited agent to the next, stashing partial w
   const { dir, git } = makeRepo({ files: { 'docs/plan/p.md': PLAN, 'src/.keep': '' } });
   const s = await dispatch(cfgFor(dir), { role: 'build', planPath: 'docs/plan/p.md', taskId: 'T1', chain: ['antigravity-cli', 'codex-cli'] });
   const agyArgs = JSON.parse(fs.readFileSync(process.env.AGY_ARGS_LOG, 'utf8'));
-  assert.ok(agyArgs.includes('--dangerously-skip-permissions'), 'write mode skips permission prompts');
+  assert.ok(!agyArgs.includes('--dangerously-skip-permissions'), 'write mode never bypasses permissions');
+  assert.ok(agyArgs.includes('--sandbox'));
+  assert.deepEqual(agyArgs.slice(agyArgs.indexOf('--mode'), agyArgs.indexOf('--mode') + 2), ['--mode', 'accept-edits']);
+  const set = JSON.parse(agyArgs[agyArgs.indexOf('--settings') + 1]);
+  assert.equal(set.toolPermission, 'proceed-in-sandbox');
+  assert.ok(set.permissions.deny.includes(`write_file(${dir}/.git)`), 'the worker folder is filled in');
+  assert.ok(set.permissions.deny.includes('command(git push)'));
   assert.match(agyArgs[agyArgs.indexOf('-p') + 1], /add function/, 'the prompt is passed with -p');
   assert.equal(s.exitCode, 0);
   assert.equal(s.winner, 'codex-cli');
@@ -126,7 +132,8 @@ test('read-only roles warn when a worker modifies files', async () => {
   fs.writeFileSync(path.join(dir, 'x.js'), 'changed');
   const s = await dispatch(cfgFor(dir), { role: 'review', chain: ['sneaky'] });
   assert.equal(s.winner, 'sneaky');
-  assert.ok(s.warnings.some((w) => w.includes('read-only')));
+  assert.ok(s.warnings.some((w) => w.includes('changed files during a read-only run')));
+  assert.ok(s.warnings.some((w) => w.includes('cannot be held to read-only')), 'custom CLIs are not trusted to stay read-only');
 });
 
 test('review sends the diff and returns the verdict', async () => {
@@ -151,14 +158,17 @@ test('safety: protected branch, dirty tree and missing task are usage errors', a
   await assert.rejects(dispatch(cfgFor(plan.dir), { role: 'nope', task: 'x' }), /unknown role/);
 });
 
-test('antigravity read mode uses plan mode; huge prompts go through the prompt file', async () => {
+test('antigravity read mode denies writes to the project (not plan mode); huge prompts go through the prompt file', async () => {
   clearCooldowns();
   const { dir } = makeRepo();
   const big = 'x'.repeat(150_000);
   await dispatch(cfgFor(dir), { role: 'ask', task: 'what does add do? ' + big, chain: ['antigravity-cli'] });
   const args = JSON.parse(fs.readFileSync(process.env.AGY_ARGS_LOG, 'utf8'));
-  assert.deepEqual(args.slice(args.indexOf('--mode'), args.indexOf('--mode') + 2), ['--mode', 'plan']);
+  assert.ok(!args.includes('--mode'), 'plan mode answers with a plan artifact link instead of the answer');
   assert.ok(!args.includes('--dangerously-skip-permissions'));
+  const set = JSON.parse(args[args.indexOf('--settings') + 1]);
+  assert.ok(set.permissions.deny.includes(`write_file(${dir})`));
+  assert.ok(set.permissions.deny.some((r) => r.startsWith('read_file(') && r.endsWith('/.env)')));
   assert.match(args[args.indexOf('-p') + 1], /^Read the file .*antigravity-cli\.prompt\.md/);
 });
 

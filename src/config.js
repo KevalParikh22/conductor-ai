@@ -41,12 +41,35 @@ export function loadConfig(root = findProjectRoot()) {
   const project = readJSON(projectConfigPath(root), {});
   let cfg = deepMerge(DEFAULT_CONFIG, global);
   cfg = deepMerge(cfg, project);
+  cfg.notices = dropRetired(cfg);
   cfg.root = root;
   cfg.sources = {
     global: fs.existsSync(GLOBAL_CONFIG) ? GLOBAL_CONFIG : null,
     project: fs.existsSync(projectConfigPath(root)) ? projectConfigPath(root) : null,
   };
   return cfg;
+}
+
+// CLI presets that were removed; configs saved by older versions may still name them.
+const RETIRED = {
+  gemini: 'Gemini CLI was removed (Google retired it for personal accounts on 18 June 2026). Use antigravity-cli instead',
+};
+const RETIRED_CONTROLLERS = { 'gemini-cli': 'antigravity' };
+
+/** Remove providers built on retired presets (and their places in role chains). Returns notices. */
+function dropRetired(cfg) {
+  const notices = [];
+  for (const [name, p] of Object.entries(cfg.providers || {})) {
+    if (p?.type !== 'cli' || !RETIRED[p.preset] || (p.bin && p.write)) continue;
+    delete cfg.providers[name];
+    for (const role of Object.keys(cfg.roles || {})) if (Array.isArray(cfg.roles[role])) cfg.roles[role] = cfg.roles[role].filter((n) => n !== name);
+    notices.push(`${name}: ${RETIRED[p.preset]}. It was left out of your chains; remove it from your config to hide this message`);
+  }
+  if (RETIRED_CONTROLLERS[cfg.controller]) {
+    notices.push(`controller "${cfg.controller}" was removed; using "${RETIRED_CONTROLLERS[cfg.controller]}". Run: conductor init --controller ${RETIRED_CONTROLLERS[cfg.controller]}`);
+    cfg.controller = RETIRED_CONTROLLERS[cfg.controller];
+  }
+  return notices;
 }
 
 export function readScope(scope, root) {
@@ -56,7 +79,7 @@ export function readScope(scope, root) {
 /** Write a full scope file (what the UI sends back). Strips runtime-only fields. */
 export function writeScope(scope, root, data) {
   const clean = { ...data };
-  delete clean.root; delete clean.sources;
+  delete clean.root; delete clean.sources; delete clean.notices;
   writeJSON(scope === 'global' ? GLOBAL_CONFIG : projectConfigPath(root), clean);
 }
 
@@ -88,6 +111,22 @@ export function providerLocation(p) {
 
 /** Can this provider edit files itself (agent) or only return text (chat)? */
 export function providerKind(p) { return p.type === 'cli' ? 'agent' : 'chat'; }
+
+/** What a CLI provider may do in each mode (from its preset, or its own `permissions`). */
+export function providerPermissions(p) {
+  if (p.type !== 'cli') return null;
+  return { ...(CLI_PRESETS[p.preset]?.permissions || {}), ...(p.permissions || {}) };
+}
+
+/**
+ * Is read-only enforced by the CLI itself (sandbox or permission rules), not just asked for in the prompt?
+ * A provider that overrides the preset's read args without declaring permissions counts as not enforced.
+ */
+export function readOnlyEnforced(p) {
+  if (p.type !== 'cli') return true; // chat APIs only return text
+  if (p.read && !p.permissions) return false;
+  return providerPermissions(p).readOnlyEnforced === true;
+}
 
 /** Readiness check without making network calls. */
 export function providerReadiness(name, p) {

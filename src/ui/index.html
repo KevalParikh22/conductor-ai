@@ -215,11 +215,15 @@ const views = {
     const byLoc = {};
     for (const [n, p] of Object.entries(W.providers)) { const loc = provStatus(n).location || (p.type === 'cli' ? 'local-agent' : 'cloud-api'); (byLoc[loc] ||= []).push(n); }
     const field = (n, k, label, ph = '', list = '') => `<div><label class="f">${label}</label><input type="text" data-pf="${esc(n)}|${k}" value="${esc(W.providers[n][k] || '')}" placeholder="${esc(ph)}" ${list ? `list="${list}"` : ''}></div>`;
+    const permNote = (p) => { const m = { ...(S.presets[p.preset]?.permissions || {}), ...(p.permissions || {}) };
+      if (!m.write) return '<div class="note">Permissions: custom CLI, check its own settings.</div>';
+      return `<div class="note"><b>Write roles:</b> ${esc(m.write)}<br><b>Read roles:</b> ${esc(m.read)}${m.readOnlyEnforced ? '' : ' <span class="pill bad">read-only not enforced</span>'}</div>`; };
     const card = (n) => { const p = W.providers[n]; const builtin = S.builtinProviders.includes(n);
       return `<div class="card prov"><label class="switch" title="Enable"><input type="checkbox" data-en="${esc(n)}" ${p.enabled ? 'checked' : ''}><span></span></label><div>
         <div class="prov-head"><b>${esc(n)}</b>${locPill(provStatus(n))}${readyPill(n)}<span class="pill">${p.type === 'cli' ? esc(S.presets[p.preset]?.label || p.bin || 'cli') : p.type === 'anthropic' ? 'Anthropic API' : 'OpenAI-compatible'}</span>
           <span class="spacer"></span><button class="btn small" data-test="${esc(n)}">Test</button>${builtin ? '' : `<button class="btn small" data-del="${esc(n)}">Remove</button>`}</div>
         ${p.notes ? `<div class="note">${esc(p.notes)}</div>` : ''}
+        ${p.type === 'cli' ? permNote(p) : ''}
         <div class="fields">${field(n, 'model', 'Model', p.type === 'cli' ? 'CLI default' : 'required', n.startsWith('openrouter') ? 'dl-or' : (p.preset === 'opencode' ? 'dl-oc' : ''))}
           ${p.type !== 'cli' ? field(n, 'baseUrl', 'Base URL') + field(n, 'apiKeyEnv', 'API key env var', 'none for local') : ''}</div>
         ${n.startsWith('openrouter') ? `<div class="row" style="margin-top:8px"><button class="btn small" id="loadfree">Load current free models</button><span class="note">${freeModels ? freeModels.length + ' free models loaded into the dropdown' : 'The free list changes often'}</span></div>` : ''}
@@ -231,7 +235,7 @@ const views = {
       <div class="card"><h2>Add a custom provider</h2><p class="note">Any OpenAI-compatible endpoint (Together, Fireworks, Mistral, a company gateway…), or another CLI agent.</p>
         <div class="fields"><div><label class="f">Name</label><input type="text" id="np-name" placeholder="e.g. mistral-api"></div>
         <div><label class="f">Type</label><select id="np-type"><option value="openai">OpenAI-compatible API</option><option value="anthropic">Anthropic API</option><option value="cli">CLI agent</option></select></div>
-        <div><label class="f">Base URL / CLI preset</label><input type="text" id="np-base" placeholder="https://api.example.com/v1  or  antigravity|codex|opencode|kimi|claude|gemini"></div>
+        <div><label class="f">Base URL / CLI preset</label><input type="text" id="np-base" placeholder="https://api.example.com/v1  or  antigravity|codex|opencode|kimi|claude"></div>
         <div><label class="f">API key env var</label><input type="text" id="np-key" placeholder="EXAMPLE_API_KEY"></div>
         <div><label class="f">Model</label><input type="text" id="np-model"></div></div>
         <div class="row" style="margin-top:10px"><button class="btn" id="np-add">Add provider</button></div></div>`;
@@ -283,7 +287,7 @@ const views = {
       <li><b>Check everything</b>${cmd('conductor doctor --live')}</li>
       <li><b>Use it from your controller</b>: in Claude Code: <span class="mono">/conduct-plan add password reset</span>, then <span class="mono">/conduct-run docs/plan/password-reset.md</span></li>
     </ol></div>
-    <div class="card"><h2>Local vs cloud</h2><p class="note"><b>Local agents</b> (Gemini CLI, Codex CLI, OpenCode, Kimi CLI) run on your machine with your subscriptions and can edit files and run tests. <b>Cloud APIs</b> (Gemini API, OpenRouter, Kimi API, Claude API…) work anywhere with a key, including CI and Claude Code on the web. They return code, which conductor applies. <b>Local models</b> (Ollama, LM Studio) are free and private. Mix them freely in any role's chain.</p></div>`;
+    <div class="card"><h2>Local vs cloud</h2><p class="note"><b>Local agents</b> (Antigravity CLI, Codex CLI, OpenCode, Kimi CLI) run on your machine with your subscriptions and can edit files and run tests. Each one runs with its own permission rules: write roles may edit only the project, read roles cannot edit (see each provider's card). <b>Cloud APIs</b> (Gemini API, OpenRouter, Kimi API, Claude API…) work anywhere with a key, including CI and Claude Code on the web. They return code, which conductor applies. <b>Local models</b> (Ollama, LM Studio) are free and private. Mix them freely in any role's chain.</p></div>`;
   },
 };
 

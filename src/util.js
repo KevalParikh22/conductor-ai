@@ -25,6 +25,9 @@ export function deepMerge(base, over) {
   return out;
 }
 
+/** Names of the variables conductor loaded from its secret files (kept away from CLI workers). */
+export const SECRET_VARS = new Set();
+
 /** Parse a KEY=VALUE env file. Does not override variables already set. */
 export function loadEnvFile(file) {
   let text;
@@ -36,7 +39,7 @@ export function loadEnvFile(file) {
     let v = m[2];
     if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) v = v.slice(1, -1);
     vars[m[1]] = v;
-    if (process.env[m[1]] === undefined) process.env[m[1]] = v;
+    if (process.env[m[1]] === undefined) { process.env[m[1]] = v; SECRET_VARS.add(m[1]); }
   }
   return vars;
 }

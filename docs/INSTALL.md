@@ -8,7 +8,7 @@ About 15 minutes the first time. After that, adding conductor to another project
 |---|---|---|
 | Node.js 20+ | `node --version` | https://nodejs.org or `nvm install 22` |
 | git | `git --version` | Write roles need a git repo |
-| A controller | | Claude Code (default), Gemini CLI, Codex CLI or OpenCode |
+| A controller | | Claude Code (default), Antigravity CLI, Codex CLI or OpenCode |
 | At least one worker | | Any CLI agent below, or an API key |
 | OS | | Linux and macOS. Windows: use WSL |
 
@@ -39,7 +39,9 @@ curl -fsSL https://antigravity.google/cli/install.sh | bash
 ```
 Run `agy` once and sign in with Google. Headless runs reuse that login.
 
-> Gemini CLI stopped serving personal Google accounts on 18 June 2026; Antigravity CLI replaced it. If you have a Gemini API key or a Code Assist licence, Gemini CLI still works: enable `gemini-cli` in the UI.
+> Gemini CLI is no longer supported: Google stopped serving personal accounts in it on 18 June 2026 and Antigravity CLI replaced it. The Gemini API (`gemini-api`, with a `GEMINI_API_KEY`) still works.
+>
+> conductor runs every agent with its own permission rules for that run (edit the project only, no push, read roles can't edit) without changing your CLI settings. See [Providers → Permissions](PROVIDERS.md#permissions-what-each-agent-may-do).
 
 **Codex CLI** (daily driver, uses your ChatGPT account or an API key):
 ```bash
@@ -90,16 +92,15 @@ For a different controller, pass it explicitly:
 ```bash
 conductor init --controller antigravity
 ```
-Other options: `codex-cli`, `opencode`, `gemini-cli`.
+Other options: `antigravity`, `codex-cli`, `opencode`.
 
 | File | Purpose | Overwrites yours? |
 |---|---|---|
 | `AGENTS.md` | Shared rules for every model | No: appends a marked block if the file exists |
 | `CLAUDE.md` / `GEMINI.md` | Controller instructions (imports AGENTS.md) | No: marked block only |
 | `.claude/commands/conduct-*.md` | Slash commands (Claude Code) | Owned by conductor |
-| `.gemini/commands/conduct-*.toml` | Slash commands (if the controller is Gemini CLI) | Owned by conductor |
 | `.agents/skills/conduct-*/SKILL.md` | Skills that play the `/conduct-*` role (if the controller is Antigravity) | Owned by conductor |
-| `.mcp.json` / `.agents/mcp_config.json` / `.gemini/settings.json` / `opencode.json` | MCP server entry | Merged, never replaced |
+| `.mcp.json` / `.agents/mcp_config.json` / `opencode.json` | MCP server entry | Merged, never replaced |
 | `.conductor/config.json` | Project overrides (controller, roles…) | Kept |
 | `.conductor/ORCHESTRATOR.md` | Controller playbook | Owned by conductor |
 | `docs/plan/_TEMPLATE.md`, `HANDOFF.md`, `docs/architecture.md` | Plan format and shared state | Kept |
@@ -165,7 +166,7 @@ conductor init
 
 To uninstall, remove conductor's files from a project:
 ```bash
-rm -rf .conductor .claude/commands/conduct-*.md .gemini/commands/conduct-*.toml .agents/skills/conduct-*
+rm -rf .conductor .claude/commands/conduct-*.md .agents/skills/conduct-*
 ```
 Then delete the `<!-- conductor:… -->` blocks from `CLAUDE.md`, `GEMINI.md` and `AGENTS.md`, and the `conductor` entry in `.mcp.json` (or `.agents/mcp_config.json`). To remove it globally:
 ```bash
