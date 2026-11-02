@@ -150,6 +150,8 @@ conductor run build --plan docs/plan/password-reset.md --task T1
 conductor run review --plan docs/plan/password-reset.md
 ```
 
+For a tmux layout or VS Code (Claude Code, Copilot agent mode, Cursor), see [tmux and editors](EDITORS.md).
+
 ## 7. When limits run out
 
 | What ran out | What happens |

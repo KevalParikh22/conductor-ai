@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **VS Code.** `conductor init --vscode` writes `.vscode/mcp.json` (merged, never replaced), so Copilot agent mode and other VS Code MCP extensions can call conductor. It is written automatically when the project already has a `.vscode/` folder.
+- **New guide: [tmux and editors](docs/EDITORS.md).** A three-pane tmux layout (controller, live runs, shell), VS Code with Claude Code or Copilot, Cursor, VS Code tasks, and the PATH fix for editors that can't find `conductor`.
 - **Install & setup page rewritten** (`conductor ui`). It checks this machine (Node, git, conductor version, project initialised, installed agents, free keys set) and has real install commands with the actual repo, not a placeholder. It shows a free path (kilo-free with no key, OpenRouter, OpenCode Zen, Gemini, Groq, Cerebras, Ollama) next to the subscription agents, a read-only free test run, install and sign-in per agent with copyable single commands, and how to update or remove conductor.
 - The API keys page lists every free provider with its signup link, and warns that free routes may log prompts.
 - API providers that return 200 with empty content (Kilo and OpenRouter free routers do this now and then) are asked once more before falling back.
