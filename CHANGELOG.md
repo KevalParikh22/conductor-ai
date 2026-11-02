@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Security: git hooks and config are restored after every worker.** `.git/config` and `.git/hooks` are snapshotted before each attempt and put back right after it, before conductor runs git again, with a warning. Before this, a worker could plant a hook or an `fsmonitor` program that ran outside its sandbox on the next git command. conductor's own git calls now also run with `core.fsmonitor=false`. Hook folders in the repo (`.husky/`, `.githooks/`, `core.hooksPath`) are protected files.
+- **Security: secrets files are never sent to API models as context** (`.env*`, `auth.json`, `secrets.env`, `.npmrc`, SSH keys, `*.pem`/`*.key`, `protectedPaths`), even when a task lists them with `--files`.
+- **Security: verify runs without conductor's API keys** in its environment.
+- **SECURITY.md rewritten** for users: what is protected, what isn't (verify runs worker-written code; agents can read what you can read; free routes may log prompts), and a checklist for sensitive projects.
 - **VS Code.** `conductor init --vscode` writes `.vscode/mcp.json` (merged, never replaced), so Copilot agent mode and other VS Code MCP extensions can call conductor. It is written automatically when the project already has a `.vscode/` folder.
 - **New guide: [tmux and editors](docs/EDITORS.md).** A three-pane tmux layout (controller, live runs, shell), VS Code with Claude Code or Copilot, Cursor, VS Code tasks, and the PATH fix for editors that can't find `conductor`.
 - **Install & setup page rewritten** (`conductor ui`). It checks this machine (Node, git, conductor version, project initialised, installed agents, free keys set) and has real install commands with the actual repo, not a placeholder. It shows a free path (kilo-free with no key, OpenRouter, OpenCode Zen, Gemini, Groq, Cerebras, Ollama) next to the subscription agents, a read-only free test run, install and sign-in per agent with copyable single commands, and how to update or remove conductor.
