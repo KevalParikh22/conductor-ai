@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { loadConfig, findProjectRoot, validateConfig, GLOBAL_CONFIG, GLOBAL_SECRETS, projectConfigPath, readScope } from '../src/config.js';
+import { loadConfig, findProjectRoot, validateConfig, GLOBAL_CONFIG, GLOBAL_SECRETS, projectConfigPath, readScope, providerPermissions, readOnlyEnforced } from '../src/config.js';
 import { dispatch, formatSummary, UsageError, clearCooldowns, getCooldowns } from '../src/core.js';
 import { runBatch, formatBatch } from '../src/batch.js';
 import { listWorktrees, removeWorktree } from '../src/worktree.js';
@@ -214,12 +214,13 @@ async function doctor(o) {
   console.log(`conductor ${VERSION} · node ${process.version} · ${os.platform()}`);
   console.log(`project: ${cfg.root}\n`);
   let problems = 0;
+  for (const n of cfg.notices || []) console.log(`! ${n}`);
   for (const [name, p] of Object.entries(cfg.providers)) {
     if (!p.enabled) continue;
     if (p.type === 'cli') {
       const preset = { ...CLI_PRESETS[p.preset], ...p };
       if (!which(preset.bin)) { problems++; console.log(`✗ ${name.padEnd(16)} not installed\n    install: ${preset.install}\n    login:   ${preset.login}`); continue; }
-    } else if (p.apiKeyEnv && !process.env[p.apiKeyEnv]) {
+    } else if (p.apiKeyEnv && !p.apiKeyOptional && !process.env[p.apiKeyEnv]) {
       problems++; console.log(`✗ ${name.padEnd(16)} ${p.apiKeyEnv} not set (add to ${GLOBAL_SECRETS} or conductor ui → Keys)`); continue;
     }
     if (o.live) {
@@ -229,6 +230,11 @@ async function doctor(o) {
       if (!t.ok) problems++;
       console.log(`${t.ok ? '✓' : '✗'} ${name.padEnd(16)} ${t.reason}${t.ok ? '' : `: ${t.sample.replace(/\s+/g, ' ').slice(0, 120)}`}`);
     } else console.log(`✓ ${name.padEnd(16)} ready (use --live to test a real call)`);
+    const perms = providerPermissions(p);
+    if (perms) {
+      console.log(`    write: ${perms.write || 'unknown (custom CLI): check its own permission settings'}`);
+      console.log(`    read:  ${perms.read || 'unknown'}${readOnlyEnforced(p) ? '' : '  ⚠ read-only NOT enforced'}`);
+    }
   }
   const errs = validateConfig(cfg);
   errs.forEach((e) => console.log(`✗ config: ${e}`));

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.0 (2026-11-02)
+
+- **Permissions for every agent, per run.** conductor passes each CLI its own rules for that run and never edits your CLI settings. Write roles may edit only the project (no `git push/commit/reset/checkout/switch/rebase/stash/clean`, no `sudo`); read roles cannot edit. `conductor doctor` and the Providers page show what each agent may do. Details in docs/PROVIDERS.md.
+  - **Antigravity:** no more `--dangerously-skip-permissions`. Write roles run `--mode accept-edits --sandbox --settings <rules>`: commands run in agy's sandbox (no network, home read-only), `.git`, `.env`-type files and conductor's folder are denied. Read roles deny writes to the project. Read roles no longer use `--mode plan`, which answered with a link to a plan file and caused the flaky reviews.
+  - **Codex:** `approval_policy="never"` and no network made explicit.
+  - **OpenCode:** runs with `--standalone`. Without it OpenCode 2 handed the run to its background service, which ignored conductor's rules (so `npm test` could be refused and read-only wasn't enforced). Read roles are now enforced (`edit: deny`, shell limited to read-only commands, no web, nothing outside the project), not just asked for in the prompt. Write roles deny folders outside the project and the git/sudo commands.
+  - **Claude Code (worker):** read roles disable the edit tools instead of plan mode; write roles disallow the git/sudo commands.
+  - **Kimi** and custom CLIs are marked as not read-only; read runs on them warn.
+- **Secrets stay with their provider.** Keys loaded from `secrets.env` / `.conductor/.env` are no longer passed to every CLI worker, only the ones it needs (`passEnv`).
+- **Gemini CLI removed** (preset, provider and controller). Configs that still name `gemini-cli` keep loading: it is dropped from the chains, the controller switches to `antigravity`, and `conductor doctor` says so. The Gemini API provider is unchanged.
+- New preset fields: `sessionSettings`, `modeEnv`, `passEnv`, `permissions`; new arg token `{sessionSettings}`.
+- `conductor doctor` no longer reports `apiKeyOptional` providers (Kilo) as missing a key.
+
 ## 0.3.0 (2026-10-30)
 
 - **Parallel tasks.** `conductor run <role> --worktree` runs a write task in its own git worktree on branch `conductor/<id>` and commits the result there. `conductor batch --plan p.md --tasks T2,T3,T4` runs independent tasks at the same time, spread across different providers. It refuses tasks that depend on each other and warns when tasks share files.

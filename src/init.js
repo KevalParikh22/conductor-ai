@@ -62,7 +62,6 @@ function parseCommand(md) {
   return { meta, body: (m?.[2] || md).trim() };
 }
 
-const tomlString = (s) => '"""\n' + s.replaceAll('\\', '\\\\').replaceAll('"""', '\\"\\"\\"') + '\n"""';
 
 export function initProject(root, { controller = 'claude-code', mcp = true } = {}) {
   if (!CONTROLLERS[controller]) throw new Error(`unknown controller "${controller}". Options: ${Object.keys(CONTROLLERS).join(', ')}`);
@@ -91,7 +90,7 @@ export function initProject(root, { controller = 'claude-code', mcp = true } = {
   }
   mergeMarkedBlock(path.join(root, ctrlFile), block, '<!-- conductor:start -->', '<!-- conductor:end -->', log);
 
-  // Gemini CLI and Antigravity read GEMINI.md: make sure it also points at AGENTS.md
+  // Antigravity reads GEMINI.md: make sure it also points at AGENTS.md
   const geminiMd = path.join(root, 'GEMINI.md');
   if (!fs.existsSync(geminiMd)) { fs.writeFileSync(geminiMd, '# Gemini instructions\n\n@./AGENTS.md\n'); log('added', 'GEMINI.md (imports AGENTS.md)'); }
   else if (!fs.readFileSync(geminiMd, 'utf8').includes('AGENTS.md')) { fs.appendFileSync(geminiMd, '\n@./AGENTS.md\n'); log('merged', 'GEMINI.md (imports AGENTS.md)'); }
@@ -101,11 +100,6 @@ export function initProject(root, { controller = 'claude-code', mcp = true } = {
   for (const f of fs.readdirSync(cmdDir).filter((x) => x.endsWith('.md')).sort()) {
     const src = fs.readFileSync(new URL(f, cmdDir), 'utf8');
     if (controller === 'claude-code') writeOwned(root, `.claude/commands/${f}`, src, log);
-    if (controller === 'gemini-cli') {
-      const { meta, body } = parseCommand(src);
-      const prompt = body.replaceAll('$ARGUMENTS', '{{args}}').replaceAll('.claude/commands/conduct-build.md', '.gemini/commands/conduct-build.toml');
-      writeOwned(root, `.gemini/commands/${f.replace(/\.md$/, '.toml')}`, `description = ${JSON.stringify(meta.description || '')}\nprompt = ${tomlString(prompt)}\n`, log);
-    }
   }
   if (controller === 'antigravity') {
     // agy has no custom slash commands; workspace skills in .agents/skills/ play that part
@@ -128,7 +122,6 @@ export function initProject(root, { controller = 'claude-code', mcp = true } = {
     const server = { command: 'conductor', args: ['mcp'] };
     if (controller === 'claude-code') mergeJsonFile(root, '.mcp.json', (d) => { d.mcpServers ||= {}; d.mcpServers.conductor ||= server; }, log);
     if (controller === 'antigravity') mergeJsonFile(root, '.agents/mcp_config.json', (d) => { d.mcpServers ||= {}; d.mcpServers.conductor ||= server; }, log);
-    if (controller === 'gemini-cli') mergeJsonFile(root, '.gemini/settings.json', (d) => { d.mcpServers ||= {}; d.mcpServers.conductor ||= { ...server, timeout: 1800000 }; }, log);
     if (controller === 'opencode') mergeJsonFile(root, 'opencode.json', (d) => { d.$schema ||= 'https://opencode.ai/config.json'; d.mcp ||= {}; d.mcp.conductor ||= { type: 'local', command: ['conductor', 'mcp'], enabled: true }; }, log);
     if (controller === 'codex-cli') notes.push('Codex: add to ~/.codex/config.toml:\n    [mcp_servers.conductor]\n    command = "conductor"\n    args = ["mcp"]');
   }

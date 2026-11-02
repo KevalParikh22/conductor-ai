@@ -39,7 +39,7 @@ Merge rules: `providers` and `settings` merge field by field; each role's chain 
 
 ## Controller
 
-`claude-code` (default) · `antigravity` · `codex-cli` · `opencode` · `gemini-cli`. Change it in the UI (Controller → Apply to this project) or with `conductor init --controller <name>`. Applying writes that agent's instruction file, its `/conduct-*` commands and an MCP entry.
+`claude-code` (default) · `antigravity` · `codex-cli` · `opencode`. (`gemini-cli` was removed; configs that name it switch to `antigravity`.) Change it in the UI (Controller → Apply to this project) or with `conductor init --controller <name>`. Applying writes that agent's instruction file, its `/conduct-*` commands and an MCP entry.
 
 ## Roles
 

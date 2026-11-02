@@ -10,7 +10,7 @@ Read by whichever AI is the controller (Claude Code by default; change it in `co
 | Work | Who | Why |
 |---|---|---|
 | Planning, design decisions, security-sensitive code, hard bugs, final review, commits | **Controller** | Best judgement. Spend its quota on decisions, not typing |
-| Implementing planned tasks (`build`) | Daily-driver agents (Gemini CLI, Codex CLI) | Big free/included quotas, can edit files and run tests |
+| Implementing planned tasks (`build`) | Daily-driver agents (Antigravity CLI, Codex CLI) | Big free/included quotas, can edit files and run tests |
 | Small fixes (`fix`) | Codex CLI first | Precise on focused changes |
 | Tests (`test`), docs (`docs`) | Free models (OpenCode free, OpenRouter `:free`) | Cheap, well-scoped work |
 | Second-opinion review (`review`) | Codex / Gemini | A different model catches different bugs |

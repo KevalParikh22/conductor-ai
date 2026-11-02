@@ -20,12 +20,11 @@ Cloud sessions clone your repo, so `.claude/commands/conduct-*`, `.mcp.json` and
    npm install -g github:KevalParikh22/conductor-ai
    ```
    Optionally add `npm install -g @openai/codex`. (Antigravity CLI needs an interactive Google sign-in, so in the cloud use API providers instead.)
-2. **Provide keys** as environment variables or network secrets in the cloud environment settings: `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, and so on. Gemini CLI (still fine with an API key) and Codex CLI also run headless with `GEMINI_API_KEY` and `CODEX_API_KEY`/`OPENAI_API_KEY`. `kilo-free` needs no key at all.
+2. **Provide keys** as environment variables or network secrets in the cloud environment settings: `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, and so on. Codex CLI also runs headless with `CODEX_API_KEY`/`OPENAI_API_KEY`. `kilo-free` needs no key at all.
 3. **Allow the hosts.** The default "Trusted" network level reaches `*.googleapis.com` (Gemini). For `openrouter.ai`, `api.openai.com`, `api.moonshot.ai` and similar, choose Custom/Full network access or add a network secret for those hosts.
 4. Optionally use a project config tuned for cloud, e.g. `.conductor/config.json`:
    ```json
-   { "providers": { "gemini-cli": { "enabled": true } },
-     "roles": { "build": ["gemini-cli", "codex-cli", "gemini-api"], "docs": ["kilo-free", "openrouter-free", "gemini-api"] } }
+   { "roles": { "build": ["codex-cli", "gemini-api", "kilo-free"], "docs": ["kilo-free", "openrouter-free", "gemini-api"] } }
    ```
 
 ## GitHub Actions

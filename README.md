@@ -19,10 +19,10 @@
 
 ## Features
 
-- **Controller you can change.** Claude Code by default; Antigravity CLI, Codex CLI, OpenCode or Gemini CLI also work. `conductor init` writes the right instruction file, slash commands and MCP entry for your controller.
+- **Controller you can change.** Claude Code by default; Antigravity CLI, Codex CLI or OpenCode also work. `conductor init` writes the right instruction file, slash commands and MCP entry for your controller.
 - **Roles with fallback chains.** `build`, `fix`, `test`, `docs`, `review`, `ask`, each with its own ordered list of providers.
 - **Local and cloud providers.**
-  - **Local agents:** Antigravity CLI (`agy`), Codex CLI, OpenCode, Kimi CLI, Claude Code and Gemini CLI (API key only). They use your logins, edit files and run tests.
+  - **Local agents:** Antigravity CLI (`agy`), Codex CLI, OpenCode, Kimi CLI and Claude Code. They use your logins, edit files and run tests, each under its own permission rules: write roles edit only the project and can't push; read roles can't edit; your API keys stay out of their environment. ([details](docs/PROVIDERS.md#permissions-what-each-agent-may-do))
   - **Cloud APIs:** free tiers from Kilo Gateway (no key needed), OpenCode Zen, OpenRouter (`:free` models), Gemini API, Groq, Cerebras, Mistral (Codestral) and NVIDIA NIM; paid OpenAI, Kimi/Moonshot, Claude and DeepSeek; or any OpenAI-compatible endpoint. conductor applies the code they return.
   - **Local models:** Ollama and LM Studio.
 - **Parallel tasks.** `conductor batch --plan p.md --tasks T2,T3,T4` runs independent tasks at the same time, each in its own git worktree and branch, spread across different providers. The controller reviews and merges each branch.
@@ -103,7 +103,7 @@ Full guide: **[docs/INSTALL.md](docs/INSTALL.md)**.
 | `conductor build\|fix\|test\|docs\|review\|ask …` | Shortcuts for `run <role>` (add `--worktree` to run isolated on branch `conductor/<id>`) |
 | `conductor batch --plan f --tasks T2,T3 [--concurrency 4]` | Run independent tasks in parallel, one worktree each |
 | `conductor worktree [list]` · `conductor worktree rm <id>\|--all [--force]` | See and clean up parallel-task worktrees |
-| `conductor init [--controller claude-code\|antigravity\|codex-cli\|opencode\|gemini-cli]` | Set up a project |
+| `conductor init [--controller claude-code\|antigravity\|codex-cli\|opencode]` | Set up a project |
 | `conductor ui` · `conductor status` · `conductor doctor [--live]` · `conductor verify` | Manage and check |
 | `conductor models [provider]` · `conductor cooldown [--clear]` · `conductor mcp` | Free model list (OpenRouter, Kilo, OpenCode Zen, …), rate-limit state, MCP server |
 

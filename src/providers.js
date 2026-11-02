@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { CLI_PRESETS } from './presets.js';
-import { run, which } from './util.js';
+import { run, which, GLOBAL_DIR, SECRET_VARS } from './util.js';
 
 /**
  * Result of one provider attempt.
@@ -15,16 +15,39 @@ function expandArgs(template, vars, modelArgs) {
       if (vars.model) out.push(...modelArgs.map((m) => m.replaceAll('{model}', vars.model)));
       continue;
     }
+    // {sessionSettings} is one whole JSON argument
+    if (a === '{sessionSettings}') { out.push(vars.sessionSettings || '{}'); continue; }
     out.push(a.replaceAll('{prompt}', vars.prompt).replaceAll('{promptFile}', vars.promptFile)
       .replaceAll('{outFile}', vars.outFile).replaceAll('{model}', vars.model || ''));
   }
   return out;
 }
 
+/** Fill {cwd} / {conductorHome} in every string of a settings object. */
+function fillPaths(value, cwd) {
+  if (typeof value === 'string') return value.replaceAll('{cwd}', cwd).replaceAll('{conductorHome}', GLOBAL_DIR);
+  if (Array.isArray(value)) return value.map((v) => fillPaths(v, cwd));
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k, v]) => [fillPaths(k, cwd), fillPaths(v, cwd)]));
+  return value;
+}
+
+/**
+ * Environment for a CLI worker: the user's shell environment, minus the secrets conductor loaded from
+ * secrets.env / .conductor/.env (except those this CLI needs, `passEnv`), plus the mode's own variables.
+ */
+export function workerEnv(preset, mode, cwd) {
+  const env = { ...process.env };
+  const pass = new Set(preset.passEnv || []);
+  for (const k of SECRET_VARS) if (!pass.has(k)) delete env[k];
+  for (const [k, v] of Object.entries(fillPaths(preset.modeEnv?.[mode] || {}, cwd))) env[k] = typeof v === 'string' ? v : JSON.stringify(v);
+  // PWD must match cwd: some CLIs (OpenCode) take the project folder from $PWD, not from their real working directory
+  return { ...env, ...(preset.env || {}), PWD: cwd };
+}
+
 // Linux caps one argv string at 128 KiB; stay well below it.
 const MAX_PROMPT_ARG = 100_000;
 
-/** Run a CLI agent (antigravity, gemini, codex, opencode, kimi, claude, or a custom one). */
+/** Run a CLI agent (antigravity, codex, opencode, kimi, claude, or a custom one). */
 export async function runCli(name, p, { mode, prompt, cwd, timeoutMs, runDir, quotaRe }) {
   const preset = { ...(CLI_PRESETS[p.preset] || {}), ...p };
   if (!which(preset.bin)) return { ok: false, text: '', reason: 'not installed', log: '' };
@@ -36,9 +59,10 @@ export async function runCli(name, p, { mode, prompt, cwd, timeoutMs, runDir, qu
   // A prompt too long for argv is replaced by a pointer to the prompt file (inside the repo, so agents may read it).
   const promptArg = prompt.length > MAX_PROMPT_ARG
     ? `Read the file ${promptFile} and follow the instructions in it exactly. Do not modify that file.` : prompt;
-  const args = expandArgs(template, { prompt: promptArg, promptFile, outFile, model: p.model }, preset.modelArgs || []);
-  // PWD must match cwd: some CLIs (OpenCode) take the project folder from $PWD, not from their real working directory
-  const env = { ...process.env, ...(p.env || {}), PWD: cwd };
+  const settings = preset.sessionSettings?.[mode];
+  const sessionSettings = settings ? JSON.stringify(fillPaths(settings, cwd)) : '';
+  const args = expandArgs(template, { prompt: promptArg, promptFile, outFile, model: p.model, sessionSettings }, preset.modelArgs || []);
+  const env = workerEnv(preset, mode, cwd);
   const r = await run(preset.bin, args, { cwd, input: preset.stdin ? prompt : undefined, timeoutMs, env });
   const log = `$ ${preset.bin} ${args.map((a) => (a.length > 80 ? JSON.stringify(a.slice(0, 77) + '...') : a)).join(' ')}\n` +
     `--- exit ${r.code}${r.timedOut ? ' (timeout)' : ''}\n--- stdout\n${r.stdout}\n--- stderr\n${r.stderr}`;

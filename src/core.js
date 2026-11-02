@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ROLES } from './presets.js';
-import { providerReadiness, providerKind, PROJECT_DIRNAME } from './config.js';
+import { providerReadiness, providerKind, readOnlyEnforced, PROJECT_DIRNAME } from './config.js';
 import { runProvider } from './providers.js';
 import * as git from './git.js';
 import { runVerify } from './verify.js';
@@ -242,6 +242,9 @@ export async function dispatch(cfg, opts) {
   for (const c of chain) {
     if (c.skip) { summary.attempts.push({ provider: c.name, ok: false, reason: c.skip, skipped: true }); emit({ type: 'skip', provider: c.name, reason: c.skip }); continue; }
     const kind = providerKind(c.p);
+    if (mode === 'read' && kind === 'agent' && !readOnlyEnforced(c.p)) {
+      summary.warnings.push(`${c.name} cannot be held to read-only (only the prompt asks it not to edit). Check git status after this run`);
+    }
     emit({ type: 'try', provider: c.name, kind });
     const before = inRepo ? git.stateHash(work) : null;
     const t0 = Date.now();
