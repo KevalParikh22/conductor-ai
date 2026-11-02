@@ -61,7 +61,7 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | `type` | all | `cli`, `openai` (any OpenAI-compatible API) or `anthropic` |
 | `enabled` | all | Disabled providers are skipped |
 | `model` | all | Model id. Empty = the CLI's default |
-| `preset` | cli | `antigravity`, `codex`, `opencode`, `kimi`, `claude`, `gemini` |
+| `preset` | cli | `antigravity`, `codex`, `opencode`, `kimi`, `claude` |
 | `bin`, `write`, `read`, `modelArgs`, `stdin` | cli | Override the preset's command line (see PROVIDERS.md) |
 | `env` | cli | Extra environment variables for that CLI |
 | `baseUrl` | api | e.g. `https://openrouter.ai/api/v1` (conductor adds `/chat/completions`) |
@@ -69,6 +69,9 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | `apiKeyOptional` | api | `true` = send the key if set, but run without one too (e.g. `kilo-free`) |
 | `headers`, `maxTokens`, `temperature` | api | Optional request tuning |
 | `fallbackModels` | openrouter | Extra models OpenRouter tries if the first is unavailable |
+| `price` | api | `{ "input": 0.3, "output": 2.5 }`: dollars per 1M tokens, used for cost and budgets. Without it, cost is shown as unknown |
+| `free` | api | `true` = costs nothing (set on Kilo, OpenRouter free, OpenCode Zen free, Ollama, LM Studio). Remove it if you switch that provider to a paid model |
+| `dailyBudgetUSD` | api | Daily cap for this provider alone (needs `price`) |
 | `notes` | all | Shown in the UI |
 
 ## Settings
@@ -85,6 +88,21 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | `maxDiffBytes` | 100000 | Review diffs above this are truncated |
 | `maxContextBytes` | 60000 | File content sent to chat-only (API) providers |
 | `quotaPattern` | (regex) | Output that counts as a rate-limit error for CLIs |
+| `dailyBudgetUSD` | 0 | Daily cap on known API spend across all providers. 0 = no cap. Providers over budget are skipped like cooled-down ones; free ones never count |
+
+## Usage and budgets
+
+Every attempt is logged to `~/.config/conductor/usage.jsonl`: provider, model, role, project, result, time and, for API providers, tokens. Cost is known when the provider reports tokens and has a `price` (or is `free`). CLI agents run on your subscriptions, so they're counted in runs and minutes, not dollars.
+
+```bash
+conductor usage --days 7
+```
+
+Set `settings.dailyBudgetUSD` (or the field on one provider) to stop paid APIs for the rest of the day once the cap is reached; the chain then moves on to free providers and CLI agents. The UI's Runs page shows today's spend against the budget.
+
+## Run history
+
+Each run leaves `.conductor/runs/<time>-<role>[-task]/` in the project: the task, every provider's log, the winning report and `summary.json`. `conductor runs` lists them (newest first, with result, worker, verify and warnings), `conductor runs show <run>` prints one in full, and the UI's Runs page shows the same list, refreshing every few seconds.
 
 ## Cooldown state
 

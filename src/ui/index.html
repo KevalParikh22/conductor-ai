@@ -140,8 +140,8 @@ body { overflow-x: hidden; }
 <div id="toast" role="status"></div>
 <script>
 const TOKEN = new URLSearchParams(location.hash.slice(1)).get('t') || '';
-const TABS = [['overview', 'Overview'], ['roles', 'Roles & fallback'], ['providers', 'Providers'], ['keys', 'API keys'], ['controller', 'Controller'], ['settings', 'Settings'], ['setup', 'Install & setup']];
-let S = null, W = null, tab = 'overview', dirty = false, freeModels = null;
+const TABS = [['overview', 'Overview'], ['runs', 'Runs'], ['roles', 'Roles & fallback'], ['providers', 'Providers'], ['keys', 'API keys'], ['controller', 'Controller'], ['settings', 'Settings'], ['setup', 'Install & setup']];
+let S = null, W = null, tab = 'overview', dirty = false, freeModels = null, runsData = null;
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const clone = (x) => JSON.parse(JSON.stringify(x));
@@ -182,7 +182,34 @@ function copyBtn(text) { return `<button class="btn small copy" data-copy="${esc
 function cmd(text) { return `<pre class="cmd">${esc(text)}${copyBtn(text)}</pre>`; }
 function bindCopy() { document.querySelectorAll('[data-copy]').forEach((b) => b.onclick = () => { navigator.clipboard?.writeText(b.dataset.copy).then(() => toast('Copied'), () => toast('Copy failed')); }); }
 
+function loadRuns() { api('GET', '/api/runs').then((d) => { runsData = d; if (tab === 'runs') render(); }, (e) => toast(e.message)); }
+// keep the Runs page current while it is open (runs started from the terminal show up on their own)
+setInterval(() => { if (tab === 'runs' && document.visibilityState === 'visible') loadRuns(); }, 5000);
+
 const views = {
+  runs() {
+    if (!runsData) { loadRuns(); return '<h1>Runs</h1><p class="sub">Loading…</p>'; }
+    const { runs, usage, budget } = runsData;
+    const money = (n) => (n == null ? '–' : n ? `$${n.toFixed(n < 0.01 ? 4 : 2)}` : '$0');
+    const result = (r) => r.state === 'running' ? '<span class="pill warn">running</span>' : r.state === 'done' ? '<span class="pill ok">done</span>' : '<span class="pill bad">failed</span>';
+    const verify = (v) => !v ? '–' : `<span class="pill ${v === 'PASS' ? 'ok' : v === 'FAIL' ? 'bad' : ''}">${esc(v)}</span>`;
+    return `<h1>Runs</h1><p class="sub">Work handed out in this project, newest first. Updates every few seconds. In the terminal: <span class="mono">conductor runs</span>.</p>
+    <div class="grid">
+      <div class="card stat"><div class="l">Runs (last ${usage.days} days, all projects)</div><div class="n">${usage.rows.reduce((t, r) => t + r.runs, 0)}</div></div>
+      <div class="card stat"><div class="l">Known API cost today</div><div class="n">${money(usage.today)}</div><div class="note">${budget ? `daily budget ${money(budget)}` : 'no daily budget (Settings)'}</div></div>
+    </div>
+    <div class="card"><h2>Recent runs</h2>${runs.length ? `<table><tr><th>When</th><th>Role · task</th><th>Result</th><th>Worker</th><th>Verify</th><th>Files</th><th>Time</th></tr>
+      ${runs.map((r) => `<tr><td class="mono">${esc(r.startedAt ? new Date(r.startedAt).toLocaleString() : r.id)}</td>
+        <td><b>${esc(r.role)}</b>${r.task ? ` · ${esc(r.task)}` : ''}${r.branch ? `<div class="note mono">${esc(r.branch)}</div>` : ''}</td>
+        <td>${result(r)}</td>
+        <td>${esc(r.winner || '–')}${r.attempts?.length > 1 ? `<div class="note">${r.attempts.map((a) => `${esc(a.provider)} ${a.ok ? '✓' : '✗'}`).join(' → ')}</div>` : ''}</td>
+        <td>${verify(r.verify)}</td><td>${r.changed ?? '–'}</td><td>${r.seconds != null ? `${r.seconds}s` : ''}</td></tr>
+        ${r.warnings?.length ? `<tr><td></td><td colspan="6">${r.warnings.map((w) => `<div class="note">⚠ ${esc(w)}</div>`).join('')}</td></tr>` : ''}`).join('')}
+      </table>` : '<p class="note">No runs yet. They appear here when your controller hands out work (<span class="mono">conductor run …</span>).</p>'}</div>
+    <div class="card"><h2>Usage by provider</h2><p class="note">Last ${usage.days} days, all projects. CLI agents run on your subscriptions, so they show runs and time; API providers also show tokens and, when a price is set, cost.</p>
+      ${usage.rows.length ? `<table><tr><th>Provider</th><th>Runs</th><th>Succeeded</th><th>Tokens in / out</th><th>Cost</th><th>Time</th></tr>
+      ${usage.rows.map((u) => `<tr><td>${esc(u.provider)}</td><td>${u.runs}</td><td>${u.ok}</td><td>${u.input || u.output ? `${u.input.toLocaleString()} / ${u.output.toLocaleString()}` : '–'}</td><td>${u.subscription ? '<span class="note">subscription</span>' : u.cost ? money(u.cost) : u.costKnown ? '$0' : '? (no price)'}</td><td>${Math.round(u.seconds / 60)} min</td></tr>`).join('')}</table>` : '<p class="note">Nothing recorded yet.</p>'}</div>`;
+  },
   overview() {
     const st = S.status; const ready = st.providers.filter((p) => p.ready).length; const enabled = st.providers.filter((p) => p.enabled).length;
     const cds = Object.entries(S.cooldowns);
@@ -267,6 +294,7 @@ const views = {
       ${num('cooldownMinutes', 'Cooldown after rate limit (minutes)', "Rate-limited providers are skipped this long (or for the provider's Retry-After)")}
       ${num('maxDiffBytes', 'Max review diff (bytes)', 'Larger diffs are truncated')}
       ${num('maxContextBytes', 'Max context for API models (bytes)', 'File content sent to chat-only providers')}
+      ${num('dailyBudgetUSD', 'Daily budget for paid APIs ($)', '0 = no cap. Counts API providers with a price set; free ones never count')}
       <div><label class="f">Verify command</label><input type="text" data-sets="verify" value="${esc(st.verify)}" placeholder="auto: AGENTS.md Verify line, then npm/pytest/cargo/go"><div class="note">Must pass before a task counts as done</div></div>
       <div><label class="f">Protected branches</label><input type="text" data-setl="protectedBranches" value="${esc((st.protectedBranches || []).join(', '))}"><div class="note">Workers never write on these</div></div>
       </div><div style="margin-top:12px;display:grid;gap:6px">${chk('requireCleanTree', 'Require a clean git tree before write roles (enables safe stash-on-failure)')}${chk('autoVerify', 'Run verify automatically after each write task')}</div></div>`;

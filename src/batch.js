@@ -3,16 +3,18 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ROLES } from './presets.js';
-import { dispatch, extractTask, taskFiles, resolveChain, UsageError } from './core.js';
+import { dispatch, extractTask, taskFiles, resolveChain, openQuestions, UsageError } from './core.js';
 
 const field = (section, name) => (section.match(new RegExp(`\\*\\*${name}:\\*\\*\\s*(.+)`, 'i')) || [])[1]?.trim() || '';
 
 /** Read and check the tasks before anything runs. */
-export function planBatch(cfg, { planPath, tasks, role }) {
+export function planBatch(cfg, { planPath, tasks, role, allowOpenQuestions }) {
   const planAbs = path.resolve(cfg.root, planPath || '');
   if (!planPath || !fs.existsSync(planAbs)) throw new UsageError(`plan not found: ${planPath || '(none given)'}`);
   if (!tasks?.length) throw new UsageError('batch needs --tasks T1,T2,...');
   const planText = fs.readFileSync(planAbs, 'utf8');
+  const open = openQuestions(planText);
+  if (open.length && !allowOpenQuestions) throw new UsageError(`${planPath} still has ${open.length} open question(s): ${open.map((q) => `"${q}"`).join('; ')}. Answer them in the plan (- [x] question → answer) first, or pass --allow-open-questions`);
   const ids = [...new Set(tasks)];
   const items = ids.map((id) => {
     const section = extractTask(planText, id);
@@ -55,8 +57,8 @@ export function spreadChains(cfg, items, { provider } = {}) {
 }
 
 /** Run tasks with at most `concurrency` at once. Results come back in task order. */
-export async function runBatch(cfg, { planPath, tasks, role, provider, concurrency, noVerify, replace, note, onEvent }) {
-  const { items, warnings } = planBatch(cfg, { planPath, tasks, role });
+export async function runBatch(cfg, { planPath, tasks, role, provider, concurrency, noVerify, replace, note, allowOpenQuestions, onEvent }) {
+  const { items, warnings } = planBatch(cfg, { planPath, tasks, role, allowOpenQuestions });
   const work = spreadChains(cfg, items, { provider });
   const limit = Math.max(1, Math.min(Number(concurrency) || 4, work.length));
   const results = new Array(work.length);
@@ -70,7 +72,7 @@ export async function runBatch(cfg, { planPath, tasks, role, provider, concurren
       try {
         const s = await dispatch(cfg, {
           role: t.role, planPath, taskId: t.id, chain: t.chain, note, noVerify,
-          worktree: true, worktreeId: t.id, replace, onEvent: emit,
+          worktree: true, worktreeId: t.id, replace, allowOpenQuestions, onEvent: emit,
         });
         results[i] = { task: t.id, role: t.role, summary: s };
       } catch (e) {

@@ -33,6 +33,7 @@ const TOOLS = [
         focus: { type: 'string', description: 'review: what to focus on' },
         save: { type: 'string', description: 'ask: also save the answer to this path' },
         no_verify: { type: 'boolean' },
+        allow_open_questions: { type: 'boolean', description: 'run plan tasks even if the plan has unresolved Open questions' },
         allow_dirty: { type: 'boolean' },
         worktree: { type: 'boolean', description: 'Write roles: run in an isolated checkout on branch conductor/<task_id> and commit there, so several tasks can run at once. Merge the branch afterwards.' },
         replace: { type: 'boolean', description: 'With worktree: discard an existing worktree/branch for this task first' },
@@ -54,6 +55,7 @@ const TOOLS = [
         concurrency: { type: 'number', description: 'Max tasks at once (default 4)' },
         replace: { type: 'boolean' },
         no_verify: { type: 'boolean' },
+        allow_open_questions: { type: 'boolean', description: 'run plan tasks even if the plan has unresolved Open questions' },
       },
       required: ['plan', 'tasks'],
     },
@@ -78,7 +80,7 @@ async function callTool(name, args, root) {
     try {
       const b = await runBatch(cfg, {
         planPath: args.plan, tasks: args.tasks, role: args.role, provider: args.provider, concurrency: args.concurrency,
-        replace: args.replace, noVerify: args.no_verify,
+        replace: args.replace, noVerify: args.no_verify, allowOpenQuestions: args.allow_open_questions,
         onEvent: (e) => process.stderr.write(`[conductor ${e.task}] ${e.type} ${e.provider || ''} ${e.reason || ''}\n`),
       });
       return text(formatBatch(b), b.ok === 0);
@@ -90,7 +92,7 @@ async function callTool(name, args, root) {
     try {
       const s = await dispatch(cfg, {
         role: args.role, task: args.task, planPath: args.plan, taskId: args.task_id, provider: args.provider, note: args.note,
-        files: args.files, base: args.base, focus: args.focus, save: args.save, noVerify: args.no_verify, allowDirty: args.allow_dirty,
+        files: args.files, base: args.base, focus: args.focus, save: args.save, noVerify: args.no_verify, allowDirty: args.allow_dirty, allowOpenQuestions: args.allow_open_questions,
         worktree: args.worktree, worktreeId: args.task_id, replace: args.replace,
         onEvent: (e) => process.stderr.write(`[conductor] ${e.type} ${e.provider || ''} ${e.reason || ''}\n`),
       });

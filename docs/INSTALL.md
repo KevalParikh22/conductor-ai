@@ -14,7 +14,11 @@ About 15 minutes the first time. After that, adding conductor to another project
 
 ## 1. Install conductor (once per machine)
 
-From GitHub:
+One line (checks Node 20+, installs from GitHub, runs `conductor setup`):
+```bash
+curl -fsSL https://raw.githubusercontent.com/KevalParikh22/conductor-ai/main/scripts/install.sh | bash
+```
+Or with npm directly:
 ```bash
 npm install -g github:KevalParikh22/conductor-ai
 ```

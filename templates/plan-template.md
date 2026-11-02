@@ -4,6 +4,11 @@
 **Branch:** feat/<slug>
 **Out of scope:** <not now>
 
+## Open questions
+<!-- Anything the user must decide, or that the controller couldn't settle from the code. conductor refuses to
+     hand out write tasks while an item is unchecked. Resolve each one as: - [x] question → answer -->
+- [ ] <question>
+
 ## Design notes
 <Concrete decisions by the controller: data shapes, function signatures, API contracts, file layout. Workers rely on these and must not make design decisions themselves.>
 

@@ -8,6 +8,8 @@ import { spawn } from 'node:child_process';
 import { loadConfig, findProjectRoot, readScope, writeScope, validateConfig, GLOBAL_CONFIG, GLOBAL_SECRETS, GLOBAL_SECRETS as SECRETS, projectConfigPath, loadSecrets } from '../config.js';
 import { DEFAULT_CONFIG, CLI_PRESETS, ROLES, CONTROLLERS } from '../presets.js';
 import { statusData } from '../status.js';
+import { listRuns } from '../runs.js';
+import { usageReport } from '../usage.js';
 import { testProvider } from '../providers.js';
 import { listFreeModels } from '../models.js';
 import { initProject, setupGlobal } from '../init.js';
@@ -134,6 +136,7 @@ export function createUiServer({ cwd = process.cwd(), token = crypto.randomBytes
           try { return send(200, await testProvider(body.name, { ...p, enabled: true }, root, dir)); }
           finally { fs.rmSync(dir, { recursive: true, force: true }); }
         }
+        case 'GET /api/runs': return send(200, { runs: listRuns(root, { limit: 50 }), usage: usageReport(7), budget: loadConfig(root).settings.dailyBudgetUSD || 0 });
         case 'GET /api/models': return send(200, { models: await listFreeModels() });
         case 'PUT /api/secrets': writeSecrets(body.updates || {}); return send(200, stateFor(root));
         case 'POST /api/init': {

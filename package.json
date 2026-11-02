@@ -1,15 +1,49 @@
 {
   "name": "conductor-ai",
-  "version": "0.4.0",
-  "description": "Use Claude (or any agent) as the controller and delegate coding, tests, docs and reviews to Gemini, Codex, OpenCode, OpenRouter free models, Kimi, local models and more, with automatic fallback.",
+  "version": "0.5.0",
+  "description": "Claude (or any agent) plans and reviews; Antigravity, Codex, OpenCode, free Kilo/OpenRouter models, Kimi and local models do the coding, tests and docs, with quota-aware fallback, per-agent permissions and parallel worktrees.",
+  "keywords": [
+    "claude",
+    "claude-code",
+    "antigravity",
+    "codex",
+    "opencode",
+    "openrouter",
+    "kilo",
+    "llm",
+    "orchestrator",
+    "multi-agent",
+    "coding-agent",
+    "mcp",
+    "ai-coding",
+    "git-worktree",
+    "free-llm"
+  ],
+  "homepage": "https://github.com/KevalParikh22/conductor-ai#readme",
+  "bugs": {
+    "url": "https://github.com/KevalParikh22/conductor-ai/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KevalParikh22/conductor-ai.git"
+  },
+  "license": "MIT",
   "type": "module",
-  "bin": { "conductor": "bin/conductor.js" },
-  "files": ["bin", "src", "templates", "README.md", "LICENSE"],
-  "engines": { "node": ">=20" },
+  "bin": {
+    "conductor": "bin/conductor.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "templates",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "test": "node --test test/*.test.js",
     "ui": "node bin/conductor.js ui"
-  },
-  "keywords": ["claude", "claude-code", "gemini", "codex", "opencode", "openrouter", "llm", "orchestrator", "multi-agent", "mcp", "ai-coding"],
-  "license": "MIT"
+  }
 }

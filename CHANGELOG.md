@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.5.0 (2026-11-02)
+
+- **Evidence check.** After a write task, the worker's "Files changed" list is compared with what git shows. conductor warns about files it claims but didn't change, changes it didn't report, and "DONE" with no changes. Files already modified before the run are not counted.
+- **Open questions gate.** Plans get a `## Open questions` section. Write tasks (and `conductor batch`) are refused while an item is unchecked, so workers never guess at decisions. `/conduct-plan` settles questions first and asks you the rest. Override with `--allow-open-questions`.
+- **Usage and budgets.** Every attempt is logged to `~/.config/conductor/usage.jsonl` with time, tokens and cost (for API providers with a `price`, or marked `free`). `conductor usage` shows totals per provider. `settings.dailyBudgetUSD` (or per provider) skips paid APIs once today's spend reaches the cap. Run summaries show tokens and cost.
+- **Run history.** `conductor runs` and `conductor runs show <run>`, plus a Runs page in `conductor ui` that refreshes while open and shows usage by provider and today's spend.
+- **One-line installer**: `scripts/install.sh` checks Node 20+, installs from GitHub and runs setup. `llms.txt` describes the repo for AI tools.
+- The README no longer has a comparison table.
+
+## 0.4.1 (2026-11-02)
+
+- Fix (macOS): CLI workers got `PWD` and agy's deny rules with the unresolved project path. Through a symlink (`/var` → `/private/var` on macOS) that path differs from the one the process runs in, so agy's project rules might not match. conductor now uses the resolved path. This was also why CI failed on macOS.
+- New README: logo, badges, diagram, screenshots of the settings page and a permissions table.
+- `SECURITY.md`, issue templates for bugs and provider requests, and repository links in `package.json`.
+- CI runs every OS and Node combination to the end instead of cancelling on the first failure, with current GitHub Actions versions.
+
 ## 0.4.0 (2026-11-02)
 
 - **Permissions for every agent, per run.** conductor passes each CLI its own rules for that run and never edits your CLI settings. Write roles may edit only the project (no `git push/commit/reset/checkout/switch/rebase/stash/clean`, no `sudo`); read roles cannot edit. `conductor doctor` and the Providers page show what each agent may do. Details in docs/PROVIDERS.md.
