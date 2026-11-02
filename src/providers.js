@@ -124,7 +124,9 @@ export async function runOpenAI(name, p, { system, prompt, timeoutMs }) {
   if (p.temperature !== undefined) body.temperature = p.temperature;
   if (Array.isArray(p.fallbackModels) && p.fallbackModels.length) body.models = [p.model, ...p.fallbackModels]; // OpenRouter
   const url = p.baseUrl.replace(/\/+$/, '') + '/chat/completions';
-  const r = await httpJson(url, { headers, body, timeoutMs });
+  let r = await httpJson(url, { headers, body, timeoutMs });
+  // free routers (Kilo auto, OpenRouter free) now and then answer 200 with no content: ask once more
+  if (r.status === 200 && !r.json?.error && !r.json?.choices?.[0]?.message?.content?.trim()) r = await httpJson(url, { headers, body, timeoutMs });
   const log = `POST ${url} model=${p.model}\n--- status ${r.status}${r.error ? ' ' + r.error : ''}\n${(r.raw || '').slice(0, 4000)}`;
   const text = r.json?.choices?.[0]?.message?.content;
   const u = r.json?.usage;

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- **Install & setup page rewritten** (`conductor ui`). It checks this machine (Node, git, conductor version, project initialised, installed agents, free keys set) and has real install commands with the actual repo, not a placeholder. It shows a free path (kilo-free with no key, OpenRouter, OpenCode Zen, Gemini, Groq, Cerebras, Ollama) next to the subscription agents, a read-only free test run, install and sign-in per agent with copyable single commands, and how to update or remove conductor.
+- The API keys page lists every free provider with its signup link, and warns that free routes may log prompts.
+- API providers that return 200 with empty content (Kilo and OpenRouter free routers do this now and then) are asked once more before falling back.
+
 ## 0.5.0 (2026-11-02)
 
 - **Evidence check.** After a write task, the worker's "Files changed" list is compared with what git shows. conductor warns about files it claims but didn't change, changes it didn't report, and "DONE" with no changes. Files already modified before the run are not counted.
