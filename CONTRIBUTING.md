@@ -3,7 +3,7 @@
 Thanks for helping! conductor has **no runtime dependencies**. Please keep it that way.
 
 ```bash
-git clone https://github.com/YOUR-GITHUB-USER/conductor-ai && cd conductor-ai
+git clone https://github.com/KevalParikh22/conductor-ai && cd conductor-ai
 npm test                 # node:test, no network: CLIs and APIs are mocked
 node bin/conductor.js ui # try the settings page against the current folder
 ```

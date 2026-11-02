@@ -41,7 +41,7 @@
 ## Quick start
 
 ```bash
-npm install -g github:YOUR-GITHUB-USER/conductor-ai
+npm install -g github:KevalParikh22/conductor-ai
 ```
 ```bash
 conductor setup

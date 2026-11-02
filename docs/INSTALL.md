@@ -16,11 +16,11 @@ About 15 minutes the first time. After that, adding conductor to another project
 
 From GitHub:
 ```bash
-npm install -g github:YOUR-GITHUB-USER/conductor-ai
+npm install -g github:KevalParikh22/conductor-ai
 ```
 Or from a clone, which is better for hacking on it:
 ```bash
-git clone https://github.com/YOUR-GITHUB-USER/conductor-ai && cd conductor-ai && npm install -g .
+git clone https://github.com/KevalParikh22/conductor-ai && cd conductor-ai && npm install -g .
 ```
 Then create `~/.config/conductor/` (config, plus a private `secrets.env`):
 ```bash
@@ -157,7 +157,7 @@ conductor run review --plan docs/plan/password-reset.md
 
 Update by reinstalling, then refresh each project's conductor files:
 ```bash
-npm install -g github:YOUR-GITHUB-USER/conductor-ai
+npm install -g github:KevalParikh22/conductor-ai
 ```
 ```bash
 conductor init

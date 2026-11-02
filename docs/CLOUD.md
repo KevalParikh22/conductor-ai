@@ -17,7 +17,7 @@ Cloud sessions clone your repo, so `.claude/commands/conduct-*`, `.mcp.json` and
 
 1. **Install conductor in the environment's setup script:**
    ```bash
-   npm install -g github:YOUR-GITHUB-USER/conductor-ai
+   npm install -g github:KevalParikh22/conductor-ai
    ```
    Optionally add `npm install -g @openai/codex`. (Antigravity CLI needs an interactive Google sign-in, so in the cloud use API providers instead.)
 2. **Provide keys** as environment variables or network secrets in the cloud environment settings: `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, and so on. Gemini CLI (still fine with an API key) and Codex CLI also run headless with `GEMINI_API_KEY` and `CODEX_API_KEY`/`OPENAI_API_KEY`. `kilo-free` needs no key at all.
@@ -35,7 +35,7 @@ Example: have Claude implement an issue with conductor workers. See [`examples/g
 ```yaml
 - uses: actions/setup-node@v4
   with: { node-version: 22 }
-- run: npm install -g github:YOUR-GITHUB-USER/conductor-ai
+- run: npm install -g github:KevalParikh22/conductor-ai
 - uses: anthropics/claude-code-action@v1
   with:
     anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
