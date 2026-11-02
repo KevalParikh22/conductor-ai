@@ -133,3 +133,22 @@ test('run history lists runs newest first with their outcome', async () => {
   assert.equal(readRun(dir, rows[1].id).summary.winner, 'honest');
   assert.equal(readRun(dir, 'nope'), null);
 });
+
+test('an API provider that answers 200 with no content is asked once more', async () => {
+  clearCooldowns();
+  let calls = 0;
+  const flaky = http.createServer((req, res) => {
+    req.resume().on('end', () => {
+      calls++;
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ choices: [{ message: { content: calls === 1 ? '' : 'Second try worked, with enough words.' } }] }));
+    });
+  });
+  await new Promise((r) => flaky.listen(0, '127.0.0.1', r));
+  const { dir } = makeRepo();
+  const cfg = cfgFor(dir, { flaky: { type: 'openai', enabled: true, baseUrl: `http://127.0.0.1:${flaky.address().port}/v1`, apiKeyEnv: '', model: 'm', free: true } });
+  const s = await dispatch(cfg, { role: 'ask', task: 'what?', chain: ['flaky'] });
+  flaky.close();
+  assert.equal(s.winner, 'flaky');
+  assert.equal(calls, 2);
+});

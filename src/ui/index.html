@@ -56,6 +56,9 @@ h2 { font-size: 15px; margin: 0 0 10px; }
 .btn.small { padding: 3px 8px; font-size: 12px; }
 .btn.icon { padding: 3px 7px; }
 .btn:disabled { opacity: .45; cursor: default; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.mini { border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: var(--panel-2); }
+.mini .note { display: block; margin-top: 6px; }
 input[type=text], input[type=password], input[type=number], select, textarea { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; font: inherit; width: 100%; min-width: 0; }
 input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 label.f { display: block; font-size: 12px; color: var(--muted); margin-bottom: 3px; }
@@ -84,7 +87,7 @@ label.f { display: block; font-size: 12px; color: var(--muted); margin-bottom: 3
 .ctrl { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
 .ctrl label { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; cursor: pointer; background: var(--panel); display: block; }
 .ctrl input { margin-right: 6px; } .ctrl label.sel { border-color: var(--accent); background: var(--accent-soft); }
-pre.cmd { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin: 6px 0; overflow-x: auto; font-family: var(--mono); font-size: 12.5px; position: relative; white-space: pre-wrap; word-break: break-all; }
+pre.cmd { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 64px 8px 10px; margin: 6px 0; overflow-x: auto; font-family: var(--mono); font-size: 12.5px; position: relative; white-space: pre-wrap; word-break: break-all; }
 .copy { position: absolute; top: 5px; right: 5px; }
 table { width: 100%; border-collapse: collapse; }
 td, th { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
@@ -273,11 +276,15 @@ const views = {
     ${S.secrets.map((k) => `<tr><td class="mono">${esc(k.name)}</td><td>${k.set ? `<span class="pill ok">set ${esc(k.hint)}</span> <span class="note">${esc(k.source)}</span>` : '<span class="pill bad">not set</span>'}</td><td class="note">${esc(k.usedBy.join(', ') || '-')}</td>
       <td><div class="row" style="flex-wrap:nowrap"><input type="password" data-key="${esc(k.name)}" placeholder="paste key" autocomplete="off"><button class="btn small" data-savekey="${esc(k.name)}">Save</button>${k.source === 'secrets file' ? `<button class="btn small" data-delkey="${esc(k.name)}">Remove</button>` : ''}</div></td></tr>`).join('')}
     </table></div>
-    <div class="card"><h2>Where to get free keys</h2><ul>
-      <li><b>Gemini API</b> (free tier): <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a></li>
+    <div class="card"><h2>Where to get free keys</h2><p class="note">No key needed for <b>kilo-free</b> (Kilo gateway free models, about 200 requests an hour). Free routes may log prompts, so keep secrets out of tasks you send to them.</p><ul>
       <li><b>OpenRouter</b> (<span class="mono">:free</span> models, 50 req/day, or 1000/day after a one-time $10 credit): <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a></li>
-      <li><b>Kimi / Moonshot</b>: <a href="https://platform.moonshot.ai" target="_blank" rel="noopener">platform.moonshot.ai</a></li>
-      <li><b>Groq</b>: <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a></li></ul></div>`;
+      <li><b>OpenCode Zen</b> (the <span class="mono">-free</span> models): <a href="https://opencode.ai/zen" target="_blank" rel="noopener">opencode.ai/zen</a></li>
+      <li><b>Gemini API</b> (free tier): <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a></li>
+      <li><b>Groq</b> (free tier, fast): <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a></li>
+      <li><b>Cerebras</b> (free tier, fast): <a href="https://cloud.cerebras.ai" target="_blank" rel="noopener">cloud.cerebras.ai</a></li>
+      <li><b>Mistral</b> (free Experiment plan with Codestral; prompts may be used for training): <a href="https://console.mistral.ai" target="_blank" rel="noopener">console.mistral.ai</a></li>
+      <li><b>NVIDIA NIM</b> (free developer access): <a href="https://build.nvidia.com" target="_blank" rel="noopener">build.nvidia.com</a></li>
+      <li><b>Kimi / Moonshot</b> (paid): <a href="https://platform.moonshot.ai" target="_blank" rel="noopener">platform.moonshot.ai</a></ul></div>`;
   },
   controller() {
     return `<h1>Controller</h1><p class="sub">The controller plans, delegates, reviews and commits. Claude Code is the default because it reviews best, but you can pick any agent. Applying writes that agent's instruction file, its <span class="mono">/conduct-*</span> commands and the MCP entry into this project, without overwriting your own content.</p>
@@ -300,22 +307,47 @@ const views = {
       </div><div style="margin-top:12px;display:grid;gap:6px">${chk('requireCleanTree', 'Require a clean git tree before write roles (enables safe stash-on-failure)')}${chk('autoVerify', 'Run verify automatically after each write task')}</div></div>`;
   },
   setup() {
-    const p = S.presets;
-    return `<h1>Install & setup</h1><p class="sub">Works for every project: install conductor once, then run <span class="mono">conductor init</span> in each project.</p>
-    <div class="card"><h2>Status on this machine</h2><table><tr><th>Tool</th><th>Status</th><th>Install</th><th>Sign in</th></tr>
-      <tr><td>Node.js</td><td><span class="pill ok">${esc(S.env.node)}</span></td><td class="note">20+ required</td><td></td></tr>
-      <tr><td>conductor on PATH</td><td>${S.env.conductorOnPath ? '<span class="pill ok">yes</span>' : '<span class="pill bad">no</span>'}</td><td class="mono">npm install -g github:&lt;you&gt;/conductor-ai</td><td></td></tr>
-      ${Object.entries(p).map(([k, v]) => `<tr><td>${esc(v.label)}</td><td>${v.installed ? '<span class="pill ok">installed</span>' : '<span class="pill bad">missing</span>'}</td><td class="mono" style="word-break:break-all">${esc(v.install)}</td><td class="mono">${esc(v.login)}</td></tr>`).join('')}
+    const p = S.presets, sec = Object.fromEntries(S.secrets.map((x) => [x.name, x.set]));
+    const pill = (ok, yes, no) => ok ? `<span class="pill ok">${yes}</span>` : `<span class="pill bad">${no}</span>`;
+    const agents = Object.values(p).filter((v) => v.installed).length;
+    const freeKeys = ['OPENROUTER_API_KEY', 'OPENCODE_API_KEY', 'GEMINI_API_KEY', 'GROQ_API_KEY', 'CEREBRAS_API_KEY'].filter((n) => sec[n]).length;
+    const link = (u) => `<a href="https://${u}" target="_blank" rel="noopener">${u}</a>`;
+    return `<h1>Install & setup</h1><p class="sub">Install conductor once per machine, then run <span class="mono">conductor init</span> in each project. You can start for free: the Kilo gateway needs no key and no install.</p>
+    <div class="card"><h2>This machine</h2><table><tr><th>Check</th><th>Status</th><th>How to fix</th></tr>
+      <tr><td>Node.js 20+</td><td>${pill(+S.env.node.slice(1).split('.')[0] >= 20, esc(S.env.node), esc(S.env.node) + ' (too old)')}</td><td class="mono">nvm install 22</td></tr>
+      <tr><td>git</td><td>${pill(S.env.git, 'installed', 'missing')}</td><td class="note">Needed for worktrees, evidence checks and rollback</td></tr>
+      <tr><td>conductor ${esc(S.version)}</td><td>${pill(S.env.conductorOnPath, 'on PATH', 'not on PATH')}</td><td class="note">${S.env.conductorOnPath ? 'Ready' : 'Add <span class="mono">$(npm prefix -g)/bin</span> to PATH'}</td></tr>
+      <tr><td>This project</td><td>${pill(S.hasProjectConfig, 'initialised', 'not initialised')}</td><td class="mono">${S.hasProjectConfig ? '' : 'conductor init'}</td></tr>
+      <tr><td>Worker agents</td><td>${pill(agents, agents + ' installed', 'none installed')}</td><td class="note">Optional: free API providers work without one</td></tr>
+      <tr><td>Free API keys</td><td>${freeKeys ? `<span class="pill ok">${freeKeys} set</span>` : '<span class="pill">none yet</span>'}</td><td class="note">kilo-free works without a key</td></tr>
     </table></div>
     <div class="card"><h2>Steps</h2><ol class="steps">
-      <li><b>Install conductor</b> (once per machine)${cmd('npm install -g github:<your-user>/conductor-ai\nconductor setup')}</li>
-      <li><b>Install and sign in to your workers</b>: at least the ones enabled in Providers. Daily drivers (then run <code>agy</code> once to sign in with Google):${cmd(p.antigravity.install)}${cmd(p.codex.install)}<span class="note">Free models for tests and docs: OpenCode, Kilo (no key needed), or an OpenRouter / OpenCode Zen key.</span></li>
-      <li><b>Add keys</b> for cloud APIs on the API keys page (Gemini API, OpenRouter, Kimi…).</li>
-      <li><b>Set up each project</b>${cmd('cd my-project\nconductor init            # or: conductor init --controller antigravity')}<span class="note">Then fill in section 1 of AGENTS.md (stack and Verify command).</span></li>
-      <li><b>Check everything</b>${cmd('conductor doctor --live')}</li>
-      <li><b>Use it from your controller</b>: in Claude Code: <span class="mono">/conduct-plan add password reset</span>, then <span class="mono">/conduct-run docs/plan/password-reset.md</span></li>
+      <li><b>Install conductor</b> (once per machine; run it again to update)${cmd('curl -fsSL https://raw.githubusercontent.com/KevalParikh22/conductor-ai/main/scripts/install.sh | bash')}<span class="note">Or with npm directly:</span>${cmd('npm install -g github:KevalParikh22/conductor-ai\nconductor setup')}<span class="note">If npm asks for sudo, use a Node version manager (nvm, fnm) instead.</span></li>
+      <li><b>Pick your workers.</b> Choose a free start, subscription agents, or both. Every role falls back down its chain, so you can mix them.
+        <div class="grid2" style="margin-top:10px">
+          <div class="mini"><b>Free, no install</b><ul class="note" style="margin:6px 0 0;padding-left:18px">
+            <li><b>kilo-free</b>: works now, no key (about 200 req/hour)</li>
+            <li><b>OpenRouter</b> <span class="mono">:free</span> models: ${link('openrouter.ai/keys')}</li>
+            <li><b>OpenCode Zen</b> free models: ${link('opencode.ai/zen')}</li>
+            <li><b>Gemini API</b> free tier: ${link('aistudio.google.com/apikey')}</li>
+            <li><b>Groq</b> / <b>Cerebras</b> (fast, free tier; enable on Providers): ${link('console.groq.com/keys')}, ${link('cloud.cerebras.ai')}</li>
+            <li><b>Ollama</b> (local and private; enable on Providers): ${link('ollama.com')}</li></ul>
+            <span class="note">Free API models return code that conductor applies. Good for tests, docs, review and questions.</span></div>
+          <div class="mini"><b>Coding agents (your subscriptions)</b><ul class="note" style="margin:6px 0 0;padding-left:0;list-style:none">
+            ${Object.values(p).map((v) => `<li>${v.installed ? '✓' : '○'} <b>${esc(v.label)}</b></li>`).join('')}</ul>
+            <span class="note">Agents edit files and run tests themselves, each under its own permission rules. Install commands are below.</span></div>
+        </div></li>
+      <li><b>Add keys</b> for the free or paid APIs you chose. They are stored in conductor's secrets file (mode 600), never in the project. <button class="btn" data-goto="keys">Open API keys</button></li>
+      <li><b>Set up each project</b>${cmd('cd my-project\nconductor init            # controller: claude-code (default), antigravity, codex-cli, opencode')}<span class="note">Then fill in section 1 of AGENTS.md: the stack and the Verify command (for example <span class="mono">npm test</span>).</span></li>
+      <li><b>Check everything</b>: <span class="mono">--live</span> sends one tiny prompt to each enabled provider and shows which ones answer.${cmd('conductor doctor --live')}</li>
+      <li><b>Try a free run</b> (read-only, changes nothing):${cmd('conductor ask "What does this project do? List the main folders." --chain kilo-free')}<span class="note">Then try a small write task on a test branch: <span class="mono">conductor docs "add a usage section to README" --chain kilo-free,openrouter-free</span>. Check the result on the Runs page.</span></li>
+      <li><b>Use it from your controller.</b> In Claude Code: <span class="mono">/conduct-plan add password reset</span>, answer the plan's open questions, then <span class="mono">/conduct-run docs/plan/password-reset.md</span>. Other controllers read the same instructions from AGENTS.md or GEMINI.md.</li>
     </ol></div>
-    <div class="card"><h2>Local vs cloud</h2><p class="note"><b>Local agents</b> (Antigravity CLI, Codex CLI, OpenCode, Kimi CLI) run on your machine with your subscriptions and can edit files and run tests. Each one runs with its own permission rules: write roles may edit only the project, read roles cannot edit (see each provider's card). <b>Cloud APIs</b> (Gemini API, OpenRouter, Kimi API, Claude API…) work anywhere with a key, including CI and Claude Code on the web. They return code, which conductor applies. <b>Local models</b> (Ollama, LM Studio) are free and private. Mix them freely in any role's chain.</p></div>`;
+    <div class="card"><h2>Worker agents: install and sign in</h2><table><tr><th>Agent</th><th>Status</th><th>Install</th><th>Sign in</th></tr>
+      ${Object.values(p).map((v) => `<tr><td>${esc(v.label)}</td><td>${pill(v.installed, 'installed', 'missing')}</td><td>${cmd(v.install.split(/\s+\(or: /)[0])}${/\(or: /.test(v.install) ? `<span class="note">or: <span class="mono">${esc(v.install.split(/\(or: /)[1].replace(/\)$/, ''))}</span></span>` : ''}</td><td class="mono">${esc(v.login)}</td></tr>`).join('')}
+    </table><p class="note">After installing, enable the agent on the Providers page and place it in a role's chain on Roles & fallback.</p></div>
+    <div class="card"><h2>Update or remove</h2>${cmd('npm install -g github:KevalParikh22/conductor-ai   # update to latest\nconductor --version\nnpm uninstall -g conductor-ai                       # remove')}<span class="note">Settings and keys stay in <span class="mono">${esc(S.paths.global.replace(/[^/\\]+$/, ''))}</span>. Delete that folder to remove them too.</span></div>
+    <div class="card"><h2>Local vs cloud</h2><p class="note"><b>Local agents</b> (Antigravity, Codex, OpenCode, Kimi, Claude Code) run on your machine with your subscriptions. They edit files and run tests, each under its own permission rules: write roles may edit only the project, and read roles cannot edit. <b>Cloud APIs</b> (Kilo, OpenRouter, OpenCode Zen, Gemini, Groq, Claude API…) work anywhere with a key, including CI. They return code, and conductor applies it. <b>Local models</b> (Ollama, LM Studio) are free and private.</p></div>`;
   },
 };
 

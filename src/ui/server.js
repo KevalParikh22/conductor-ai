@@ -76,7 +76,7 @@ function stateFor(root) {
     status: statusData(cfg), secrets: secretsState(cfg), cooldowns: getCooldowns(), errors: validateConfig(cfg),
     presets: Object.fromEntries(Object.entries(CLI_PRESETS).map(([k, v]) => [k, { label: v.label, bin: v.bin, install: v.install, login: v.login, docs: v.docs, permissions: v.permissions || null, installed: !!which(v.bin) }])),
     roles: ROLES, controllers: CONTROLLERS,
-    env: { node: process.version, platform: os.platform(), conductorOnPath: !!which('conductor') },
+    env: { node: process.version, platform: os.platform(), conductorOnPath: !!which('conductor'), git: !!which('git') },
   };
 }
 
