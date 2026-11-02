@@ -195,6 +195,7 @@ Exit codes: `0` ok · `2` usage or unsafe repo state · `3` every provider faile
 | [Install guide](docs/INSTALL.md) | Step by step, for every project |
 | [Configuration](docs/CONFIGURATION.md) | Roles, providers, settings, config files |
 | [Providers](docs/PROVIDERS.md) | Every provider, free tiers, permissions, adding your own |
+| [tmux and editors](docs/EDITORS.md) | tmux layout, VS Code (Claude Code, Copilot agent mode), Cursor |
 | [Local, cloud and CI](docs/CLOUD.md) | Claude Code on the web, GitHub Actions, servers |
 | [How it works](docs/ARCHITECTURE.md) | Design, safety model, parallel runs, inspirations |
 

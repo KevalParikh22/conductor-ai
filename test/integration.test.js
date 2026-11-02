@@ -26,6 +26,18 @@ test('init (claude-code) adds files, preserves user content, and is idempotent',
   assert.equal((fs.readFileSync(path.join(dir, 'CLAUDE.md'), 'utf8').match(/conductor:start/g) || []).length, 1);
 });
 
+test('init writes .vscode/mcp.json when asked or when .vscode/ exists, and keeps other servers', () => {
+  const plain = makeRepo().dir;
+  initProject(plain, { controller: 'claude-code' });
+  assert.ok(!fs.existsSync(path.join(plain, '.vscode/mcp.json')), 'no .vscode folder, not asked: nothing written');
+  initProject(plain, { controller: 'claude-code', vscode: true });
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(plain, '.vscode/mcp.json'), 'utf8')).servers.conductor, { type: 'stdio', command: 'conductor', args: ['mcp'] });
+  const { dir } = makeRepo({ files: { '.vscode/mcp.json': JSON.stringify({ servers: { other: { type: 'stdio', command: 'x' } } }) } });
+  initProject(dir, { controller: 'opencode' });
+  const servers = JSON.parse(fs.readFileSync(path.join(dir, '.vscode/mcp.json'), 'utf8')).servers;
+  assert.deepEqual(Object.keys(servers), ['other', 'conductor']);
+});
+
 test('init refuses the retired gemini-cli controller', () => {
   const { dir } = makeRepo();
   assert.throws(() => initProject(dir, { controller: 'gemini-cli' }), /unknown controller "gemini-cli"/);

@@ -22,7 +22,8 @@ const HELP = `conductor-ai ${VERSION}: one controller (Claude by default), many 
 
 Setup
   conductor setup                      first-time global setup (~/.config/conductor)
-  conductor init [--controller <c>]    add conductor to the current project
+  conductor init [--controller <c>] [--vscode]   add conductor to the current project
+                                       (--vscode also writes .vscode/mcp.json; automatic if .vscode/ exists)
                                        controllers: ${Object.keys(CONTROLLERS).join(', ')}
   conductor ui [--port 4545] [--no-open]   settings page: providers, roles, controller, keys
   conductor doctor [--live]            check installs and keys (--live pings each provider)
@@ -61,7 +62,7 @@ Exit codes: 0 ok · 2 usage/unsafe state · 3 every provider failed (controller 
 
 function parseArgs(argv) {
   const opts = { _: [] };
-  const flags = new Set(['no-verify', 'allow-dirty', 'json', 'live', 'no-open', 'no-mcp', 'all', 'clear', 'global', 'help', 'version', 'worktree', 'replace', 'force', 'allow-open-questions']);
+  const flags = new Set(['no-verify', 'allow-dirty', 'json', 'live', 'no-open', 'no-mcp', 'all', 'clear', 'global', 'help', 'version', 'worktree', 'replace', 'force', 'allow-open-questions', 'vscode']);
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '-h') { opts.help = true; continue; }
@@ -95,7 +96,7 @@ async function main() {
       const root = findProjectRoot();
       const controller = o.controller || 'claude-code';
       setupGlobal();
-      const { lines, notes } = initProject(root, { controller, mcp: !o['no-mcp'] });
+      const { lines, notes } = initProject(root, { controller, mcp: !o['no-mcp'], vscode: o.vscode || undefined });
       console.log(`conductor init → ${root}  (controller: ${CONTROLLERS[controller].label})`);
       lines.forEach((l) => console.log(l));
       notes.forEach((n) => console.log('\n' + n));

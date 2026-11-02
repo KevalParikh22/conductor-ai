@@ -63,7 +63,7 @@ function parseCommand(md) {
 }
 
 
-export function initProject(root, { controller = 'claude-code', mcp = true } = {}) {
+export function initProject(root, { controller = 'claude-code', mcp = true, vscode } = {}) {
   if (!CONTROLLERS[controller]) throw new Error(`unknown controller "${controller}". Options: ${Object.keys(CONTROLLERS).join(', ')}`);
   const lines = [];
   const log = (what, p) => lines.push(`  ${what.padEnd(8)} ${p}`);
@@ -124,6 +124,8 @@ export function initProject(root, { controller = 'claude-code', mcp = true } = {
     if (controller === 'antigravity') mergeJsonFile(root, '.agents/mcp_config.json', (d) => { d.mcpServers ||= {}; d.mcpServers.conductor ||= server; }, log);
     if (controller === 'opencode') mergeJsonFile(root, 'opencode.json', (d) => { d.$schema ||= 'https://opencode.ai/config.json'; d.mcp ||= {}; d.mcp.conductor ||= { type: 'local', command: ['conductor', 'mcp'], enabled: true }; }, log);
     if (controller === 'codex-cli') notes.push('Codex: add to ~/.codex/config.toml:\n    [mcp_servers.conductor]\n    command = "conductor"\n    args = ["mcp"]');
+    // VS Code (Copilot agent mode and other MCP extensions) reads .vscode/mcp.json: on request, or when the project already has a .vscode folder
+    if (vscode ?? fs.existsSync(path.join(root, '.vscode'))) mergeJsonFile(root, '.vscode/mcp.json', (d) => { d.servers ||= {}; d.servers.conductor ||= { type: 'stdio', ...server }; }, log);
   }
 
   // 5. Project state
