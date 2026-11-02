@@ -8,6 +8,7 @@ import * as git from './git.js';
 import { runVerify } from './verify.js';
 import { createWorktree, commitWorktree, removeWorktree } from './worktree.js';
 import { GLOBAL_DIR, readJSON, writeJSON, timestamp, rel } from './util.js';
+import { budgetBlock, estimateCost, recordUsage } from './usage.js';
 
 const PROMPTS = new URL('./prompts/', import.meta.url);
 const loadPrompt = (n) => fs.readFileSync(new URL(`${n}.md`, PROMPTS), 'utf8');
@@ -63,6 +64,16 @@ export function extractSection(planText, title) {
   return m ? m[1].trim() : '';
 }
 
+/**
+ * Unresolved items under "## Open questions" in a plan: "- [ ] ..." lines. Resolved ones are "- [x] ... → answer".
+ * Workers must not guess at open questions, so write tasks from a plan with any left are refused.
+ */
+export function openQuestions(planText) {
+  return extractSection(planText, 'Open questions').split('\n')
+    .map((l) => l.match(/^\s*[-*]\s*\[ \]\s*(.+)$/)?.[1]?.trim())
+    .filter((q) => q && !/^<.*>$/.test(q));
+}
+
 /** Paths in backticks on a "files:" line of a task. */
 export function taskFiles(section) {
   const line = section.split('\n').find((l) => /\bfiles\b\**\s*:/i.test(l)) || '';
@@ -110,6 +121,8 @@ export function resolveChain(cfg, role, { provider, chain } = {}) {
     if (!r.ready) return { name, p, skip: r.reason };
     const c = cooldowns[name];
     if (c) return { name, p, skip: `cooling down until ${new Date(c.until).toLocaleTimeString()} (${c.reason})` };
+    const over = budgetBlock(name, p, cfg.settings);
+    if (over) return { name, p, skip: over };
     return { name, p };
   });
 }
@@ -182,6 +195,11 @@ export async function dispatch(cfg, opts) {
     if (!planText) throw new UsageError('--task needs --plan');
     section = extractTask(planText, opts.taskId);
     if (!section) throw new UsageError(`task "${opts.taskId}" not found in ${opts.planPath} (expected a heading like "### ${opts.taskId}: title")`);
+    const open = mode === 'write' ? openQuestions(planText) : [];
+    if (open.length && !opts.allowOpenQuestions) {
+      throw new UsageError(`${opts.planPath} still has ${open.length} open question(s): ${open.map((q) => `"${q}"`).join('; ')}. ` +
+        'Answer them in the plan (mark "- [x] question → answer") before handing out tasks, or pass --allow-open-questions');
+    }
     const notes = useWorktree ? extractSection(planText, 'Design notes') : '';
     body = useWorktree
       ? `Plan: ${opts.planPath} (its Design notes are copied below; the file itself may not exist in your checkout)\nYour task id: ${opts.taskId}\n\n## Design notes\n${notes || '(none)'}\n\n${section}\n`
@@ -218,7 +236,7 @@ export async function dispatch(cfg, opts) {
   fs.writeFileSync(path.join(runDir, 'task.md'), body);
 
   const summary = {
-    role, mode, task: opts.taskId || null, plan: opts.planPath || null, attempts: [], winner: null, model: null,
+    role, mode, startedAt: new Date().toISOString(), task: opts.taskId || null, plan: opts.planPath || null, attempts: [], winner: null, model: null,
     report: null, status: null, changed: [], applied: [], rejected: [], warnings: [...preWarnings], verify: null, runDir: rel(root, runDir), exitCode: 3,
   };
   let ioDir = runDir; // where CLI workers get their prompt/output files
@@ -237,6 +255,8 @@ export async function dispatch(cfg, opts) {
   const quotaRe = new RegExp(settings.quotaPattern, 'i');
   const timeoutMs = (settings.timeoutSec || 1200) * 1000;
   const chain = resolveChain(cfg, role, { provider: opts.provider, chain: opts.chain });
+  // files already modified before the run (allowed with --allow-dirty): can't be credited to the worker
+  const preDirty = mode === 'write' && inRepo ? new Set(git.changedFiles(work)) : new Set();
   let winnerText = '';
 
   for (const c of chain) {
@@ -260,6 +280,9 @@ export async function dispatch(cfg, opts) {
       else summary.applied = applied;
     }
     const attempt = { provider: c.name, kind, ok: res.ok, reason: res.ok ? 'ok' : res.reason, seconds: Math.round((Date.now() - t0) / 100) / 10 };
+    if (res.tokens) { attempt.tokens = res.tokens; attempt.cost = estimateCost(c.p, res.tokens); }
+    recordUsage({ provider: c.name, model: res.model || c.p.model || null, kind: kind === 'agent' ? 'agent' : 'chat', role, project: path.basename(root),
+      ok: res.ok, reason: attempt.reason, seconds: attempt.seconds, tokens: res.tokens || null, cost: attempt.cost ?? null });
     const changedDuringRead = mode === 'read' && inRepo && before !== git.stateHash(work);
     if (changedDuringRead) summary.warnings.push(`${c.name} changed files during a read-only run. Check git status.`);
 
@@ -306,6 +329,11 @@ export async function dispatch(cfg, opts) {
     summary.changed = git.changedFiles(work);
     const touched = summary.changed.filter((f) => isProtected(f, settings.protectedPaths || []));
     if (touched.length) summary.warnings.push(`worker modified protected files: ${touched.join(', ')}`);
+    if (summary.attempts.at(-1)?.kind === 'agent') { // chat replies are applied from their file blocks, so they can't misreport
+      const ev = checkEvidence(winnerText, summary.changed, summary.status, preDirty);
+      summary.evidence = { claimed: ev.claimed, notChanged: ev.notChanged, notReported: ev.notReported };
+      summary.warnings.push(...ev.warnings);
+    }
     if (settings.autoVerify !== false && !opts.noVerify) {
       emit({ type: 'verify' });
       // in a worktree, other parallel tasks' work is missing, so prefer the task's own verify line from the plan
@@ -330,6 +358,41 @@ export async function dispatch(cfg, opts) {
   return summary;
 }
 
+/**
+ * Paths a worker lists under "## Files changed" in its report, or null when the report has no such section.
+ * Accepts "- path — summary", "- `path`: summary", "* path".
+ */
+export function claimedFiles(report) {
+  const m = report.match(/^#{1,4}\s*Files changed\s*$([\s\S]*?)(?=^#{1,4}\s|(?![\s\S]))/mi);
+  if (!m) return null;
+  const files = [];
+  for (const line of m[1].split('\n')) {
+    const item = line.match(/^\s*[-*+]\s+`?([^`\s:—–]+?)`?(?:\s|:|$)/);
+    if (!item || /^\(?(none|nothing|n\/a)\)?\.?$/i.test(item[1])) continue;
+    files.push(item[1].replace(/^\.\//, ''));
+  }
+  return files;
+}
+
+/**
+ * Evidence check: does the worker's report match what git shows? Claims are not trusted on their own.
+ * Returns warnings plus the details for the summary.
+ */
+export function checkEvidence(report, changed, status, preDirty = new Set()) {
+  const claimed = claimedFiles(report);
+  const actual = new Set(changed);
+  const warnings = [];
+  if (/RESULT:\s*DONE/i.test(status || '') && !changed.length) warnings.push('the worker reports DONE but changed no files');
+  changed = changed.filter((f) => !preDirty.has(f)); // their changes may be from before the run
+  if (!claimed) return { claimed: null, notChanged: [], notReported: [], warnings };
+  const claimedSet = new Set(claimed);
+  const notChanged = claimed.filter((f) => !actual.has(f) && !changed.some((c) => c.startsWith(f.replace(/\/?$/, '/'))));
+  const notReported = changed.filter((f) => !claimedSet.has(f) && ![...claimedSet].some((c) => f.startsWith(c.replace(/\/?$/, '/'))));
+  if (notChanged.length) warnings.push(`the worker says it changed ${notChanged.join(', ')}, but git shows no change there`);
+  if (notReported.length) warnings.push(`changed but not listed in the worker's report: ${notReported.join(', ')}`);
+  return { claimed, notChanged, notReported, warnings };
+}
+
 export function formatSummary(s) {
   const L = [];
   L.push('', '==================== CONDUCTOR RESULT ====================');
@@ -342,6 +405,12 @@ export function formatSummary(s) {
     return L.join('\n');
   }
   L.push(`worker:    ${s.winner} (${s.model})`);
+  const used = s.attempts.filter((a) => a.tokens);
+  if (used.length) {
+    const tin = used.reduce((t, a) => t + (a.tokens.input || 0), 0), tout = used.reduce((t, a) => t + (a.tokens.output || 0), 0);
+    const known = used.filter((a) => a.cost != null), cost = known.reduce((t, a) => t + a.cost, 0);
+    L.push(`usage:     ${tin} tokens in / ${tout} out${known.length ? ` · $${cost.toFixed(4)}` : ' · cost unknown (no price set)'}`);
+  }
   L.push(`report:    ${s.report}`);
   L.push(`status:    ${s.status || '(no RESULT/VERDICT line, so read the report)'}`);
   if (s.applied.length) L.push(`applied:   ${s.applied.join(', ')}`);

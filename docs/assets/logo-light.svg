@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="460" height="112" viewBox="0 0 460 112" role="img" aria-label="conductor-ai">
+  <rect x="4" y="8" width="96" height="96" rx="24" fill="#eef0ff"/>
+  <g transform="translate(16 20) scale(3)" fill="none" stroke="#4f46e5" stroke-width="2" stroke-linecap="round">
+    <path d="M4 20 L14 6"/><circle cx="16" cy="4.5" r="2"/><path d="M3 12h3M18 12h3M12 18v3"/>
+  </g>
+  <text x="124" y="66" font-family="-apple-system, 'Segoe UI', Inter, Helvetica, Arial, sans-serif" font-size="46" font-weight="700" fill="#111827" letter-spacing="-1">conductor<tspan fill="#4f46e5">-ai</tspan></text>
+  <text x="126" y="94" font-family="-apple-system, 'Segoe UI', Inter, Helvetica, Arial, sans-serif" font-size="16" fill="#6b7280" letter-spacing="0.4">one controller · many models</text>
+</svg>

@@ -59,10 +59,13 @@ export async function runCli(name, p, { mode, prompt, cwd, timeoutMs, runDir, qu
   // A prompt too long for argv is replaced by a pointer to the prompt file (inside the repo, so agents may read it).
   const promptArg = prompt.length > MAX_PROMPT_ARG
     ? `Read the file ${promptFile} and follow the instructions in it exactly. Do not modify that file.` : prompt;
+  // Use the resolved path: the process runs there, and through a symlink (macOS /var -> /private/var)
+  // a deny rule for the unresolved path would not match what the CLI sees.
+  const realCwd = fs.realpathSync(cwd);
   const settings = preset.sessionSettings?.[mode];
-  const sessionSettings = settings ? JSON.stringify(fillPaths(settings, cwd)) : '';
+  const sessionSettings = settings ? JSON.stringify(fillPaths(settings, realCwd)) : '';
   const args = expandArgs(template, { prompt: promptArg, promptFile, outFile, model: p.model, sessionSettings }, preset.modelArgs || []);
-  const env = workerEnv(preset, mode, cwd);
+  const env = workerEnv(preset, mode, realCwd);
   const r = await run(preset.bin, args, { cwd, input: preset.stdin ? prompt : undefined, timeoutMs, env });
   const log = `$ ${preset.bin} ${args.map((a) => (a.length > 80 ? JSON.stringify(a.slice(0, 77) + '...') : a)).join(' ')}\n` +
     `--- exit ${r.code}${r.timedOut ? ' (timeout)' : ''}\n--- stdout\n${r.stdout}\n--- stderr\n${r.stderr}`;
@@ -124,8 +127,10 @@ export async function runOpenAI(name, p, { system, prompt, timeoutMs }) {
   const r = await httpJson(url, { headers, body, timeoutMs });
   const log = `POST ${url} model=${p.model}\n--- status ${r.status}${r.error ? ' ' + r.error : ''}\n${(r.raw || '').slice(0, 4000)}`;
   const text = r.json?.choices?.[0]?.message?.content;
+  const u = r.json?.usage;
+  const tokens = u ? { input: u.prompt_tokens ?? u.input_tokens, output: u.completion_tokens ?? u.output_tokens } : undefined;
   if (r.status === 200 && typeof text === 'string' && text.trim()) {
-    return { ok: true, text, log, model: r.json.model };
+    return { ok: true, text, log, model: r.json.model, tokens };
   }
   if (r.status === 200) {
     // OpenRouter sometimes returns 200 with an error object (upstream rate limit)
@@ -147,7 +152,8 @@ export async function runAnthropic(name, p, { system, prompt, timeoutMs }) {
   });
   const log = `POST ${url} model=${p.model}\n--- status ${r.status}${r.error ? ' ' + r.error : ''}\n${(r.raw || '').slice(0, 4000)}`;
   const text = (r.json?.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('\n');
-  if (r.status === 200 && text.trim()) return { ok: true, text, log };
+  const tokens = r.json?.usage ? { input: r.json.usage.input_tokens, output: r.json.usage.output_tokens } : undefined;
+  if (r.status === 200 && text.trim()) return { ok: true, text, log, tokens };
   if (r.status === 529) return { ok: false, text: '', reason: 'server overloaded', log };
   return { ok: false, text: r.json?.error?.message || '', ...(r.status === 200 ? { reason: 'empty output' } : classifyHttp(r)), log };
 }

@@ -70,7 +70,7 @@ test('build falls back from a rate-limited agent to the next, stashing partial w
   assert.deepEqual(agyArgs.slice(agyArgs.indexOf('--mode'), agyArgs.indexOf('--mode') + 2), ['--mode', 'accept-edits']);
   const set = JSON.parse(agyArgs[agyArgs.indexOf('--settings') + 1]);
   assert.equal(set.toolPermission, 'proceed-in-sandbox');
-  assert.ok(set.permissions.deny.includes(`write_file(${dir}/.git)`), 'the worker folder is filled in');
+  assert.ok(set.permissions.deny.includes(`write_file(${fs.realpathSync(dir)}/.git)`), 'the worker folder is filled in, resolved');
   assert.ok(set.permissions.deny.includes('command(git push)'));
   assert.match(agyArgs[agyArgs.indexOf('-p') + 1], /add function/, 'the prompt is passed with -p');
   assert.equal(s.exitCode, 0);
@@ -167,7 +167,7 @@ test('antigravity read mode denies writes to the project (not plan mode); huge p
   assert.ok(!args.includes('--mode'), 'plan mode answers with a plan artifact link instead of the answer');
   assert.ok(!args.includes('--dangerously-skip-permissions'));
   const set = JSON.parse(args[args.indexOf('--settings') + 1]);
-  assert.ok(set.permissions.deny.includes(`write_file(${dir})`));
+  assert.ok(set.permissions.deny.includes(`write_file(${fs.realpathSync(dir)})`));
   assert.ok(set.permissions.deny.some((r) => r.startsWith('read_file(') && r.endsWith('/.env)')));
   assert.match(args[args.indexOf('-p') + 1], /^Read the file .*antigravity-cli\.prompt\.md/);
 });

@@ -22,10 +22,11 @@ templates/              AGENTS.md, controller block, playbook, plan template, sl
 3. **Prompt.**
    - Agents get: worker rules + role instructions + the task. They read `AGENTS.md` and the files themselves.
    - Chat APIs get a system prompt (rules, role and the file-block protocol) plus context: `AGENTS.md`, the plan's Design notes, and the listed files, capped by `maxContextBytes`.
-4. **Chain.** Each provider is checked (enabled? installed or key set? cooling down?) and skipped with a reason if it isn't ready.
+4. **Chain.** Each provider is checked (enabled? installed or key set? cooling down? over its daily budget?) and skipped with a reason if it isn't ready. Plan tasks for write roles are refused while the plan has unanswered `## Open questions`.
 5. **Attempt.** On failure, the reason is classified (`quota`, `timeout`, `exit N`, `auth`, `empty output`…). Quota failures set a cooldown. Write-role failures stash partial work, so the next provider starts clean and nothing is lost.
-6. **Success.** The report is saved, the changed files listed, protected-file edits flagged, and verify run.
-7. **Summary.** The controller gets a short text block (or JSON with `--json`, or the MCP tool result) and only reads the full report when it needs to.
+6. **Success.** The report is saved, the changed files listed, protected-file edits flagged, and verify run. The **evidence check** compares the worker's "Files changed" list with what git shows and warns on claimed-but-unchanged files, unreported changes, or "DONE" with no changes at all. Files already modified before the run are left out of that comparison.
+7. **Usage.** Every attempt (failed ones too) is appended to `~/.config/conductor/usage.jsonl` with time and, for APIs, tokens and cost.
+8. **Summary.** The controller gets a short text block (or JSON with `--json`, or the MCP tool result) and only reads the full report when it needs to.
 
 ## Parallel runs (worktrees)
 
@@ -61,7 +62,10 @@ conductor borrows proven ideas:
 - **Task Master AI:** assigning models to roles (main / research / fallback) in config.
 - **Aider's architect/editor mode:** a strong model plans while a cheaper model edits.
 - **claude-code-router:** ordered fallbacks and routing by task type.
-- **Claude Squad:** isolating each agent's work (here with git stash, rather than worktrees).
+- **Claude Squad:** isolating each agent's work (git stash for single runs, worktrees for parallel ones).
+- **Bernstein:** parallel agents in git worktrees, cost budgets, and a run view next to the terminal.
+- **Ouroboros:** settle ambiguity before any code is written (here: the plan's Open questions gate), and don't take a worker's word for what it did (the evidence check).
+- **llm-use:** per-run cost tracking with a breakdown by provider.
 
 What conductor adds: a controller that stays in charge of quality (plan → delegate → verify → review), mixed agent and chat providers in the same chain, rate-limit cooldowns shared across projects, and per-project setup for several controllers.
 

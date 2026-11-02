@@ -15,6 +15,8 @@ import { listFreeModels, listProviderModels } from '../src/models.js';
 import { CLI_PRESETS, ROLES, CONTROLLERS } from '../src/presets.js';
 import { VERSION } from '../src/version.js';
 import { which } from '../src/util.js';
+import { usageReport, formatUsage } from '../src/usage.js';
+import { listRuns, readRun, formatRuns } from '../src/runs.js';
 
 const HELP = `conductor-ai ${VERSION}: one controller (Claude by default), many worker LLMs.
 
@@ -38,6 +40,7 @@ Work (normally called by the controller)
      --worktree [--replace]      run in its own checkout on branch conductor/<id> and commit there
                                  (write roles; lets several tasks run at the same time)
      --no-verify --allow-dirty --json
+     --allow-open-questions      run plan tasks even if the plan has unresolved "## Open questions"
   conductor <role> ...                 shortcut for: conductor run <role> ...
   conductor batch --plan <file> --tasks T1,T2,T3 [--concurrency 4] [--role r] [--provider p] [--replace] [--json]
                                        run independent tasks in parallel, one worktree each,
@@ -48,6 +51,9 @@ Work (normally called by the controller)
   conductor status [--json]            providers, chains and repo state
   conductor models [provider] [--all]  list free models (OpenRouter by default, or any API provider)
   conductor cooldown [--clear [name]]  show or clear rate-limit cooldowns
+  conductor runs [--limit 20] [--json] recent runs in this project: who did what, verify, warnings
+  conductor runs show <run>            one run's full summary
+  conductor usage [--days 7] [--json]  runs, tokens and known cost per provider (all projects)
   conductor config path                show config file locations
   conductor mcp                        run as an MCP server (stdio)
 
@@ -55,7 +61,7 @@ Exit codes: 0 ok · 2 usage/unsafe state · 3 every provider failed (controller 
 
 function parseArgs(argv) {
   const opts = { _: [] };
-  const flags = new Set(['no-verify', 'allow-dirty', 'json', 'live', 'no-open', 'no-mcp', 'all', 'clear', 'global', 'help', 'version', 'worktree', 'replace', 'force']);
+  const flags = new Set(['no-verify', 'allow-dirty', 'json', 'live', 'no-open', 'no-mcp', 'all', 'clear', 'global', 'help', 'version', 'worktree', 'replace', 'force', 'allow-open-questions']);
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '-h') { opts.help = true; continue; }
@@ -132,7 +138,7 @@ async function main() {
         role, task: o._.join(' ') || undefined, planPath: o.plan, taskId: o.task, provider: o.provider,
         chain: o.chain ? o.chain.split(',').map((x) => x.trim()).filter(Boolean) : undefined,
         note: o.note, files: o.files ? o.files.split(',').map((x) => x.trim()) : [], base: o.base, focus: o.focus,
-        save: o.save, noVerify: o['no-verify'], allowDirty: o['allow-dirty'], worktree: o.worktree, replace: o.replace,
+        save: o.save, noVerify: o['no-verify'], allowDirty: o['allow-dirty'], worktree: o.worktree, replace: o.replace, allowOpenQuestions: o['allow-open-questions'],
         onEvent: o.json ? undefined : (e) => {
           const m = { worktree: `working in ${e.dir} (branch ${e.branch})`, try: `trying ${e.provider} (${e.kind})…`, skip: `skip ${e.provider}: ${e.reason}`, fail: `${e.provider} failed: ${e.reason}`, ok: `${e.provider} finished`, verify: 'running verify…' }[e.type];
           if (m) process.stderr.write(`conductor: ${m}\n`);
@@ -165,7 +171,7 @@ async function main() {
       if (errs.length) throw new UsageError('config problems:\n  ' + errs.join('\n  '));
       const tasks = (o.tasks || o._.join(',')).split(',').map((x) => x.trim()).filter(Boolean);
       const b = await runBatch(cfg, {
-        planPath: o.plan, tasks, role: o.role, provider: o.provider, concurrency: o.concurrency, noVerify: o['no-verify'], replace: o.replace, note: o.note,
+        planPath: o.plan, tasks, role: o.role, provider: o.provider, concurrency: o.concurrency, noVerify: o['no-verify'], replace: o.replace, note: o.note, allowOpenQuestions: o['allow-open-questions'],
         onEvent: o.json ? undefined : (e) => {
           const m = { start: `starting (first choice: ${e.provider})`, try: `trying ${e.provider}…`, fail: `${e.provider} failed: ${e.reason}`, ok: `${e.provider} finished`, verify: 'running verify…', done: 'done' }[e.type];
           if (m) process.stderr.write(`conductor [${e.task}]: ${m}\n`);
@@ -190,6 +196,23 @@ async function main() {
         return 0;
       }
       throw new UsageError('usage: conductor worktree [list] | rm <id>|--all [--force]');
+    }
+    case 'runs': {
+      const root = findProjectRoot();
+      if (o._[0] === 'show') {
+        const r = o._[1] && readRun(root, o._[1]);
+        if (!r) throw new UsageError(`usage: conductor runs show <run>   (no single run matches "${o._[1] || ''}"; see conductor runs)`);
+        console.log(o.json ? JSON.stringify(r.summary, null, 2) : `run: ${r.id}${formatSummary(r.summary)}`);
+        return 0;
+      }
+      const rows = listRuns(root, { limit: Number(o.limit) || 20 });
+      console.log(o.json ? JSON.stringify(rows, null, 2) : formatRuns(rows));
+      return 0;
+    }
+    case 'usage': {
+      const u = usageReport(Math.max(1, Number(o.days) || 7));
+      console.log(o.json ? JSON.stringify(u, null, 2) : formatUsage(u, loadConfig().settings));
+      return 0;
     }
     case 'cooldown': {
       if (o.clear) { clearCooldowns(o._[0] || (typeof o.clear === 'string' ? o.clear : undefined)); console.log('cooldowns cleared'); return 0; }

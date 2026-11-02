@@ -149,19 +149,19 @@ export const DEFAULT_PROVIDERS = {
   'claude-cli': { type: 'cli', preset: 'claude', enabled: false, model: '', notes: 'Claude as a worker (spends Claude quota).' },
 
   'gemini-api': { type: 'openai', enabled: true, baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', apiKeyEnv: 'GEMINI_API_KEY', model: 'gemini-3.8-flash', notes: 'Free tier from Google AI Studio.' },
-  'openrouter-free': { type: 'openai', enabled: true, baseUrl: 'https://openrouter.ai/api/v1', apiKeyEnv: 'OPENROUTER_API_KEY', model: 'openrouter/free', notes: 'Any ":free" model. 20 req/min, 50/day (1000/day after $10 credit).' },
+  'openrouter-free': { type: 'openai', enabled: true, baseUrl: 'https://openrouter.ai/api/v1', apiKeyEnv: 'OPENROUTER_API_KEY', model: 'openrouter/free', free: true, notes: 'Any ":free" model. 20 req/min, 50/day (1000/day after $10 credit).' },
   'openai-api': { type: 'openai', enabled: false, baseUrl: 'https://api.openai.com/v1', apiKeyEnv: 'OPENAI_API_KEY', model: 'gpt-6-luna' },
   'kimi-api': { type: 'openai', enabled: false, baseUrl: 'https://api.moonshot.ai/v1', apiKeyEnv: 'MOONSHOT_API_KEY', model: 'kimi-latest' },
   'deepseek-api': { type: 'openai', enabled: false, baseUrl: 'https://api.deepseek.com/v1', apiKeyEnv: 'DEEPSEEK_API_KEY', model: 'deepseek-chat' },
-  'kilo-free': { type: 'openai', enabled: true, baseUrl: 'https://api.kilo.ai/api/gateway', apiKeyEnv: 'KILO_API_KEY', apiKeyOptional: true, model: 'kilo-auto/free', notes: 'Kilo Gateway free models. Works without a key (about 200 req/hour per IP). Free routes may log prompts.' },
-  'opencode-zen': { type: 'openai', enabled: true, baseUrl: 'https://opencode.ai/zen/v1', apiKeyEnv: 'OPENCODE_API_KEY', model: 'deepseek-v4.1-flash-free', notes: 'OpenCode Zen API: the same "-free" models as the OpenCode CLI, without the CLI. Key from opencode.ai/zen.' },
+  'kilo-free': { type: 'openai', enabled: true, baseUrl: 'https://api.kilo.ai/api/gateway', apiKeyEnv: 'KILO_API_KEY', apiKeyOptional: true, model: 'kilo-auto/free', free: true, notes: 'Kilo Gateway free models. Works without a key (about 200 req/hour per IP). Free routes may log prompts.' },
+  'opencode-zen': { type: 'openai', enabled: true, baseUrl: 'https://opencode.ai/zen/v1', apiKeyEnv: 'OPENCODE_API_KEY', model: 'deepseek-v4.1-flash-free', free: true, notes: 'OpenCode Zen API: the same "-free" models as the OpenCode CLI, without the CLI. Key from opencode.ai/zen.' },
   'groq-api': { type: 'openai', enabled: false, baseUrl: 'https://api.groq.com/openai/v1', apiKeyEnv: 'GROQ_API_KEY', model: '', notes: 'Free tier, very fast. About 30 req/min, 1000/day. Pick a model with: conductor models groq-api' },
   'cerebras-api': { type: 'openai', enabled: false, baseUrl: 'https://api.cerebras.ai/v1', apiKeyEnv: 'CEREBRAS_API_KEY', model: '', notes: 'Free tier, very fast. Pick a model with: conductor models cerebras-api' },
   'mistral-api': { type: 'openai', enabled: false, baseUrl: 'https://api.mistral.ai/v1', apiKeyEnv: 'MISTRAL_API_KEY', model: 'codestral-latest', notes: 'Free "Experiment" plan includes Codestral. Prompts may be used for training.' },
   'nvidia-nim': { type: 'openai', enabled: false, baseUrl: 'https://integrate.api.nvidia.com/v1', apiKeyEnv: 'NVIDIA_API_KEY', model: '', notes: 'Free developer access, about 40 req/min. Pick a model with: conductor models nvidia-nim' },
   'claude-api': { type: 'anthropic', enabled: false, baseUrl: 'https://api.anthropic.com', apiKeyEnv: 'ANTHROPIC_API_KEY', model: 'claude-sonnet-5-5' },
-  'ollama': { type: 'openai', enabled: false, baseUrl: 'http://localhost:11434/v1', apiKeyEnv: '', model: 'qwen3-coder', notes: 'Local model, free, private.' },
-  'lmstudio': { type: 'openai', enabled: false, baseUrl: 'http://localhost:1234/v1', apiKeyEnv: '', model: '' },
+  'ollama': { type: 'openai', enabled: false, baseUrl: 'http://localhost:11434/v1', apiKeyEnv: '', model: 'qwen3-coder', free: true, notes: 'Local model, free, private.' },
+  'lmstudio': { type: 'openai', enabled: false, baseUrl: 'http://localhost:1234/v1', apiKeyEnv: '', model: '', free: true },
 };
 
 /** Roles. mode "write" may change files; "read" must not. */
@@ -198,6 +198,7 @@ export const DEFAULT_SETTINGS = {
   requireCleanTree: true,
   verify: '',
   autoVerify: true,
+  dailyBudgetUSD: 0, // 0 = no cap; counts API providers that have a `price` set
   cooldownMinutes: 30,
   maxDiffBytes: 100000,
   maxContextBytes: 60000,
