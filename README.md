@@ -147,6 +147,8 @@ conductor passes each CLI its permission rules **for that run only**, through th
 
 For every agent: no `git push`, `commit`, `reset`, `checkout`, `rebase`, `stash`, `clean` or `sudo`; only the API key that CLI needs is passed to it. conductor adds its own guards on top: clean tree and non-protected branch for write roles, failed attempts stashed (never lost), and changes to `AGENTS.md`, plans and controller files reverted. Details and the exact flags: [Providers → Permissions](docs/PROVIDERS.md#permissions-what-each-agent-may-do).
 
+**Is it safe?** Read [SECURITY.md](SECURITY.md): what conductor guards (sandboxes, scrubbed keys, git hooks and config restored after every worker, checked model output), what it can't (tests run code the worker wrote; agents can read what you can read; free routes may log prompts), and a checklist for sensitive projects.
+
 ### Providers
 
 | | Built in |
@@ -197,6 +199,7 @@ Exit codes: `0` ok · `2` usage or unsafe repo state · `3` every provider faile
 | [Providers](docs/PROVIDERS.md) | Every provider, free tiers, permissions, adding your own |
 | [tmux and editors](docs/EDITORS.md) | tmux layout, VS Code (Claude Code, Copilot agent mode), Cursor |
 | [Local, cloud and CI](docs/CLOUD.md) | Claude Code on the web, GitHub Actions, servers |
+| [Security](SECURITY.md) | What is protected, known limits, setup for sensitive code |
 | [How it works](docs/ARCHITECTURE.md) | Design, safety model, parallel runs, inspirations |
 
 ### Honest limits

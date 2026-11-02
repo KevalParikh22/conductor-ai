@@ -17,7 +17,7 @@ export class UsageError extends Error {}
 
 // Files workers must never touch (agents are told; chat output is filtered).
 const PROTECTED = [/^AGENTS\.md$/, /^CLAUDE\.md$/, /^GEMINI\.md$/, /^HANDOFF\.md$/, /^docs\/plan\//, /^\.claude\//, /^\.gemini\//, /^\.agents\//,
-  /^\.conductor\//, /^\.git\//, /^\.mcp\.json$/, /(^|\/)node_modules\//, /(^|\/)\.env(\.|$)/, /(^|\/)auth\.json$/];
+  /^\.conductor\//, /^\.git\//, /^\.husky\//, /^\.githooks\//, /^\.vscode\/mcp\.json$/, /^\.mcp\.json$/, /(^|\/)node_modules\//, /(^|\/)\.env(\.|$)/, /(^|\/)auth\.json$/];
 /** `extra`: regex strings from settings.protectedPaths (e.g. "^app/etc/env\\.php$"). */
 export const isProtected = (p, extra = []) => {
   const norm = p.replaceAll('\\', '/');
@@ -127,11 +127,16 @@ export function resolveChain(cfg, role, { provider, chain } = {}) {
   });
 }
 
-function readContextFiles(root, files, budget) {
+// never sent to an API model as context, even when asked to
+const SECRET_PATHS = [/(^|\/)\.env(\.|$)/, /(^|\/)auth\.json$/, /(^|\/)secrets?\.env$/, /(^|\/)\.npmrc$/, /(^|\/)id_(rsa|ed25519|ecdsa)/, /\.(pem|key|p12|pfx)$/];
+
+function readContextFiles(root, files, budget, extraSecret = []) {
   let out = '', used = 0;
   for (const f of [...new Set(files)]) {
     const abs = path.resolve(root, f);
-    if (!abs.startsWith(path.resolve(root))) continue;
+    if (!abs.startsWith(path.resolve(root) + path.sep)) continue;
+    const norm = path.relative(root, abs).replaceAll('\\', '/');
+    if (SECRET_PATHS.some((re) => re.test(norm)) || extraSecret.some((src) => new RegExp(src).test(norm))) { out += `\n### ${f}\n(withheld: looks like a secrets file)\n`; continue; }
     let body;
     try { body = fs.readFileSync(abs, 'utf8'); } catch { out += `\n### ${f}\n(does not exist yet: new file)\n`; continue; }
     if (used + body.length > budget) { out += `\n### ${f}\n(omitted: context budget reached)\n`; continue; }
@@ -222,7 +227,7 @@ export async function dispatch(cfg, opts) {
     const notes = planText && extractSection(planText, 'Design notes');
     if (notes) ctx += `\n# Design notes from ${opts.planPath}\n${notes}\n`;
     const files = [...(opts.files || []), ...taskFiles(section)];
-    if (files.length) ctx += `\n# Relevant files (current content)\n${readContextFiles(work, files, settings.maxContextBytes || 60000)}`;
+    if (files.length) ctx += `\n# Relevant files (current content)\n${readContextFiles(work, files, settings.maxContextBytes || 60000, settings.protectedPaths || [])}`;
     return ctx;
   };
 
@@ -258,6 +263,10 @@ export async function dispatch(cfg, opts) {
   // files already modified before the run (allowed with --allow-dirty): can't be credited to the worker
   const preDirty = mode === 'write' && inRepo ? new Set(git.changedFiles(work)) : new Set();
   let winnerText = '';
+  // hooks and .git/config can run programs: snapshot them so whatever a worker writes there is undone
+  const control = inRepo ? git.snapshotControl(work) : null;
+  const hooksRel = inRepo ? git.repoHooksPath(work) : null;
+  const protectedExtra = [...(settings.protectedPaths || []), ...(hooksRel ? [`^${hooksRel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/`] : [])];
 
   for (const c of chain) {
     if (c.skip) { summary.attempts.push({ provider: c.name, ok: false, reason: c.skip, skipped: true }); emit({ type: 'skip', provider: c.name, reason: c.skip }); continue; }
@@ -270,11 +279,13 @@ export async function dispatch(cfg, opts) {
     const t0 = Date.now();
     const userPrompt = kind === 'chat' ? `${chatContext()}\n---\n# TASK (role: ${role})\n${body}` : agentPrompt;
     let res = await runProvider(c.name, c.p, { mode, prompt: userPrompt, system: chatSystem, cwd: work, timeoutMs, runDir: ioDir, quotaRe });
+    const tampered = control ? git.restoreControl(control) : [];
+    if (tampered.length) summary.warnings.push(`${c.name} changed git hooks or config, which can run programs. conductor put them back: ${tampered.join(', ')}`);
     fs.writeFileSync(path.join(runDir, `${c.name}.log`), res.log || '');
 
     if (res.ok && kind === 'chat' && mode === 'write') {
       const blocks = parseFileBlocks(res.text);
-      const { applied, rejected } = applyFileBlocks(work, blocks, settings.protectedPaths || []);
+      const { applied, rejected } = applyFileBlocks(work, blocks, protectedExtra);
       summary.rejected.push(...rejected);
       if (!applied.length) res = { ...res, ok: false, reason: rejected.length ? 'only protected/outside files returned' : 'no file blocks in reply' };
       else summary.applied = applied;
@@ -327,7 +338,7 @@ export async function dispatch(cfg, opts) {
 
   if (mode === 'write') {
     summary.changed = git.changedFiles(work);
-    const touched = summary.changed.filter((f) => isProtected(f, settings.protectedPaths || []));
+    const touched = summary.changed.filter((f) => isProtected(f, protectedExtra));
     if (touched.length) summary.warnings.push(`worker modified protected files: ${touched.join(', ')}`);
     if (summary.attempts.at(-1)?.kind === 'agent') { // chat replies are applied from their file blocks, so they can't misreport
       const ev = checkEvidence(winnerText, summary.changed, summary.status, preDirty);

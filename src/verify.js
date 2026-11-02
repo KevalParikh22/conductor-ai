@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { run, which } from './util.js';
+import { run, which, SECRET_VARS } from './util.js';
 
 /** Priority: settings.verify > the "Verify" line in AGENTS.md > auto-detect from project files. */
 export function detectVerify(root, settings = {}) {
@@ -36,7 +36,10 @@ export async function runVerify(root, settings, logFile) {
   if (!cmd) return { status: 'SKIPPED', cmd: '', note: 'no verify command: set it in AGENTS.md or conductor settings' };
   const shell = process.platform === 'win32' ? 'cmd' : 'bash';
   const args = process.platform === 'win32' ? ['/c', cmd] : ['-c', cmd];
-  const r = await run(shell, args, { cwd: root, timeoutMs: (settings.timeoutSec || 1200) * 1000 });
+  // verify runs code the worker may have written: it gets your environment minus conductor's API keys
+  const env = { ...process.env };
+  for (const k of SECRET_VARS) delete env[k];
+  const r = await run(shell, args, { cwd: root, env, timeoutMs: (settings.timeoutSec || 1200) * 1000 });
   if (logFile) fs.writeFileSync(logFile, `$ ${cmd}\n--- exit ${r.code}\n${r.stdout}\n${r.stderr}`);
   return { status: r.code === 0 ? 'PASS' : 'FAIL', cmd, log: logFile, tail: (r.stdout + r.stderr).split('\n').slice(-25).join('\n') };
 }
