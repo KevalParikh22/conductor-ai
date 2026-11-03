@@ -14,14 +14,20 @@ import { testProvider } from '../src/providers.js';
 import { listFreeModels, listProviderModels } from '../src/models.js';
 import { CLI_PRESETS, ROLES, CONTROLLERS } from '../src/presets.js';
 import { VERSION } from '../src/version.js';
-import { which } from '../src/util.js';
+import { which, keyValue } from '../src/util.js';
 import { usageReport, formatUsage } from '../src/usage.js';
 import { listRuns, readRun, formatRuns } from '../src/runs.js';
+import { CATALOG, CATEGORIES, urlFields } from '../src/catalog.js';
+import { runAdd, catalogStatus, detect, enableDetected, keyList, interactive, askSecret, confirm, choose } from '../src/setup.js';
+import { writeSecrets } from '../src/config.js';
 
 const HELP = `conductor-ai ${VERSION}: one controller (Claude by default), many worker LLMs.
 
 Setup
-  conductor setup                      first-time global setup (~/.config/conductor)
+  conductor setup [--yes]              guided first-time setup: finds your agents and keys, adds a free provider, tests
+  conductor providers [--free] [--search x]   every provider conductor can add (${Object.keys(CATALOG).length}), with status
+  conductor add <provider> [--model m] [--yes] [--project]   add one: key, model, test, role chains
+  conductor keys [set NAME | rm NAME]  list, set (hidden input or stdin) or remove API keys
   conductor init [--controller <c>] [--vscode]   add conductor to the current project
                                        (--vscode also writes .vscode/mcp.json; automatic if .vscode/ exists)
                                        controllers: ${Object.keys(CONTROLLERS).join(', ')}
@@ -62,7 +68,7 @@ Exit codes: 0 ok · 2 usage/unsafe state · 3 every provider failed (controller 
 
 function parseArgs(argv) {
   const opts = { _: [] };
-  const flags = new Set(['no-verify', 'allow-dirty', 'json', 'live', 'no-open', 'no-mcp', 'all', 'clear', 'global', 'help', 'version', 'worktree', 'replace', 'force', 'allow-open-questions', 'vscode']);
+  const flags = new Set(['no-verify', 'allow-dirty', 'json', 'live', 'no-open', 'no-mcp', 'all', 'clear', 'global', 'help', 'version', 'worktree', 'replace', 'force', 'allow-open-questions', 'vscode', 'yes', 'free', 'project']);
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '-h') { opts.help = true; continue; }
@@ -85,13 +91,25 @@ async function main() {
   if (ROLES[cmd]) { o._.unshift(cmd); cmd = 'run'; }
 
   switch (cmd) {
-    case 'setup': {
-      console.log('Global setup:');
-      setupGlobal().forEach((l) => console.log(l));
-      console.log(`\nAdd API keys to ${GLOBAL_SECRETS} (or use: conductor ui → Keys).`);
-      console.log('Next: cd into a project and run  conductor init');
+    case 'setup': return setup(o);
+    case 'providers': return providers(o);
+    case 'add': {
+      const id = o._[0];
+      if (!id) throw new UsageError('usage: conductor add <provider>   (list them with: conductor providers)');
+      const e = CATALOG[id];
+      const fields = Object.fromEntries((e ? urlFields(e) : []).map((f) => [f, o[f.toLowerCase().replaceAll('_', '-')]]).filter(([, v]) => v));
+      const r = await runAdd(findProjectRoot(), id, { model: o.model, baseUrl: o['base-url'], fields, yes: o.yes, scope: o.project ? 'project' : 'global' });
+      console.log(`\n✓ ${r.name} added${r.provider.model ? ` (model ${r.provider.model})` : ''}${r.roles.length ? `, now in: ${r.roles.join(', ')}` : ''}.`);
+      if (o.yes || !interactive() || await confirm('Test it now (sends a one-word prompt)?')) {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'conductor-add-'));
+        const t = await testProvider(r.name, r.provider, findProjectRoot(), dir);
+        fs.rmSync(dir, { recursive: true, force: true });
+        console.log(t.ok ? `✓ ${r.name} answered.` : `✗ ${r.name}: ${t.reason}${t.sample ? `: ${t.sample.replace(/\s+/g, ' ').slice(0, 120)}` : ''}\n  See docs/providers/${id}.md → Troubleshooting.`);
+        if (!t.ok) return 1;
+      }
       return 0;
     }
+    case 'keys': return keys(o);
     case 'init': {
       const root = findProjectRoot();
       const controller = o.controller || 'claude-code';
@@ -235,34 +253,108 @@ async function main() {
 
 async function doctor(o) {
   const cfg = loadConfig();
-  console.log(`conductor ${VERSION} · node ${process.version} · ${os.platform()}`);
-  console.log(`project: ${cfg.root}\n`);
-  let problems = 0;
-  for (const n of cfg.notices || []) console.log(`! ${n}`);
+  const results = [];
   for (const [name, p] of Object.entries(cfg.providers)) {
     if (!p.enabled) continue;
+    const r = { name, kind: p.type === 'cli' ? 'agent' : 'chat', ok: true, status: 'ready', next: null, permissions: providerPermissions(p), readOnlyEnforced: readOnlyEnforced(p) };
+    results.push(r);
     if (p.type === 'cli') {
       const preset = { ...CLI_PRESETS[p.preset], ...p };
-      if (!which(preset.bin)) { problems++; console.log(`✗ ${name.padEnd(16)} not installed\n    install: ${preset.install}\n    login:   ${preset.login}`); continue; }
-    } else if (p.apiKeyEnv && !p.apiKeyOptional && !process.env[p.apiKeyEnv]) {
-      problems++; console.log(`✗ ${name.padEnd(16)} ${p.apiKeyEnv} not set (add to ${GLOBAL_SECRETS} or conductor ui → Keys)`); continue;
+      if (!which(preset.bin)) { Object.assign(r, { ok: false, status: 'not installed', next: `install: ${preset.install}\n    login:   ${preset.login}` }); continue; }
+    } else if (p.apiKeyEnv && !p.apiKeyOptional && !keyValue(p.apiKeyEnv)) {
+      Object.assign(r, { ok: false, status: `${p.apiKeyEnv} not set${process.env[p.apiKeyEnv] ? ' (placeholder value)' : ''}`, next: p.catalog ? `conductor add ${p.catalog}` : `conductor keys set ${p.apiKeyEnv}` });
+      continue;
     }
     if (o.live) {
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'conductor-doctor-'));
       const t = await testProvider(name, p, cfg.root, dir);
       fs.rmSync(dir, { recursive: true, force: true });
-      if (!t.ok) problems++;
-      console.log(`${t.ok ? '✓' : '✗'} ${name.padEnd(16)} ${t.reason}${t.ok ? '' : `: ${t.sample.replace(/\s+/g, ' ').slice(0, 120)}`}`);
-    } else console.log(`✓ ${name.padEnd(16)} ready (use --live to test a real call)`);
-    const perms = providerPermissions(p);
-    if (perms) {
-      console.log(`    write: ${perms.write || 'unknown (custom CLI): check its own permission settings'}`);
-      console.log(`    read:  ${perms.read || 'unknown'}${readOnlyEnforced(p) ? '' : '  ⚠ read-only NOT enforced'}`);
+      Object.assign(r, { ok: t.ok, status: t.reason, sample: t.ok ? undefined : t.sample.replace(/\s+/g, ' ').slice(0, 120),
+        next: t.ok ? null : p.catalog ? `see docs/providers/${p.catalog}.md → Troubleshooting` : null });
     }
   }
   const errs = validateConfig(cfg);
+  const problems = results.filter((r) => !r.ok).length + errs.length;
+  if (o.json) { console.log(JSON.stringify({ version: VERSION, node: process.version, project: cfg.root, notices: cfg.notices, providers: results, configErrors: errs, problems }, null, 2)); return problems ? 1 : 0; }
+  console.log(`conductor ${VERSION} · node ${process.version} · ${os.platform()}`);
+  console.log(`project: ${cfg.root}\n`);
+  for (const n of cfg.notices || []) console.log(`! ${n}`);
+  for (const r of results) {
+    console.log(`${r.ok ? '✓' : '✗'} ${r.name.padEnd(16)} ${r.ok && !o.live ? 'ready (use --live to test a real call)' : r.status}${r.sample ? `: ${r.sample}` : ''}`);
+    if (r.next) console.log(`    next: ${r.next}`);
+    if (r.permissions) {
+      console.log(`    write: ${r.permissions.write || 'unknown (custom CLI): check its own permission settings'}`);
+      console.log(`    read:  ${r.permissions.read || 'unknown'}${r.readOnlyEnforced ? '' : '  ⚠ read-only NOT enforced'}`);
+    }
+  }
   errs.forEach((e) => console.log(`✗ config: ${e}`));
-  console.log(problems + errs.length ? `\n${problems + errs.length} problem(s). Disabled providers are ignored; toggle them in conductor ui.` : '\nAll enabled providers look good.');
+  console.log(problems ? `\n${problems} problem(s). Disabled providers are ignored; toggle them in conductor ui.` : '\nAll enabled providers look good.');
+  return 0;
+}
+
+async function setup(o) {
+  const ask = interactive() && !o.yes;
+  console.log('Global setup:');
+  setupGlobal().forEach((l) => console.log(l));
+  const root = findProjectRoot();
+  const nodeOk = Number(process.versions.node.split('.')[0]) >= 20;
+  console.log(`\nThis machine: node ${process.version} ${nodeOk ? '✓' : '✗ (20+ needed)'} · git ${which('git') ? '✓' : '✗ (needed)'} · conductor on PATH ${which('conductor') ? '✓' : '✗ (add "$(npm prefix -g)/bin" to PATH)'}`);
+
+  const found = detect(loadConfig(root));
+  const installed = found.agents.filter((a) => a.installed);
+  console.log(`\nAgents installed: ${installed.length ? installed.map((a) => a.label).join(', ') : 'none (optional: free API providers work without one)'}`);
+  console.log(`API keys found:   ${found.keys.length ? found.keys.map((k) => `${k.label} (${k.env})`).join(', ') : 'none yet'}`);
+  const off = [...installed.filter((a) => !a.enabled), ...found.keys.filter((k) => !k.enabled)];
+  if (off.length && (!ask || await confirm(`Enable ${off.map((x) => x.name).join(', ')}?`))) console.log(`✓ enabled: ${enableDetected(root, found).join(', ')}`);
+
+  console.log('\nkilo-free is ready now: free models, no key needed.');
+  if (ask && await confirm('Add another free provider (more models, higher limits)?', false)) {
+    const free = catalogStatus(loadConfig(root)).filter((c) => c.free && !c.enabled && c.category !== 'local');
+    const pick = await choose(free, (c) => `${c.label.padEnd(22)} ${c.free}`, null);
+    if (pick) { const r = await runAdd(root, pick.id, {}); console.log(`✓ ${r.name} added.`); }
+  }
+  if (ask && await confirm('Test the enabled providers now (one-word prompt each)?')) await doctor({ live: true });
+  console.log(`\nNext:
+  cd my-project && conductor init       set up a project (CLAUDE.md / AGENTS.md, commands, MCP)
+  conductor providers                   ${Object.keys(CATALOG).length} providers you can add with: conductor add <name>
+  conductor ui                          settings page`);
+  return 0;
+}
+
+function providers(o) {
+  const rows = catalogStatus(loadConfig()).filter((c) => (!o.free || c.free) && (!o.search || `${c.id} ${c.label} ${c.about}`.toLowerCase().includes(String(o.search).toLowerCase())));
+  if (o.json) { console.log(JSON.stringify(rows, null, 2)); return 0; }
+  for (const [cat, label] of Object.entries(CATEGORIES)) {
+    const list = rows.filter((c) => c.category === cat);
+    if (!list.length) continue;
+    console.log(`\n${label}`);
+    for (const c of list) {
+      const state = c.enabled ? '✓ on ' : c.added ? '· off' : '     ';
+      const key = c.apiKeyEnv && !c.apiKeyOptional ? (c.keySet ? 'key ✓' : 'key needed') : 'no key';
+      console.log(`  ${state} ${c.id.padEnd(16)} ${c.label.padEnd(26)} ${key.padEnd(11)} ${c.free ? c.free.split(/[.(]/)[0].trim() : ''}`);
+    }
+  }
+  console.log(`\nAdd one: conductor add <name>   Guides: docs/providers/<name>.md`);
+  return 0;
+}
+
+async function keys(o) {
+  const [sub, name] = o._;
+  if (sub === 'set' || sub === 'rm') {
+    if (!name || !/^[A-Z_][A-Z0-9_]*$/.test(name)) throw new UsageError(`usage: conductor keys ${sub} NAME   (an env var name, e.g. GROQ_API_KEY)`);
+    if (sub === 'rm') { writeSecrets({ [name]: null }); console.log(`removed ${name} from ${GLOBAL_SECRETS}`); return 0; }
+    let value = '';
+    if (process.stdin.isTTY) value = await askSecret(`${name} (hidden): `);
+    else { for await (const c of process.stdin) value += c; value = value.trim(); }
+    if (!value) throw new UsageError('no value given; nothing changed');
+    writeSecrets({ [name]: value });
+    console.log(`saved ${name} to ${GLOBAL_SECRETS} (mode 600)`);
+    return 0;
+  }
+  const list = keyList(loadConfig());
+  if (o.json) { console.log(JSON.stringify(list, null, 2)); return 0; }
+  for (const k of list) console.log(`${k.set ? '✓' : k.placeholder ? '!' : ' '} ${k.name.padEnd(22)} ${k.set ? k.source : k.placeholder ? 'placeholder value, not a real key' : 'not set'}${k.usedBy.length ? `  · ${k.usedBy.join(', ')}` : ''}`);
+  console.log(`\nSet one: conductor keys set NAME   (hidden input, or pipe it: printenv X | conductor keys set NAME)`);
   return 0;
 }
 

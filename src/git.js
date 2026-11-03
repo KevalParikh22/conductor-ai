@@ -17,6 +17,7 @@ export const isRepo = (root) => { try { git(root, ['rev-parse', '--is-inside-wor
 export const branch = (root) => git(root, ['symbolic-ref', '--short', '-q', 'HEAD'], { allowFail: true }).trim() || '(detached)';
 export const status = (root) => git(root, ['status', '--porcelain']).trimEnd();
 export const isDirty = (root) => status(root).length > 0;
+export const head = (root) => git(root, ['rev-parse', '-q', '--verify', 'HEAD'], { allowFail: true }).trim();
 export const hasCommits = (root) => { try { git(root, ['rev-parse', '-q', '--verify', 'HEAD']); return true; } catch { return false; } };
 
 /** Hash of the working tree state, used to detect changes made by read-only runs. */

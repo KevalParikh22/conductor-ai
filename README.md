@@ -21,7 +21,7 @@
 
 > **Status: early (v0.5), solo-maintained.** 41 tests, run in CI on Linux and macOS with Node 20, 22 and 24. The agents it drives change their CLI flags often; each one is a small preset you can override in config.
 
-A Claude subscription runs out fast when Claude types every line. Claude is best at judgement: planning, design and catching bugs. **conductor-ai** keeps Claude (or any agent you choose) as the controller and quality gate, and hands the typing to Antigravity, Codex, OpenCode, free Kilo / OpenRouter / OpenCode Zen models, Kimi or local models. When one hits its limit, the next one takes over.
+A Claude subscription runs out fast when Claude types every line. Claude is best at judgement: planning, design and catching bugs. **conductor-ai** keeps Claude (or any agent you choose) as the controller and quality gate, and hands the typing to Antigravity, Codex, OpenCode, free Kilo / OpenRouter / Groq / Gemini models, Kimi or local models. When one hits its limit, the next one takes over.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/KevalParikh22/conductor-ai/main/scripts/install.sh | bash
@@ -95,9 +95,9 @@ flowchart LR
 
 ```bash
 npm install -g github:KevalParikh22/conductor-ai   # Node 20+
-conductor setup                 # global config in ~/.config/conductor
+conductor setup                 # guided: finds your agents and keys, adds a free provider, tests
 cd my-app && conductor init     # rules, commands, MCP entry
-conductor doctor --live         # a real call to each provider
+conductor add groq              # add any of 45 chat APIs: key, model, test, roles
 ```
 
 Then, in Claude Code inside the project:
@@ -117,7 +117,7 @@ npm install -g @openai/codex && codex login
 curl -fsSL https://opencode.ai/install | bash                          # free models
 ```
 
-Free API providers need no install: `kilo-free` works without a key; add keys for OpenRouter, Gemini API, OpenCode Zen, Groq and others in `conductor ui` → API keys. Full guide: [docs/INSTALL.md](docs/INSTALL.md).
+Free API providers need no install: `kilo-free` works without a key; add more with `conductor add <name>` (45 chat APIs: [setup guides](docs/providers/README.md)). Full guide: [docs/INSTALL.md](docs/INSTALL.md).
 
 </details>
 
@@ -143,6 +143,11 @@ conductor passes each CLI its permission rules **for that run only**, through th
 | **Codex** | OS sandbox `workspace-write`, no network, never asks | OS sandbox `read-only` |
 | **OpenCode** | edits inside the project; outside folders denied (shell not OS-sandboxed) | edits, web and mutating shell commands denied |
 | **Claude Code** | edits auto-approved; other commands that would ask are refused | edit tools disabled |
+| **Copilot CLI** | `--allow-all-tools` with git/sudo denied (deny wins); file tools limited to the project; shell not OS-sandboxed | write tools and shell denied |
+| **Aider** | edits in the repo only; no shell, no auto-commits, project `.env` not loaded | `--dry-run` |
+| **Grok Build** | kernel sandbox (`strict`): project and temp only, no network for commands on Linux; git/sudo denied | `read-only` sandbox, read tools only |
+| **Kiro** | commands in its OS sandbox, network blocked; `.git` writes refused | only read and search tools |
+| **Goose** | no permission control: use in a throwaway worktree | tool-less chat mode |
 | **Kimi**, custom CLIs | no permission control: use in a throwaway worktree | ⚠ not enforced, runs warn |
 
 For every agent: no `git push`, `commit`, `reset`, `checkout`, `rebase`, `stash`, `clean` or `sudo`; only the API key that CLI needs is passed to it. conductor adds its own guards on top: clean tree and non-protected branch for write roles, failed attempts stashed (never lost), and changes to `AGENTS.md`, plans and controller files reverted. Details and the exact flags: [Providers → Permissions](docs/PROVIDERS.md#permissions-what-each-agent-may-do).
@@ -153,12 +158,17 @@ For every agent: no `git push`, `commit`, `reset`, `checkout`, `rebase`, `stash`
 
 | | Built in |
 |---|---|
-| **Local agents** | Antigravity CLI · Codex CLI · OpenCode · Kimi CLI · Claude Code · any CLI you add |
-| **Free APIs** | Kilo Gateway (no key) · OpenCode Zen · OpenRouter `:free` · Gemini API · Groq · Cerebras · Mistral Codestral · NVIDIA NIM |
-| **Paid APIs** | OpenAI · Claude API · Kimi / Moonshot · DeepSeek · any OpenAI-compatible endpoint |
-| **Local models** | Ollama · LM Studio |
+| **Local agents** | Antigravity CLI · Codex CLI · OpenCode · GitHub Copilot CLI · Grok Build · Kiro · Aider · Goose · Kimi CLI · Claude Code · any CLI you add |
+| **Free APIs** | Kilo Gateway and OVHcloud (no key) · OpenRouter `:free` · Gemini API · Groq · Cerebras · Cohere trial · NVIDIA NIM · Hugging Face credits |
+| **Gateways** | OpenRouter · Requesty · Vercel AI Gateway · Hugging Face · Cloudflare Workers AI · Poe · AI/ML API |
+| **Model makers** | OpenAI · Claude API · Gemini · xAI · Mistral · DeepSeek · Kimi · Qwen · GLM · MiniMax |
+| **Fast hosts** | Groq · Cerebras · SambaNova · Together · Fireworks · DeepInfra · Novita · Nebius · Baseten · and more |
+| **Clouds** | Azure OpenAI · Amazon Bedrock · anything else through a LiteLLM proxy |
+| **Local models** | Ollama · LM Studio · llama.cpp · vLLM · LocalAI · Jan |
 
 Chat APIs can't run your tests, so conductor applies the files they return (refusing paths outside the repo) and runs verify for them. `conductor models <provider>` lists current models; free lists change weekly.
+
+Every one has a setup guide: **[docs/providers](docs/providers/README.md)**. See them all with `conductor providers`; add one with `conductor add <name>` or the **Add a provider** gallery in `conductor ui`. Any other OpenAI-compatible endpoint works too.
 
 <details>
 <summary><b>Commands</b></summary>

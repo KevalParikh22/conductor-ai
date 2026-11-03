@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { DEFAULT_CONFIG, CLI_PRESETS, ROLES } from './presets.js';
-import { GLOBAL_DIR, readJSON, writeJSON, deepMerge, loadEnvFile, which, isPlainObject } from './util.js';
+import { GLOBAL_DIR, readJSON, writeJSON, deepMerge, loadEnvFile, which, isPlainObject, SECRET_VARS, keyValue } from './util.js';
 
 export const GLOBAL_CONFIG = path.join(GLOBAL_DIR, 'config.json');
 export const GLOBAL_SECRETS = path.join(GLOBAL_DIR, 'secrets.env');
@@ -21,6 +21,29 @@ export function findProjectRoot(cwd = process.cwd()) {
       dir = up;
     }
   }
+}
+
+/** Set (string) or remove (null or "") keys in the global secrets file, mode 600. Also updates process.env. */
+export function writeSecrets(updates) {
+  let lines = [];
+  try { lines = fs.readFileSync(GLOBAL_SECRETS, 'utf8').split('\n'); } catch { /* new file */ }
+  for (const [k, v] of Object.entries(updates)) {
+    if (!/^[A-Z_][A-Z0-9_]*$/.test(k)) throw new Error(`bad key name ${k}`);
+    if (typeof v === 'string' && /[\r\n]/.test(v)) throw new Error('key values cannot contain newlines');
+    const idx = lines.findIndex((l) => new RegExp(`^\\s*(export\\s+)?${k}\\s*=`).test(l));
+    if (v === null || v === '') {
+      if (idx >= 0) lines.splice(idx, 1);
+      delete process.env[k];
+    } else {
+      const line = `${k}=${v}`;
+      if (idx >= 0) lines[idx] = line; else lines.push(line);
+      process.env[k] = v;
+      SECRET_VARS.add(k);
+    }
+  }
+  fs.mkdirSync(path.dirname(GLOBAL_SECRETS), { recursive: true });
+  fs.writeFileSync(GLOBAL_SECRETS, lines.join('\n').replace(/\n*$/, '\n'), { mode: 0o600 });
+  try { fs.chmodSync(GLOBAL_SECRETS, 0o600); } catch { /* windows */ }
 }
 
 export function projectConfigPath(root) { return path.join(root, PROJECT_DIRNAME, 'config.json'); }
@@ -136,7 +159,7 @@ export function providerReadiness(name, p) {
     const bin = preset.bin;
     return which(bin) ? { ready: true, reason: 'installed' } : { ready: false, reason: `"${bin}" not installed` };
   }
-  if (p.apiKeyEnv && !p.apiKeyOptional && !process.env[p.apiKeyEnv]) return { ready: false, reason: `${p.apiKeyEnv} not set` };
-  if (!p.model) return { ready: false, reason: 'no model set' };
+  if (p.apiKeyEnv && !p.apiKeyOptional && !keyValue(p.apiKeyEnv)) return { ready: false, reason: `${p.apiKeyEnv} not set${process.env[p.apiKeyEnv] ? ' (placeholder value)' : ''}` };
+  if (!p.model) return { ready: true, reason: 'ready (model picked automatically)' };
   return { ready: true, reason: p.apiKeyEnv && process.env[p.apiKeyEnv] ? 'key present' : 'no key needed' };
 }

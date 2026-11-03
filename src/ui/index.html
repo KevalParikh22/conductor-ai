@@ -59,7 +59,7 @@ h2 { font-size: 15px; margin: 0 0 10px; }
 .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
 .mini { border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: var(--panel-2); }
 .mini .note { display: block; margin-top: 6px; }
-input[type=text], input[type=password], input[type=number], select, textarea { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; font: inherit; width: 100%; min-width: 0; }
+input[type=text], input[type=search], input[type=password], input[type=number], select, textarea { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; font: inherit; width: 100%; min-width: 0; }
 input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 label.f { display: block; font-size: 12px; color: var(--muted); margin-bottom: 3px; }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -74,6 +74,14 @@ label.f { display: block; font-size: 12px; color: var(--muted); margin-bottom: 3
 .link .nm { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; min-width: 0; }
 .chainline { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .chainline .arrow { color: var(--muted); }
+.gal { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; margin-top: 12px; }
+.gcard { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--panel-2); display: flex; flex-direction: column; gap: 4px; }
+.gcard.open { grid-column: 1 / -1; border-color: var(--accent); }
+.gcard .note { margin: 0; }
+.gcard .warn { color: var(--warn); }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { border: 1px solid var(--line); background: var(--panel); color: var(--text); border-radius: 999px; padding: 3px 10px; font: inherit; font-size: 12.5px; cursor: pointer; }
+.chip.on { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
 .prov { display: grid; grid-template-columns: auto 1fr; gap: 12px; }
 .prov-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .prov-head b { font-size: 14.5px; }
@@ -144,7 +152,9 @@ body { overflow-x: hidden; }
 <script>
 const TOKEN = new URLSearchParams(location.hash.slice(1)).get('t') || '';
 const TABS = [['overview', 'Overview'], ['runs', 'Runs'], ['roles', 'Roles & fallback'], ['providers', 'Providers'], ['keys', 'API keys'], ['controller', 'Controller'], ['settings', 'Settings'], ['setup', 'Install & setup']];
-let S = null, W = null, tab = 'overview', dirty = false, freeModels = null, runsData = null;
+let S = null, W = null, tab = 'overview', dirty = false, freeModels = null, runsData = null, gOpen = null, gFilter = { q: '', cat: 'all' };
+const provModels = {};
+const GUIDE = (id) => `https://github.com/KevalParikh22/conductor-ai/blob/main/docs/providers/${id}.md`;
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const clone = (x) => JSON.parse(JSON.stringify(x));
@@ -188,6 +198,36 @@ function bindCopy() { document.querySelectorAll('[data-copy]').forEach((b) => b.
 function loadRuns() { api('GET', '/api/runs').then((d) => { runsData = d; if (tab === 'runs') render(); }, (e) => toast(e.message)); }
 // keep the Runs page current while it is open (runs started from the terminal show up on their own)
 setInterval(() => { if (tab === 'runs' && document.visibilityState === 'visible') loadRuns(); }, 5000);
+
+const GCATS = [['all', 'All'], ['free', 'Free'], ['aggregator', 'Gateways'], ['frontier', 'Model makers'], ['fast', 'Fast hosts'], ['cloud', 'Cloud'], ['local', 'Local']];
+const gMatch = (c) => (gFilter.cat === 'all' || c.category === gFilter.cat || (gFilter.cat === 'free' && !!c.free))
+  && (!gFilter.q || `${c.id} ${c.label} ${c.about} ${c.free || ''}`.toLowerCase().includes(gFilter.q.toLowerCase()));
+function gallery() {
+  const card = (c) => { const open = gOpen === c.id;
+    return `<div class="gcard ${open ? 'open' : ''}" data-gid="${esc(c.id)}" ${gMatch(c) ? '' : 'hidden'}>
+      <div class="prov-head"><b>${esc(c.label)}</b>${c.enabled ? '<span class="pill ok">on</span>' : c.added ? '<span class="pill">off</span>' : ''}<span class="spacer"></span>
+        <a class="note" href="${GUIDE(c.id)}" target="_blank" rel="noopener">guide</a></div>
+      <p class="note">${esc(c.about)}</p>
+      ${c.free ? `<p class="note"><b>Free:</b> ${esc(c.free.replace(/^Free:\s*/i, ''))}</p>` : ''}
+      ${c.privacy ? `<p class="note warn">${esc(c.privacy)}</p>` : ''}
+      ${open ? `<div class="fields" style="margin-top:6px">
+          ${c.apiKeyEnv && !c.apiKeyOptional && !c.keySet ? `<div><label class="f">${esc(c.apiKeyEnv)} · <a href="${esc(c.keyUrl)}" target="_blank" rel="noopener">get a key</a></label><input type="password" id="g-key" placeholder="paste key" autocomplete="off"></div>` : `<div class="note">${c.apiKeyEnv && !c.apiKeyOptional ? `${esc(c.apiKeyEnv)} is set.` : c.apiKeyEnv ? 'No key needed to start.' : 'No key needed.'}</div>`}
+          ${c.fields.map((f) => `<div><label class="f">${esc(f.replaceAll('_', ' ').toLowerCase())}</label><input type="text" data-gfield="${esc(f)}"></div>`).join('')}
+        </div><div class="row" style="margin-top:8px"><button class="btn primary small" data-gsave="${esc(c.id)}">Add and enable</button><button class="btn small" data-gclose>Cancel</button>
+          <span class="note">Saved to ${$('#scope')?.value === 'project' ? 'this project' : 'global config'}; added to the docs, test, review and ask roles. The key goes to the secrets file.</span></div>`
+        : `<div class="row" style="margin-top:4px">${c.enabled ? '<span class="note">Added. Configure it above.</span>' : `<button class="btn small" data-gadd="${esc(c.id)}">${c.added ? 'Enable' : 'Add'}</button>`}</div>`}
+    </div>`; };
+  return `<div class="card"><h2>Add a provider <span class="note">${S.catalog.length} available, ${S.catalog.filter((c) => c.free).length} with a free tier</span></h2>
+    <div class="row" style="gap:10px;flex-wrap:wrap"><input type="search" id="g-q" placeholder="Search: groq, coding, free…" value="${esc(gFilter.q)}" style="max-width:260px">
+      <div class="chips">${GCATS.map(([k, l]) => `<button class="chip ${gFilter.cat === k ? 'on' : ''}" data-gcat="${k}">${l}</button>`).join('')}</div></div>
+    <div class="gal">${S.catalog.map(card).join('')}</div>
+    <p class="note" id="g-none" ${S.catalog.some(gMatch) ? 'hidden' : ''}>Nothing matches. Any OpenAI-compatible endpoint works: add it as a custom provider below.</p></div>`;
+}
+function applyGalleryFilter() {
+  document.querySelectorAll('[data-gid]').forEach((el) => { el.hidden = !gMatch(S.catalog.find((c) => c.id === el.dataset.gid)); });
+  document.querySelectorAll('[data-gcat]').forEach((b) => b.classList.toggle('on', b.dataset.gcat === gFilter.cat));
+  const none = $('#g-none'); if (none) none.hidden = S.catalog.some(gMatch);
+}
 
 const views = {
   runs() {
@@ -251,17 +291,19 @@ const views = {
     const card = (n) => { const p = W.providers[n]; const builtin = S.builtinProviders.includes(n);
       return `<div class="card prov"><label class="switch" title="Enable"><input type="checkbox" data-en="${esc(n)}" ${p.enabled ? 'checked' : ''}><span></span></label><div>
         <div class="prov-head"><b>${esc(n)}</b>${locPill(provStatus(n))}${readyPill(n)}<span class="pill">${p.type === 'cli' ? esc(S.presets[p.preset]?.label || p.bin || 'cli') : p.type === 'anthropic' ? 'Anthropic API' : 'OpenAI-compatible'}</span>
-          <span class="spacer"></span><button class="btn small" data-test="${esc(n)}">Test</button>${builtin ? '' : `<button class="btn small" data-del="${esc(n)}">Remove</button>`}</div>
+          <span class="spacer"></span>${p.type !== 'cli' ? `<button class="btn small" data-lm="${esc(n)}" title="Load this provider's current models into the Model field">Models</button>` : ''}<button class="btn small" data-test="${esc(n)}">Test</button>${p.catalog ? `<a class="btn small" href="${GUIDE(p.catalog)}" target="_blank" rel="noopener">Guide</a>` : ''}${builtin ? '' : `<button class="btn small" data-del="${esc(n)}">Remove</button>`}</div>
         ${p.notes ? `<div class="note">${esc(p.notes)}</div>` : ''}
         ${p.type === 'cli' ? permNote(p) : ''}
-        <div class="fields">${field(n, 'model', 'Model', p.type === 'cli' ? 'CLI default' : 'required', n.startsWith('openrouter') ? 'dl-or' : (p.preset === 'opencode' ? 'dl-oc' : ''))}
+        <div class="fields">${field(n, 'model', 'Model', p.type === 'cli' ? 'CLI default' : 'required', n.startsWith('openrouter') ? 'dl-or' : p.preset === 'opencode' ? 'dl-oc' : provModels[n] ? `dl-m-${n}` : '')}
           ${p.type !== 'cli' ? field(n, 'baseUrl', 'Base URL') + field(n, 'apiKeyEnv', 'API key env var', 'none for local') : ''}</div>
         ${n.startsWith('openrouter') ? `<div class="row" style="margin-top:8px"><button class="btn small" id="loadfree">Load current free models</button><span class="note">${freeModels ? freeModels.length + ' free models loaded into the dropdown' : 'The free list changes often'}</span></div>` : ''}
+        ${provModels[n] ? `<datalist id="dl-m-${esc(n)}">${provModels[n].map((m) => `<option value="${esc(m.id)}">${m.free ? 'free' : ''}</option>`).join('')}</datalist><div class="note">${provModels[n].length} models loaded into the Model field's list</div>` : ''}
         <div class="note" id="test-${esc(n)}"></div></div></div>`; };
     return `<h1>Providers</h1><p class="sub">Turn providers on or off and pick models. Keys go in API keys and are never saved in config files.</p>
       <datalist id="dl-oc">${['opencode/big-pickle', 'opencode/glm-5.3-flash-free', 'opencode/deepseek-v4.1-flash-free', 'opencode/nemotron-3-ultra-free', 'opencode/mimo-v2.6-flash-free'].map((m) => `<option value="${m}">`).join('')}</datalist>
       <datalist id="dl-or"><option value="openrouter/free">${(freeModels || []).map((m) => `<option value="${esc(m.id)}">${m.tools ? 'tools · ' : ''}${m.context || ''}</option>`).join('')}</datalist>
       ${Object.entries(groups).map(([loc, title]) => byLoc[loc]?.length ? `<h2 style="margin-top:18px">${title}</h2>${byLoc[loc].map(card).join('')}` : '').join('')}
+      ${gallery()}
       <div class="card"><h2>Add a custom provider</h2><p class="note">Any OpenAI-compatible endpoint (Together, Fireworks, Mistral, a company gateway…), or another CLI agent.</p>
         <div class="fields"><div><label class="f">Name</label><input type="text" id="np-name" placeholder="e.g. mistral-api"></div>
         <div><label class="f">Type</label><select id="np-type"><option value="openai">OpenAI-compatible API</option><option value="anthropic">Anthropic API</option><option value="cli">CLI agent</option></select></div>
@@ -278,7 +320,7 @@ const views = {
     </table></div>
     <div class="card"><h2>Where to get free keys</h2><p class="note">No key needed for <b>kilo-free</b> (Kilo gateway free models, about 200 requests an hour). Free routes may log prompts, so keep secrets out of tasks you send to them.</p><ul>
       <li><b>OpenRouter</b> (<span class="mono">:free</span> models, 50 req/day, or 1000/day after a one-time $10 credit): <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a></li>
-      <li><b>OpenCode Zen</b> (the <span class="mono">-free</span> models): <a href="https://opencode.ai/zen" target="_blank" rel="noopener">opencode.ai/zen</a></li>
+      <li><b>OVHcloud AI Endpoints</b> (works without a key at 2 requests a minute): <a href="https://www.ovh.com/manager/#/public-cloud/" target="_blank" rel="noopener">OVH Public Cloud</a></li>
       <li><b>Gemini API</b> (free tier): <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a></li>
       <li><b>Groq</b> (free tier, fast): <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a></li>
       <li><b>Cerebras</b> (free tier, fast): <a href="https://cloud.cerebras.ai" target="_blank" rel="noopener">cloud.cerebras.ai</a></li>
@@ -328,7 +370,7 @@ const views = {
           <div class="mini"><b>Free, no install</b><ul class="note" style="margin:6px 0 0;padding-left:18px">
             <li><b>kilo-free</b>: works now, no key (about 200 req/hour)</li>
             <li><b>OpenRouter</b> <span class="mono">:free</span> models: ${link('openrouter.ai/keys')}</li>
-            <li><b>OpenCode Zen</b> free models: ${link('opencode.ai/zen')}</li>
+            <li><b>OVHcloud</b>: works without a key (2 req/min)</li>
             <li><b>Gemini API</b> free tier: ${link('aistudio.google.com/apikey')}</li>
             <li><b>Groq</b> / <b>Cerebras</b> (fast, free tier; enable on Providers): ${link('console.groq.com/keys')}, ${link('cloud.cerebras.ai')}</li>
             <li><b>Ollama</b> (local and private; enable on Providers): ${link('ollama.com')}</li></ul>
@@ -347,7 +389,7 @@ const views = {
       ${Object.values(p).map((v) => `<tr><td>${esc(v.label)}</td><td>${pill(v.installed, 'installed', 'missing')}</td><td>${cmd(v.install.split(/\s+\(or: /)[0])}${/\(or: /.test(v.install) ? `<span class="note">or: <span class="mono">${esc(v.install.split(/\(or: /)[1].replace(/\)$/, ''))}</span></span>` : ''}</td><td class="mono">${esc(v.login)}</td></tr>`).join('')}
     </table><p class="note">After installing, enable the agent on the Providers page and place it in a role's chain on Roles & fallback.</p></div>
     <div class="card"><h2>Update or remove</h2>${cmd('npm install -g github:KevalParikh22/conductor-ai   # update to latest\nconductor --version\nnpm uninstall -g conductor-ai                       # remove')}<span class="note">Settings and keys stay in <span class="mono">${esc(S.paths.global.replace(/[^/\\]+$/, ''))}</span>. Delete that folder to remove them too.</span></div>
-    <div class="card"><h2>Local vs cloud</h2><p class="note"><b>Local agents</b> (Antigravity, Codex, OpenCode, Kimi, Claude Code) run on your machine with your subscriptions. They edit files and run tests, each under its own permission rules: write roles may edit only the project, and read roles cannot edit. <b>Cloud APIs</b> (Kilo, OpenRouter, OpenCode Zen, Gemini, Groq, Claude API…) work anywhere with a key, including CI. They return code, and conductor applies it. <b>Local models</b> (Ollama, LM Studio) are free and private.</p></div>`;
+    <div class="card"><h2>Local vs cloud</h2><p class="note"><b>Local agents</b> (Antigravity, Codex, OpenCode, Kimi, Claude Code) run on your machine with your subscriptions. They edit files and run tests, each under its own permission rules: write roles may edit only the project, and read roles cannot edit. <b>Cloud APIs</b> (Kilo, OpenRouter, Gemini, Groq, Claude API and 40 more) work anywhere with a key, including CI. They return code, and conductor applies it. <b>Local models</b> (Ollama, LM Studio) are free and private.</p></div>`;
   },
 };
 
@@ -372,6 +414,25 @@ function bind() {
     catch (e) { out.textContent = '✗ ' + e.message; } finally { b.disabled = false; }
   });
   document.querySelectorAll('[data-del]').forEach((b) => b.onclick = () => { const n = b.dataset.del; delete W.providers[n]; for (const c of Object.values(W.roles)) { const i = c.indexOf(n); if (i >= 0) c.splice(i, 1); } markDirty(); render(); });
+  const gq = $('#g-q'); if (gq) gq.oninput = () => { gFilter.q = gq.value; applyGalleryFilter(); };
+  document.querySelectorAll('[data-gcat]').forEach((b) => b.onclick = () => { gFilter.cat = b.dataset.gcat; applyGalleryFilter(); });
+  document.querySelectorAll('[data-gadd]').forEach((b) => b.onclick = () => { gOpen = b.dataset.gadd; render(); $('#g-key')?.focus(); });
+  document.querySelectorAll('[data-gclose]').forEach((b) => b.onclick = () => { gOpen = null; render(); });
+  document.querySelectorAll('[data-gsave]').forEach((b) => b.onclick = async () => {
+    if (dirty) return toast('Save or discard your other changes first');
+    const fields = {}; document.querySelectorAll('[data-gfield]').forEach((i) => { fields[i.dataset.gfield] = i.value.trim(); });
+    b.disabled = true; b.textContent = 'Adding…';
+    try {
+      const r = await api('POST', '/api/providers/add', { id: b.dataset.gsave, key: $('#g-key')?.value.trim() || undefined, fields, scope: $('#scope').value });
+      gOpen = null; load(r);
+      toast(`${r.added.name} added${r.added.model ? ` (${r.added.model})` : ''}. ${r.added.warning || 'Use Test on its card.'}`);
+    } catch (e) { toast(e.message); b.disabled = false; b.textContent = 'Add and enable'; }
+  });
+  document.querySelectorAll('[data-lm]').forEach((b) => b.onclick = async () => {
+    b.disabled = true; b.textContent = 'Loading…';
+    try { const r = await api('POST', '/api/provider-models', { name: b.dataset.lm }); if (r.error) toast(r.error); else { provModels[b.dataset.lm] = r.models; toast(`${r.models.length} models`); } } catch (e) { toast(e.message); }
+    render();
+  });
   const lf = $('#loadfree'); if (lf) lf.onclick = async () => { lf.disabled = true; lf.textContent = 'Loading…'; try { freeModels = (await api('GET', '/api/models')).models; toast(`${freeModels.length} free models`); } catch (e) { toast(e.message); } render(); };
   const add = $('#np-add'); if (add) add.onclick = () => {
     const name = $('#np-name').value.trim(), type = $('#np-type').value, base = $('#np-base').value.trim();

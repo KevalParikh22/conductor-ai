@@ -26,10 +26,11 @@ Or from a clone, which is better for hacking on it:
 ```bash
 git clone https://github.com/KevalParikh22/conductor-ai && cd conductor-ai && npm install -g .
 ```
-Then create `~/.config/conductor/` (config, plus a private `secrets.env`):
+Then run the guided setup. It creates `~/.config/conductor/`, finds the agents and API keys you already have and turns them on, offers to add a free provider, and tests what's enabled:
 ```bash
 conductor setup
 ```
+In scripts or CI, `conductor setup --yes` does the same without questions.
 
 Check it worked: `conductor --version`.
 
@@ -65,24 +66,27 @@ Run `opencode auth login` if your chosen model needs it.
 
 **Optional:** Kimi Code CLI (`kimi`, then `/login`), or Claude Code as a worker (spends Claude quota). Their install commands are listed in `conductor doctor` and in the UI under **Install & setup**.
 
-## 3. Add API keys (optional, for cloud models)
+## 3. Add API providers (optional)
 
+conductor knows 45 chat APIs. Each has a guide in [docs/providers](providers/README.md). See them all, with what's already on:
 ```bash
-conductor ui
+conductor providers --free
 ```
-Go to **API keys** and paste the keys you have. They're stored in `~/.config/conductor/secrets.env` (chmod 600), never in config files or git.
+Add one. conductor shows where to get the key, asks for it (hidden input), lets you pick a model, sends one test prompt and puts the provider in the `docs`, `test`, `review` and `ask` roles:
+```bash
+conductor add groq
+```
+Or use `conductor ui` → Providers → **Add a provider**.
 
-| Key | Where | Free? |
-|---|---|---|
-| `GEMINI_API_KEY` | https://aistudio.google.com/apikey | Free tier |
-| `OPENROUTER_API_KEY` | https://openrouter.ai/keys | `:free` models: 20 req/min; 50/day, or 1000/day after a one-time $10 credit |
-| `KILO_API_KEY` | https://app.kilo.ai | Optional: `kilo-free` works without it |
-| `OPENCODE_API_KEY` | https://opencode.ai/zen | `-free` models through the OpenCode Zen API |
-| `CEREBRAS_API_KEY`, `GROQ_API_KEY`, `MISTRAL_API_KEY`, `NVIDIA_API_KEY` | provider dashboards | Free tiers (enable the provider in the UI) |
-| `MOONSHOT_API_KEY` | https://platform.moonshot.ai | Kimi API |
-| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY` | provider dashboards | Paid |
+Keys are stored in `~/.config/conductor/secrets.env` (mode 600), never in config files or git. Real environment variables take priority, and copied placeholders like `YOUR_API_KEY` count as not set. To manage keys directly:
+```bash
+conductor keys
+```
+```bash
+conductor keys set OPENROUTER_API_KEY
+```
 
-Real environment variables always take priority over `secrets.env`.
+Good free starting points: `kilo` and `ovh` (no key), `openrouter`, `gemini`, `groq`, `cerebras`.
 
 ## 4. Set up a project (once per project)
 

@@ -1,11 +1,12 @@
 // The routing engine: role -> provider chain -> attempt with fallback -> verify -> summary.
 import fs from 'node:fs';
 import path from 'node:path';
-import { ROLES } from './presets.js';
+import { ROLES, CLI_PRESETS } from './presets.js';
 import { providerReadiness, providerKind, readOnlyEnforced, PROJECT_DIRNAME } from './config.js';
 import { runProvider } from './providers.js';
 import * as git from './git.js';
 import { runVerify } from './verify.js';
+import { autoModel } from './models.js';
 import { createWorktree, commitWorktree, removeWorktree } from './worktree.js';
 import { GLOBAL_DIR, readJSON, writeJSON, timestamp, rel } from './util.js';
 import { budgetBlock, estimateCost, recordUsage } from './usage.js';
@@ -265,6 +266,7 @@ export async function dispatch(cfg, opts) {
   let winnerText = '';
   // hooks and .git/config can run programs: snapshot them so whatever a worker writes there is undone
   const control = inRepo ? git.snapshotControl(work) : null;
+  const headBefore = inRepo ? git.head(work) : '';
   const hooksRel = inRepo ? git.repoHooksPath(work) : null;
   const protectedExtra = [...(settings.protectedPaths || []), ...(hooksRel ? [`^${hooksRel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/`] : [])];
 
@@ -277,10 +279,18 @@ export async function dispatch(cfg, opts) {
     emit({ type: 'try', provider: c.name, kind });
     const before = inRepo ? git.stateHash(work) : null;
     const t0 = Date.now();
-    const userPrompt = kind === 'chat' ? `${chatContext()}\n---\n# TASK (role: ${role})\n${body}` : agentPrompt;
-    let res = await runProvider(c.name, c.p, { mode, prompt: userPrompt, system: chatSystem, cwd: work, timeoutMs, runDir: ioDir, quotaRe });
+    // chat APIs, and agents whose read mode has no tools (goose), get the project context inlined
+    const inline = kind === 'chat' || (mode === 'read' && CLI_PRESETS[c.p.preset]?.readInlineContext);
+    const userPrompt = inline ? `${chatContext()}\n---\n# TASK (role: ${role})\n${body}` : agentPrompt;
+    // an API provider without a model gets the best one from its live list (cached for a day)
+    const p = kind === 'chat' && !c.p.model ? { ...c.p, model: await autoModel(c.name, c.p) } : c.p;
+    let res = kind === 'chat' && !p.model
+      ? { ok: false, text: '', reason: 'no model set, and its model list could not be fetched', log: '' }
+      : await runProvider(c.name, p, { mode, prompt: userPrompt, system: chatSystem, cwd: work, timeoutMs, runDir: ioDir, quotaRe });
+    if (p !== c.p && p.model && !res.model) res.model = p.model;
     const tampered = control ? git.restoreControl(control) : [];
     if (tampered.length) summary.warnings.push(`${c.name} changed git hooks or config, which can run programs. conductor put them back: ${tampered.join(', ')}`);
+    if (headBefore && git.head(work) !== headBefore) summary.warnings.push(`${c.name} made git commits itself (HEAD moved from ${headBefore.slice(0, 8)}). Check them with git log before merging`);
     fs.writeFileSync(path.join(runDir, `${c.name}.log`), res.log || '');
 
     if (res.ok && kind === 'chat' && mode === 'write') {

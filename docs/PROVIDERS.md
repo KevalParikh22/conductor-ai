@@ -5,37 +5,29 @@ There are two kinds of provider:
 - **Agents** (`type: "cli"`) run on your machine. They read the repo, edit files and run tests themselves, which makes them best for `build` and `fix`.
 - **Chat APIs** (`type: "openai"` or `"anthropic"`) receive the task, `AGENTS.md`, the plan's design notes and the task's listed files. They return whole files in a `<<<FILE path … FILE>>>` format, which conductor writes, refusing paths outside the repo and protected files. They're best for `docs`, `test`, `ask` and `review`. conductor runs your verify command for them.
 
-## Built-in providers
+## All providers and their setup guides
 
-| Name | Kind | Where it runs | Default model | Enabled |
-|---|---|---|---|---|
-| `antigravity-cli` | agent | local (`agy`, your Google AI Pro login) | CLI default | ✓ |
-| `codex-cli` | agent | local (ChatGPT login or OpenAI key) | CLI default | ✓ |
-| `opencode` | agent | local (free models) | `opencode/big-pickle` | ✓ |
-| `kimi-cli` | agent | local (Kimi login) | CLI default | |
-| `claude-cli` | agent | local (spends Claude quota) | CLI default | |
-| `gemini-api` | chat | cloud | `gemini-3.8-flash` | ✓ |
-| `openrouter-free` | chat | cloud | `openrouter/free` (auto-picks a free model) | ✓ |
-| `kilo-free` | chat | cloud (Kilo Gateway, **no key needed**) | `kilo-auto/free` (auto-picks a free model) | ✓ |
-| `opencode-zen` | chat | cloud (OpenCode Zen API, `OPENCODE_API_KEY`) | `deepseek-v4.1-flash-free` | ✓ |
-| `openai-api` | chat | cloud | `gpt-6-luna` | |
-| `kimi-api` | chat | cloud (Moonshot) | `kimi-latest` | |
-| `deepseek-api` | chat | cloud | `deepseek-chat` | |
-| `groq-api` | chat | cloud (free tier) | (set one) | |
-| `cerebras-api` | chat | cloud (free tier) | (set one) | |
-| `mistral-api` | chat | cloud (free Experiment plan) | `codestral-latest` | |
-| `nvidia-nim` | chat | cloud (free developer access) | (set one) | |
-| `claude-api` | chat | cloud (Anthropic) | `claude-sonnet-5-5` | |
-| `ollama` | chat | local model, `localhost:11434` | `qwen3-coder` | |
-| `lmstudio` | chat | local model, `localhost:1234` | (set one) | |
+conductor knows **45 chat APIs** and **10 coding agents**. Each one has a step-by-step guide (key link, one command, manual config, troubleshooting): **[docs/providers](providers/README.md)**.
 
-Model ids change often. Pick current ones in `conductor ui` → Providers. "Load current free models" fetches the live OpenRouter list. From the terminal, `conductor models` lists OpenRouter's free models and `conductor models <provider>` lists any API provider's (e.g. `conductor models kilo-free`, `conductor models groq-api --all`).
+The quickest way in:
+```bash
+conductor setup            # finds installed agents and keys you already have, adds a free provider, tests
+```
+```bash
+conductor providers        # everything you can add, with status
+```
+```bash
+conductor add groq         # key (hidden input), model, test and role chains in one command
+```
+Or open `conductor ui` → Providers → **Add a provider**.
+
+Enabled out of the box: `antigravity-cli`, `codex-cli`, `opencode` (agents; each needs installing and signing in), and `kilo-free` (no key), `openrouter-free` and `gemini-api` (free keys). Model ids change often: `conductor models <provider>` lists any API provider's current models, and the **Models** button on a provider's card in the UI loads them into its model list.
 
 ## Permissions: what each agent may do
 
 Every CLI agent runs with permission rules that conductor passes **for that run only**. conductor never edits your own CLI settings (`~/.gemini/antigravity-cli/settings.json`, `~/.codex/config.toml`, `opencode.json`…), and your own deny rules still apply on top.
 
-Rules for every agent:
+Rules for every agent (where the CLI supports them; the table says which do):
 - **Write roles** (`build`, `fix`, `test`, `docs`) may edit files inside the project (or its worktree) only. Nothing outside it. No `git push`, `git commit`, `git reset`, `git checkout`, `git switch`, `git rebase`, `git stash`, `git clean` or `sudo`: conductor commits, and the controller merges and pushes. No permission prompts, and no "skip all permissions" flags.
 - **Read roles** (`review`, `ask`) cannot edit files. They may run read-only commands (`git diff/log/show/status/blame/grep`, `ls`, `cat`, `head`, `tail`, `wc`, `grep`, `rg`, `pwd`).
 - **Secrets:** keys conductor loads from `secrets.env` or `.conductor/.env` are removed from a CLI's environment, except the ones that CLI needs itself (`passEnv`). Variables you set in your own shell are left alone.
@@ -46,6 +38,11 @@ Rules for every agent:
 | Codex | `--sandbox workspace-write`, `approval_policy="never"`, network off. Codex keeps `.git` read-only. | `--sandbox read-only` | ✓ |
 | OpenCode (2.x) | `--standalone --auto` with `external_directory: deny` and the git/sudo commands denied. Its shell is **not** OS-sandboxed: OpenCode blocks outside paths it can detect in a command, not all of them | `edit: deny`, `webfetch: deny`, `external_directory: deny`, shell denied except read-only commands | ✓ |
 | Claude Code | `--permission-mode acceptEdits`; the git/sudo commands disallowed; other commands that would ask are refused in `-p` mode | `Edit`, `Write`, `NotebookEdit` disallowed | ✓ |
+| GitHub Copilot CLI | `-p --allow-all-tools` with `--deny-tool shell(git push)` (and the other git/sudo commands) and `write(.env)`; deny beats allow. File tools only reach the project, temp and conductor's prompt folder. Its shell is **not** OS-sandboxed (Copilot's `--sandbox` needs bubblewrap on Linux; turn it on in your Copilot settings if you have it) | `--deny-tool write --deny-tool shell`: only its read and search tools run | ✓ |
+| Aider | edits files in the repo only; `--no-suggest-shell-commands` (no shell at all), `--no-auto-commits`, and `--env-file` set to an empty file so the project `.env` is never loaded | `--dry-run`: shows changes, writes nothing | ✓ |
+| Grok Build (xAI) | `--sandbox strict` (kernel-enforced: writes only in the project and temp; no network for commands on Linux), `--always-approve` with `Bash(git push*)`… and `Bash(sudo*)` denied (deny wins), web tools off | `--sandbox read-only`, `--permission-mode dontAsk`, only `read_file`, `grep`, `list_dir` | ✓ |
+| Kiro CLI | `--no-interactive --sandbox --trust-all-tools`: commands in Kiro's OS sandbox with network blocked; the run fails rather than go unsandboxed; Kiro refuses `.git` writes headless. `git commit`/`reset` can't be denied per run (Kiro keeps deny rules in `~/.kiro/settings/permissions.yaml`); conductor warns if a worker commits | `--trust-tools=read_file,grep_search`; anything that would ask is denied headless | ✓ |
+| Goose | **none**: `GOOSE_MODE=auto` runs any command; goose has no per-command or path rules | `GOOSE_MODE=chat`: no tools at all (conductor inlines the project context) | ✓ |
 | Kimi | **none**: print mode can run any command | prompt only | ✗ |
 | Custom CLI | whatever its args say | whatever its args say | ✗ unless you declare `permissions` |
 
@@ -73,17 +70,17 @@ How conductor drives it (tested with agy 1.4.11, Nov 2026):
 
 ## Free options at a glance
 
-| Option | Cost | Limits (Oct 2026) | Notes |
+| Option | Cost | Limits (Nov 2026) | Notes |
 |---|---|---|---|
-| OpenCode free models (`opencode/*-free`, `big-pickle`) | Free | "Free for a limited time" | Data retention varies by model; check opencode.ai/docs/zen |
-| Kilo Gateway free models (`kilo-free`) | Free, **no key** | About 200 req/hour per IP | Free routes may log prompts. A free `KILO_API_KEY` raises limits |
-| OpenCode Zen API (`opencode-zen`) | Free `-free` models | Per account | The same models as the OpenCode CLI, as an API. Key from opencode.ai/zen |
-| OpenRouter `:free` models | Free | 20 req/min; 50 req/day (1000/day after a one-time $10 credit) | The list changes weekly |
+| OpenCode agent free models (`opencode/*-free`, `big-pickle`) | Free | "Free for a limited time" | Only inside the OpenCode app, so use the `opencode` agent. The OpenCode Zen **API** needs credits |
+| Kilo Gateway (`kilo-free`) | Free, **no key** | 200 req/hour per IP | Free routes may log prompts. A free `KILO_API_KEY` raises limits |
+| OVHcloud AI Endpoints (`ovh`) | Free, **no key** | 2 req/min per model (400 with a key) | Hosted in Europe |
+| OpenRouter `:free` models | Free | 50 req/day (1000/day after a one-time $10 credit) | The list changes weekly |
 | Groq · Cerebras | Free tier | About 30 req/min, 1000+/day (per model) | Very fast; open models |
-| Mistral (Codestral) | Free Experiment plan | About 1 req/s | Prompts may be used for training |
-| NVIDIA NIM | Free developer access | About 40 req/min | Many open models; logged |
-| Gemini API free tier | Free | Shown in AI Studio | Daily reset at midnight Pacific |
-| Ollama / LM Studio | Free | Your hardware | Fully private |
+| Gemini API free tier | Free | Shown in AI Studio | Free-tier prompts are used to improve Google products |
+| NVIDIA NIM · Cohere trial · Hugging Face credits · Cloudflare (10k Neurons/day) · Scaleway (1M tokens) | Free | See each guide | |
+| Mistral free mode | Free | Rate-limited | Prompts may be used for training |
+| Ollama · LM Studio · llama.cpp · vLLM · LocalAI · Jan | Free | Your hardware | Fully private |
 
 ## How each CLI is called
 
@@ -118,7 +115,7 @@ If you override `read` for a built-in agent, conductor no longer assumes it stay
 
 ## Adding your own
 
-**Any OpenAI-compatible API** (Together, Fireworks, LLM7, a company gateway, vLLM…):
+**Any OpenAI-compatible API** that isn't in the catalog (a company gateway, a new provider…):
 ```json
 { "providers": { "together-api": { "type": "openai", "enabled": true, "baseUrl": "https://api.together.xyz/v1", "apiKeyEnv": "TOGETHER_API_KEY", "model": "..." } } }
 ```

@@ -5,13 +5,14 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { loadConfig, findProjectRoot, readScope, writeScope, validateConfig, GLOBAL_CONFIG, GLOBAL_SECRETS, GLOBAL_SECRETS as SECRETS, projectConfigPath, loadSecrets } from '../config.js';
+import { loadConfig, findProjectRoot, readScope, writeScope, validateConfig, GLOBAL_CONFIG, GLOBAL_SECRETS, GLOBAL_SECRETS as SECRETS, projectConfigPath, loadSecrets, writeSecrets } from '../config.js';
 import { DEFAULT_CONFIG, CLI_PRESETS, ROLES, CONTROLLERS } from '../presets.js';
 import { statusData } from '../status.js';
 import { listRuns } from '../runs.js';
+import { catalogStatus, addProviderAuto } from '../setup.js';
 import { usageReport } from '../usage.js';
 import { testProvider } from '../providers.js';
-import { listFreeModels } from '../models.js';
+import { listFreeModels, listProviderModels } from '../models.js';
 import { initProject, setupGlobal } from '../init.js';
 import { clearCooldowns, getCooldowns } from '../core.js';
 import { deepMerge, isPlainObject, which, loadEnvFile } from '../util.js';
@@ -42,26 +43,6 @@ function secretsState(cfg) {
   }));
 }
 
-function writeSecrets(updates) {
-  let lines = [];
-  try { lines = fs.readFileSync(SECRETS, 'utf8').split('\n'); } catch { /* new file */ }
-  for (const [k, v] of Object.entries(updates)) {
-    if (!/^[A-Z_][A-Z0-9_]*$/.test(k)) throw new Error(`bad key name ${k}`);
-    if (typeof v === 'string' && /[\r\n]/.test(v)) throw new Error('key values cannot contain newlines');
-    const idx = lines.findIndex((l) => new RegExp(`^\\s*(export\\s+)?${k}\\s*=`).test(l));
-    if (v === null || v === '') {
-      if (idx >= 0) lines.splice(idx, 1);
-      delete process.env[k];
-    } else {
-      const line = `${k}=${v}`;
-      if (idx >= 0) lines[idx] = line; else lines.push(line);
-      process.env[k] = v;
-    }
-  }
-  fs.mkdirSync(path.dirname(SECRETS), { recursive: true });
-  fs.writeFileSync(SECRETS, lines.join('\n').replace(/\n*$/, '\n'), { mode: 0o600 });
-  try { fs.chmodSync(SECRETS, 0o600); } catch { /* windows */ }
-}
 
 function stateFor(root) {
   const cfg = loadConfig(root);
@@ -75,7 +56,7 @@ function stateFor(root) {
     builtinProviders: Object.keys(DEFAULT_CONFIG.providers),
     status: statusData(cfg), secrets: secretsState(cfg), cooldowns: getCooldowns(), errors: validateConfig(cfg),
     presets: Object.fromEntries(Object.entries(CLI_PRESETS).map(([k, v]) => [k, { label: v.label, bin: v.bin, install: v.install, login: v.login, docs: v.docs, permissions: v.permissions || null, installed: !!which(v.bin) }])),
-    roles: ROLES, controllers: CONTROLLERS,
+    roles: ROLES, controllers: CONTROLLERS, catalog: catalogStatus(cfg),
     env: { node: process.version, platform: os.platform(), conductorOnPath: !!which('conductor'), git: !!which('git') },
   };
 }
@@ -138,6 +119,15 @@ export function createUiServer({ cwd = process.cwd(), token = crypto.randomBytes
         }
         case 'GET /api/runs': return send(200, { runs: listRuns(root, { limit: 50 }), usage: usageReport(7), budget: loadConfig(root).settings.dailyBudgetUSD || 0 });
         case 'GET /api/models': return send(200, { models: await listFreeModels() });
+        case 'POST /api/providers/add': {
+          const r = await addProviderAuto(root, String(body.id || ''), { key: body.key || undefined, fields: body.fields || {}, scope: body.scope === 'project' ? 'project' : 'global' });
+          return send(200, { ...stateFor(root), added: { name: r.name, model: r.provider.model, roles: r.roles, warning: r.warning } });
+        }
+        case 'POST /api/provider-models': {
+          const p = loadConfig(root).providers[body.name];
+          if (!p || p.type === 'cli') return send(400, { error: 'not an API provider' });
+          return send(200, await listProviderModels(p, { freeOnly: false }));
+        }
         case 'PUT /api/secrets': writeSecrets(body.updates || {}); return send(200, stateFor(root));
         case 'POST /api/init': {
           setupGlobal();

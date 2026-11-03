@@ -27,11 +27,10 @@ conductor setup
 cat <<'NEXT'
 
 Done. Next:
-  1. Install at least one worker agent and sign in, e.g.
-       curl -fsSL https://antigravity.google/cli/install.sh | bash && agy
-       npm install -g @openai/codex && codex login
-     (free API providers like kilo-free need no install)
-  2. In a project:   cd my-app && conductor init
-  3. Check:          conductor doctor --live
-  4. Settings page:  conductor ui
+  conductor providers --free     free chat APIs you can add (kilo-free already works, no key)
+  conductor add <name>           add one: key, model, test, roles (guides: docs/providers/)
+  cd my-app && conductor init    set up a project
+  conductor doctor --live        check everything
+  conductor ui                   settings page
+Coding agents (optional): see docs/providers/README.md (Antigravity, Codex, OpenCode, Copilot, Grok, Kiro, Aider, Goose, Kimi, Claude Code).
 NEXT

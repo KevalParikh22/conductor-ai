@@ -1,7 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { CLI_PRESETS } from './presets.js';
-import { run, which, GLOBAL_DIR, SECRET_VARS } from './util.js';
+import { run, which, GLOBAL_DIR, SECRET_VARS, keyValue } from './util.js';
 
 /**
  * Result of one provider attempt.
@@ -18,7 +19,8 @@ function expandArgs(template, vars, modelArgs) {
     // {sessionSettings} is one whole JSON argument
     if (a === '{sessionSettings}') { out.push(vars.sessionSettings || '{}'); continue; }
     out.push(a.replaceAll('{prompt}', vars.prompt).replaceAll('{promptFile}', vars.promptFile)
-      .replaceAll('{outFile}', vars.outFile).replaceAll('{model}', vars.model || ''));
+      .replaceAll('{outFile}', vars.outFile).replaceAll('{ioDir}', vars.ioDir || '').replaceAll('{cwd}', vars.cwd || '')
+      .replaceAll('{devnull}', os.devNull).replaceAll('{model}', vars.model || ''));
   }
   return out;
 }
@@ -64,7 +66,7 @@ export async function runCli(name, p, { mode, prompt, cwd, timeoutMs, runDir, qu
   const realCwd = fs.realpathSync(cwd);
   const settings = preset.sessionSettings?.[mode];
   const sessionSettings = settings ? JSON.stringify(fillPaths(settings, realCwd)) : '';
-  const args = expandArgs(template, { prompt: promptArg, promptFile, outFile, model: p.model, sessionSettings }, preset.modelArgs || []);
+  const args = expandArgs(template, { prompt: promptArg, promptFile, outFile, ioDir: path.dirname(promptFile), cwd: realCwd, model: p.model, sessionSettings }, preset.modelArgs || []);
   const env = workerEnv(preset, mode, realCwd);
   const r = await run(preset.bin, args, { cwd, input: preset.stdin ? prompt : undefined, timeoutMs, env });
   const log = `$ ${preset.bin} ${args.map((a) => (a.length > 80 ? JSON.stringify(a.slice(0, 77) + '...') : a)).join(' ')}\n` +
@@ -114,7 +116,7 @@ function classifyHttp(r) {
 
 /** Any OpenAI-compatible chat API: Gemini, OpenRouter, Kilo, OpenCode Zen, Groq, Ollama, LM Studio... */
 export async function runOpenAI(name, p, { system, prompt, timeoutMs }) {
-  const key = p.apiKeyEnv ? process.env[p.apiKeyEnv] : '';
+  const key = keyValue(p.apiKeyEnv);
   if (p.apiKeyEnv && !key && !p.apiKeyOptional) return { ok: false, text: '', reason: `${p.apiKeyEnv} not set`, log: '' };
   const headers = { ...(p.headers || {}) };
   if (key) headers.authorization = `Bearer ${key}`;
@@ -144,7 +146,7 @@ export async function runOpenAI(name, p, { system, prompt, timeoutMs }) {
 
 /** Anthropic Messages API (Claude as a remote worker). */
 export async function runAnthropic(name, p, { system, prompt, timeoutMs }) {
-  const key = process.env[p.apiKeyEnv || 'ANTHROPIC_API_KEY'];
+  const key = keyValue(p.apiKeyEnv || 'ANTHROPIC_API_KEY');
   if (!key) return { ok: false, text: '', reason: `${p.apiKeyEnv || 'ANTHROPIC_API_KEY'} not set`, log: '' };
   const url = (p.baseUrl || 'https://api.anthropic.com').replace(/\/+$/, '') + '/v1/messages';
   const r = await httpJson(url, {
