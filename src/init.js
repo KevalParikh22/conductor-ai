@@ -159,7 +159,7 @@ export function setupGlobal() {
       '# GEMINI_API_KEY=        # https://aistudio.google.com/apikey (free tier)',
       '# OPENROUTER_API_KEY=    # https://openrouter.ai/keys (free ":free" models)',
       '# KILO_API_KEY=          # optional: kilo-free works without a key (https://app.kilo.ai)',
-      '# OPENCODE_API_KEY=      # https://opencode.ai/zen (OpenCode Zen API, "-free" models)',
+      '# OPENCODE_API_KEY=      # https://opencode.ai/console (OpenCode Zen API, paid credits)',
       '# CEREBRAS_API_KEY=      # https://cloud.cerebras.ai (free tier)',
       '# MISTRAL_API_KEY=       # https://console.mistral.ai (free Experiment plan, Codestral)',
       '# NVIDIA_API_KEY=        # https://build.nvidia.com (free developer access)',

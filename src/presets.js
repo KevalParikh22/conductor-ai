@@ -1,3 +1,4 @@
+import { catalogDefaults } from './catalog.js';
 // Built-in knowledge: how to drive each CLI agent, default providers, roles and controllers.
 // Everything here can be overridden in config (global or per project).
 
@@ -138,6 +139,112 @@ export const CLI_PRESETS = {
     login: 'claude   (then /login)',
     docs: 'https://code.claude.com/docs/en/permissions',
   },
+  copilot: {
+    label: 'GitHub Copilot CLI',
+    bin: 'copilot',
+    // -p runs one prompt and exits; -s prints only the answer. Deny rules beat --allow-all-tools. File tools are
+    // limited to the working folder (plus temp, plus --add-dir for conductor's prompt folder in worktree runs).
+    // Not --trust-folder / COPILOT_ALLOW_ALL=true: those would load the repo's own hooks and MCP servers.
+    // --disable-builtin-mcps: its GitHub MCP server could push or open PRs through the API, around the git rules.
+    write: ['-p', '{prompt}', '-s', '--no-ask-user', '--no-auto-update', '--disable-builtin-mcps', '--allow-all-tools', '--add-dir', '{ioDir}',
+      ...DENIED_COMMANDS.flatMap((c) => ['--deny-tool', `shell(${c})`]), '--deny-tool', 'write(.env)', '--deny-tool', 'url', '{modelArgs}'],
+    // read: no write tools and no shell at all (deny beats allow); its built-in view/search tools still work
+    read: ['-p', '{prompt}', '-s', '--no-ask-user', '--no-auto-update', '--disable-builtin-mcps', '--allow-all-tools', '--add-dir', '{ioDir}',
+      '--deny-tool', 'write', '--deny-tool', 'shell', '--deny-tool', 'memory', '--deny-tool', 'url', '{modelArgs}'],
+    modelArgs: ['--model', '{model}'],
+    passEnv: ['COPILOT_GITHUB_TOKEN', 'GH_TOKEN', 'GITHUB_TOKEN'],
+    permissions: {
+      write: 'file tools limited to the project; git push/commit/reset and sudo denied; web and the built-in GitHub MCP tools off; shell commands are not OS-sandboxed (Copilot\'s --sandbox needs bubblewrap on Linux, so conductor leaves it to your Copilot settings)',
+      read: 'write tools, shell, web and memory denied; only its read and search tools run',
+      readOnlyEnforced: true,
+    },
+    install: 'npm install -g @github/copilot',
+    login: 'copilot, then /login   (or set COPILOT_GITHUB_TOKEN; needs a Copilot plan)',
+    docs: 'https://docs.github.com/en/copilot/how-tos/copilot-cli',
+  },
+  aider: {
+    label: 'Aider',
+    bin: 'aider',
+    // one message from a file, then exit. Aider commits after every edit by default: turned off, conductor
+    // decides about commits. It also loads the repo's .env by default: pointed at an empty file instead.
+    // No shell commands (--no-suggest-shell-commands), so --yes-always only approves edits and adding files.
+    write: ['--message-file', '{promptFile}', '--yes-always', '--no-auto-commits', '--no-dirty-commits', '--no-suggest-shell-commands',
+      '--no-detect-urls', '--no-auto-lint', '--no-auto-test', '--no-check-update', '--no-show-model-warnings', '--no-pretty', '--no-stream',
+      '--no-fancy-input', '--analytics-disable', '--env-file', '{devnull}', '{modelArgs}'],
+    read: ['--message-file', '{promptFile}', '--dry-run', '--yes-always', '--no-auto-commits', '--no-dirty-commits', '--no-suggest-shell-commands',
+      '--no-detect-urls', '--no-auto-lint', '--no-auto-test', '--no-check-update', '--no-show-model-warnings', '--no-pretty', '--no-stream',
+      '--no-fancy-input', '--analytics-disable', '--env-file', '{devnull}', '{modelArgs}'],
+    modelArgs: ['--model', '{model}'],
+    passEnv: ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GEMINI_API_KEY', 'OPENROUTER_API_KEY', 'DEEPSEEK_API_KEY', 'GROQ_API_KEY', 'MISTRAL_API_KEY', 'XAI_API_KEY'],
+    permissions: {
+      write: 'edits files in the repo only; no shell commands; no commits (conductor turns auto-commit off); the project .env is not loaded',
+      read: '--dry-run: shows the changes, writes nothing; no shell commands',
+      readOnlyEnforced: true,
+    },
+    install: 'python -m pip install aider-install && aider-install   (or: uv tool install aider-chat)',
+    login: 'no login: it uses the API key of the model you pick (e.g. ANTHROPIC_API_KEY, or conductor keys set …)',
+    docs: 'https://aider.chat/docs/config/options.html',
+  },
+  grok: {
+    label: 'Grok Build (xAI)',
+    bin: 'grok',
+    // official xAI CLI. --sandbox is enforced by the kernel for grok and every command it starts (Landlock/bwrap
+    // on Linux, Seatbelt on macOS). strict: writes only in the project and temp, child network blocked on Linux.
+    // Deny rules win even with --always-approve.
+    write: ['-p', '{prompt}', '--cwd', '{cwd}', '--no-auto-update', '--sandbox', 'strict', '--always-approve',
+      ...DENIED_COMMANDS.flatMap((c) => ['--deny', `Bash(${c}*)`]), '--disallowed-tools', 'web_search,web_fetch', '{modelArgs}'],
+    read: ['-p', '{prompt}', '--cwd', '{cwd}', '--no-auto-update', '--sandbox', 'read-only', '--permission-mode', 'dontAsk',
+      '--tools', 'read_file,grep,list_dir', '{modelArgs}'],
+    modelArgs: ['--model', '{model}'],
+    passEnv: ['XAI_API_KEY'],
+    permissions: {
+      write: 'OS sandbox (strict): writes only in the project and temp, no network for commands on Linux; git push/commit/reset and sudo denied; web tools off',
+      read: 'OS sandbox (read-only) and only its read, grep and list tools',
+      readOnlyEnforced: true,
+    },
+    install: 'curl -fsSL https://x.ai/cli/install.sh | bash',
+    login: 'grok login   (or set XAI_API_KEY from console.x.ai)',
+    docs: 'https://github.com/xai-org/grok-build',
+  },
+  kiro: {
+    label: 'Kiro CLI',
+    bin: 'kiro-cli',
+    // headless: anything that would ask is denied. Read mode trusts only the read and search tools.
+    // Write mode trusts all tools but runs commands in Kiro's sandbox (no network); --sandbox makes the run fail
+    // rather than continue unsandboxed. Kiro always asks before writes to .git, which headless means denied.
+    write: ['chat', '--v3', '--no-interactive', '--sandbox', '--trust-all-tools', '{modelArgs}', '{prompt}'],
+    read: ['chat', '--v3', '--no-interactive', '--trust-tools=read_file,grep_search', '{modelArgs}', '{prompt}'],
+    modelArgs: ['--model', '{model}'],
+    passEnv: ['KIRO_API_KEY'],
+    permissions: {
+      write: 'commands in Kiro\'s OS sandbox with network blocked; .git writes refused; git commit/reset are not denied per run (Kiro keeps deny rules in ~/.kiro/settings/permissions.yaml), and conductor warns if a worker commits',
+      read: 'only its read_file and grep_search tools; anything else is denied in headless mode',
+      readOnlyEnforced: true,
+    },
+    install: 'curl -fsSL https://cli.kiro.dev/install | bash',
+    login: 'kiro-cli login   (headless runs can also use KIRO_API_KEY, on paid plans)',
+    docs: 'https://kiro.dev/docs/cli/',
+  },
+  goose: {
+    label: 'Goose',
+    bin: 'goose',
+    // write: GOOSE_MODE=auto is fully autonomous and goose has no per-command or path rules, so it is not contained.
+    // read: GOOSE_MODE=chat has no tools at all, so it cannot edit; conductor inlines the project context instead.
+    write: ['run', '--no-session', '-q', '{modelArgs}', '-t', '{prompt}'],
+    read: ['run', '--no-session', '-q', '{modelArgs}', '-t', '{prompt}'],
+    modeEnv: { write: { GOOSE_MODE: 'auto' }, read: { GOOSE_MODE: 'chat' } },
+    readInlineContext: true,
+    modelArgs: ['--model', '{model}'],
+    passEnv: ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GOOGLE_API_KEY', 'OPENROUTER_API_KEY', 'GROQ_API_KEY', 'XAI_API_KEY'],
+    permissions: {
+      write: 'no permission control: goose runs any command and edits any file it can reach. Only use it in a container or a worktree you can throw away',
+      read: 'chat mode: no tools at all, so it cannot edit (or open files: conductor puts the project context in the prompt)',
+      readOnlyEnforced: true,
+    },
+    install: 'curl -fsSL https://github.com/aaif-goose/goose/releases/download/stable/download_cli.sh | CONFIGURE=false bash',
+    login: 'goose configure   (pick a provider and paste its key once)',
+    docs: 'https://block.github.io/goose/docs/guides/goose-cli-commands',
+  },
 };
 
 /** Default provider registry. type: cli | openai (any OpenAI-compatible API) | anthropic */
@@ -147,21 +254,15 @@ export const DEFAULT_PROVIDERS = {
   'opencode': { type: 'cli', preset: 'opencode', enabled: true, model: 'opencode/big-pickle', notes: 'Free models through OpenCode. Good for tests and docs.' },
   'kimi-cli': { type: 'cli', preset: 'kimi', enabled: false, model: '' },
   'claude-cli': { type: 'cli', preset: 'claude', enabled: false, model: '', notes: 'Claude as a worker (spends Claude quota).' },
+  'copilot-cli': { type: 'cli', preset: 'copilot', enabled: false, model: '', notes: 'GitHub Copilot as a worker (uses your Copilot plan).' },
+  'grok-cli': { type: 'cli', preset: 'grok', enabled: false, model: '', notes: 'xAI Grok Build: OS-sandboxed agent. Uses your grok login or XAI_API_KEY.' },
+  'kiro-cli': { type: 'cli', preset: 'kiro', enabled: false, model: '', notes: 'AWS Kiro: sandboxed commands; uses your Kiro login or KIRO_API_KEY.' },
+  'goose': { type: 'cli', preset: 'goose', enabled: false, model: '', notes: 'Not contained in write roles: use only in a throwaway worktree or container.' },
+  'aider': { type: 'cli', preset: 'aider', enabled: false, model: '', notes: 'Edits with any model you have a key for. Set a model, e.g. sonnet, gpt-6-astra or openrouter/<id>.' },
 
-  'gemini-api': { type: 'openai', enabled: true, baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', apiKeyEnv: 'GEMINI_API_KEY', model: 'gemini-3.8-flash', notes: 'Free tier from Google AI Studio.' },
-  'openrouter-free': { type: 'openai', enabled: true, baseUrl: 'https://openrouter.ai/api/v1', apiKeyEnv: 'OPENROUTER_API_KEY', model: 'openrouter/free', free: true, notes: 'Any ":free" model. 20 req/min, 50/day (1000/day after $10 credit).' },
-  'openai-api': { type: 'openai', enabled: false, baseUrl: 'https://api.openai.com/v1', apiKeyEnv: 'OPENAI_API_KEY', model: 'gpt-6-luna' },
-  'kimi-api': { type: 'openai', enabled: false, baseUrl: 'https://api.moonshot.ai/v1', apiKeyEnv: 'MOONSHOT_API_KEY', model: 'kimi-latest' },
-  'deepseek-api': { type: 'openai', enabled: false, baseUrl: 'https://api.deepseek.com/v1', apiKeyEnv: 'DEEPSEEK_API_KEY', model: 'deepseek-chat' },
-  'kilo-free': { type: 'openai', enabled: true, baseUrl: 'https://api.kilo.ai/api/gateway', apiKeyEnv: 'KILO_API_KEY', apiKeyOptional: true, model: 'kilo-auto/free', free: true, notes: 'Kilo Gateway free models. Works without a key (about 200 req/hour per IP). Free routes may log prompts.' },
-  'opencode-zen': { type: 'openai', enabled: true, baseUrl: 'https://opencode.ai/zen/v1', apiKeyEnv: 'OPENCODE_API_KEY', model: 'deepseek-v4.1-flash-free', free: true, notes: 'OpenCode Zen API: the same "-free" models as the OpenCode CLI, without the CLI. Key from opencode.ai/zen.' },
-  'groq-api': { type: 'openai', enabled: false, baseUrl: 'https://api.groq.com/openai/v1', apiKeyEnv: 'GROQ_API_KEY', model: '', notes: 'Free tier, very fast. About 30 req/min, 1000/day. Pick a model with: conductor models groq-api' },
-  'cerebras-api': { type: 'openai', enabled: false, baseUrl: 'https://api.cerebras.ai/v1', apiKeyEnv: 'CEREBRAS_API_KEY', model: '', notes: 'Free tier, very fast. Pick a model with: conductor models cerebras-api' },
-  'mistral-api': { type: 'openai', enabled: false, baseUrl: 'https://api.mistral.ai/v1', apiKeyEnv: 'MISTRAL_API_KEY', model: 'codestral-latest', notes: 'Free "Experiment" plan includes Codestral. Prompts may be used for training.' },
-  'nvidia-nim': { type: 'openai', enabled: false, baseUrl: 'https://integrate.api.nvidia.com/v1', apiKeyEnv: 'NVIDIA_API_KEY', model: '', notes: 'Free developer access, about 40 req/min. Pick a model with: conductor models nvidia-nim' },
-  'claude-api': { type: 'anthropic', enabled: false, baseUrl: 'https://api.anthropic.com', apiKeyEnv: 'ANTHROPIC_API_KEY', model: 'claude-sonnet-5-5' },
-  'ollama': { type: 'openai', enabled: false, baseUrl: 'http://localhost:11434/v1', apiKeyEnv: '', model: 'qwen3-coder', free: true, notes: 'Local model, free, private.' },
-  'lmstudio': { type: 'openai', enabled: false, baseUrl: 'http://localhost:1234/v1', apiKeyEnv: '', model: '', free: true },
+
+  // chat APIs: built from the catalog (src/catalog.js), under their original names
+  ...catalogDefaults(),
 };
 
 /** Roles. mode "write" may change files; "read" must not. */
@@ -178,7 +279,7 @@ export const DEFAULT_ROLES = {
   build: ['antigravity-cli', 'codex-cli', 'opencode'],
   fix: ['codex-cli', 'antigravity-cli', 'opencode'],
   test: ['opencode', 'kilo-free', 'openrouter-free', 'antigravity-cli'],
-  docs: ['openrouter-free', 'kilo-free', 'opencode-zen', 'opencode', 'gemini-api', 'antigravity-cli'],
+  docs: ['openrouter-free', 'kilo-free', 'opencode', 'gemini-api', 'antigravity-cli'],
   review: ['codex-cli', 'antigravity-cli', 'gemini-api', 'kilo-free'],
   ask: ['antigravity-cli', 'gemini-api', 'kilo-free', 'openrouter-free'],
 };

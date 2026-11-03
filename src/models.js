@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { keyValue, GLOBAL_DIR, readJSON, writeJSON } from './util.js';
 /** Free models on OpenRouter (pricing "0"). The free list changes often, so query it live. */
 export async function listFreeModels({ all = false, timeoutMs = 20000 } = {}) {
   const ctrl = new AbortController();
@@ -20,7 +23,7 @@ export async function listProviderModels(p, { freeOnly = false, timeoutMs = 2000
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const key = p.apiKeyEnv ? process.env[p.apiKeyEnv] : '';
+    const key = keyValue(p.apiKeyEnv);
     const res = await fetch(p.baseUrl.replace(/\/+$/, '') + '/models', { headers: key ? { authorization: `Bearer ${key}` } : {}, signal: ctrl.signal });
     if (!res.ok) return { error: `HTTP ${res.status}${res.status === 401 ? ` (${p.apiKeyEnv || 'API key'} missing or wrong)` : ''}`, models: [] };
     const json = await res.json();
@@ -32,4 +35,28 @@ export async function listProviderModels(p, { freeOnly = false, timeoutMs = 2000
   } catch (e) {
     return { error: e.name === 'AbortError' ? 'timeout' : String(e.cause?.code || e.message), models: [] };
   } finally { clearTimeout(t); }
+}
+
+// models that can't do a coding task: classifiers, embeddings, speech, images
+const NOT_CHAT = /guard|safety|\bbge\b|moderation|embed|rerank|whisper|tts|speech|audio|transcri|image|vision-only|ocr|dall-e|flux|stable-diffusion/i;
+/** Chat models ranked for coding work: coder models, then free ones, then the rest; non-chat models dropped. */
+export function rankModels(models) {
+  const score = (m) => (/coder|code|devstral|codestral/i.test(m.id) ? 2 : 0) + (m.free ? 1 : 0);
+  return models.filter((m) => !NOT_CHAT.test(m.id)).sort((a, b) => score(b) - score(a));
+}
+
+const AUTO_CACHE = () => path.join(GLOBAL_DIR, 'models-cache.json');
+const AUTO_TTL = 24 * 3600_000;
+
+/**
+ * The model to use for an API provider that has none set: the best-ranked one from its live list,
+ * remembered for a day per provider and endpoint. '' when the list can't be fetched.
+ */
+export async function autoModel(name, p) {
+  const cache = readJSON(AUTO_CACHE(), {});
+  const hit = cache[name];
+  if (hit && hit.baseUrl === p.baseUrl && Date.now() - hit.at < AUTO_TTL) return hit.model;
+  const best = rankModels((await listProviderModels(p)).models || [])[0]?.id || '';
+  if (best) { cache[name] = { baseUrl: p.baseUrl, model: best, at: Date.now() }; try { writeJSON(AUTO_CACHE(), cache); } catch { /* cache is optional */ } }
+  return best;
 }

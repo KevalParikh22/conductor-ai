@@ -93,3 +93,9 @@ export function timestamp() {
 }
 
 export function rel(root, p) { return path.relative(root, p) || '.'; }
+
+// "YOUR_API_KEY", "<key>", "sk-xxxx", "changeme"…: copied examples, not keys
+const PLACEHOLDER_KEY = /^(your[_-]|<.*>$|sk-x{3,}$|x{4,}$|changeme$|todo$|placeholder|replace[_-]?me)/i;
+export const isPlaceholderKey = (v) => !v || !String(v).trim() || PLACEHOLDER_KEY.test(String(v).trim());
+/** An env var's value when it holds a real-looking key, else ''. */
+export const keyValue = (name) => (name && !isPlaceholderKey(process.env[name]) ? process.env[name] : '');

@@ -48,7 +48,7 @@ Merge rules: `providers` and `settings` merge field by field; each role's chain 
 | `build` | write | antigravity-cli → codex-cli → opencode | Planned implementation tasks |
 | `fix` | write | codex-cli → antigravity-cli → opencode | Small fixes, review follow-ups |
 | `test` | write | opencode → kilo-free → openrouter-free → antigravity-cli | Writing tests (free models) |
-| `docs` | write | openrouter-free → kilo-free → opencode-zen → opencode → gemini-api → antigravity-cli | README, docs, changelogs |
+| `docs` | write | openrouter-free → kilo-free → opencode → gemini-api → antigravity-cli | README, docs, changelogs |
 | `review` | read | codex-cli → antigravity-cli → gemini-api → kilo-free | Second-opinion review of a diff |
 | `ask` | read | antigravity-cli → gemini-api → kilo-free → openrouter-free | Codebase questions, research |
 
@@ -70,7 +70,7 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | `headers`, `maxTokens`, `temperature` | api | Optional request tuning |
 | `fallbackModels` | openrouter | Extra models OpenRouter tries if the first is unavailable |
 | `price` | api | `{ "input": 0.3, "output": 2.5 }`: dollars per 1M tokens, used for cost and budgets. Without it, cost is shown as unknown |
-| `free` | api | `true` = costs nothing (set on Kilo, OpenRouter free, OpenCode Zen free, Ollama, LM Studio). Remove it if you switch that provider to a paid model |
+| `free` | api | `true` = costs nothing (set on Kilo, OpenRouter free and local models). Remove it if you switch that provider to a paid model |
 | `dailyBudgetUSD` | api | Daily cap for this provider alone (needs `price`) |
 | `notes` | all | Shown in the UI |
 

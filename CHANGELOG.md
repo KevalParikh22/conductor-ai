@@ -1,6 +1,42 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 (2026-11-03)
+
+- **Five more coding agents:** GitHub Copilot CLI, Grok Build (xAI), Kiro, Aider and Goose. There are now ten in all, each with a guide in docs/providers. Every flag was checked against the CLI's own `--help`, source or reference docs.
+  - **Copilot:**
+    - Deny rules for the git and sudo commands, which win over `--allow-all-tools`.
+    - Built-in GitHub MCP tools and web access are off, so it can't push through the API.
+    - Read mode denies writes and the shell.
+  - **Grok Build:** kernel-enforced `strict` / `read-only` sandboxes.
+  - **Kiro:** commands run in its sandbox, and read mode trusts only read and search tools.
+  - **Aider:**
+    - Never commits or runs shell commands.
+    - Never loads the project `.env`.
+    - Read mode is `--dry-run`.
+  - **Goose:** write mode is marked as not contained. Read mode is tool-less chat with the project context inlined.
+- **conductor warns when a worker makes git commits itself.**
+- **API providers with no model set now work:** conductor picks the best one from the provider's live list when it runs (coding models first; classifiers, embeddings and speech models skipped) and remembers it for a day.
+- **Guides now explain conductor-chosen key names.** Where a provider's docs name no environment variable, the guide says the name is conductor's own and how to use another.
+- **45 chat APIs, each a one-command add.** A provider catalog (`src/catalog.js`) covers:
+  - free and no-key options (Kilo, OVHcloud, Gemini, Groq, Cerebras, NVIDIA, Cohere)
+  - gateways (OpenRouter, Requesty, Vercel, Hugging Face, Cloudflare, Poe, AI/ML API)
+  - model makers (OpenAI, Anthropic, xAI, Mistral, DeepSeek, Kimi, Qwen, GLM, MiniMax)
+  - fast hosts (SambaNova, Together, Fireworks, DeepInfra, Nebius, Baseten and more)
+  - Azure OpenAI and Bedrock
+  - local servers (Ollama, LM Studio, llama.cpp, vLLM, LocalAI, Jan, LiteLLM proxy)
+
+  Every endpoint was checked against the provider's own docs in November 2026. Built-in provider names (`groq-api`, `kilo-free`…) are unchanged.
+- **`conductor add <provider>`.** Shows where to get the key, asks for it with hidden input, picks a model from the live list (coding and free models first; classifiers, embeddings and speech models skipped), sends a test prompt and adds the provider to the `docs`, `test`, `review` and `ask` roles. Only the chains it changes are written to your config. `--yes` for scripts.
+- **`conductor providers`** lists everything you can add, grouped, with what's on and which keys are set (`--free`, `--search`, `--json`).
+- **Guided `conductor setup`.** Checks Node, git and PATH, finds installed agents and API keys you already have and turns them on, offers to add a free provider, and tests what's enabled. `--yes` (and the installer) runs it without questions.
+- **`conductor keys`** lists keys and where they come from. `keys set NAME` takes hidden input or stdin; `keys rm NAME` removes one. Placeholder values such as `YOUR_API_KEY` count as not set everywhere.
+- **`conductor doctor --json`**, and a "next:" line for every failing provider (e.g. `conductor add groq`).
+- **A setup guide for every provider:** [docs/providers](docs/providers/README.md). It has 45 API guides and the agent guides, generated from the catalog and checked by a test, so they can't drift.
+- **UI:** an "Add a provider" gallery with search and filters (Free, Gateways, Model makers, Fast hosts, Cloud, Local), inline key entry and a guide link on every card. API provider cards get a **Models** button that loads the provider's current model list.
+- **Changed defaults:**
+  - `kilo-free` now uses Kilo's documented endpoint, `https://ai-gateway.kilo.ai/api/v1`.
+  - `opencode-zen` is off by default and out of the `docs` chain. OpenCode's docs say its free models only work inside the OpenCode app (use the `opencode` agent for those).
+  - Default model ids are updated for OpenAI, DeepSeek and Kimi.
 
 - **Security: git hooks and config are restored after every worker.** `.git/config` and `.git/hooks` are snapshotted before each attempt and put back right after it, before conductor runs git again, with a warning. Before this, a worker could plant a hook or an `fsmonitor` program that ran outside its sandbox on the next git command. conductor's own git calls now also run with `core.fsmonitor=false`. Hook folders in the repo (`.husky/`, `.githooks/`, `core.hooksPath`) are protected files.
 - **Security: secrets files are never sent to API models as context** (`.env*`, `auth.json`, `secrets.env`, `.npmrc`, SSH keys, `*.pem`/`*.key`, `protectedPaths`), even when a task lists them with `--files`.
