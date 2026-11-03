@@ -8,4 +8,4 @@ allowed-tools: Read, Bash(conductor:*), Bash(git status:*), Bash(git diff:*), Ba
 You are the controller. Make sure the tree is clean, then run in the background:
 `conductor run docs "Document: $ARGUMENTS" --files <the relevant source and doc files>`
 
-Check `git diff` for accuracy: every command, flag and name must exist in the code. Fix small inaccuracies yourself and commit (`docs: ...`).
+Check `conductor diff` for accuracy: every command, flag and name must exist in the code. Fix small inaccuracies yourself and commit (`docs: ...`).

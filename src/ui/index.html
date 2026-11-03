@@ -3,7 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Conductor Settings</title>
+<title>conductor</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234f46e5'/%3E%3Cg fill='none' stroke='white' stroke-width='2.6' stroke-linecap='round'%3E%3Cpath d='M8 25 L19 9'/%3E%3Cpath d='M6 16h3M23 16h3M16 23v3'/%3E%3C/g%3E%3Ccircle cx='21' cy='7' r='2.6' fill='white'/%3E%3C/svg%3E">
+<meta name="theme-color" content="#4f46e5">
 <style>
 :root {
   --bg: #f6f7f9; --panel: #ffffff; --panel-2: #f1f3f6; --text: #16181d; --muted: #5d6573; --line: #e2e5ea;
@@ -37,9 +39,9 @@ header { position: sticky; top: 0; z-index: 5; background: var(--panel); border-
 .brand svg { color: var(--accent); }
 .proj { color: var(--muted); font-family: var(--mono); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 46ch; }
 .spacer { flex: 1; }
-.layout { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 0; max-width: 1200px; margin: 0 auto; }
+.layout { display: grid; grid-template-columns: 184px minmax(0, 1fr); gap: 0; max-width: 1200px; margin: 0 auto; }
 nav { padding: 16px 12px; position: sticky; top: 57px; align-self: start; }
-nav button { display: block; width: 100%; text-align: left; background: none; border: 0; color: var(--muted); padding: 8px 12px; border-radius: 8px; font: inherit; cursor: pointer; }
+nav button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: none; border: 0; color: var(--muted); padding: 8px 12px; border-radius: 8px; font: inherit; cursor: pointer; }
 nav button:hover { background: var(--panel-2); color: var(--text); }
 nav button.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 main { padding: 20px; min-width: 0; }
@@ -68,10 +70,10 @@ label.f { display: block; font-size: 12px; color: var(--muted); margin-bottom: 3
 .pill.warn { background: var(--warn-soft); color: var(--warn); }
 .pill.local-agent, .pill.local-model { background: var(--local-soft); color: var(--local); } .pill.cloud-api { background: var(--cloud-soft); color: var(--cloud); }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bad); flex: none; } .dot.ok { background: var(--ok); }
-.chain { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
-.link { display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; align-items: center; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); }
+.chain { display: flex; flex-direction: column; gap: 4px; margin: 10px 0; }
+.link { display: grid; grid-template-columns: 18px 1fr auto; gap: 8px; align-items: center; padding: 4px 6px 4px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); }
 .link .idx { color: var(--muted); font-size: 12px; text-align: center; }
-.link .nm { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; min-width: 0; }
+.link .nm { display: flex; gap: 8px; align-items: center; min-width: 0; white-space: nowrap; overflow: hidden; }
 .chainline { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .chainline .arrow { color: var(--muted); }
 .gal { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; margin-top: 12px; }
@@ -82,6 +84,23 @@ label.f { display: block; font-size: 12px; color: var(--muted); margin-bottom: 3
 .chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .chip { border: 1px solid var(--line); background: var(--panel); color: var(--text); border-radius: 999px; padding: 3px 10px; font: inherit; font-size: 12.5px; cursor: pointer; }
 .chip.on { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+svg.i { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vertical-align: -3px; }
+.btn svg.i { width: 14px; height: 14px; }
+.btn.ghost { border-color: transparent; background: none; color: var(--muted); } .btn.ghost:hover { background: var(--panel-2); color: var(--text); }
+.head { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; } .head h1 { margin: 0; } .head .sub { margin: 2px 0 0; flex-basis: 100%; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; } .seg button { border: 0; background: var(--panel); color: var(--muted); padding: 5px 12px; font: inherit; font-size: 13px; cursor: pointer; } .seg button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.plist { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); margin-bottom: 14px; }
+.prow { border-bottom: 1px solid var(--line); } .prow:last-child { border-bottom: 0; }
+.prow-main { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 14px; }
+.prow-name { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; } .prow-name b { font-size: 14px; }
+.prow-model { color: var(--muted); font-family: var(--mono); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 28ch; }
+.prow-body { padding: 0 14px 14px 60px; } .prow.open { background: var(--panel-2); }
+.chev { transition: transform .15s; } .prow.open .chev { transform: rotate(180deg); }
+.kind { color: var(--muted); display: inline-flex; } .kind svg.i { width: 14px; height: 14px; }
+.roles { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; } .roles .card { margin: 0; }
+.status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); } .status.bad { color: var(--bad); }
+details.more > summary { cursor: pointer; color: var(--muted); font-size: 13px; list-style: none; display: flex; align-items: center; gap: 6px; } details.more > summary::-webkit-details-marker { display: none; }
+details.more[open] > summary { margin-bottom: 10px; }
 .prov { display: grid; grid-template-columns: auto 1fr; gap: 12px; }
 .prov-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .prov-head b { font-size: 14.5px; }
@@ -95,7 +114,7 @@ label.f { display: block; font-size: 12px; color: var(--muted); margin-bottom: 3
 .ctrl { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
 .ctrl label { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; cursor: pointer; background: var(--panel); display: block; }
 .ctrl input { margin-right: 6px; } .ctrl label.sel { border-color: var(--accent); background: var(--accent-soft); }
-pre.cmd { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 64px 8px 10px; margin: 6px 0; overflow-x: auto; font-family: var(--mono); font-size: 12.5px; position: relative; white-space: pre-wrap; word-break: break-all; }
+pre.cmd { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 44px 8px 10px; margin: 6px 0; overflow-x: auto; font-family: var(--mono); font-size: 12.5px; position: relative; white-space: pre-wrap; word-break: break-all; }
 .copy { position: absolute; top: 5px; right: 5px; }
 table { width: 100%; border-collapse: collapse; }
 td, th { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
@@ -111,9 +130,10 @@ th { font-size: 12px; color: var(--muted); font-weight: 600; }
 @media (max-width: 760px) {
   .layout { grid-template-columns: 1fr; }
   nav { position: static; display: flex; overflow-x: auto; gap: 4px; padding: 8px 16px; border-bottom: 1px solid var(--line); background: var(--panel); }
-  nav button { width: auto; white-space: nowrap; }
+  nav button { width: auto; white-space: nowrap; padding: 6px 10px; }
+  .prow-body { padding-left: 14px; } .prow-model { display: none; }
   main { padding: 16px; }
-  .bar { padding: 10px 16px; }
+  .bar { padding: 10px 16px; gap: 8px; } .bar label[for=scope] { display: none; } #scope { max-width: 150px; font-size: 13px; padding: 4px 6px; }
   .proj { max-width: 100%; order: 5; flex-basis: 100%; }
   table { display: block; overflow-x: auto; }
   td input[type=password] { min-width: 140px; }
@@ -136,7 +156,7 @@ body { overflow-x: hidden; }
       <option value="global">Global (all projects)</option>
       <option value="project">This project only</option>
     </select>
-    <button class="btn icon" id="theme" title="Toggle theme" aria-label="Toggle theme">◐</button>
+    <button class="btn icon ghost" id="theme" title="Toggle theme" aria-label="Toggle theme"></button>
   </div>
 </header>
 <div class="layout">
@@ -151,8 +171,26 @@ body { overflow-x: hidden; }
 <div id="toast" role="status"></div>
 <script>
 const TOKEN = new URLSearchParams(location.hash.slice(1)).get('t') || '';
-const TABS = [['overview', 'Overview'], ['runs', 'Runs'], ['roles', 'Roles & fallback'], ['providers', 'Providers'], ['keys', 'API keys'], ['controller', 'Controller'], ['settings', 'Settings'], ['setup', 'Install & setup']];
+// small stroke icons (24x24 paths), drawn for this page
+const ICONS = {
+  overview: 'M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 3v6h8V3z',
+  runs: 'M22 12h-4l-3 8L9 4l-3 8H2',
+  roles: 'M6 3v12M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 9a9 9 0 0 1-9 9',
+  providers: 'M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0zM12 18v4',
+  keys: 'M15.5 7.5l3 3M21 2l-9.6 9.6M14 9l7-7M7.5 21a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11z',
+  settings: 'M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6',
+  setup: 'M12 3v12M7 10l5 5 5-5M5 21h14',
+  test: 'M6 4l14 8-14 8z', guide: 'M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5zM4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5',
+  list: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01', chev: 'M6 9l6 6 6-6', plus: 'M12 5v14M5 12h14', x: 'M18 6L6 18M6 6l12 12',
+  up: 'M12 19V5M5 12l7-7 7 7', down: 'M12 5v14M19 12l-7 7-7-7', agent: 'M4 17l6-6-6-6M12 19h8', cloud: 'M18 10h-1.3A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z',
+  chip: 'M5 5h14v14H5zM9 9h6v6H9zM9 1v4M15 1v4M9 19v4M15 19v4M1 9h4M1 15h4M19 9h4M19 15h4',
+  sun: 'M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4',
+  moon: 'M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z', copy: 'M9 9h11v11H9zM5 15H4V4h11v1',
+};
+const icon = (n, t = '') => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true"${t ? ` title="${t}"` : ''}><path d="${ICONS[n]}"/></svg>`;
+const TABS = [['overview', 'Overview'], ['runs', 'Runs'], ['roles', 'Roles'], ['providers', 'Providers'], ['keys', 'API keys'], ['settings', 'Settings'], ['setup', 'Setup']];
 let S = null, W = null, tab = 'overview', dirty = false, freeModels = null, runsData = null, gOpen = null, gFilter = { q: '', cat: 'all' };
+let pAll = false, pAdd = false; const pOpen = new Set(); // providers page: show disabled, gallery open, expanded rows
 const provModels = {};
 const GUIDE = (id) => `https://github.com/KevalParikh22/conductor-ai/blob/main/docs/providers/${id}.md`;
 const $ = (s) => document.querySelector(s);
@@ -160,10 +198,12 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const clone = (x) => JSON.parse(JSON.stringify(x));
 
 try { const t = localStorage.getItem('conductor-theme'); if (t) document.documentElement.dataset.theme = t; } catch {}
+const curTheme = () => document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+const themeIcon = () => { $('#theme').innerHTML = icon(curTheme() === 'dark' ? 'sun' : 'moon'); };
+themeIcon();
 $('#theme').onclick = () => {
-  const cur = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-  const next = cur === 'dark' ? 'light' : 'dark';
-  document.documentElement.dataset.theme = next;
+  const next = curTheme() === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = next; themeIcon();
   try { localStorage.setItem('conductor-theme', next); } catch {}
 };
 
@@ -185,13 +225,15 @@ $('#discard').onclick = () => load(S);
 $('#scope').onchange = () => { if (dirty) markDirty(); try { localStorage.setItem('conductor-scope', $('#scope').value); } catch {} };
 
 function renderNav() {
-  $('#nav').innerHTML = TABS.map(([k, l]) => `<button data-tab="${k}" class="${k === tab ? 'active' : ''}">${l}</button>`).join('');
+  $('#nav').innerHTML = TABS.map(([k, l]) => `<button data-tab="${k}" class="${k === tab ? 'active' : ''}">${icon(k)}${l}</button>`).join('');
   $('#nav').querySelectorAll('button').forEach((b) => b.onclick = () => { tab = b.dataset.tab; render(); });
 }
 function provStatus(name) { return S.status.providers.find((p) => p.name === name) || { ready: false, reason: 'unknown' }; }
 function locPill(p) { const l = p.location || 'cloud-api'; return `<span class="pill ${l}">${{ 'local-agent': 'local agent', 'local-model': 'local model', 'cloud-api': 'cloud API' }[l]}</span>`; }
 function readyPill(name) { const st = provStatus(name); const w = W.providers[name]; if (w && !w.enabled) return '<span class="pill">disabled</span>'; return st.ready ? '<span class="pill ok">ready</span>' : `<span class="pill bad">${esc(st.reason)}</span>`; }
-function copyBtn(text) { return `<button class="btn small copy" data-copy="${esc(text)}">copy</button>`; }
+// short status for tight rows; the full reason is in the title
+const shortReason = (r) => /not set/.test(r) ? 'no key' : /not installed/.test(r) ? 'not installed' : r.length > 22 ? r.slice(0, 20) + '…' : r;
+function copyBtn(text) { return `<button class="btn small copy" data-copy="${esc(text)}" title="Copy">${icon('copy')}</button>`; }
 function cmd(text) { return `<pre class="cmd">${esc(text)}${copyBtn(text)}</pre>`; }
 function bindCopy() { document.querySelectorAll('[data-copy]').forEach((b) => b.onclick = () => { navigator.clipboard?.writeText(b.dataset.copy).then(() => toast('Copied'), () => toast('Copy failed')); }); }
 
@@ -215,13 +257,20 @@ function gallery() {
           ${c.fields.map((f) => `<div><label class="f">${esc(f.replaceAll('_', ' ').toLowerCase())}</label><input type="text" data-gfield="${esc(f)}"></div>`).join('')}
         </div><div class="row" style="margin-top:8px"><button class="btn primary small" data-gsave="${esc(c.id)}">Add and enable</button><button class="btn small" data-gclose>Cancel</button>
           <span class="note">Saved to ${$('#scope')?.value === 'project' ? 'this project' : 'global config'}; added to the docs, test, review and ask roles. The key goes to the secrets file.</span></div>`
-        : `<div class="row" style="margin-top:4px">${c.enabled ? '<span class="note">Added. Configure it above.</span>' : `<button class="btn small" data-gadd="${esc(c.id)}">${c.added ? 'Enable' : 'Add'}</button>`}</div>`}
+        : `<div class="row" style="margin-top:4px">${c.enabled ? '<span class="note">Added: see your list.</span>' : `<button class="btn small" data-gadd="${esc(c.id)}">${c.added ? 'Enable' : 'Add'}</button>`}</div>`}
     </div>`; };
   return `<div class="card"><h2>Add a provider <span class="note">${S.catalog.length} available, ${S.catalog.filter((c) => c.free).length} with a free tier</span></h2>
     <div class="row" style="gap:10px;flex-wrap:wrap"><input type="search" id="g-q" placeholder="Search: groq, coding, free…" value="${esc(gFilter.q)}" style="max-width:260px">
       <div class="chips">${GCATS.map(([k, l]) => `<button class="chip ${gFilter.cat === k ? 'on' : ''}" data-gcat="${k}">${l}</button>`).join('')}</div></div>
     <div class="gal">${S.catalog.map(card).join('')}</div>
-    <p class="note" id="g-none" ${S.catalog.some(gMatch) ? 'hidden' : ''}>Nothing matches. Any OpenAI-compatible endpoint works: add it as a custom provider below.</p></div>`;
+    <p class="note" id="g-none" ${S.catalog.some(gMatch) ? 'hidden' : ''}>Nothing matches. Any OpenAI-compatible endpoint works: add it as a custom provider below.</p>
+    <details class="more" style="margin-top:12px"><summary>${icon('plus')} Custom provider (any OpenAI-compatible endpoint or another CLI agent)</summary>
+      <div class="fields"><div><label class="f">Name</label><input type="text" id="np-name" placeholder="e.g. company-gateway"></div>
+      <div><label class="f">Type</label><select id="np-type"><option value="openai">OpenAI-compatible API</option><option value="anthropic">Anthropic API</option><option value="cli">CLI agent</option></select></div>
+      <div><label class="f">Base URL / CLI preset</label><input type="text" id="np-base" placeholder="https://api.example.com/v1  or  codex, grok, aider…"></div>
+      <div><label class="f">API key env var</label><input type="text" id="np-key" placeholder="EXAMPLE_API_KEY"></div>
+      <div><label class="f">Model</label><input type="text" id="np-model"></div></div>
+      <div class="row" style="margin-top:10px"><button class="btn" id="np-add">Add</button></div></details></div>`;
 }
 function applyGalleryFilter() {
   document.querySelectorAll('[data-gid]').forEach((el) => { el.hidden = !gMatch(S.catalog.find((c) => c.id === el.dataset.gid)); });
@@ -231,12 +280,12 @@ function applyGalleryFilter() {
 
 const views = {
   runs() {
-    if (!runsData) { loadRuns(); return '<h1>Runs</h1><p class="sub">Loading…</p>'; }
+    if (!runsData) { loadRuns(); return '<div class="head"><h1>Runs</h1><p class="sub">Loading…</p></div>'; }
     const { runs, usage, budget } = runsData;
     const money = (n) => (n == null ? '–' : n ? `$${n.toFixed(n < 0.01 ? 4 : 2)}` : '$0');
     const result = (r) => r.state === 'running' ? '<span class="pill warn">running</span>' : r.state === 'done' ? '<span class="pill ok">done</span>' : '<span class="pill bad">failed</span>';
     const verify = (v) => !v ? '–' : `<span class="pill ${v === 'PASS' ? 'ok' : v === 'FAIL' ? 'bad' : ''}">${esc(v)}</span>`;
-    return `<h1>Runs</h1><p class="sub">Work handed out in this project, newest first. Updates every few seconds. In the terminal: <span class="mono">conductor runs</span>.</p>
+    return `<div class="head"><h1>Runs</h1><p class="sub">Work handed out in this project, newest first; updates every few seconds (<span class="mono">conductor runs</span> in the terminal).</p></div>
     <div class="grid">
       <div class="card stat"><div class="l">Runs (last ${usage.days} days, all projects)</div><div class="n">${usage.rows.reduce((t, r) => t + r.runs, 0)}</div></div>
       <div class="card stat"><div class="l">Known API cost today</div><div class="n">${money(usage.today)}</div><div class="note">${budget ? `daily budget ${money(budget)}` : 'no daily budget (Settings)'}</div></div>
@@ -256,10 +305,10 @@ const views = {
   overview() {
     const st = S.status; const ready = st.providers.filter((p) => p.ready).length; const enabled = st.providers.filter((p) => p.enabled).length;
     const cds = Object.entries(S.cooldowns);
-    return `<h1>Overview</h1><p class="sub">${esc(S.controllers[W.controller]?.label || W.controller)} is the controller. It plans and reviews, and hands work to the providers below in fallback order.</p>
+    return `<div class="head"><h1>Overview</h1><p class="sub">${esc(S.controllers[W.controller]?.label || W.controller)} plans and reviews; the providers below do the work, in fallback order.</p></div>
     ${S.errors.length ? `<div class="err">Config problems: ${S.errors.map(esc).join('; ')}</div>` : ''}
     <div class="grid">
-      <div class="card stat"><div class="l">Controller</div><div class="n" style="font-size:18px">${esc(S.controllers[W.controller]?.label || W.controller)}</div><div class="note">Change in Controller</div></div>
+      <div class="card stat"><div class="l">Controller</div><div class="n" style="font-size:18px">${esc(S.controllers[W.controller]?.label || W.controller)}</div><div class="note">Change in Settings</div></div>
       <div class="card stat"><div class="l">Providers ready</div><div class="n">${ready}<span class="note" style="font-size:14px"> / ${enabled} enabled</span></div></div>
       <div class="card stat"><div class="l">Repo</div><div class="n" style="font-size:16px">${st.repo ? esc(st.repo.branch) : 'not a git repo'}</div><div class="note">${st.repo ? (st.repo.dirty ? 'uncommitted changes' : 'clean') + (st.repo.failedStashes ? ` · ${st.repo.failedStashes} failed-attempt stash(es)` : '') : 'write roles need git'}</div></div>
       <div class="card stat"><div class="l">Verify command</div><div class="mono" style="margin-top:6px">${esc(st.verify || 'none detected')}</div></div>
@@ -269,76 +318,73 @@ const views = {
       ${Object.entries(W.roles).map(([r, chain]) => `<tr><td><b>${esc(S.roles[r]?.label || r)}</b> ${S.roles[r]?.mode === 'read' ? '<span class="pill">read-only</span>' : ''}</td><td><div class="chainline">${chain.map((n, i) => `${i ? '<span class="arrow">→</span>' : ''}<span class="pill"><span class="dot ${provStatus(n).ready && W.providers[n]?.enabled ? 'ok' : ''}"></span>${esc(n)}</span>`).join('')}</div></td></tr>`).join('')}
       </table></div>
     ${cds.length ? `<div class="card"><h2>Cooling down (rate-limited)</h2>${cds.map(([n, c]) => `<div class="row" style="margin-bottom:6px"><b>${esc(n)}</b><span class="note">until ${new Date(c.until).toLocaleTimeString()}</span><button class="btn small" data-clear="${esc(n)}">clear</button></div>`).join('')}</div>` : ''}
-    ${!S.hasProjectConfig && S.inRepo ? `<div class="card"><h2>This project isn't set up yet</h2><p class="note">Add the rules file, controller commands and plan template to <span class="mono">${esc(S.root)}</span>.</p><button class="btn primary" data-goto="controller">Set up this project</button></div>` : ''}`;
+    ${!S.hasProjectConfig && S.inRepo ? `<div class="card"><h2>This project isn't set up yet</h2><p class="note">Add the rules file, controller commands and plan template to <span class="mono">${esc(S.root)}</span>.</p><button class="btn primary" data-goto="settings">Set up this project</button></div>` : ''}`;
   },
   roles() {
     const names = Object.keys(W.providers);
-    return `<h1>Roles & fallback</h1><p class="sub">Each role tries providers top to bottom. If one is rate-limited, fails or isn't installed, the next one runs. If all fail, the controller does the task itself.</p>
-    ${Object.entries(W.roles).map(([r, chain]) => `<div class="card"><div class="row"><h2 style="margin:0">${esc(S.roles[r]?.label || r)}</h2>${S.roles[r]?.mode === 'read' ? '<span class="pill">read-only</span>' : '<span class="pill warn">edits files</span>'}</div>
+    const kindIcon = (n) => { const l = provStatus(n).location || (W.providers[n]?.type === 'cli' ? 'local-agent' : 'cloud-api');
+      return `<span class="kind" title="${{ 'local-agent': 'local agent', 'local-model': 'local model', 'cloud-api': 'cloud API' }[l]}">${icon(l === 'local-agent' ? 'agent' : l === 'local-model' ? 'chip' : 'cloud')}</span>`; };
+    const st = (n) => { const p = W.providers[n], s = provStatus(n);
+      if (!p) return '<span class="status bad">unknown</span>';
+      if (!p.enabled) return '<span class="status">off</span>';
+      return s.ready ? '<span class="status"><span class="dot ok"></span></span>' : `<span class="status bad" title="${esc(s.reason)}"><span class="dot"></span>${esc(shortReason(s.reason))}</span>`; };
+    return `<div class="head"><h1>Roles</h1><p class="sub">Each role tries its providers top to bottom; when one is rate-limited, fails or isn't installed, the next runs. If all fail, the controller does the task.</p></div>
+    <div class="roles">${Object.entries(W.roles).map(([r, chain]) => `<div class="card"><div class="row"><h2 style="margin:0">${esc(S.roles[r]?.label || r)}</h2>${S.roles[r]?.mode === 'read' ? '<span class="pill">read-only</span>' : '<span class="pill warn">edits files</span>'}</div>
       <div class="note">${esc(S.roles[r]?.description || '')}</div>
-      <div class="chain">${chain.map((n, i) => `<div class="link"><span class="idx">${i + 1}</span><span class="nm"><b>${esc(n)}</b>${W.providers[n] ? locPill(provStatus(n)) : ''}${readyPill(n)}</span>
-        <span class="row"><button class="btn icon small" data-mv="${r}|${i}|-1" ${i === 0 ? 'disabled' : ''} aria-label="Move up">↑</button><button class="btn icon small" data-mv="${r}|${i}|1" ${i === chain.length - 1 ? 'disabled' : ''} aria-label="Move down">↓</button><button class="btn icon small" data-rm="${r}|${i}" aria-label="Remove">✕</button></span></div>`).join('') || '<div class="note">No providers: the controller will do this role itself.</div>'}</div>
-      <div class="row"><select data-addsel="${r}" style="max-width:260px"><option value="">+ add provider…</option>${names.filter((n) => !chain.includes(n)).map((n) => `<option>${esc(n)}</option>`).join('')}</select></div></div>`).join('')}`;
+      <div class="chain">${chain.map((n, i) => `<div class="link"><span class="idx">${i + 1}</span><span class="nm">${kindIcon(n)}<b>${esc(n)}</b>${st(n)}</span>
+        <span class="row" style="gap:2px"><button class="btn icon ghost small" data-mv="${r}|${i}|-1" ${i === 0 ? 'disabled' : ''} aria-label="Move up">${icon('up')}</button><button class="btn icon ghost small" data-mv="${r}|${i}|1" ${i === chain.length - 1 ? 'disabled' : ''} aria-label="Move down">${icon('down')}</button><button class="btn icon ghost small" data-rm="${r}|${i}" aria-label="Remove">${icon('x')}</button></span></div>`).join('') || '<div class="note">No providers: the controller does this role itself.</div>'}</div>
+      <select data-addsel="${r}" style="max-width:220px"><option value="">+ add provider…</option>${names.filter((n) => !chain.includes(n)).map((n) => `<option>${esc(n)}</option>`).join('')}</select></div>`).join('')}</div>`;
   },
   providers() {
-    const groups = { 'local-agent': 'Local agents (CLI tools that use your logins)', 'cloud-api': 'Cloud APIs (remote models: Gemini, OpenRouter, Kimi, Claude…)', 'local-model': 'Local models (Ollama, LM Studio)' };
-    const byLoc = {};
-    for (const [n, p] of Object.entries(W.providers)) { const loc = provStatus(n).location || (p.type === 'cli' ? 'local-agent' : 'cloud-api'); (byLoc[loc] ||= []).push(n); }
     const field = (n, k, label, ph = '', list = '') => `<div><label class="f">${label}</label><input type="text" data-pf="${esc(n)}|${k}" value="${esc(W.providers[n][k] || '')}" placeholder="${esc(ph)}" ${list ? `list="${list}"` : ''}></div>`;
     const permNote = (p) => { const m = { ...(S.presets[p.preset]?.permissions || {}), ...(p.permissions || {}) };
       if (!m.write) return '<div class="note">Permissions: custom CLI, check its own settings.</div>';
       return `<div class="note"><b>Write roles:</b> ${esc(m.write)}<br><b>Read roles:</b> ${esc(m.read)}${m.readOnlyEnforced ? '' : ' <span class="pill bad">read-only not enforced</span>'}</div>`; };
-    const card = (n) => { const p = W.providers[n]; const builtin = S.builtinProviders.includes(n);
-      return `<div class="card prov"><label class="switch" title="Enable"><input type="checkbox" data-en="${esc(n)}" ${p.enabled ? 'checked' : ''}><span></span></label><div>
-        <div class="prov-head"><b>${esc(n)}</b>${locPill(provStatus(n))}${readyPill(n)}<span class="pill">${p.type === 'cli' ? esc(S.presets[p.preset]?.label || p.bin || 'cli') : p.type === 'anthropic' ? 'Anthropic API' : 'OpenAI-compatible'}</span>
-          <span class="spacer"></span>${p.type !== 'cli' ? `<button class="btn small" data-lm="${esc(n)}" title="Load this provider's current models into the Model field">Models</button>` : ''}<button class="btn small" data-test="${esc(n)}">Test</button>${p.catalog ? `<a class="btn small" href="${GUIDE(p.catalog)}" target="_blank" rel="noopener">Guide</a>` : ''}${builtin ? '' : `<button class="btn small" data-del="${esc(n)}">Remove</button>`}</div>
+    const all = Object.keys(W.providers), on = all.filter((n) => W.providers[n].enabled);
+    const order = (n) => ({ 'local-agent': 0, 'cloud-api': 1, 'local-model': 2 }[provStatus(n).location] ?? 1);
+    const shown = (pAll ? all : on).sort((x, y) => order(x) - order(y));
+    const row = (n) => { const p = W.providers[n], builtin = S.builtinProviders.includes(n), open = pOpen.has(n), s = provStatus(n);
+      const l = s.location || (p.type === 'cli' ? 'local-agent' : 'cloud-api');
+      const status = !p.enabled ? '<span class="status">off</span>' : s.ready ? '<span class="status"><span class="dot ok"></span>ready</span>' : `<span class="status bad" title="${esc(s.reason)}"><span class="dot"></span>${esc(s.reason)}</span>`;
+      return `<div class="prow ${open ? 'open' : ''}"><div class="prow-main">
+        <label class="switch" title="Enable"><input type="checkbox" data-en="${esc(n)}" ${p.enabled ? 'checked' : ''}><span></span></label>
+        <div class="prow-name"><span class="kind" title="${l.replace('-', ' ')}">${icon(l === 'local-agent' ? 'agent' : l === 'local-model' ? 'chip' : 'cloud')}</span><b>${esc(n)}</b>${status}${p.model ? `<span class="prow-model">${esc(p.model)}</span>` : ''}</div>
+        <div class="row" style="gap:4px"><button class="btn small ghost" data-test="${esc(n)}" title="Send a one-word test prompt">${icon('test')} Test</button><button class="btn icon ghost small" data-popen="${esc(n)}" aria-label="Details" aria-expanded="${open}">${icon('chev').replace('class="i"', 'class="i chev"')}</button></div>
+      </div><div class="prow-body" ${open ? '' : 'hidden'}>
         ${p.notes ? `<div class="note">${esc(p.notes)}</div>` : ''}
         ${p.type === 'cli' ? permNote(p) : ''}
-        <div class="fields">${field(n, 'model', 'Model', p.type === 'cli' ? 'CLI default' : 'required', n.startsWith('openrouter') ? 'dl-or' : p.preset === 'opencode' ? 'dl-oc' : provModels[n] ? `dl-m-${n}` : '')}
+        <div class="fields">${field(n, 'model', 'Model', p.type === 'cli' ? 'CLI default' : 'picked automatically', n.startsWith('openrouter') ? 'dl-or' : p.preset === 'opencode' ? 'dl-oc' : provModels[n] ? `dl-m-${n}` : '')}
           ${p.type !== 'cli' ? field(n, 'baseUrl', 'Base URL') + field(n, 'apiKeyEnv', 'API key env var', 'none for local') : ''}</div>
-        ${n.startsWith('openrouter') ? `<div class="row" style="margin-top:8px"><button class="btn small" id="loadfree">Load current free models</button><span class="note">${freeModels ? freeModels.length + ' free models loaded into the dropdown' : 'The free list changes often'}</span></div>` : ''}
-        ${provModels[n] ? `<datalist id="dl-m-${esc(n)}">${provModels[n].map((m) => `<option value="${esc(m.id)}">${m.free ? 'free' : ''}</option>`).join('')}</datalist><div class="note">${provModels[n].length} models loaded into the Model field's list</div>` : ''}
-        <div class="note" id="test-${esc(n)}"></div></div></div>`; };
-    return `<h1>Providers</h1><p class="sub">Turn providers on or off and pick models. Keys go in API keys and are never saved in config files.</p>
+        ${provModels[n] ? `<datalist id="dl-m-${esc(n)}">${provModels[n].map((m) => `<option value="${esc(m.id)}">${m.free ? 'free' : ''}</option>`).join('')}</datalist>` : ''}
+        <div class="row" style="margin-top:10px">${p.type !== 'cli' ? `<button class="btn small" data-lm="${esc(n)}">${icon('list')} ${provModels[n] ? `${provModels[n].length} models loaded` : 'Load models'}</button>` : ''}${n.startsWith('openrouter') ? `<button class="btn small" id="loadfree">${freeModels ? `${freeModels.length} free models loaded` : 'Load free models'}</button>` : ''}${p.catalog ? `<a class="btn small" href="${GUIDE(p.catalog)}" target="_blank" rel="noopener">${icon('guide')} Guide</a>` : ''}${builtin ? '' : `<button class="btn small" data-del="${esc(n)}">Remove</button>`}</div>
+      </div><div class="note" id="test-${esc(n)}" style="padding:0 14px"></div></div>`; };
+    return `<div class="head"><h1>Providers</h1><span class="spacer"></span>
+        <div class="seg"><button data-pall="0" class="${pAll ? '' : 'on'}">Enabled (${on.length})</button><button data-pall="1" class="${pAll ? 'on' : ''}">All (${all.length})</button></div>
+        <button class="btn ${pAdd ? '' : 'primary'}" id="padd">${icon(pAdd ? 'x' : 'plus')} ${pAdd ? 'Close' : 'Add provider'}</button>
+        <p class="sub">Switch providers on or off; open a row for its model, endpoint and permissions. Keys live in API keys, never in config files.</p></div>
       <datalist id="dl-oc">${['opencode/big-pickle', 'opencode/glm-5.3-flash-free', 'opencode/deepseek-v4.1-flash-free', 'opencode/nemotron-3-ultra-free', 'opencode/mimo-v2.6-flash-free'].map((m) => `<option value="${m}">`).join('')}</datalist>
       <datalist id="dl-or"><option value="openrouter/free">${(freeModels || []).map((m) => `<option value="${esc(m.id)}">${m.tools ? 'tools · ' : ''}${m.context || ''}</option>`).join('')}</datalist>
-      ${Object.entries(groups).map(([loc, title]) => byLoc[loc]?.length ? `<h2 style="margin-top:18px">${title}</h2>${byLoc[loc].map(card).join('')}` : '').join('')}
-      ${gallery()}
-      <div class="card"><h2>Add a custom provider</h2><p class="note">Any OpenAI-compatible endpoint (Together, Fireworks, Mistral, a company gateway…), or another CLI agent.</p>
-        <div class="fields"><div><label class="f">Name</label><input type="text" id="np-name" placeholder="e.g. mistral-api"></div>
-        <div><label class="f">Type</label><select id="np-type"><option value="openai">OpenAI-compatible API</option><option value="anthropic">Anthropic API</option><option value="cli">CLI agent</option></select></div>
-        <div><label class="f">Base URL / CLI preset</label><input type="text" id="np-base" placeholder="https://api.example.com/v1  or  antigravity|codex|opencode|kimi|claude"></div>
-        <div><label class="f">API key env var</label><input type="text" id="np-key" placeholder="EXAMPLE_API_KEY"></div>
-        <div><label class="f">Model</label><input type="text" id="np-model"></div></div>
-        <div class="row" style="margin-top:10px"><button class="btn" id="np-add">Add provider</button></div></div>`;
+      ${pAdd ? gallery() : ''}
+      <div class="plist">${shown.map(row).join('') || '<p class="note" style="padding:14px">Nothing enabled yet. Use <b>Add provider</b>, or show all.</p>'}</div>`;
   },
   keys() {
-    return `<h1>API keys</h1><p class="sub">Stored in <span class="mono">${esc(S.paths.secrets)}</span> (readable only by you), never in config files or git. Real environment variables take priority. In cloud or CI environments, set these as environment secrets instead.</p>
+    const keys = S.secrets.filter((k) => k.set || k.usedBy.some((n) => W.providers[n]?.enabled));
+    return `<div class="head"><h1>API keys</h1><p class="sub">Saved in <span class="mono">${esc(S.paths.secrets)}</span> (only you can read it), never in config or git. Real environment variables win. Showing keys that are set or used by an enabled provider.</p></div>
     <div class="card"><table><tr><th>Variable</th><th>Status</th><th>Used by</th><th style="width:38%">Set / replace</th></tr>
-    ${S.secrets.map((k) => `<tr><td class="mono">${esc(k.name)}</td><td>${k.set ? `<span class="pill ok">set ${esc(k.hint)}</span> <span class="note">${esc(k.source)}</span>` : '<span class="pill bad">not set</span>'}</td><td class="note">${esc(k.usedBy.join(', ') || '-')}</td>
+    ${keys.map((k) => `<tr><td class="mono">${esc(k.name)}</td><td>${k.set ? `<span class="pill ok">set ${esc(k.hint)}</span> <span class="note">${esc(k.source)}</span>` : '<span class="pill bad">not set</span>'}</td><td class="note">${esc(k.usedBy.join(', ') || '-')}</td>
       <td><div class="row" style="flex-wrap:nowrap"><input type="password" data-key="${esc(k.name)}" placeholder="paste key" autocomplete="off"><button class="btn small" data-savekey="${esc(k.name)}">Save</button>${k.source === 'secrets file' ? `<button class="btn small" data-delkey="${esc(k.name)}">Remove</button>` : ''}</div></td></tr>`).join('')}
     </table></div>
-    <div class="card"><h2>Where to get free keys</h2><p class="note">No key needed for <b>kilo-free</b> (Kilo gateway free models, about 200 requests an hour). Free routes may log prompts, so keep secrets out of tasks you send to them.</p><ul>
-      <li><b>OpenRouter</b> (<span class="mono">:free</span> models, 50 req/day, or 1000/day after a one-time $10 credit): <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a></li>
-      <li><b>OVHcloud AI Endpoints</b> (works without a key at 2 requests a minute): <a href="https://www.ovh.com/manager/#/public-cloud/" target="_blank" rel="noopener">OVH Public Cloud</a></li>
-      <li><b>Gemini API</b> (free tier): <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a></li>
-      <li><b>Groq</b> (free tier, fast): <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a></li>
-      <li><b>Cerebras</b> (free tier, fast): <a href="https://cloud.cerebras.ai" target="_blank" rel="noopener">cloud.cerebras.ai</a></li>
-      <li><b>Mistral</b> (free Experiment plan with Codestral; prompts may be used for training): <a href="https://console.mistral.ai" target="_blank" rel="noopener">console.mistral.ai</a></li>
-      <li><b>NVIDIA NIM</b> (free developer access): <a href="https://build.nvidia.com" target="_blank" rel="noopener">build.nvidia.com</a></li>
-      <li><b>Kimi / Moonshot</b> (paid): <a href="https://platform.moonshot.ai" target="_blank" rel="noopener">platform.moonshot.ai</a></ul></div>`;
-  },
-  controller() {
-    return `<h1>Controller</h1><p class="sub">The controller plans, delegates, reviews and commits. Claude Code is the default because it reviews best, but you can pick any agent. Applying writes that agent's instruction file, its <span class="mono">/conduct-*</span> commands and the MCP entry into this project, without overwriting your own content.</p>
-    <div class="card"><div class="ctrl">${Object.entries(S.controllers).map(([k, c]) => `<label class="${W.controller === k ? 'sel' : ''}"><input type="radio" name="ctrl" value="${k}" ${W.controller === k ? 'checked' : ''}><b>${esc(c.label)}</b><div class="note">instructions in ${esc(c.file)}</div></label>`).join('')}</div>
-      <div class="row" style="margin-top:14px"><button class="btn primary" id="apply-ctrl" ${S.inRepo ? '' : 'disabled'}>Apply to this project</button><label class="row note"><input type="checkbox" id="ctrl-mcp" checked> also register the MCP server</label></div>
-      ${S.inRepo ? '' : '<p class="note">Open the UI from inside a git project (<span class="mono">cd my-app && conductor ui</span>) to apply.</p>'}
-      <pre class="cmd" id="init-out" style="display:none"></pre></div>`;
+    <p class="note">Need a key? Each provider's guide links to where you get one: <b>Providers → Add provider</b> (filter <b>Free</b>), or <span class="mono">conductor providers --free</span>. kilo-free and OVHcloud work without one.</p>`;
   },
   settings() {
     const st = W.settings; const num = (k, l, h) => `<div><label class="f">${l}</label><input type="number" data-set="${k}" value="${esc(st[k])}"><div class="note">${h}</div></div>`;
     const chk = (k, l) => `<label class="row"><input type="checkbox" data-setb="${k}" ${st[k] ? 'checked' : ''}> ${l}</label>`;
-    return `<h1>Settings</h1><p class="sub">Defaults suit most projects.</p><div class="card"><div class="fields">
+    return `<div class="head"><h1>Settings</h1><p class="sub">Defaults suit most projects.</p></div>
+    <div class="card"><h2>Controller</h2><p class="note" style="margin-top:-4px">The agent that plans, delegates, reviews and commits. Applying writes its instruction file, <span class="mono">/conduct-*</span> commands and MCP entry into this project, keeping your own content.</p>
+      <div class="ctrl">${Object.entries(S.controllers).map(([k, c]) => `<label class="${W.controller === k ? 'sel' : ''}"><input type="radio" name="ctrl" value="${k}" ${W.controller === k ? 'checked' : ''}><b>${esc(c.label)}</b><div class="note">${esc(c.file)}</div></label>`).join('')}</div>
+      <div class="row" style="margin-top:12px"><button class="btn primary" id="apply-ctrl" ${S.inRepo ? '' : 'disabled'}>Apply to this project</button><label class="row note"><input type="checkbox" id="ctrl-mcp" checked> also register the MCP server</label>${S.inRepo ? '' : '<span class="note">Open the UI inside a git project to apply.</span>'}</div>
+      <pre class="cmd" id="init-out" style="display:none"></pre></div>
+    <div class="card"><h2>Runs</h2><div class="fields">
       ${num('timeoutSec', 'Timeout per attempt (seconds)', 'A worker is stopped and the next one tried')}
       ${num('cooldownMinutes', 'Cooldown after rate limit (minutes)', "Rate-limited providers are skipped this long (or for the provider's Retry-After)")}
       ${num('maxDiffBytes', 'Max review diff (bytes)', 'Larger diffs are truncated')}
@@ -346,7 +392,7 @@ const views = {
       ${num('dailyBudgetUSD', 'Daily budget for paid APIs ($)', '0 = no cap. Counts API providers with a price set; free ones never count')}
       <div><label class="f">Verify command</label><input type="text" data-sets="verify" value="${esc(st.verify)}" placeholder="auto: AGENTS.md Verify line, then npm/pytest/cargo/go"><div class="note">Must pass before a task counts as done</div></div>
       <div><label class="f">Protected branches</label><input type="text" data-setl="protectedBranches" value="${esc((st.protectedBranches || []).join(', '))}"><div class="note">Workers never write on these</div></div>
-      </div><div style="margin-top:12px;display:grid;gap:6px">${chk('requireCleanTree', 'Require a clean git tree before write roles (enables safe stash-on-failure)')}${chk('autoVerify', 'Run verify automatically after each write task')}</div></div>`;
+      </div><div style="margin-top:12px;display:grid;gap:6px">${chk('smartSelect', 'Smart selector: try the cheapest capable provider first (free API models for small tasks, agents for big ones)')}${chk('requireCleanTree', 'Require a clean git tree before write roles (enables safe stash-on-failure)')}${chk('autoVerify', 'Run verify automatically after each write task')}</div></div>`;
   },
   setup() {
     const p = S.presets, sec = Object.fromEntries(S.secrets.map((x) => [x.name, x.set]));
@@ -354,7 +400,7 @@ const views = {
     const agents = Object.values(p).filter((v) => v.installed).length;
     const freeKeys = ['OPENROUTER_API_KEY', 'OPENCODE_API_KEY', 'GEMINI_API_KEY', 'GROQ_API_KEY', 'CEREBRAS_API_KEY'].filter((n) => sec[n]).length;
     const link = (u) => `<a href="https://${u}" target="_blank" rel="noopener">${u}</a>`;
-    return `<h1>Install & setup</h1><p class="sub">Install conductor once per machine, then run <span class="mono">conductor init</span> in each project. You can start for free: the Kilo gateway needs no key and no install.</p>
+    return `<div class="head"><h1>Setup</h1><p class="sub">Install once per machine, run <span class="mono">conductor setup</span>, then <span class="mono">conductor init</span> in each project. kilo-free works with no key and no install.</p></div>
     <div class="card"><h2>This machine</h2><table><tr><th>Check</th><th>Status</th><th>How to fix</th></tr>
       <tr><td>Node.js 20+</td><td>${pill(+S.env.node.slice(1).split('.')[0] >= 20, esc(S.env.node), esc(S.env.node) + ' (too old)')}</td><td class="mono">nvm install 22</td></tr>
       <tr><td>git</td><td>${pill(S.env.git, 'installed', 'missing')}</td><td class="note">Needed for worktrees, evidence checks and rollback</td></tr>
@@ -368,28 +414,25 @@ const views = {
       <li><b>Pick your workers.</b> Choose a free start, subscription agents, or both. Every role falls back down its chain, so you can mix them.
         <div class="grid2" style="margin-top:10px">
           <div class="mini"><b>Free, no install</b><ul class="note" style="margin:6px 0 0;padding-left:18px">
-            <li><b>kilo-free</b>: works now, no key (about 200 req/hour)</li>
-            <li><b>OpenRouter</b> <span class="mono">:free</span> models: ${link('openrouter.ai/keys')}</li>
-            <li><b>OVHcloud</b>: works without a key (2 req/min)</li>
-            <li><b>Gemini API</b> free tier: ${link('aistudio.google.com/apikey')}</li>
-            <li><b>Groq</b> / <b>Cerebras</b> (fast, free tier; enable on Providers): ${link('console.groq.com/keys')}, ${link('cloud.cerebras.ai')}</li>
-            <li><b>Ollama</b> (local and private; enable on Providers): ${link('ollama.com')}</li></ul>
-            <span class="note">Free API models return code that conductor applies. Good for tests, docs, review and questions.</span></div>
+            <li><b>kilo-free</b> and <b>OVHcloud</b>: no key at all</li>
+            <li><b>OpenRouter</b>, <b>Gemini</b>, <b>Groq</b>, <b>Cerebras</b>: free keys</li>
+            <li><b>Ollama</b>, <b>LM Studio</b>: local and private</li></ul>
+            <span class="note">Add any with <span class="mono">conductor add &lt;name&gt;</span> or Providers → Add provider.</span></div>
           <div class="mini"><b>Coding agents (your subscriptions)</b><ul class="note" style="margin:6px 0 0;padding-left:0;list-style:none">
             ${Object.values(p).map((v) => `<li>${v.installed ? '✓' : '○'} <b>${esc(v.label)}</b></li>`).join('')}</ul>
             <span class="note">Agents edit files and run tests themselves, each under its own permission rules. Install commands are below.</span></div>
         </div></li>
-      <li><b>Add keys</b> for the free or paid APIs you chose. They are stored in conductor's secrets file (mode 600), never in the project. <button class="btn" data-goto="keys">Open API keys</button></li>
+      <li><b>Add providers</b>: <span class="mono">conductor add groq</span> asks for the key, picks a model and tests it. Or use <button class="btn small" data-goto="providers">Providers → Add provider</button></li>
       <li><b>Set up each project</b>${cmd('cd my-project\nconductor init            # controller: claude-code (default), antigravity, codex-cli, opencode')}<span class="note">Then fill in section 1 of AGENTS.md: the stack and the Verify command (for example <span class="mono">npm test</span>).</span></li>
       <li><b>Check everything</b>: <span class="mono">--live</span> sends one tiny prompt to each enabled provider and shows which ones answer.${cmd('conductor doctor --live')}</li>
       <li><b>Try a free run</b> (read-only, changes nothing):${cmd('conductor ask "What does this project do? List the main folders." --chain kilo-free')}<span class="note">Then try a small write task on a test branch: <span class="mono">conductor docs "add a usage section to README" --chain kilo-free,openrouter-free</span>. Check the result on the Runs page.</span></li>
       <li><b>Use it from your controller.</b> In Claude Code: <span class="mono">/conduct-plan add password reset</span>, answer the plan's open questions, then <span class="mono">/conduct-run docs/plan/password-reset.md</span>. Other controllers read the same instructions from AGENTS.md or GEMINI.md.</li>
     </ol></div>
-    <div class="card"><h2>Worker agents: install and sign in</h2><table><tr><th>Agent</th><th>Status</th><th>Install</th><th>Sign in</th></tr>
+    <div class="card"><details class="more"><summary>${icon('chev')} <b style="color:var(--text)">Coding agents: install and sign in</b> (${Object.values(p).filter((v) => v.installed).length} of ${Object.keys(p).length} installed)</summary><table><tr><th>Agent</th><th>Status</th><th>Install</th><th>Sign in</th></tr>
       ${Object.values(p).map((v) => `<tr><td>${esc(v.label)}</td><td>${pill(v.installed, 'installed', 'missing')}</td><td>${cmd(v.install.split(/\s+\(or: /)[0])}${/\(or: /.test(v.install) ? `<span class="note">or: <span class="mono">${esc(v.install.split(/\(or: /)[1].replace(/\)$/, ''))}</span></span>` : ''}</td><td class="mono">${esc(v.login)}</td></tr>`).join('')}
-    </table><p class="note">After installing, enable the agent on the Providers page and place it in a role's chain on Roles & fallback.</p></div>
-    <div class="card"><h2>Update or remove</h2>${cmd('npm install -g github:KevalParikh22/conductor-ai   # update to latest\nconductor --version\nnpm uninstall -g conductor-ai                       # remove')}<span class="note">Settings and keys stay in <span class="mono">${esc(S.paths.global.replace(/[^/\\]+$/, ''))}</span>. Delete that folder to remove them too.</span></div>
-    <div class="card"><h2>Local vs cloud</h2><p class="note"><b>Local agents</b> (Antigravity, Codex, OpenCode, Kimi, Claude Code) run on your machine with your subscriptions. They edit files and run tests, each under its own permission rules: write roles may edit only the project, and read roles cannot edit. <b>Cloud APIs</b> (Kilo, OpenRouter, Gemini, Groq, Claude API and 40 more) work anywhere with a key, including CI. They return code, and conductor applies it. <b>Local models</b> (Ollama, LM Studio) are free and private.</p></div>`;
+    </table><p class="note">After installing, run <span class="mono">conductor setup</span> (it turns on what it finds) or switch the agent on in Providers.</p></details></div>
+    <div class="card"><details class="more"><summary>${icon('chev')} <b style="color:var(--text)">Update or remove</b></summary>${cmd('npm install -g github:KevalParikh22/conductor-ai   # update to latest\nconductor --version\nnpm uninstall -g conductor-ai                       # remove')}<span class="note">Settings and keys stay in <span class="mono">${esc(S.paths.global.replace(/[^/\\]+$/, ''))}</span>. Delete that folder to remove them too.</span></details></div>
+`;
   },
 };
 
@@ -409,11 +452,15 @@ function bind() {
   document.querySelectorAll('[data-pf]').forEach((i) => i.oninput = () => { const [n, k] = i.dataset.pf.split('|'); W.providers[n][k] = i.value.trim(); markDirty(); });
   document.querySelectorAll('[data-test]').forEach((b) => b.onclick = async () => {
     const n = b.dataset.test, out = document.getElementById('test-' + n);
+    out.style.paddingBottom = '10px';
     b.disabled = true; out.textContent = 'Testing… (CLI agents can take a minute)';
     try { const r = await api('POST', '/api/test', { name: n, provider: W.providers[n] }); out.innerHTML = r.ok ? '<span class="pill ok">✓ responded</span>' : `<span class="pill bad">✗ ${esc(r.reason)}</span> ${esc(r.sample)}`; }
     catch (e) { out.textContent = '✗ ' + e.message; } finally { b.disabled = false; }
   });
   document.querySelectorAll('[data-del]').forEach((b) => b.onclick = () => { const n = b.dataset.del; delete W.providers[n]; for (const c of Object.values(W.roles)) { const i = c.indexOf(n); if (i >= 0) c.splice(i, 1); } markDirty(); render(); });
+  document.querySelectorAll('[data-popen]').forEach((b) => b.onclick = () => { const n = b.dataset.popen; pOpen.has(n) ? pOpen.delete(n) : pOpen.add(n); render(); });
+  document.querySelectorAll('[data-pall]').forEach((b) => b.onclick = () => { pAll = b.dataset.pall === '1'; render(); });
+  const pa = $('#padd'); if (pa) pa.onclick = () => { pAdd = !pAdd; gOpen = null; render(); if (pAdd) $('#g-q')?.focus(); };
   const gq = $('#g-q'); if (gq) gq.oninput = () => { gFilter.q = gq.value; applyGalleryFilter(); };
   document.querySelectorAll('[data-gcat]').forEach((b) => b.onclick = () => { gFilter.cat = b.dataset.gcat; applyGalleryFilter(); });
   document.querySelectorAll('[data-gadd]').forEach((b) => b.onclick = () => { gOpen = b.dataset.gadd; render(); $('#g-key')?.focus(); });

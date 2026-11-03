@@ -8,4 +8,4 @@ allowed-tools: Read, Bash(conductor:*), Bash(git status:*), Bash(git diff:*), Ba
 You are the controller. Make sure the tree is clean, then run in the background:
 `conductor run test "Write tests for: $ARGUMENTS" --files <the source files under test>`
 
-Check `git diff`: the tests must test real behaviour (not just mocks), follow the existing test style, and must not change production code. If verify passes and the tests are meaningful, commit (`test: ...`). If the worker reports a real bug, tell the user. If the tests are weak, retry once with `--note`, then write them yourself.
+Check `conductor diff`: the tests must test real behaviour (not just mocks), follow the existing test style, and must not change production code. If verify passes and the tests are meaningful, commit (`test: ...`). If the worker reports a real bug, tell the user. If the tests are weak, retry once with `--note`, then write them yourself.
