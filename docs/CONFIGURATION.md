@@ -79,16 +79,28 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | Setting | Default | Meaning |
 |---|---|---|
 | `timeoutSec` | 1200 | Max seconds per attempt; then the next provider runs |
+| `apiTimeoutSec` | 300 | API (chat) providers give up after this and the next provider runs; a stalled free route shouldn't hold the chain for the agent timeout |
 | `cooldownMinutes` | 30 | How long a rate-limited provider is skipped (or its `Retry-After`) |
 | `protectedBranches` | `["main","master"]` | Write roles refuse to run on these |
 | `protectedPaths` | `[]` | Extra regexes (repo-relative paths) workers may never write, e.g. `"^app/etc/env\\.php$"`. Built in: AGENTS/CLAUDE/GEMINI/HANDOFF.md, plans, `.claude/`, `.gemini/`, `.agents/`, `.conductor/`, `.git/`, `.env*`, `auth.json`, `node_modules/` |
 | `requireCleanTree` | true | Write roles need a clean tree (enables stash-on-failure) |
 | `verify` | `""` | Verify command. Empty = `AGENTS.md` Verify line, then auto-detect |
 | `autoVerify` | true | Run verify after each write task |
-| `maxDiffBytes` | 100000 | Review diffs above this are truncated |
+| `smartSelect` | true | Reorder each role's chain for the task: free API models first for small tasks with listed files, agents first for larger or open-ended ones, paid APIs last, and providers that failed 3 times in a row moved to the end. Off when you pass `--chain` or `--provider` |
+| `maxReportBytes` | 8000 | `report.md` (what the controller reads) keeps only the worker's RESULT block, up to this size; the full output is saved as `report.full.md` |
+| `maxDiffBytes` | 100000 | Review diffs above this are truncated (they are compacted first: see `conductor diff`) |
 | `maxContextBytes` | 60000 | File content sent to chat-only (API) providers |
 | `quotaPattern` | (regex) | Output that counts as a rate-limit error for CLIs |
 | `dailyBudgetUSD` | 0 | Daily cap on known API spend across all providers. 0 = no cap. Providers over budget are skipped like cooled-down ones; free ones never count |
+
+## Saving tokens
+
+Your controller's context is the expensive part, so conductor keeps what it reads small:
+
+- **Smart selector** (`smartSelect`). Each run's summary shows a `selector:` line when it reorders a chain, e.g. `small task (1 file): free API models first`.
+- **Compact diffs.** `conductor diff` (working tree, new files included), `conductor diff conductor/T3` (a parallel task's branch) or `conductor diff A..B`. Whitespace-only changes, lockfiles, build output and source maps are listed but not shown, with 2 lines of context and long files cut (`--lines`). It prints how much of the full diff it showed. Review workers get the same compact diff.
+- **Trimmed reports.** `report.md` starts at the worker's `## RESULT` line, so tool transcripts printed before it never reach the controller.
+- **The `/conduct-*` commands** tell the controller to read only the summary, `report.md` and `conductor diff`.
 
 ## Usage and budgets
 

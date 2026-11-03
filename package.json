@@ -1,6 +1,6 @@
 {
   "name": "conductor-ai",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Claude (or any agent) plans and reviews; Antigravity, Codex, OpenCode, free Kilo/OpenRouter models, Kimi and local models do the coding, tests and docs, with quota-aware fallback, per-agent permissions and parallel worktrees.",
   "keywords": [
     "claude",

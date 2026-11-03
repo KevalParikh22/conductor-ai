@@ -7,6 +7,8 @@ import { runProvider } from './providers.js';
 import * as git from './git.js';
 import { runVerify } from './verify.js';
 import { autoModel } from './models.js';
+import { smartOrder } from './selector.js';
+import { compactDiff } from './diffview.js';
 import { createWorktree, commitWorktree, removeWorktree } from './worktree.js';
 import { GLOBAL_DIR, readJSON, writeJSON, timestamp, rel } from './util.js';
 import { budgetBlock, estimateCost, recordUsage } from './usage.js';
@@ -73,6 +75,17 @@ export function openQuestions(planText) {
   return extractSection(planText, 'Open questions').split('\n')
     .map((l) => l.match(/^\s*[-*]\s*\[ \]\s*(.+)$/)?.[1]?.trim())
     .filter((q) => q && !/^<.*>$/.test(q));
+}
+
+/**
+ * The part of a worker's output the controller needs: from its RESULT/VERDICT line on (agents often print their
+ * whole transcript before it), capped at maxBytes. Falls back to the end of the output.
+ */
+export function trimReport(text, maxBytes = 8000) {
+  const at = text.search(/^#{0,4}\s*(RESULT|VERDICT):/m);
+  let r = at > 0 ? text.slice(at) : text;
+  if (r.length > maxBytes) r = at >= 0 ? r.slice(0, maxBytes) + `\n… [cut at ${maxBytes} characters; full output: report.full.md]\n` : `[… start cut; full output: report.full.md]\n` + r.slice(-maxBytes);
+  return r;
 }
 
 /** Paths in backticks on a "files:" line of a task. */
@@ -183,6 +196,7 @@ export async function dispatch(cfg, opts) {
 
   // ---- task body
   let body = '', planText = '', section = '';
+  let diffBytes = 0; // size of the full review diff, for the selector
   if (opts.planPath) {
     const planAbs = path.resolve(root, opts.planPath);
     if (!fs.existsSync(planAbs)) throw new UsageError(`plan not found: ${opts.planPath}`);
@@ -191,8 +205,11 @@ export async function dispatch(cfg, opts) {
   if (role === 'review') {
     if (!inRepo) throw new UsageError('review needs a git repo');
     const base = opts.base || git.defaultBase(root);
-    let diff = git.diffAgainst(root, base);
-    if (!diff.trim()) throw new UsageError(`nothing to review: no changes vs ${base}`);
+    // compact: whitespace-only changes, lockfiles and build output left out (listed), 2 lines of context
+    const cd = compactDiff(root, { base, maxFileLines: 400 });
+    if (cd.empty) throw new UsageError(`nothing to review: no changes vs ${base}`);
+    let diff = cd.text;
+    diffBytes = cd.fullChars;
     const max = settings.maxDiffBytes || 100000;
     if (diff.length > max) diff = diff.slice(0, max) + `\n... [diff truncated at ${max} bytes: open the changed files directly for the rest]\n`;
     body = (opts.planPath ? `Plan file: ${opts.planPath}\n` : '') + (opts.focus ? `Extra focus: ${opts.focus}\n` : '') +
@@ -260,7 +277,13 @@ export async function dispatch(cfg, opts) {
   }
   const quotaRe = new RegExp(settings.quotaPattern, 'i');
   const timeoutMs = (settings.timeoutSec || 1200) * 1000;
-  const chain = resolveChain(cfg, role, { provider: opts.provider, chain: opts.chain });
+  let chain = resolveChain(cfg, role, { provider: opts.provider, chain: opts.chain });
+  // smart selector: cheapest capable provider first (not when the caller chose the chain or a provider)
+  if (settings.smartSelect !== false && !opts.chain?.length && !opts.provider) {
+    const pick = smartOrder(chain, { role, mode, body, files: [...(opts.files || []), ...taskFiles(section)], diffBytes });
+    chain = pick.chain;
+    if (pick.note) summary.selector = pick.note;
+  }
   // files already modified before the run (allowed with --allow-dirty): can't be credited to the worker
   const preDirty = mode === 'write' && inRepo ? new Set(git.changedFiles(work)) : new Set();
   let winnerText = '';
@@ -286,7 +309,9 @@ export async function dispatch(cfg, opts) {
     const p = kind === 'chat' && !c.p.model ? { ...c.p, model: await autoModel(c.name, c.p) } : c.p;
     let res = kind === 'chat' && !p.model
       ? { ok: false, text: '', reason: 'no model set, and its model list could not be fetched', log: '' }
-      : await runProvider(c.name, p, { mode, prompt: userPrompt, system: chatSystem, cwd: work, timeoutMs, runDir: ioDir, quotaRe });
+      : await runProvider(c.name, p, { mode, prompt: userPrompt, system: chatSystem, cwd: work, runDir: ioDir, quotaRe,
+        // an API call that stalls (free routes sometimes do) should fall back long before an agent's timeout
+        timeoutMs: kind === 'chat' ? Math.min(timeoutMs, (settings.apiTimeoutSec || 300) * 1000) : timeoutMs });
     if (p !== c.p && p.model && !res.model) res.model = p.model;
     const tampered = control ? git.restoreControl(control) : [];
     if (tampered.length) summary.warnings.push(`${c.name} changed git hooks or config, which can run programs. conductor put them back: ${tampered.join(', ')}`);
@@ -340,8 +365,11 @@ export async function dispatch(cfg, opts) {
     return summary;
   }
 
+  // the controller reads report.md: keep it to the worker's structured answer; the full output stays in the run folder
   const reportPath = path.join(runDir, 'report.md');
-  fs.writeFileSync(reportPath, winnerText);
+  const report = trimReport(winnerText, settings.maxReportBytes || 8000);
+  fs.writeFileSync(reportPath, report);
+  if (report.length < winnerText.length) fs.writeFileSync(path.join(runDir, 'report.full.md'), winnerText);
   summary.report = rel(root, reportPath);
   summary.status = (winnerText.match(/^#*\s*(RESULT|VERDICT):.*$/m) || [null])[0];
   summary.exitCode = 0;
@@ -419,6 +447,7 @@ export function formatSummary(s) {
   L.push('', '==================== CONDUCTOR RESULT ====================');
   L.push(`role:      ${s.role}${s.task ? `   task: ${s.task}` : ''}${s.plan ? `   plan: ${s.plan}` : ''}`);
   if (s.worktree) L.push(`worktree:  ${s.worktree.branch}${s.worktree.removed ? ' (removed: nothing to keep)' : `  ${s.worktree.dir}`}`);
+  if (s.selector) L.push(`selector:  ${s.selector}`);
   L.push(`attempts:  ${s.attempts.map((a) => `${a.provider}(${a.reason}${a.stashed ? ', stashed' : ''})`).join(' → ') || '(none)'}`);
   if (!s.winner) {
     L.push('worker:    NONE. Every provider failed or was skipped (exit 3).');
@@ -443,12 +472,12 @@ export function formatSummary(s) {
   for (const w of s.warnings) L.push(`WARNING:   ${w}`);
   if (s.worktree) {
     L.push(s.worktree.commit
-      ? `next:      orchestrator reviews \`git diff HEAD...${s.worktree.branch}\`, then \`git merge --no-ff ${s.worktree.branch}\` and \`conductor worktree rm ${s.worktree.id}\` (or rm --force to reject)`
+      ? `next:      orchestrator reviews \`conductor diff ${s.worktree.branch}\`, then \`git merge --no-ff ${s.worktree.branch}\` and \`conductor worktree rm ${s.worktree.id}\` (or rm --force to reject)`
       : `next:      the worker changed nothing; \`conductor worktree rm ${s.worktree.id}\``);
     return L.join('\n');
   }
   L.push(s.mode === 'write'
-    ? 'next:      orchestrator checks `git diff`, then commits, or retries with --provider <other> --note "<what was wrong>"'
+    ? 'next:      orchestrator checks `conductor diff`, then commits, or retries with --provider <other> --note "<what was wrong>"'
     : 'next:      orchestrator reads the report and triages it. Workers can be wrong.');
   return L.join('\n');
 }

@@ -20,55 +20,69 @@ import { listRuns, readRun, formatRuns } from '../src/runs.js';
 import { CATALOG, CATEGORIES, urlFields } from '../src/catalog.js';
 import { runAdd, catalogStatus, detect, enableDetected, keyList, interactive, askSecret, confirm, choose } from '../src/setup.js';
 import { writeSecrets } from '../src/config.js';
+import { compactDiff } from '../src/diffview.js';
 
-const HELP = `conductor-ai ${VERSION}: one controller (Claude by default), many worker LLMs.
+const HELP = `conductor ${VERSION}: Claude (or any controller) plans and reviews; cheaper models do the work.
+
+Start
+  conductor setup                 guided setup: finds your agents and keys, adds a free provider
+  conductor add <provider>        add one of ${Object.keys(CATALOG).length} chat APIs (see: conductor providers)
+  conductor init                  set up the current project
+  conductor ui                    settings page
+  conductor doctor [--live]       check everything
+
+Work
+  conductor <role> "task"         roles: ${Object.keys(ROLES).join(', ')}
+  conductor <role> --plan <file> --task T1
+  conductor batch --plan <file> --tasks T1,T2   parallel, one worktree each
+  conductor diff [branch]         compact diff to review (lockfiles hidden, whitespace ignored)
+  conductor runs                  what ran, who did it, verify results
+
+All commands and options: conductor help all`;
+
+const HELP_ALL = `conductor-ai ${VERSION}: one controller (Claude by default), many worker LLMs.
 
 Setup
   conductor setup [--yes]              guided first-time setup: finds your agents and keys, adds a free provider, tests
-  conductor providers [--free] [--search x]   every provider conductor can add (${Object.keys(CATALOG).length}), with status
+  conductor providers [--free] [--search x] [--json]   every provider conductor can add (${Object.keys(CATALOG).length}), with status
   conductor add <provider> [--model m] [--yes] [--project]   add one: key, model, test, role chains
   conductor keys [set NAME | rm NAME]  list, set (hidden input or stdin) or remove API keys
-  conductor init [--controller <c>] [--vscode]   add conductor to the current project
-                                       (--vscode also writes .vscode/mcp.json; automatic if .vscode/ exists)
+  conductor init [--controller <c>] [--vscode] [--no-mcp]   add conductor to the current project
                                        controllers: ${Object.keys(CONTROLLERS).join(', ')}
-  conductor ui [--port 4545] [--no-open]   settings page: providers, roles, controller, keys
-  conductor doctor [--live]            check installs and keys (--live pings each provider)
+  conductor ui [--port 4545] [--no-open]   settings page
+  conductor doctor [--live] [--details] [--json]   check installs and keys (--live sends a test prompt)
 
 Work (normally called by the controller)
-  conductor run <role> [task text] [options]
+  conductor run <role> [task text] [options]      (or just: conductor <role> ...)
      roles: ${Object.entries(ROLES).map(([r, m]) => `${r}${m.mode === 'read' ? '(ro)' : ''}`).join(' ')}
      --plan <file> --task <id>   take the task from a plan file
      --provider <name>           try this provider first
-     --chain a,b,c               use exactly this fallback chain
+     --chain a,b,c               use exactly this chain (no smart reordering)
      --note "<feedback>"         extra instructions (use on retries)
      --files a,b                 context files for API (chat) providers
      --base <ref> --focus "..."  review options
      --save <file>               ask: save the answer
      --worktree [--replace]      run in its own checkout on branch conductor/<id> and commit there
-                                 (write roles; lets several tasks run at the same time)
-     --no-verify --allow-dirty --json
-     --allow-open-questions      run plan tasks even if the plan has unresolved "## Open questions"
-  conductor <role> ...                 shortcut for: conductor run <role> ...
+     --no-verify --allow-dirty --allow-open-questions --json
   conductor batch --plan <file> --tasks T1,T2,T3 [--concurrency 4] [--role r] [--provider p] [--replace] [--json]
-                                       run independent tasks in parallel, one worktree each,
-                                       spread across different providers
-  conductor worktree [list]            conductor/* worktrees and whether they are merged
-  conductor worktree rm <id>|--all [--force]   remove worktrees (unmerged branches need --force)
+  conductor diff [branch | A..B] [--lines 200]   compact diff for review (default: working tree, new files included)
   conductor verify                     run the project's verify command
+  conductor worktree [list] | rm <id>|--all [--force]
+
+Inspect
+  conductor runs [--limit 20] [--json] | runs show <run>
+  conductor usage [--days 7] [--json]  runs, tokens and cost per provider
   conductor status [--json]            providers, chains and repo state
-  conductor models [provider] [--all]  list free models (OpenRouter by default, or any API provider)
-  conductor cooldown [--clear [name]]  show or clear rate-limit cooldowns
-  conductor runs [--limit 20] [--json] recent runs in this project: who did what, verify, warnings
-  conductor runs show <run>            one run's full summary
-  conductor usage [--days 7] [--json]  runs, tokens and known cost per provider (all projects)
-  conductor config path                show config file locations
+  conductor models [provider] [--all]  current models of an API provider
+  conductor cooldown [--clear [name]]  rate-limit cooldowns
+  conductor config path                config file locations
   conductor mcp                        run as an MCP server (stdio)
 
 Exit codes: 0 ok · 2 usage/unsafe state · 3 every provider failed (controller takes over)`;
 
 function parseArgs(argv) {
   const opts = { _: [] };
-  const flags = new Set(['no-verify', 'allow-dirty', 'json', 'live', 'no-open', 'no-mcp', 'all', 'clear', 'global', 'help', 'version', 'worktree', 'replace', 'force', 'allow-open-questions', 'vscode', 'yes', 'free', 'project']);
+  const flags = new Set(['no-verify', 'allow-dirty', 'json', 'live', 'no-open', 'no-mcp', 'all', 'clear', 'global', 'help', 'version', 'worktree', 'replace', 'force', 'allow-open-questions', 'vscode', 'yes', 'free', 'project', 'details']);
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '-h') { opts.help = true; continue; }
@@ -87,7 +101,7 @@ async function main() {
   let cmd = argv[0] && !argv[0].startsWith('-') ? argv.shift() : 'help';
   const o = parseArgs(argv);
   if (o.version) { console.log(VERSION); return 0; }
-  if (o.help || cmd === 'help') { console.log(HELP); return 0; }
+  if (o.help || cmd === 'help') { console.log(o._[0] === 'all' || o.all ? HELP_ALL : HELP); return 0; }
   if (ROLES[cmd]) { o._.unshift(cmd); cmd = 'run'; }
 
   switch (cmd) {
@@ -110,6 +124,14 @@ async function main() {
       return 0;
     }
     case 'keys': return keys(o);
+    case 'diff': {
+      const t = o._[0];
+      const d = compactDiff(findProjectRoot(), { ...(t ? { range: t.includes('..') ? t : `HEAD...${t}` } : {}), maxFileLines: Number(o.lines) || 200 });
+      if (d.empty) { console.log(t ? `no changes in ${t}` : 'no changes'); return 0; }
+      console.log(d.text.trimEnd());
+      if (d.fullChars > d.chars) console.log(`\n[compact: ${d.chars.toLocaleString()} of ${d.fullChars.toLocaleString()} characters of the full diff; full: ${t ? `git diff ${t.includes('..') ? t : `HEAD...${t}`}` : 'git diff, plus new files'}]`);
+      return 0;
+    }
     case 'init': {
       const root = findProjectRoot();
       const controller = o.controller || 'claude-code';
@@ -282,12 +304,15 @@ async function doctor(o) {
   for (const r of results) {
     console.log(`${r.ok ? '✓' : '✗'} ${r.name.padEnd(16)} ${r.ok && !o.live ? 'ready (use --live to test a real call)' : r.status}${r.sample ? `: ${r.sample}` : ''}`);
     if (r.next) console.log(`    next: ${r.next}`);
-    if (r.permissions) {
+    if (r.permissions && o.details) {
       console.log(`    write: ${r.permissions.write || 'unknown (custom CLI): check its own permission settings'}`);
       console.log(`    read:  ${r.permissions.read || 'unknown'}${r.readOnlyEnforced ? '' : '  ⚠ read-only NOT enforced'}`);
     }
   }
   errs.forEach((e) => console.log(`✗ config: ${e}`));
+  if (!o.details && results.some((r) => r.permissions)) console.log('\nWhat each agent may do: conductor doctor --details');
+  const weak = results.filter((r) => r.permissions && !r.readOnlyEnforced).map((r) => r.name);
+  if (weak.length) console.log(`⚠ read-only not enforced for: ${weak.join(', ')}`);
   console.log(problems ? `\n${problems} problem(s). Disabled providers are ignored; toggle them in conductor ui.` : '\nAll enabled providers look good.');
   return 0;
 }

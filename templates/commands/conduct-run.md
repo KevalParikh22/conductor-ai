@@ -13,14 +13,14 @@ Work in **waves**. A wave is every `status: todo` task whose `depends on` tasks 
 - **Wave with two or more delegable tasks that don't list the same files:** run them in parallel, in the background:
   `conductor batch --plan <plan> --tasks T2,T3,T4`
   Each task runs in its own git worktree on branch `conductor/<id>`, spread across different providers, and conductor commits the result on that branch. When the batch finishes, for each ✓ task:
-  1. `git diff HEAD...conductor/<id>`: in scope? matches the Design notes and acceptance criteria? Check its verify result.
+  1. `conductor diff conductor/<id>`: in scope? matches the Design notes and acceptance criteria? Check its verify result.
   2. Good: `git merge --no-ff conductor/<id> -m "<slug>: <id> <title>"`, then `conductor worktree rm <id>` and set `status: done`.
   3. Bad: `conductor worktree rm <id> --force`, then retry it alone with `conductor run <role> --plan <plan> --task <id> --worktree --provider <different> --note "<what was wrong>"`, or do it yourself.
   For each ✗ task, retry it alone the same way. If a merge conflicts, resolve it yourself, or abort and retry that task after the others are merged.
 - If tasks in a wave list the same file, run them one after another instead.
 
 While running:
-- Keep your context small: read the summaries, the RESULT blocks and each task's diff, never full logs.
+- Keep your context small: read the summaries, `report.md` and `conductor diff`, never `report.full.md` or run logs. Use plain `git diff -- <file>` only for a file the compact diff cut short.
 - After each task, report one line: `T3 ✓ antigravity-cli · verify PASS · a1b2c3d`.
 - **Stop and ask** if a task needs a design decision the plan doesn't cover, a worker leaves its scope twice, or verify fails for reasons outside the task.
 - If exit code 3 happens on two waves in a row (everything rate-limited), stop, update `HANDOFF.md`, and report what is left.

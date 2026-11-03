@@ -133,6 +133,12 @@ conductor init --controller opencode      # AGENTS.md + opencode.json MCP entry
 
 </details>
 
+### Built to save tokens
+
+- **Smart selector.** Every task tries the cheapest provider that can do it: free API models for small tasks with known files, agents for bigger ones, paid APIs last. Providers that keep failing drop to the end.
+- **Compact diffs.** `conductor diff` is what the controller reviews: whitespace-only changes, lockfiles and build output are left out, and long files are cut. On this repo's own last change it was about 40% smaller than `git diff`; far more when lockfiles change.
+- **Short reports.** The controller reads only the worker's RESULT block; tool transcripts stay in the run folder.
+
 ### Every agent runs under its own rules
 
 conductor passes each CLI its permission rules **for that run only**, through the CLI's own sandbox or permission system. No "skip all permissions" flags.
@@ -190,9 +196,11 @@ Every one has a setup guide: **[docs/providers](docs/providers/README.md)**. See
 | `conductor run <role> [task] [--plan f --task T1] [--provider p] [--chain a,b] [--note …] [--files a,b] [--json]` | Delegate with fallback |
 | `conductor build\|fix\|test\|docs\|review\|ask …` | Shortcuts for `run <role>`; add `--worktree` to run on branch `conductor/<id>` |
 | `conductor batch --plan f --tasks T2,T3 [--concurrency 4]` | Independent tasks in parallel, one worktree each |
+| `conductor diff [branch]` | Compact diff to review: lockfiles and whitespace left out, new files included |
 | `conductor worktree [list]` · `conductor worktree rm <id>\|--all [--force]` | See and clean up worktrees |
+| `conductor setup` · `conductor add <provider>` · `conductor providers` · `conductor keys` | Guided setup; add any of 45 chat APIs; list them; manage keys |
 | `conductor init [--controller claude-code\|antigravity\|codex-cli\|opencode]` | Set up a project |
-| `conductor ui` · `conductor status` · `conductor doctor [--live]` · `conductor verify` | Manage and check |
+| `conductor ui` · `conductor status` · `conductor doctor [--live] [--details]` · `conductor verify` | Manage and check |
 | `conductor runs [show <run>]` · `conductor usage [--days 7]` | Run history; runs, tokens and cost per provider |
 | `conductor models [provider]` · `conductor cooldown [--clear]` · `conductor mcp` | Model lists, rate-limit state, MCP server |
 

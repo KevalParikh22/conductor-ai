@@ -11,7 +11,7 @@ You are the controller (see `.conductor/ORCHESTRATOR.md`). Arguments: `$ARGUMENT
 2. Make sure the tree is clean and you are not on main. Then run it **in the background** (Bash `run_in_background: true`):
    `conductor run <role> --plan <plan> --task <id> [--provider <provider>]`
    When it finishes, read the CONDUCTOR RESULT summary.
-3. Check it yourself. Don't trust the report: `git diff` (in scope? matches the Design notes and acceptance criteria? no invented APIs or shortcuts?) and the verify line.
+3. Check it yourself. Don't trust the report: `conductor diff` (in scope? matches the Design notes and acceptance criteria? no invented APIs or shortcuts?) and the verify line.
 4. Decide:
    - **Good:** `git add -A && git commit -m "<slug>: <id> <title>"`, then set `status: done` in the plan.
    - **Small issue (<10 lines):** fix it, run `conductor verify`, commit.

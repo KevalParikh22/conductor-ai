@@ -302,6 +302,9 @@ export const DEFAULT_SETTINGS = {
   dailyBudgetUSD: 0, // 0 = no cap; counts API providers that have a `price` set
   cooldownMinutes: 30,
   maxDiffBytes: 100000,
+  apiTimeoutSec: 300, // API (chat) providers: give up and fall back after this; agents use timeoutSec
+  maxReportBytes: 8000, // report.md the controller reads; the full output is kept in report.full.md
+  smartSelect: true, // reorder each chain for the cheapest capable provider (see src/selector.js)
   maxContextBytes: 60000,
   quotaPattern: 'quota|rate.?limit|usage limit|RESOURCE_EXHAUSTED|too many requests|\\b429\\b|limit reached|exceeded your|insufficient (credit|balance)|try again (later|in )',
 };

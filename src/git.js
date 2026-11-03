@@ -48,6 +48,11 @@ export function defaultBase(root) {
 }
 
 /** Diff of working tree vs base, plus untracked files as new-file diffs. */
+/** Raw `git diff` with the given arguments ('' on error). */
+export const diffRaw = (root, args) => git(root, ['diff', '--no-color', '--no-ext-diff', ...args], { allowFail: true });
+/** Untracked files that are not ignored. */
+export const untracked = (root) => git(root, ['ls-files', '--others', '--exclude-standard', '-z']).split('\0').filter(Boolean);
+
 export function diffAgainst(root, base) {
   let d = git(root, ['diff', base], { allowFail: true });
   const untracked = git(root, ['ls-files', '--others', '--exclude-standard', '-z']).split('\0').filter(Boolean);

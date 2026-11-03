@@ -28,6 +28,10 @@ templates/              AGENTS.md, controller block, playbook, plan template, sl
 7. **Usage.** Every attempt (failed ones too) is appended to `~/.config/conductor/usage.jsonl` with time and, for APIs, tokens and cost.
 8. **Summary.** The controller gets a short text block (or JSON with `--json`, or the MCP tool result) and only reads the full report when it needs to.
 
+## Smart selector
+
+`src/selector.js` reorders the role's chain before a run; it never adds or removes providers. A task is **small** when it lists 1–2 files and its text is short (or, for reviews, the diff is under 40 kB), and **large** otherwise. Small tasks try free API models first, since they cost nothing and get the files in the prompt. Large ones try agents first, which find and edit files themselves instead of an API model rewriting whole files. Paid APIs come after both. A provider whose last three attempts (last 24 hours) all failed for reasons other than rate limits goes last; cooldowns already handle rate limits. The order inside each group is yours. `--chain`, `--provider` or `smartSelect: false` turn it off.
+
 ## Parallel runs (worktrees)
 
 With `--worktree` (or `conductor batch`, which always uses it), step 1 changes: instead of checking your branch and tree, conductor creates a git worktree from your last commit on a new branch `conductor/<task-id>`. The checkout lives outside the repo, in `~/.config/conductor/worktrees/<repo>-<hash>/<id>`, so test runners and file watchers in your project never see it. Ignored dependency folders (`node_modules`, `vendor`, `.venv`, `venv`) are symlinked in, so verify works without a reinstall.

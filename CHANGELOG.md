@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.7.0 (2026-11-03)
+
+**Saving tokens**
+- **Smart selector.** Before each run, conductor reorders the role's chain for the task. It never adds or removes providers.
+  - Small tasks with known files (and reviews of small diffs) try free API models first.
+  - Larger or open-ended tasks try agents first.
+  - Paid APIs go last.
+  - A provider whose last three attempts all failed (not counting rate limits) moves to the end.
+  - The summary shows a `selector:` line when the order changed.
+  - Off with `--chain`, `--provider` or `"smartSelect": false`.
+- **`conductor diff`.** A compact diff for the controller to review:
+  - Whitespace-only changes, lockfiles, build output and source maps are listed, not shown.
+  - 2 lines of context; long files are cut (`--lines`).
+  - New files are included, and it reports how much of the full diff it showed.
+  - `conductor diff conductor/T3` shows a parallel task's branch.
+  - Review workers get the same compact diff.
+- **Shorter reports.** `report.md` now starts at the worker's `## RESULT` line, so tool transcripts printed before it never reach the controller. The full output is in `report.full.md`.
+- **The `/conduct-*` commands and the controller playbook** use `conductor diff` and say what to read and what not to. There's a new "Saving tokens" section.
+- **API providers time out after 5 minutes** (`apiTimeoutSec`) and fall back, instead of holding the chain for the 20-minute agent timeout when a free route stalls.
+
+**Simpler UI and CLI**
+- **New look:** a favicon, an icon for each section, and a sun/moon theme toggle.
+- **Seven sections:** Controller moved into Settings.
+- **Providers** is a compact list: one row per provider, enabled ones by default, and details on click. The 45-provider gallery and custom providers open from **Add provider**.
+- **Roles** is a two-column grid with short status labels (the full reason on hover).
+- **API keys** shows only keys that are set or in use. **Setup** collapses the agent table and the update steps.
+- **Phone width** works without a squeezed header.
+- **`conductor --help`** is one screen; `conductor help all` has everything.
+- **`conductor doctor`** prints one line per provider; `--details` adds each agent's permissions.
+
 ## 0.6.0 (2026-11-03)
 
 - **Five more coding agents:** GitHub Copilot CLI, Grok Build (xAI), Kiro, Aider and Goose. There are now ten in all, each with a guide in docs/providers. Every flag was checked against the CLI's own `--help`, source or reference docs.
