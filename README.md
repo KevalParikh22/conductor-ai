@@ -15,7 +15,7 @@
 [![MCP](https://img.shields.io/badge/MCP-server-818cf8)](docs/ARCHITECTURE.md)
 [![License](https://img.shields.io/github/license/KevalParikh22/conductor-ai?color=blue)](LICENSE)
 
-[Quick start](#quick-start) &middot; [How it works](#how-it-works) &middot; [Permissions](#every-agent-runs-under-its-own-rules) &middot; [Install guide](docs/INSTALL.md) &middot; [Providers](docs/PROVIDERS.md) &middot; [Changelog](CHANGELOG.md)
+[Quick start](#quick-start) &middot; [How it works](#how-it-works) &middot; [Permissions](#every-agent-runs-under-its-own-rules) &middot; [Install guide](docs/INSTALL.md) &middot; [Providers](docs/PROVIDERS.md) &middot; [Routing](docs/ROUTING.md) &middot; [Changelog](CHANGELOG.md)
 
 </div>
 
@@ -144,6 +144,7 @@ conductor init --controller opencode      # AGENTS.md + opencode.json MCP entry
 
 - **Per task:** add `- **provider:** codex-cli` to a plan task.
 - **By rule:** `"routes": [{ "files": "src/frontend/**", "provider": "grok-cli" }]`, matched on files, task text or role.
+- **Ready-made rules:** `conductor route --add starter` adds a starter set (security and database work to your strongest agent, docs and small edits to free models). There are 12 rules in the library; see the [routing guide](docs/ROUTING.md).
 - **Preview:** `conductor route "task" --files a.tsx`, or Roles → Routing in the UI, shows where a task would go before anything runs.
 - **Local models:** `conductor local` finds Ollama, LM Studio, llama.cpp and others running on your machine and turns them on.
 
