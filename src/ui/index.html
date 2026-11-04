@@ -106,6 +106,10 @@ details.more[open] > summary { margin-bottom: 10px; }
 .prov-head b { font-size: 14.5px; }
 .fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-top: 10px; }
 .note { color: var(--muted); font-size: 12.5px; }
+.explain { margin-top: 10px; padding: 10px 12px; border-radius: 8px; background: var(--panel-2); font-size: 13px; line-height: 1.5; }
+.explain ol { margin: 4px 0 0; padding-left: 20px; } .explain li { margin: 2px 0; }
+.lib { display: grid; gap: 8px; } .lib .item { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+.lib .item .row { gap: 6px; } .lib .item .note { display: block; margin-top: 2px; }
 .switch { position: relative; width: 34px; height: 20px; flex: none; }
 .switch input { opacity: 0; width: 0; height: 0; }
 .switch span { position: absolute; inset: 0; background: var(--line); border-radius: 99px; cursor: pointer; transition: .15s; }
@@ -191,6 +195,13 @@ const icon = (n, t = '') => `<svg class="i" viewBox="0 0 24 24" aria-hidden="tru
 const TABS = [['overview', 'Overview'], ['runs', 'Runs'], ['roles', 'Roles'], ['providers', 'Providers'], ['keys', 'API keys'], ['settings', 'Settings'], ['setup', 'Setup']];
 let S = null, W = null, tab = 'overview', dirty = false, freeModels = null, runsData = null, gOpen = null, gFilter = { q: '', cat: 'all' };
 let rPreview = null; // routing preview result
+let rtLib = null, rtLibKey = '', rtLibOpen = null; // rule library, resolved against the current (unsaved) providers
+const ROUTING_GUIDE = 'https://github.com/KevalParikh22/conductor-ai/blob/main/docs/ROUTING.md';
+function loadRtLib() {
+  const key = JSON.stringify([Object.keys(W.providers).filter((n) => W.providers[n].enabled), (W.routes || []).map((r) => r.from)]);
+  if (key === rtLibKey) return; rtLibKey = key;
+  api('POST', '/api/route-templates', { providers: W.providers, routes: W.routes || [] }).then((d) => { rtLib = d.templates; if (tab === 'roles') render(); }, () => {});
+}
 let localInfo = null, localAt = 0; // local model servers, refreshed at most every 30s
 function loadLocal() { if (Date.now() - localAt < 30000) return; localAt = Date.now(); api('GET', '/api/local').then((d) => { localInfo = d.local; if (tab === 'providers' || tab === 'setup') render(); }, () => {}); }
 let pAll = false, pAdd = false; const pOpen = new Set(); // providers page: show disabled, gallery open, expanded rows
@@ -347,16 +358,31 @@ const views = {
       if (!p.enabled) return '<span class="status">off</span>';
       return s.ready ? '<span class="status"><span class="dot ok"></span></span>' : `<span class="status bad" title="${esc(s.reason)}"><span class="dot"></span>${esc(shortReason(s.reason))}</span>`; };
     const routes = W.routes || [];
+    loadRtLib();
     const roleOpts = (sel = '') => `<option value="">any role</option>${Object.keys(S.roles).map((r) => `<option value="${r}" ${sel === r ? 'selected' : ''}>${esc(S.roles[r].label)}</option>`).join('')}`;
     const when = (r) => [r.role && `<span class="pill">${esc(S.roles[r.role]?.label || r.role)}</span>`, r.files && `files <span class="mono">${esc([].concat(r.files).join(', '))}</span>`, r.text && `text <span class="mono">/${esc(r.text)}/</span>`].filter(Boolean).join(' + ');
     return `<div class="head"><h1>Roles</h1><p class="sub">Each role tries its providers top to bottom; when one is rate-limited, fails or isn't installed, the next runs. If all fail, the controller does the task.</p></div>
-    <div class="card"><div class="row"><h2 style="margin:0">Routing</h2><span class="note">Send matching tasks to a provider first; the role's chain stays as fallback. A plan task's <span class="mono">provider:</span> line wins over these.</span></div>
-      ${routes.length ? `<table style="margin-top:8px"><tr><th>#</th><th>When</th><th>Goes to</th><th></th></tr>${routes.map((r, i) => `<tr><td class="note">${i + 1}</td><td>${when(r) || 'any task'}</td><td><b>${esc([].concat(r.provider).join(', '))}</b></td><td style="text-align:right"><button class="btn icon ghost small" data-rtmv="${i}|-1" ${i ? '' : 'disabled'} aria-label="Move up">${icon('up')}</button><button class="btn icon ghost small" data-rtrm="${i}" aria-label="Remove">${icon('x')}</button></td></tr>`).join('')}</table>` : '<p class="note">No rules yet. Without them the smart selector orders each chain.</p>'}
+    <div class="card"><div class="row"><h2 style="margin:0">Routing</h2><span class="note">You decide which provider takes which kind of task.</span><span class="spacer"></span><a class="btn small ghost" href="${ROUTING_GUIDE}" target="_blank" rel="noopener">${icon('guide')} Routing guide</a></div>
+      <div class="explain"><b>How it works</b><ol>
+        <li>A rule matches a task by its <b>files</b> (a glob like <span class="mono">*.sql</span>), its <b>text</b> (a regex like <span class="mono">login|payment</span>) or its <b>role</b>. Every condition you fill in must hold.</li>
+        <li>When a task matches, the rule's providers run <b>first</b>. The role's chain stays behind them, so a rate limit or failure still falls back.</li>
+        <li>Rules are checked top to bottom and the <b>first match wins</b>: keep risky rules (security, database) at the top. A plan task's <span class="mono">provider:</span> line beats every rule; tasks no rule matches go to the smart selector.</li>
+      </ol><span class="note">Not sure where to start? Add the starter set from the rule library below, then try a task in Preview.</span></div>
+      ${routes.length ? `<table style="margin-top:8px"><tr><th>#</th><th>When</th><th>Goes to</th><th></th></tr>${routes.map((r, i) => `<tr><td class="note">${i + 1}</td><td>${when(r) || 'any task'}${r.from ? ` <span class="note">· ${esc(r.from)}</span>` : ''}</td><td><b>${esc([].concat(r.provider).join(', '))}</b></td><td style="text-align:right"><button class="btn icon ghost small" data-rtmv="${i}|-1" ${i ? '' : 'disabled'} aria-label="Move up">${icon('up')}</button><button class="btn icon ghost small" data-rtrm="${i}" aria-label="Remove">${icon('x')}</button></td></tr>`).join('')}</table>` : '<p class="note">No rules yet. Without them the smart selector orders each chain.</p>'}
+      <details class="more" id="rt-libd" style="margin-top:14px" ${(rtLibOpen ?? !routes.length) ? 'open' : ''}><summary>${icon('list')} Rule library: ${rtLib ? rtLib.length : ''} ready-made rules</summary>
+        ${rtLib ? `<div class="row" style="margin-bottom:8px"><button class="btn small primary" id="rt-starter" ${rtLib.filter((t) => t.starter && !t.added && !t.missing).length ? '' : 'disabled'}>${icon('plus')} Add starter set</button><span class="note">★ rules: security, database, infrastructure, small edits, docs. Providers are filled in from the ones you have on.</span></div>
+        <div class="lib">${rtLib.map((t) => `<div class="item"><div class="row"><b>${t.starter ? '★ ' : ''}${esc(t.label)}</b><span class="spacer"></span>
+          ${t.added ? '<span class="pill ok">added</span>' : t.missing ? `<span class="note">${esc(t.missing)}</span>` : `<button class="btn small" data-rtlib="${esc(t.id)}">${icon('plus')} Add</button>`}
+          <button class="btn small ghost" data-rtedit="${esc(t.id)}" title="Copy into the form below to change it first">Customize</button></div>
+          <span class="note">${esc(t.why)}</span>
+          <span class="note">${when(t.route) || 'any task'} → <b>${esc([].concat(t.route.provider).join(', ') || t.want)}</b></span></div>`).join('')}</div>` : '<p class="note">Loading…</p>'}
+      </details>
+      <h3 style="margin:16px 0 0;font-size:14px">Write your own rule</h3>
       <div class="fields" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))"><div><label class="f">Role</label><select id="rt-role">${roleOpts()}</select></div>
         <div><label class="f">Files (glob)</label><input type="text" id="rt-files" placeholder="src/frontend/**"></div>
         <div><label class="f">Task text (regex)</label><input type="text" id="rt-text" placeholder="migration|schema"></div>
         <div><label class="f">Provider</label><select id="rt-prov">${Object.keys(W.providers).filter((n) => W.providers[n].enabled).map((n) => `<option>${esc(n)}</option>`).join('')}</select></div></div>
-      <div class="row" style="margin-top:10px"><button class="btn small" id="rt-add">${icon('plus')} Add rule</button><span class="note">Matches when all filled-in conditions hold. First match wins.</span></div>
+      <div class="row" style="margin-top:10px"><button class="btn small" id="rt-add">${icon('plus')} Add rule</button><span class="note">Fill in at least one condition. <b>Files</b>: comma-separated globs, <span class="mono">**</span> spans folders and <span class="mono">*.sql</span> matches in any folder. <b>Task text</b>: a regex on the task description, case ignored. The new rule goes to the bottom; move it up with ↑. Save to keep it.</span></div>
       <details class="more" style="margin-top:14px" ${rPreview ? 'open' : ''}><summary>${icon('test')} Preview: which providers would take a task?</summary>
         <div class="fields" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))"><div><label class="f">Role</label><select id="pv-role">${Object.keys(S.roles).map((r) => `<option value="${r}" ${rPreview?.input?.role === r ? 'selected' : ''}>${esc(S.roles[r].label)}</option>`).join('')}</select></div>
           <div style="grid-column:span 2"><label class="f">Task</label><input type="text" id="pv-task" placeholder="e.g. add a date picker to the booking form" value="${esc(rPreview?.input?.task || '')}"></div>
@@ -503,6 +529,20 @@ function bind() {
     for (const k of ['role', 'files', 'text']) if (!r[k]) delete r[k];
     (W.routes ||= []).push(r); markDirty(); render(); toast('Rule added. Save to keep it');
   };
+  const addLib = async (ids) => {
+    try { const d = await api('POST', '/api/route-templates', { providers: W.providers, routes: W.routes || [], add: ids });
+      W.routes = d.routes; markDirty(); rtLibKey = ''; render();
+      toast(d.added.length ? `Added ${d.added.length} rule${d.added.length > 1 ? 's' : ''}. Save to keep ${d.added.length > 1 ? 'them' : 'it'}` : d.skipped.map((x) => `${x.id}: ${x.why}`).join('; ') || 'Nothing to add');
+    } catch (e) { toast(e.message); } };
+  const ld = $('#rt-libd'); if (ld) ld.ontoggle = () => { rtLibOpen = ld.open; };
+  const rs = $('#rt-starter'); if (rs) rs.onclick = () => addLib(rtLib.filter((t) => t.starter).map((t) => t.id));
+  document.querySelectorAll('[data-rtlib]').forEach((b) => b.onclick = () => addLib([b.dataset.rtlib]));
+  document.querySelectorAll('[data-rtedit]').forEach((b) => b.onclick = () => {
+    const r = rtLib.find((t) => t.id === b.dataset.rtedit).route;
+    $('#rt-role').value = r.role || ''; $('#rt-files').value = [].concat(r.files || []).join(', '); $('#rt-text').value = r.text || '';
+    const p = [].concat(r.provider)[0]; if (p) $('#rt-prov').value = p;
+    $('#rt-files').scrollIntoView({ block: 'center' }); toast('Copied into the form: change it, then Add rule');
+  });
   document.querySelectorAll('[data-rtrm]').forEach((b) => b.onclick = () => { W.routes.splice(+b.dataset.rtrm, 1); markDirty(); render(); });
   document.querySelectorAll('[data-rtmv]').forEach((b) => b.onclick = () => { const [i, d] = b.dataset.rtmv.split('|').map(Number); const a = W.routes; [a[i], a[i + d]] = [a[i + d], a[i]]; markDirty(); render(); });
   document.querySelectorAll('[data-local]').forEach((b) => b.onclick = async () => {

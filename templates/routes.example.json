@@ -1,0 +1,149 @@
+{
+  "routes": [
+    {
+      "text": "\\b(auth|login|password|token|secret|session|payment|checkout|permission|encrypt|csrf|oauth)",
+      "provider": [
+        "codex-cli",
+        "antigravity-cli"
+      ],
+      "from": "security"
+    },
+    {
+      "files": [
+        "*.sql",
+        "**/migrations/**",
+        "**/migration/**",
+        "**/db/**",
+        "**/Setup/**"
+      ],
+      "provider": [
+        "codex-cli",
+        "antigravity-cli"
+      ],
+      "from": "database"
+    },
+    {
+      "files": [
+        "Dockerfile",
+        "docker-compose*.yml",
+        ".github/**",
+        "*.tf",
+        "**/k8s/**",
+        "nginx*.conf",
+        "Makefile"
+      ],
+      "provider": [
+        "codex-cli",
+        "antigravity-cli"
+      ],
+      "from": "infra"
+    },
+    {
+      "text": "\\b(typo|spelling|rename|comment|docstring|lint|format(ting)?|whitespace)\\b",
+      "provider": [
+        "kilo-free",
+        "openrouter-free"
+      ],
+      "from": "small-edits"
+    },
+    {
+      "files": [
+        "*.test.*",
+        "*.spec.*",
+        "*Test.php",
+        "**/tests/**",
+        "**/test/**",
+        "**/__tests__/**"
+      ],
+      "provider": [
+        "opencode",
+        "codex-cli"
+      ],
+      "from": "tests"
+    },
+    {
+      "files": [
+        "*.tsx",
+        "*.jsx",
+        "*.vue",
+        "*.svelte",
+        "*.css",
+        "*.scss",
+        "*.less",
+        "*.html",
+        "*.phtml"
+      ],
+      "provider": [
+        "antigravity-cli",
+        "codex-cli"
+      ],
+      "from": "frontend"
+    },
+    {
+      "files": [
+        "*.php",
+        "*.py",
+        "*.go",
+        "*.rb",
+        "*.java",
+        "*.cs",
+        "*.rs"
+      ],
+      "provider": [
+        "codex-cli",
+        "antigravity-cli"
+      ],
+      "from": "backend"
+    },
+    {
+      "files": [
+        "*.md",
+        "*.mdx",
+        "*.rst",
+        "docs/**"
+      ],
+      "provider": [
+        "kilo-free",
+        "openrouter-free"
+      ],
+      "from": "docs-files"
+    },
+    {
+      "files": [
+        "**/locales/**",
+        "**/i18n/**",
+        "**/lang/**",
+        "*.po"
+      ],
+      "provider": [
+        "kilo-free",
+        "openrouter-free"
+      ],
+      "from": "translations"
+    },
+    {
+      "role": "docs",
+      "provider": [
+        "kilo-free",
+        "openrouter-free"
+      ],
+      "from": "docs-role"
+    },
+    {
+      "role": "ask",
+      "provider": [
+        "kilo-free",
+        "openrouter-free"
+      ],
+      "from": "ask-role"
+    },
+    {
+      "role": "review",
+      "provider": [
+        "codex-cli",
+        "antigravity-cli"
+      ],
+      "from": "review-role"
+    }
+  ]
+}

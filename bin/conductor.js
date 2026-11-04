@@ -20,7 +20,8 @@ import { listRuns, readRun, formatRuns } from '../src/runs.js';
 import { CATALOG, CATEGORIES, urlFields } from '../src/catalog.js';
 import { runAdd, catalogStatus, detect, enableDetected, enableLocal, keyList, interactive, askSecret, confirm, choose } from '../src/setup.js';
 import { detectLocal } from '../src/local.js';
-import { writeSecrets } from '../src/config.js';
+import { writeSecrets, writeScope } from '../src/config.js';
+import { ROUTE_TEMPLATES, resolveTemplate, addTemplates, starterIds, describeRoute, routeErrors } from '../src/routing.js';
 import { compactDiff } from '../src/diffview.js';
 
 const HELP = `conductor ${VERSION}: Claude (or any controller) plans and reviews; cheaper models do the work.
@@ -69,6 +70,7 @@ Work (normally called by the controller)
   conductor batch --plan <file> --tasks T1,T2,T3 [--concurrency 4] [--role r] [--provider p] [--replace] [--json]
   conductor diff [branch | A..B] [--lines 200]   compact diff for review (default: working tree, new files included)
   conductor route "task" [--role r] [--files a,b] | --plan f --task T1   which providers would take a task, and why
+  conductor route --rules | --templates | --add starter|<id,id> | --rm <n> [--global]   list, add or remove routing rules
   conductor verify                     run the project's verify command
   conductor worktree [list] | rm <id>|--all [--force]
 
@@ -83,9 +85,54 @@ Inspect
 
 Exit codes: 0 ok · 2 usage/unsafe state · 3 every provider failed (controller takes over)`;
 
+/** conductor route --rules | --templates | --add | --rm: manage routing rules (project scope unless --global). */
+function routeRules(cfg, o) {
+  const scope = o.global ? 'global' : 'project';
+  const where = scope === 'global' ? GLOBAL_CONFIG : projectConfigPath(cfg.root);
+  if (o.templates) {
+    const have = new Set((cfg.routes || []).map((r) => r.from).filter(Boolean));
+    console.log('Rule library (★ = in the starter set). Add with: conductor route --add <id>   or   --add starter\n');
+    for (const t of ROUTE_TEMPLATES) {
+      const r = resolveTemplate(t, cfg.providers);
+      console.log(`${t.starter ? '★' : ' '} ${t.id.padEnd(13)} ${t.label}${have.has(t.id) ? '   [added]' : ''}`);
+      console.log(`  ${''.padEnd(13)} ${describeRoute(r.route).replace(/ → .*/, '')} → ${r.missing ? `(${r.missing})` : [].concat(r.route.provider).join(', ')}`);
+      console.log(`  ${''.padEnd(13)} ${t.why}`);
+    }
+    console.log('\nGuide: docs/ROUTING.md');
+    return 0;
+  }
+  if (o.add || o.rm) {
+    const data = readScope(scope, cfg.root);
+    let routes = Array.isArray(data.routes) ? data.routes : scope === 'project' && Array.isArray(cfg.routes) ? [...cfg.routes] : [];
+    if (o.rm) {
+      const n = Number(o.rm);
+      if (!Number.isInteger(n) || n < 1 || n > routes.length) throw new UsageError(`--rm takes a rule number from 1 to ${routes.length} (see conductor route --rules${o.global ? ' --global' : ''})`);
+      const [gone] = routes.splice(n - 1, 1);
+      console.log(`✓ removed rule ${n}: ${describeRoute(gone)}`);
+    } else {
+      const ids = String(o.add).split(',').map((x) => x.trim()).filter(Boolean).flatMap((x) => (x === 'starter' ? starterIds() : [x]));
+      const r = addTemplates(routes, ids, cfg.providers);
+      routes = r.routes;
+      for (const id of r.added) console.log(`✓ added ${id}: ${describeRoute(routes.find((x) => x.from === id))}`);
+      for (const s of r.skipped) console.log(`- skipped ${s.id}: ${s.why}`);
+      if (!r.added.length) return r.skipped.some((s) => s.why === 'no such template') ? (console.log('See the ids with: conductor route --templates'), 1) : 0;
+    }
+    const errors = routeErrors(routes, cfg.providers);
+    if (errors.length) throw new UsageError(errors.join('; '));
+    writeScope(scope, cfg.root, { ...data, routes });
+    console.log(`saved to ${where}. Try one: conductor route "fix the login form" --files src/Login.tsx`);
+    return 0;
+  }
+  const routes = cfg.routes || [];
+  if (!routes.length) { console.log('No routing rules. The smart selector orders each chain.\nStart with: conductor route --add starter   (see the list: conductor route --templates)'); return 0; }
+  console.log('Routing rules, first match wins:');
+  routes.forEach((r, i) => console.log(`  ${String(i + 1).padStart(2)}. ${describeRoute(r)}${r.from ? `   (${r.from})` : ''}`));
+  return 0;
+}
+
 function parseArgs(argv) {
   const opts = { _: [] };
-  const flags = new Set(['no-verify', 'allow-dirty', 'json', 'live', 'no-open', 'no-mcp', 'all', 'clear', 'global', 'help', 'version', 'worktree', 'replace', 'force', 'allow-open-questions', 'vscode', 'yes', 'free', 'project', 'details', 'enable']);
+  const flags = new Set(['no-verify', 'allow-dirty', 'json', 'live', 'no-open', 'no-mcp', 'all', 'clear', 'global', 'help', 'version', 'worktree', 'replace', 'force', 'allow-open-questions', 'vscode', 'yes', 'free', 'project', 'details', 'enable', 'rules', 'templates']);
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '-h') { opts.help = true; continue; }
@@ -143,8 +190,9 @@ async function main() {
       return 0;
     }
     case 'route': {
-      // preview: which providers would take this task, in what order, and why (nothing runs)
       const cfg = loadConfig();
+      if (o.rules || o.templates || o.add || o.rm) return routeRules(cfg, o);
+      // preview: which providers would take this task, in what order, and why (nothing runs)
       let section = '', role = o.role;
       const files = o.files ? o.files.split(',').map((x) => x.trim()).filter(Boolean) : [];
       if (o.plan && o.task) {

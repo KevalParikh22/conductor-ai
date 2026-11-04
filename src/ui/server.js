@@ -11,6 +11,7 @@ import { statusData } from '../status.js';
 import { listRuns } from '../runs.js';
 import { catalogStatus, addProviderAuto } from '../setup.js';
 import { detectLocal } from '../local.js';
+import { ROUTE_TEMPLATES, resolveTemplate, addTemplates } from '../routing.js';
 import { usageReport } from '../usage.js';
 import { testProvider } from '../providers.js';
 import { listFreeModels, listProviderModels } from '../models.js';
@@ -125,6 +126,15 @@ export function createUiServer({ cwd = process.cwd(), token = crypto.randomBytes
           return send(200, { ...stateFor(root), added: { name: r.name, model: r.provider.model, roles: r.roles, warning: r.warning } });
         }
         case 'GET /api/local': return send(200, { local: await detectLocal() });
+        case 'POST /api/route-templates': {
+          // the rule library resolved against the (possibly unsaved) providers; with `add`, the routes with those templates inserted
+          const providers = isPlainObject(body.providers) ? body.providers : loadConfig(root).providers;
+          const routes = Array.isArray(body.routes) ? body.routes : [];
+          const have = new Set(routes.map((r) => r?.from).filter(Boolean));
+          const templates = ROUTE_TEMPLATES.map((t) => ({ ...resolveTemplate(t, providers), added: have.has(t.id) }));
+          if (!Array.isArray(body.add)) return send(200, { templates });
+          return send(200, { templates, ...addTemplates(routes, body.add.map(String), providers) });
+        }
         case 'POST /api/route-preview': {
           const cfg = loadConfig(root);
           if (Array.isArray(body.routes)) cfg.routes = body.routes; // preview unsaved rules

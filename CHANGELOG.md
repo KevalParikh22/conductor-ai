@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.8.1 (2026-11-04)
+
+- **Rule library for routing.** 12 ready-made rules:
+  - **to your strongest agent:** security-sensitive code, database and migrations, CI and infrastructure, backend code, reviews;
+  - **to a free or local model:** small edits, docs files, translations, the docs role, questions;
+  - **to an agent that runs tests:** test files;
+  - **to an agent good at UI:** frontend.
+
+  Each rule's providers are filled in from the ones you have enabled.
+- **Managing rules from the terminal:**
+  - `conductor route --add starter` adds the six starter rules (or `--add <id,id>` for others).
+  - `--templates` lists the library, `--rules` shows your rules and `--rm <n>` removes one.
+  - Rules are saved to the project unless you add `--global`.
+- **In the UI** (Roles → Routing):
+  - A "How it works" explainer and a link to the routing guide.
+  - The rule library, with **Add starter set**, **Add** and **Customize** (copies a rule into the form).
+  - Help text next to the Add rule button.
+- **New guide:** [docs/ROUTING.md](docs/ROUTING.md). Also new: `templates/routes.example.json`, with every library rule.
+
 ## 0.8.0 (2026-11-04)
 
 - **Choose who takes which task.**

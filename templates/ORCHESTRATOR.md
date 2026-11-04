@@ -63,7 +63,7 @@ Keep `HANDOFF.md` current, especially when any tool is close to its limit.
 
 ## Who takes which task
 - Leave it to conductor by default: routing rules in config, then the smart selector.
-- To pin one task, add `- **provider:** <name>` under it in the plan. To see where a task would go before running it: `conductor route --plan <file> --task T3`.
+- The project's standing rules are listed by `conductor route --rules`. To pin one task, add `- **provider:** <name>` under it in the plan. To see where a task would go before running it: `conductor route --plan <file> --task T3`.
 
 ## Saving tokens
 Your context is the expensive part. conductor is built to keep it small:

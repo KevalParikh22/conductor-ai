@@ -118,7 +118,7 @@ conductor route "add a date picker" --files src/frontend/Booking.tsx
 ```bash
 conductor route --plan docs/plan/booking.md --task T3
 ```
-In `conductor ui` → Roles → Routing you can add rules and preview a task. Each run's summary shows a `route:` line, and the Runs page shows why each worker went first.
+For a ready-made set, run `conductor route --add starter` (or pick from the 12 library rules with `conductor route --templates`). The [routing guide](ROUTING.md) explains every rule. In `conductor ui` → Roles → Routing you can add rules from the library, write your own and preview a task. Each run's summary shows a `route:` line, and the Runs page shows why each worker went first.
 
 ## Local models
 
