@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { DEFAULT_CONFIG, CLI_PRESETS, ROLES } from './presets.js';
+import { routeErrors } from './routing.js';
 import { GLOBAL_DIR, readJSON, writeJSON, deepMerge, loadEnvFile, which, isPlainObject, SECRET_VARS, keyValue } from './util.js';
 
 export const GLOBAL_CONFIG = path.join(GLOBAL_DIR, 'config.json');
@@ -114,6 +115,7 @@ export function validateConfig(cfg) {
     if (p.type === 'cli' && !CLI_PRESETS[p.preset] && !(p.bin && p.write)) errors.push(`provider ${name}: unknown preset "${p.preset}" (or give bin + write/read args)`);
     if (p.type !== 'cli' && !p.baseUrl) errors.push(`provider ${name}: baseUrl is required`);
   }
+  errors.push(...routeErrors(cfg.routes, cfg.providers));
   for (const [role, chain] of Object.entries(cfg.roles || {})) {
     if (!ROLES[role]) errors.push(`unknown role "${role}"`);
     if (!Array.isArray(chain)) { errors.push(`role ${role}: chain must be a list`); continue; }

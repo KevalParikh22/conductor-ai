@@ -179,6 +179,21 @@ export function enableDetected(root, found) {
   return on;
 }
 
+/** Turn on running local servers that have a chat model, using their best coding model. Returns names. */
+export function enableLocal(root, local) {
+  const cfg = loadConfig(root);
+  const on = [];
+  for (const l of local) {
+    if (!l.running || !l.best) continue;
+    const name = providerNameFor(cfg, l.id);
+    const p = cfg.providers[name];
+    if (p?.enabled && l.models.includes(p.model)) continue;
+    addProvider(root, l.id, { model: p?.model && l.models.includes(p.model) ? p.model : l.best });
+    on.push(`${name} (${p?.model && l.models.includes(p.model) ? p.model : l.best})`);
+  }
+  return on;
+}
+
 /** Keys conductor knows about, with where each comes from. Values are never returned. */
 export function keyList(cfg) {
   const file = loadEnvFile(GLOBAL_SECRETS);

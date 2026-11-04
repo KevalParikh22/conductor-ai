@@ -61,6 +61,10 @@ conductor batch --plan docs/plan/<slug>.md --tasks T2,T3,T4
 ### 5. Handoff
 Keep `HANDOFF.md` current, especially when any tool is close to its limit.
 
+## Who takes which task
+- Leave it to conductor by default: routing rules in config, then the smart selector.
+- To pin one task, add `- **provider:** <name>` under it in the plan. To see where a task would go before running it: `conductor route --plan <file> --task T3`.
+
 ## Saving tokens
 Your context is the expensive part. conductor is built to keep it small:
 - **Delegate by default.** Write it yourself only when it is under ~10 lines or needs judgement the plan doesn't settle.

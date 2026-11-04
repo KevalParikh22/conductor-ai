@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { loadConfig, findProjectRoot, validateConfig, GLOBAL_CONFIG, GLOBAL_SECRETS, projectConfigPath, readScope, providerPermissions, readOnlyEnforced } from '../src/config.js';
-import { dispatch, formatSummary, UsageError, clearCooldowns, getCooldowns } from '../src/core.js';
+import { dispatch, formatSummary, UsageError, clearCooldowns, getCooldowns, chooseChain, extractTask, taskFiles } from '../src/core.js';
 import { runBatch, formatBatch } from '../src/batch.js';
 import { listWorktrees, removeWorktree } from '../src/worktree.js';
 import { statusReport, statusData } from '../src/status.js';
@@ -15,10 +15,11 @@ import { listFreeModels, listProviderModels } from '../src/models.js';
 import { CLI_PRESETS, ROLES, CONTROLLERS } from '../src/presets.js';
 import { VERSION } from '../src/version.js';
 import { which, keyValue } from '../src/util.js';
-import { usageReport, formatUsage } from '../src/usage.js';
+import { usageReport, formatUsage, recordSaving } from '../src/usage.js';
 import { listRuns, readRun, formatRuns } from '../src/runs.js';
 import { CATALOG, CATEGORIES, urlFields } from '../src/catalog.js';
-import { runAdd, catalogStatus, detect, enableDetected, keyList, interactive, askSecret, confirm, choose } from '../src/setup.js';
+import { runAdd, catalogStatus, detect, enableDetected, enableLocal, keyList, interactive, askSecret, confirm, choose } from '../src/setup.js';
+import { detectLocal } from '../src/local.js';
 import { writeSecrets } from '../src/config.js';
 import { compactDiff } from '../src/diffview.js';
 
@@ -47,6 +48,7 @@ Setup
   conductor providers [--free] [--search x] [--json]   every provider conductor can add (${Object.keys(CATALOG).length}), with status
   conductor add <provider> [--model m] [--yes] [--project]   add one: key, model, test, role chains
   conductor keys [set NAME | rm NAME]  list, set (hidden input or stdin) or remove API keys
+  conductor local [--enable]           find local model servers (Ollama, LM Studio, llama.cpp…) and turn them on
   conductor init [--controller <c>] [--vscode] [--no-mcp]   add conductor to the current project
                                        controllers: ${Object.keys(CONTROLLERS).join(', ')}
   conductor ui [--port 4545] [--no-open]   settings page
@@ -66,6 +68,7 @@ Work (normally called by the controller)
      --no-verify --allow-dirty --allow-open-questions --json
   conductor batch --plan <file> --tasks T1,T2,T3 [--concurrency 4] [--role r] [--provider p] [--replace] [--json]
   conductor diff [branch | A..B] [--lines 200]   compact diff for review (default: working tree, new files included)
+  conductor route "task" [--role r] [--files a,b] | --plan f --task T1   which providers would take a task, and why
   conductor verify                     run the project's verify command
   conductor worktree [list] | rm <id>|--all [--force]
 
@@ -82,7 +85,7 @@ Exit codes: 0 ok · 2 usage/unsafe state · 3 every provider failed (controller 
 
 function parseArgs(argv) {
   const opts = { _: [] };
-  const flags = new Set(['no-verify', 'allow-dirty', 'json', 'live', 'no-open', 'no-mcp', 'all', 'clear', 'global', 'help', 'version', 'worktree', 'replace', 'force', 'allow-open-questions', 'vscode', 'yes', 'free', 'project', 'details']);
+  const flags = new Set(['no-verify', 'allow-dirty', 'json', 'live', 'no-open', 'no-mcp', 'all', 'clear', 'global', 'help', 'version', 'worktree', 'replace', 'force', 'allow-open-questions', 'vscode', 'yes', 'free', 'project', 'details', 'enable']);
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '-h') { opts.help = true; continue; }
@@ -124,12 +127,47 @@ async function main() {
       return 0;
     }
     case 'keys': return keys(o);
+    case 'local': {
+      const root = findProjectRoot();
+      const local = await detectLocal();
+      if (o.json) { console.log(JSON.stringify(local, null, 2)); return 0; }
+      const seen = local.filter((l) => l.running || l.installed);
+      if (!seen.length) { console.log('No local model servers found. Easiest start: install Ollama (https://ollama.com/download), then: ollama pull qwen3-coder'); return 0; }
+      for (const l of seen) {
+        console.log(`${l.running ? '●' : '○'} ${l.label.padEnd(18)} ${l.running ? `running at ${l.baseUrl} · ${l.models.length} model${l.models.length === 1 ? '' : 's'}${l.best ? ` · best for code: ${l.best}` : ''}` : 'installed, not running'}`);
+        if (l.next) console.log(`    next: ${l.next}`);
+      }
+      const ready = local.filter((l) => l.running && l.best);
+      if (ready.length && o.enable) console.log(`\n✓ enabled: ${enableLocal(root, local).join(', ') || 'already on'}`);
+      else if (ready.length) console.log('\nTurn them on (free, private, in the docs/test/review/ask roles): conductor local --enable');
+      return 0;
+    }
+    case 'route': {
+      // preview: which providers would take this task, in what order, and why (nothing runs)
+      const cfg = loadConfig();
+      let section = '', role = o.role;
+      const files = o.files ? o.files.split(',').map((x) => x.trim()).filter(Boolean) : [];
+      if (o.plan && o.task) {
+        section = extractTask(fs.readFileSync(path.resolve(cfg.root, o.plan), 'utf8'), o.task);
+        if (!section) throw new UsageError(`task "${o.task}" not found in ${o.plan}`);
+        role ||= (section.match(/\*\*role:\*\*\s*(\w+)/i) || [])[1];
+        files.push(...taskFiles(section));
+      }
+      role ||= 'build';
+      if (!ROLES[role]) throw new UsageError(`unknown role "${role}"`);
+      const r = chooseChain(cfg, role, { section, body: o._.join(' '), files, provider: o.provider });
+      if (o.json) { console.log(JSON.stringify({ role, how: r.how, note: r.note, chain: r.chain.map((c) => ({ name: c.name, skip: c.skip || null })) }, null, 2)); return 0; }
+      console.log(`role ${role} · ${{ chain: 'chain given', provider: '--provider', plan: 'set by the plan', route: 'routing rule', selector: 'smart selector', role: "role's chain" }[r.how]}${r.note ? `: ${r.note}` : ''}`);
+      r.chain.forEach((c, i) => console.log(`  ${c.skip ? '-' : String(i + 1) + '.'} ${c.name.padEnd(18)} ${c.skip ? `skipped: ${c.skip}` : 'ready'}`));
+      return 0;
+    }
     case 'diff': {
       const t = o._[0];
       const d = compactDiff(findProjectRoot(), { ...(t ? { range: t.includes('..') ? t : `HEAD...${t}` } : {}), maxFileLines: Number(o.lines) || 200 });
       if (d.empty) { console.log(t ? `no changes in ${t}` : 'no changes'); return 0; }
       console.log(d.text.trimEnd());
-      if (d.fullChars > d.chars) console.log(`\n[compact: ${d.chars.toLocaleString()} of ${d.fullChars.toLocaleString()} characters of the full diff; full: ${t ? `git diff ${t.includes('..') ? t : `HEAD...${t}`}` : 'git diff, plus new files'}]`);
+      recordSaving({ source: 'diff', chars: d.fullChars - d.chars, project: path.basename(findProjectRoot()) });
+      if (d.fullChars > d.chars) console.log(`\n[compact: ${d.chars.toLocaleString()} of ${d.fullChars.toLocaleString()} characters of the full diff (~${Math.round((d.fullChars - d.chars) / 4).toLocaleString()} tokens saved); full: ${t ? `git diff ${t.includes('..') ? t : `HEAD...${t}`}` : 'git diff, plus new files'}]`);
       return 0;
     }
     case 'init': {
@@ -331,6 +369,12 @@ async function setup(o) {
   console.log(`API keys found:   ${found.keys.length ? found.keys.map((k) => `${k.label} (${k.env})`).join(', ') : 'none yet'}`);
   const off = [...installed.filter((a) => !a.enabled), ...found.keys.filter((k) => !k.enabled)];
   if (off.length && (!ask || await confirm(`Enable ${off.map((x) => x.name).join(', ')}?`))) console.log(`✓ enabled: ${enableDetected(root, found).join(', ')}`);
+
+  const local = await detectLocal();
+  for (const l of local.filter((x) => x.running || x.installed)) {
+    console.log(`Local model:      ${l.label}${l.running ? ` running (${l.models.length} model${l.models.length === 1 ? '' : 's'})` : ' installed, not running'}${l.next ? `: ${l.next}` : ''}`);
+  }
+  if (local.some((l) => l.running && l.best) && (!ask || await confirm('Use the local models (free, private)?'))) console.log(`✓ enabled: ${enableLocal(root, local).join(', ') || 'already on'}`);
 
   console.log('\nkilo-free is ready now: free models, no key needed.');
   if (ask && await confirm('Add another free provider (more models, higher limits)?', false)) {

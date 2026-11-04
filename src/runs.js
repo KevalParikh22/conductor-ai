@@ -31,6 +31,8 @@ export function listRuns(root, { limit = 20 } = {}) {
       seconds: Math.round(tried.reduce((t, a) => t + (a.seconds || 0), 0)),
       cost: known.length ? known.reduce((t, a) => t + a.cost, 0) : null,
       branch: s.worktree?.commit ? s.worktree.branch : null,
+      why: s.route || s.selector || null, // why this worker went first
+      tokensSaved: s.tokensSaved?.tokens || 0,
       report: s.report,
     };
   });

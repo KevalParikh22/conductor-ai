@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.8.0 (2026-11-04)
+
+- **Choose who takes which task.**
+  - **Per task:** a plan task can name its provider with `- **provider:** codex-cli`.
+  - **By rule:** `routes` in config send matching tasks to a provider first, matched on files (globs), task text (regex) and role.
+  - **Precedence:** `--chain` > `--provider` > the plan line > routes > the smart selector.
+  - **In batches:** `conductor batch` keeps routed tasks on their provider.
+  - **Preview:** `conductor route` (and Roles → Routing in the UI) shows where a task would go and why, before it runs.
+  - **Visibility:** summaries have a `route:` line, and the Runs page shows why each worker went first.
+- **Local models.** `conductor local` finds Ollama, LM Studio, llama.cpp, vLLM, LocalAI, Jan and LiteLLM on their default ports. It lists their models and picks the best one for coding, skipping embedding and other non-chat models, and says what to do when one isn't running or has no chat model. `--enable` turns them on. `conductor setup`, the Providers page (with an Enable button) and the Setup page show the same.
+- **Tokens saved, measured.** Each estimate counts characters kept out of a model's context, at about 4 characters per token, and covers:
+  - the compact diffs the controller reads;
+  - trimmed reports;
+  - compact review diffs;
+  - tasks the selector moved to a free model.
+
+  It shows in each run's summary (`tokens:`), in `conductor diff`'s footer, in `conductor usage` and on the Runs page.
+- **Provider search** in the UI now covers every category and shows how many providers match.
+
 ## 0.7.0 (2026-11-03)
 
 **Saving tokens**
