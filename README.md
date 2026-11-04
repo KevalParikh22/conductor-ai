@@ -14,12 +14,16 @@
 [![Dependencies](https://img.shields.io/badge/dependencies-0-4f46e5)](package.json)
 [![MCP](https://img.shields.io/badge/MCP-server-818cf8)](docs/ARCHITECTURE.md)
 [![License](https://img.shields.io/github/license/KevalParikh22/conductor-ai?color=blue)](LICENSE)
+[![Providers](https://img.shields.io/badge/providers-10%20agents%20%C2%B7%2045%20APIs-0ea5e9)](docs/providers/README.md)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-22c55e)](CONTRIBUTING.md)
+[![Stars](https://img.shields.io/github/stars/KevalParikh22/conductor-ai?style=flat&color=f59e0b)](https://github.com/KevalParikh22/conductor-ai/stargazers)
 
-[Quick start](#quick-start) &middot; [How it works](#how-it-works) &middot; [Permissions](#every-agent-runs-under-its-own-rules) &middot; [Install guide](docs/INSTALL.md) &middot; [Providers](docs/PROVIDERS.md) &middot; [Routing](docs/ROUTING.md) &middot; [Changelog](CHANGELOG.md)
+[Quick start](#-quick-start) &middot; [How it works](#-how-it-works) &middot; [Routing](docs/ROUTING.md) &middot; [Security](SECURITY.md) &middot; [Providers](docs/providers/README.md) &middot; [Install guide](docs/INSTALL.md) &middot; [Changelog](CHANGELOG.md)
 
 </div>
 
-> **Status: early (v0.5), solo-maintained.** 41 tests, run in CI on Linux and macOS with Node 20, 22 and 24. The agents it drives change their CLI flags often; each one is a small preset you can override in config.
+> [!NOTE]
+> **Early and moving fast (v0.8), solo-maintained.** 79 tests run in CI on Linux and macOS with Node 20, 22 and 24. The agents it drives change their CLI flags often; each one is a small preset you can override in config.
 
 A Claude subscription runs out fast when Claude types every line. Claude is best at judgement: planning, design and catching bugs. **conductor-ai** keeps Claude (or any agent you choose) as the controller and quality gate, and hands the typing to Antigravity, Codex, OpenCode, free Kilo / OpenRouter / Groq / Gemini models, Kimi or local models. When one hits its limit, the next one takes over.
 
@@ -27,7 +31,17 @@ A Claude subscription runs out fast when Claude types every line. Claude is best
 curl -fsSL https://raw.githubusercontent.com/KevalParikh22/conductor-ai/main/scripts/install.sh | bash
 ```
 
-### At a glance
+### 🎯 Why conductor-ai
+
+| | Claude does everything | With conductor-ai |
+|---|---|---|
+| **Who types the code** | Claude, line by line | Antigravity, Codex, OpenCode, free APIs or a local model |
+| **What Claude spends tokens on** | Everything | Planning, review and the hard parts |
+| **When a quota runs out** | Work stops | The next provider takes over |
+| **Checking the work** | You hope it's right | Your tests and lint run after every task; git is compared with the worker's report |
+| **Who takes which task** | One model | Your rules: security work to your best agent, docs to a free model |
+
+### ✨ At a glance
 
 - **One controller, many workers.** Claude Code by default; Antigravity CLI, Codex CLI or OpenCode can be the controller too. Workers are picked per role (`build`, `fix`, `test`, `docs`, `review`, `ask`) from an ordered fallback chain.
 - **Quota-aware fallback.** Rate limits (HTTP 429, CLI "usage limit" messages) put a provider on cooldown, honouring `Retry-After`, and the next one starts on a clean tree. If every provider fails, the controller does the task itself.
@@ -38,7 +52,7 @@ curl -fsSL https://raw.githubusercontent.com/KevalParikh22/conductor-ai/main/scr
 - **Usage and budgets.** Every run is logged with time, tokens and known cost; set a daily budget and paid APIs stop when it's reached. `conductor runs` and the Runs page show who did what.
 - **Works everywhere.** Install once, `conductor init` in any repo. CLI and MCP server. Settings page in the browser. Zero dependencies, no telemetry.
 
-### How it works
+### 🧭 How it works
 
 ```mermaid
 flowchart LR
@@ -59,7 +73,7 @@ flowchart LR
 3. **Verify.** conductor runs your verify command, checks the worker's claimed changes against git, and reports who did the work, changed files, PASS/FAIL and any mismatch.
 4. **Review and commit.** The controller reads the diff, fixes small issues, retries with another provider, or does the task itself after two failures. A second model reviews the branch at the end.
 
-### See it
+### 🖥️ See it
 
 <table>
 <tr>
@@ -91,7 +105,7 @@ flowchart LR
 
 `conductor ui` opens this page on `127.0.0.1` (per-launch token, never exposed to the network).
 
-### Quick start
+### ⚡ Quick start
 
 ```bash
 npm install -g github:KevalParikh22/conductor-ai   # Node 20+
@@ -133,14 +147,14 @@ conductor init --controller opencode      # AGENTS.md + opencode.json MCP entry
 
 </details>
 
-### Built to save tokens
+### 💸 Built to save tokens
 
 - **Smart selector.** Every task tries the cheapest provider that can do it: free API models for small tasks with known files, agents for bigger ones, paid APIs last. Providers that keep failing drop to the end.
 - **Compact diffs.** `conductor diff` is what the controller reviews: whitespace-only changes, lockfiles and build output are left out, and long files are cut. On this repo's own last change it was about 40% smaller than `git diff`; far more when lockfiles change.
 - **Short reports.** The controller reads only the worker's RESULT block; tool transcripts stay in the run folder.
 - **See the savings.** Every run's summary, `conductor usage` and the Runs page show the estimated tokens saved.
 
-### You decide who does what
+### 🔀 You decide who does what
 
 - **Per task:** add `- **provider:** codex-cli` to a plan task.
 - **By rule:** `"routes": [{ "files": "src/frontend/**", "provider": "grok-cli" }]`, matched on files, task text or role.
@@ -148,7 +162,7 @@ conductor init --controller opencode      # AGENTS.md + opencode.json MCP entry
 - **Preview:** `conductor route "task" --files a.tsx`, or Roles → Routing in the UI, shows where a task would go before anything runs.
 - **Local models:** `conductor local` finds Ollama, LM Studio, llama.cpp and others running on your machine and turns them on.
 
-### Every agent runs under its own rules
+### 🛡️ Every agent runs under its own rules
 
 conductor passes each CLI its permission rules **for that run only**, through the CLI's own sandbox or permission system. No "skip all permissions" flags.
 
@@ -169,7 +183,7 @@ For every agent: no `git push`, `commit`, `reset`, `checkout`, `rebase`, `stash`
 
 **Is it safe?** Read [SECURITY.md](SECURITY.md): what conductor guards (sandboxes, scrubbed keys, git hooks and config restored after every worker, checked model output), what it can't (tests run code the worker wrote; agents can read what you can read; free routes may log prompts), and a checklist for sensitive projects.
 
-### Providers
+### 🔌 Providers
 
 | | Built in |
 |---|---|
@@ -218,11 +232,13 @@ Exit codes: `0` ok · `2` usage or unsafe repo state · `3` every provider faile
 
 </details>
 
-### Docs
+### 📚 Docs
 
 | Page | What it covers |
 |---|---|
 | [Install guide](docs/INSTALL.md) | Step by step, for every project |
+| [Routing](docs/ROUTING.md) | Which worker takes which task: rule library and your own rules |
+| [Provider guides](docs/providers/README.md) | One setup page for each of the 45 APIs and 10 agents |
 | [Configuration](docs/CONFIGURATION.md) | Roles, providers, settings, config files |
 | [Providers](docs/PROVIDERS.md) | Every provider, free tiers, permissions, adding your own |
 | [tmux and editors](docs/EDITORS.md) | tmux layout, VS Code (Claude Code, Copilot agent mode), Cursor |
@@ -230,15 +246,23 @@ Exit codes: `0` ok · `2` usage or unsafe repo state · `3` every provider faile
 | [Security](SECURITY.md) | What is protected, known limits, setup for sensitive code |
 | [How it works](docs/ARCHITECTURE.md) | Design, safety model, parallel runs, inspirations |
 
-### Honest limits
+### ⚖️ Honest limits
 
 - Workers are weaker than Claude at judgement. That's why plans are detailed, tasks stay small, and every diff passes verify and the controller's review.
 - Chat-only API models can't run your tests; prefer CLI agents for `build`, APIs for `docs`, `test` and `ask`.
 - OpenCode's shell and agents without a sandbox (Kimi, custom CLIs) are only as contained as their own permission systems allow.
 - Cost is only known for API providers with a `price` set; CLI agents on subscriptions are counted in runs and minutes.
 
-### Contributing · security · license
+### 🤝 Contributing · security · license
 
-Issues and pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Report security problems privately as described in [SECURITY.md](SECURITY.md). MIT licensed.
+- 💬 **Questions and ideas:** [Discussions](https://github.com/KevalParikh22/conductor-ai/discussions).
+- 🐛 **Bugs:** [open an issue](https://github.com/KevalParikh22/conductor-ai/issues/new/choose).
+- 🧩 **New agent or provider:** use the provider request template, or send a PR (most are one preset in `src/presets.js` or one entry in `src/catalog.js`). See [CONTRIBUTING.md](CONTRIBUTING.md).
+- 🔒 **Security problems:** report them privately as described in [SECURITY.md](SECURITY.md).
 
-<div align="center"><sub>If conductor-ai saves you quota, a ⭐ helps the next person find it.</sub></div>
+MIT licensed.
+
+<div align="center">
+<br>
+<sub>If conductor-ai saves you quota, a ⭐ helps the next person find it.</sub>
+</div>

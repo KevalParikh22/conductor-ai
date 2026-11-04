@@ -1,5 +1,5 @@
 ---
-name: Provider or agent request
+name: 🧩 Provider or agent request
 about: Ask for a new CLI agent, API provider or free tier
 labels: provider
 ---
