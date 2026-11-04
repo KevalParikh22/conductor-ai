@@ -190,6 +190,9 @@ const ICONS = {
 const icon = (n, t = '') => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true"${t ? ` title="${t}"` : ''}><path d="${ICONS[n]}"/></svg>`;
 const TABS = [['overview', 'Overview'], ['runs', 'Runs'], ['roles', 'Roles'], ['providers', 'Providers'], ['keys', 'API keys'], ['settings', 'Settings'], ['setup', 'Setup']];
 let S = null, W = null, tab = 'overview', dirty = false, freeModels = null, runsData = null, gOpen = null, gFilter = { q: '', cat: 'all' };
+let rPreview = null; // routing preview result
+let localInfo = null, localAt = 0; // local model servers, refreshed at most every 30s
+function loadLocal() { if (Date.now() - localAt < 30000) return; localAt = Date.now(); api('GET', '/api/local').then((d) => { localInfo = d.local; if (tab === 'providers' || tab === 'setup') render(); }, () => {}); }
 let pAll = false, pAdd = false; const pOpen = new Set(); // providers page: show disabled, gallery open, expanded rows
 const provModels = {};
 const GUIDE = (id) => `https://github.com/KevalParikh22/conductor-ai/blob/main/docs/providers/${id}.md`;
@@ -261,7 +264,7 @@ function gallery() {
     </div>`; };
   return `<div class="card"><h2>Add a provider <span class="note">${S.catalog.length} available, ${S.catalog.filter((c) => c.free).length} with a free tier</span></h2>
     <div class="row" style="gap:10px;flex-wrap:wrap"><input type="search" id="g-q" placeholder="Search: groq, coding, free…" value="${esc(gFilter.q)}" style="max-width:260px">
-      <div class="chips">${GCATS.map(([k, l]) => `<button class="chip ${gFilter.cat === k ? 'on' : ''}" data-gcat="${k}">${l}</button>`).join('')}</div></div>
+      <div class="chips">${GCATS.map(([k, l]) => `<button class="chip ${gFilter.cat === k ? 'on' : ''}" data-gcat="${k}">${l}</button>`).join('')}</div><span class="note" id="g-count">${S.catalog.filter(gMatch).length} shown</span></div>
     <div class="gal">${S.catalog.map(card).join('')}</div>
     <p class="note" id="g-none" ${S.catalog.some(gMatch) ? 'hidden' : ''}>Nothing matches. Any OpenAI-compatible endpoint works: add it as a custom provider below.</p>
     <details class="more" style="margin-top:12px"><summary>${icon('plus')} Custom provider (any OpenAI-compatible endpoint or another CLI agent)</summary>
@@ -272,10 +275,24 @@ function gallery() {
       <div><label class="f">Model</label><input type="text" id="np-model"></div></div>
       <div class="row" style="margin-top:10px"><button class="btn" id="np-add">Add</button></div></details></div>`;
 }
+// local model servers found on this machine: one line each, with Enable when there is a chat model
+function localBanner() {
+  loadLocal();
+  const seen = (localInfo || []).filter((l) => l.running || l.installed);
+  if (!seen.length) return '';
+  return `<div class="card"><div class="row"><h2 style="margin:0">${icon('chip')} Local models</h2><span class="note">Free and private: nothing leaves this machine.</span></div>
+    ${seen.map((l) => { const name = Object.entries(W.providers).find(([, p]) => p.catalog === l.id)?.[0] || l.id; const p = W.providers[name]; const on = p?.enabled && l.models.includes(p.model);
+      return `<div class="row" style="margin-top:8px"><span class="dot ${l.running ? 'ok' : ''}"></span><b>${esc(l.label)}</b>
+        <span class="note">${l.running ? `${l.models.length} model${l.models.length === 1 ? '' : 's'}${l.best ? ` · best for code: <span class="mono">${esc(l.best)}</span>` : ''}` : 'installed, not running'}</span><span class="spacer"></span>
+        ${on ? `<span class="pill ok">on · ${esc(p.model)}</span>` : l.running && l.best ? `<button class="btn small primary" data-local="${esc(l.id)}|${esc(l.best)}">Enable</button>` : ''}</div>
+        ${l.next ? `<div class="note" style="margin-left:16px">${esc(l.next.split(': ')[0])}: ${cmd(l.next.split(': ').slice(1).join(': '))}</div>` : ''}`; }).join('')}</div>`;
+}
+
 function applyGalleryFilter() {
   document.querySelectorAll('[data-gid]').forEach((el) => { el.hidden = !gMatch(S.catalog.find((c) => c.id === el.dataset.gid)); });
   document.querySelectorAll('[data-gcat]').forEach((b) => b.classList.toggle('on', b.dataset.gcat === gFilter.cat));
   const none = $('#g-none'); if (none) none.hidden = S.catalog.some(gMatch);
+  const n = $('#g-count'); if (n) n.textContent = `${S.catalog.filter(gMatch).length} shown`;
 }
 
 const views = {
@@ -288,13 +305,14 @@ const views = {
     return `<div class="head"><h1>Runs</h1><p class="sub">Work handed out in this project, newest first; updates every few seconds (<span class="mono">conductor runs</span> in the terminal).</p></div>
     <div class="grid">
       <div class="card stat"><div class="l">Runs (last ${usage.days} days, all projects)</div><div class="n">${usage.rows.reduce((t, r) => t + r.runs, 0)}</div></div>
+      <div class="card stat"><div class="l">Tokens saved (estimate)</div><div class="n">${usage.savings?.total ? `~${usage.savings.total.toLocaleString()}` : '<span class="note" style="font-size:16px">none yet</span>'}</div><div class="note">${usage.savings?.total ? `controller ~${usage.savings.controller.toLocaleString()} · workers ~${usage.savings.workers.toLocaleString()}${usage.savings.freeRuns ? ` · ${usage.savings.freeRuns} task${usage.savings.freeRuns === 1 ? '' : 's'} moved to free models` : ''}` : 'compact diffs, trimmed reports and free-model picks'}</div></div>
       <div class="card stat"><div class="l">Known API cost today</div><div class="n">${money(usage.today)}</div><div class="note">${budget ? `daily budget ${money(budget)}` : 'no daily budget (Settings)'}</div></div>
     </div>
     <div class="card"><h2>Recent runs</h2>${runs.length ? `<table><tr><th>When</th><th>Role · task</th><th>Result</th><th>Worker</th><th>Verify</th><th>Files</th><th>Time</th></tr>
       ${runs.map((r) => `<tr><td class="mono">${esc(r.startedAt ? new Date(r.startedAt).toLocaleString() : r.id)}</td>
         <td><b>${esc(r.role)}</b>${r.task ? ` · ${esc(r.task)}` : ''}${r.branch ? `<div class="note mono">${esc(r.branch)}</div>` : ''}</td>
         <td>${result(r)}</td>
-        <td>${esc(r.winner || '–')}${r.attempts?.length > 1 ? `<div class="note">${r.attempts.map((a) => `${esc(a.provider)} ${a.ok ? '✓' : '✗'}`).join(' → ')}</div>` : ''}</td>
+        <td>${esc(r.winner || '–')}${r.why ? `<div class="note">${esc(r.why)}</div>` : ''}${r.attempts?.length > 1 ? `<div class="note">${r.attempts.map((a) => `${esc(a.provider)} ${a.ok ? '✓' : '✗'}`).join(' → ')}</div>` : ''}</td>
         <td>${verify(r.verify)}</td><td>${r.changed ?? '–'}</td><td>${r.seconds != null ? `${r.seconds}s` : ''}</td></tr>
         ${r.warnings?.length ? `<tr><td></td><td colspan="6">${r.warnings.map((w) => `<div class="note">⚠ ${esc(w)}</div>`).join('')}</td></tr>` : ''}`).join('')}
       </table>` : '<p class="note">No runs yet. They appear here when your controller hands out work (<span class="mono">conductor run …</span>).</p>'}</div>
@@ -328,7 +346,24 @@ const views = {
       if (!p) return '<span class="status bad">unknown</span>';
       if (!p.enabled) return '<span class="status">off</span>';
       return s.ready ? '<span class="status"><span class="dot ok"></span></span>' : `<span class="status bad" title="${esc(s.reason)}"><span class="dot"></span>${esc(shortReason(s.reason))}</span>`; };
+    const routes = W.routes || [];
+    const roleOpts = (sel = '') => `<option value="">any role</option>${Object.keys(S.roles).map((r) => `<option value="${r}" ${sel === r ? 'selected' : ''}>${esc(S.roles[r].label)}</option>`).join('')}`;
+    const when = (r) => [r.role && `<span class="pill">${esc(S.roles[r.role]?.label || r.role)}</span>`, r.files && `files <span class="mono">${esc([].concat(r.files).join(', '))}</span>`, r.text && `text <span class="mono">/${esc(r.text)}/</span>`].filter(Boolean).join(' + ');
     return `<div class="head"><h1>Roles</h1><p class="sub">Each role tries its providers top to bottom; when one is rate-limited, fails or isn't installed, the next runs. If all fail, the controller does the task.</p></div>
+    <div class="card"><div class="row"><h2 style="margin:0">Routing</h2><span class="note">Send matching tasks to a provider first; the role's chain stays as fallback. A plan task's <span class="mono">provider:</span> line wins over these.</span></div>
+      ${routes.length ? `<table style="margin-top:8px"><tr><th>#</th><th>When</th><th>Goes to</th><th></th></tr>${routes.map((r, i) => `<tr><td class="note">${i + 1}</td><td>${when(r) || 'any task'}</td><td><b>${esc([].concat(r.provider).join(', '))}</b></td><td style="text-align:right"><button class="btn icon ghost small" data-rtmv="${i}|-1" ${i ? '' : 'disabled'} aria-label="Move up">${icon('up')}</button><button class="btn icon ghost small" data-rtrm="${i}" aria-label="Remove">${icon('x')}</button></td></tr>`).join('')}</table>` : '<p class="note">No rules yet. Without them the smart selector orders each chain.</p>'}
+      <div class="fields" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))"><div><label class="f">Role</label><select id="rt-role">${roleOpts()}</select></div>
+        <div><label class="f">Files (glob)</label><input type="text" id="rt-files" placeholder="src/frontend/**"></div>
+        <div><label class="f">Task text (regex)</label><input type="text" id="rt-text" placeholder="migration|schema"></div>
+        <div><label class="f">Provider</label><select id="rt-prov">${Object.keys(W.providers).filter((n) => W.providers[n].enabled).map((n) => `<option>${esc(n)}</option>`).join('')}</select></div></div>
+      <div class="row" style="margin-top:10px"><button class="btn small" id="rt-add">${icon('plus')} Add rule</button><span class="note">Matches when all filled-in conditions hold. First match wins.</span></div>
+      <details class="more" style="margin-top:14px" ${rPreview ? 'open' : ''}><summary>${icon('test')} Preview: which providers would take a task?</summary>
+        <div class="fields" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))"><div><label class="f">Role</label><select id="pv-role">${Object.keys(S.roles).map((r) => `<option value="${r}" ${rPreview?.input?.role === r ? 'selected' : ''}>${esc(S.roles[r].label)}</option>`).join('')}</select></div>
+          <div style="grid-column:span 2"><label class="f">Task</label><input type="text" id="pv-task" placeholder="e.g. add a date picker to the booking form" value="${esc(rPreview?.input?.task || '')}"></div>
+          <div><label class="f">Files</label><input type="text" id="pv-files" placeholder="src/frontend/Booking.tsx" value="${esc(rPreview?.input?.files || '')}"></div></div>
+        <div class="row" style="margin-top:8px"><button class="btn small" id="pv-go">Preview</button>${rPreview ? `<span class="note">${esc({ plan: 'set by the plan', route: 'routing rule', selector: 'smart selector', role: "role's chain" }[rPreview.how] || rPreview.how)}${rPreview.note ? `: ${esc(rPreview.note)}` : ''}</span>` : ''}</div>
+        ${rPreview ? `<div class="chainline" style="margin-top:8px">${rPreview.chain.map((c, i) => `${i ? '<span class="arrow">→</span>' : ''}<span class="pill" title="${esc(c.skip || 'ready')}"><span class="dot ${c.skip ? '' : 'ok'}"></span>${esc(c.name)}</span>`).join('')}</div>` : ''}
+      </details></div>
     <div class="roles">${Object.entries(W.roles).map(([r, chain]) => `<div class="card"><div class="row"><h2 style="margin:0">${esc(S.roles[r]?.label || r)}</h2>${S.roles[r]?.mode === 'read' ? '<span class="pill">read-only</span>' : '<span class="pill warn">edits files</span>'}</div>
       <div class="note">${esc(S.roles[r]?.description || '')}</div>
       <div class="chain">${chain.map((n, i) => `<div class="link"><span class="idx">${i + 1}</span><span class="nm">${kindIcon(n)}<b>${esc(n)}</b>${st(n)}</span>
@@ -364,6 +399,7 @@ const views = {
         <p class="sub">Switch providers on or off; open a row for its model, endpoint and permissions. Keys live in API keys, never in config files.</p></div>
       <datalist id="dl-oc">${['opencode/big-pickle', 'opencode/glm-5.3-flash-free', 'opencode/deepseek-v4.1-flash-free', 'opencode/nemotron-3-ultra-free', 'opencode/mimo-v2.6-flash-free'].map((m) => `<option value="${m}">`).join('')}</datalist>
       <datalist id="dl-or"><option value="openrouter/free">${(freeModels || []).map((m) => `<option value="${esc(m.id)}">${m.tools ? 'tools · ' : ''}${m.context || ''}</option>`).join('')}</datalist>
+      ${localBanner()}
       ${pAdd ? gallery() : ''}
       <div class="plist">${shown.map(row).join('') || '<p class="note" style="padding:14px">Nothing enabled yet. Use <b>Add provider</b>, or show all.</p>'}</div>`;
   },
@@ -407,6 +443,7 @@ const views = {
       <tr><td>conductor ${esc(S.version)}</td><td>${pill(S.env.conductorOnPath, 'on PATH', 'not on PATH')}</td><td class="note">${S.env.conductorOnPath ? 'Ready' : 'Add <span class="mono">$(npm prefix -g)/bin</span> to PATH'}</td></tr>
       <tr><td>This project</td><td>${pill(S.hasProjectConfig, 'initialised', 'not initialised')}</td><td class="mono">${S.hasProjectConfig ? '' : 'conductor init'}</td></tr>
       <tr><td>Worker agents</td><td>${pill(agents, agents + ' installed', 'none installed')}</td><td class="note">Optional: free API providers work without one</td></tr>
+      <tr><td>Local models</td><td>${(() => { loadLocal(); const run = (localInfo || []).filter((l) => l.running); return !localInfo ? '<span class="pill">checking…</span>' : run.length ? `<span class="pill ok">${run.map((l) => esc(l.label)).join(', ')}</span>` : '<span class="pill">none running</span>'; })()}</td><td class="note">${(localInfo || []).find((l) => l.next)?.next ? esc((localInfo || []).find((l) => l.next).next) : 'Optional: <a href="https://ollama.com/download" target="_blank" rel="noopener">Ollama</a>, then <span class="mono">ollama pull qwen3-coder</span>'}</td></tr>
       <tr><td>Free API keys</td><td>${freeKeys ? `<span class="pill ok">${freeKeys} set</span>` : '<span class="pill">none yet</span>'}</td><td class="note">kilo-free works without a key</td></tr>
     </table></div>
     <div class="card"><h2>Steps</h2><ol class="steps">
@@ -458,10 +495,31 @@ function bind() {
     catch (e) { out.textContent = '✗ ' + e.message; } finally { b.disabled = false; }
   });
   document.querySelectorAll('[data-del]').forEach((b) => b.onclick = () => { const n = b.dataset.del; delete W.providers[n]; for (const c of Object.values(W.roles)) { const i = c.indexOf(n); if (i >= 0) c.splice(i, 1); } markDirty(); render(); });
+  const ra = $('#rt-add'); if (ra) ra.onclick = () => {
+    const r = { role: $('#rt-role').value, files: $('#rt-files').value.trim(), text: $('#rt-text').value.trim(), provider: $('#rt-prov').value };
+    if (!r.role && !r.files && !r.text) return toast('Fill in a role, files or text to match on');
+    if (!r.provider) return toast('Enable a provider first');
+    if (r.text) { try { new RegExp(r.text); } catch { return toast('Task text is not a valid regex'); } }
+    for (const k of ['role', 'files', 'text']) if (!r[k]) delete r[k];
+    (W.routes ||= []).push(r); markDirty(); render(); toast('Rule added. Save to keep it');
+  };
+  document.querySelectorAll('[data-rtrm]').forEach((b) => b.onclick = () => { W.routes.splice(+b.dataset.rtrm, 1); markDirty(); render(); });
+  document.querySelectorAll('[data-rtmv]').forEach((b) => b.onclick = () => { const [i, d] = b.dataset.rtmv.split('|').map(Number); const a = W.routes; [a[i], a[i + d]] = [a[i + d], a[i]]; markDirty(); render(); });
+  document.querySelectorAll('[data-local]').forEach((b) => b.onclick = async () => {
+    if (dirty) return toast('Save or discard your other changes first');
+    const [id, model] = b.dataset.local.split('|');
+    b.disabled = true;
+    try { const r = await api('POST', '/api/providers/add', { id, model, scope: $('#scope').value }); load(r); localAt = 0; loadLocal(); toast(`${r.added.name} on with ${r.added.model}`); } catch (e) { toast(e.message); b.disabled = false; }
+  });
+  const pv = $('#pv-go'); if (pv) pv.onclick = async () => {
+    const input = { role: $('#pv-role').value, task: $('#pv-task').value, files: $('#pv-files').value };
+    try { rPreview = { ...(await api('POST', '/api/route-preview', { ...input, routes: W.routes || [], roles: W.roles })), input }; render(); } catch (e) { toast(e.message); }
+  };
   document.querySelectorAll('[data-popen]').forEach((b) => b.onclick = () => { const n = b.dataset.popen; pOpen.has(n) ? pOpen.delete(n) : pOpen.add(n); render(); });
   document.querySelectorAll('[data-pall]').forEach((b) => b.onclick = () => { pAll = b.dataset.pall === '1'; render(); });
   const pa = $('#padd'); if (pa) pa.onclick = () => { pAdd = !pAdd; gOpen = null; render(); if (pAdd) $('#g-q')?.focus(); };
-  const gq = $('#g-q'); if (gq) gq.oninput = () => { gFilter.q = gq.value; applyGalleryFilter(); };
+  // typing searches every category; a chip narrows the current search
+  const gq = $('#g-q'); if (gq) gq.oninput = () => { gFilter.q = gq.value; if (gFilter.q) gFilter.cat = 'all'; applyGalleryFilter(); };
   document.querySelectorAll('[data-gcat]').forEach((b) => b.onclick = () => { gFilter.cat = b.dataset.gcat; applyGalleryFilter(); });
   document.querySelectorAll('[data-gadd]').forEach((b) => b.onclick = () => { gOpen = b.dataset.gadd; render(); $('#g-key')?.focus(); });
   document.querySelectorAll('[data-gclose]').forEach((b) => b.onclick = () => { gOpen = null; render(); });

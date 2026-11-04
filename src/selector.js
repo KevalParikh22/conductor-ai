@@ -23,7 +23,7 @@ export function taskSize({ role, mode, body = '', files = [], diffBytes = 0 }) {
   return { size: 'small', why: files.length ? `${files.length} file${files.length > 1 ? 's' : ''}` : 'short task' };
 }
 
-const isFree = (p) => !!p.free || providerLocation(p) === 'local-model';
+export const isFree = (p) => !!p?.free || (!!p?.baseUrl && providerLocation(p) === 'local-model');
 
 /** Providers whose last 3 recorded attempts (last 24h) all failed for reasons other than rate limits. */
 export function unhealthy(names, now = Date.now()) {

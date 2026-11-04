@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ROLES } from './presets.js';
-import { dispatch, extractTask, taskFiles, resolveChain, openQuestions, UsageError } from './core.js';
+import { dispatch, extractTask, taskFiles, resolveChain, chooseChain, openQuestions, UsageError } from './core.js';
 
 const field = (section, name) => (section.match(new RegExp(`\\*\\*${name}:\\*\\*\\s*(.+)`, 'i')) || [])[1]?.trim() || '';
 
@@ -23,7 +23,7 @@ export function planBatch(cfg, { planPath, tasks, role, allowOpenQuestions }) {
     if (r === 'controller') throw new UsageError(`${id} is a controller task: do it yourself, not in a batch`);
     if (!ROLES[r] || ROLES[r].mode !== 'write') throw new UsageError(`${id}: role "${r}" can't run in a batch (use build, fix, test or docs)`);
     const deps = field(section, 'depends on').split(/[\s,]+/).filter((d) => /^T?\w+$/.test(d) && d !== '-' && !/^none$/i.test(d));
-    return { id, role: r, files: taskFiles(section), deps };
+    return { id, role: r, files: taskFiles(section), deps, section };
   });
   for (const t of items) {
     const inBatch = t.deps.filter((d) => ids.includes(d));
@@ -41,11 +41,16 @@ export function planBatch(cfg, { planPath, tasks, role, allowOpenQuestions }) {
 
 /**
  * Give each task a different first provider where possible: task n of a role starts with the n-th ready
- * provider in that role's chain, and keeps the rest of the chain as its fallback.
+ * provider in that role's chain, and keeps the rest of the chain as its fallback. A task the plan or a route
+ * assigns to a provider keeps that choice.
  */
 export function spreadChains(cfg, items, { provider } = {}) {
   const seen = {};
   return items.map((t) => {
+    if (!provider) {
+      const own = chooseChain(cfg, t.role, { section: t.section || '', body: t.section || '', files: t.files || [] });
+      if (own.how === 'plan' || own.how === 'route') return { ...t, chain: own.chain.map((c) => c.name), route: own.note };
+    }
     const resolved = resolveChain(cfg, t.role, { provider });
     const names = resolved.map((c) => c.name);
     const ready = resolved.filter((c) => !c.skip).map((c) => c.name);

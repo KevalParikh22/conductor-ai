@@ -22,6 +22,21 @@ export function recordUsage(entry) {
   } catch { /* usage logging must never break a run */ }
 }
 
+// Tokens saved are estimates: characters kept out of a model's context, at about 4 characters per token.
+export const CHARS_PER_TOKEN = 4;
+export const SAVING_SOURCES = {
+  diff: 'compact diffs the controller read (conductor diff)',
+  report: 'trimmed worker reports the controller read',
+  'review-diff': 'compact diffs sent to review workers',
+  'free-model': 'tasks the selector gave to a free model first',
+};
+/** Log a saving: { source, chars } or { source, tokens }. Ignored when there is nothing to count. */
+export function recordSaving({ source, chars = 0, tokens, project }) {
+  const t = tokens ?? Math.round(chars / CHARS_PER_TOKEN);
+  if (t > 0) recordUsage({ kind: 'saving', source, tokens: t, project });
+  return t;
+}
+
 /** Usage entries since `sinceMs` (epoch ms). */
 export function readUsage(sinceMs = 0) {
   let text = '';
@@ -60,7 +75,15 @@ export function budgetBlock(name, p, settings = {}) {
 export function usageReport(days = 7) {
   const since = startOfToday() - (days - 1) * 86_400_000;
   const rows = {};
+  const savings = { total: 0, controller: 0, workers: 0, freeRuns: 0, by: {} };
   for (const e of readUsage(since)) {
+    if (e.kind === 'saving') {
+      savings.total += e.tokens || 0;
+      savings.by[e.source] = (savings.by[e.source] || 0) + (e.tokens || 0);
+      if (e.source === 'diff' || e.source === 'report') savings.controller += e.tokens || 0; else savings.workers += e.tokens || 0;
+      if (e.source === 'free-model') savings.freeRuns++;
+      continue;
+    }
     const r = rows[e.provider] ||= { provider: e.provider, runs: 0, ok: 0, input: 0, output: 0, cost: 0, costKnown: true, subscription: true, seconds: 0 };
     if (e.kind === 'chat') r.subscription = false;
     r.runs++; if (e.ok) r.ok++;
@@ -69,7 +92,7 @@ export function usageReport(days = 7) {
     r.seconds += e.seconds || 0;
   }
   const list = Object.values(rows).sort((a, b) => b.runs - a.runs);
-  return { days, since: new Date(since).toISOString().slice(0, 10), rows: list, total: list.reduce((t, r) => t + r.cost, 0), today: spentToday().total };
+  return { days, since: new Date(since).toISOString().slice(0, 10), rows: list, total: list.reduce((t, r) => t + r.cost, 0), today: spentToday().total, savings };
 }
 
 const k = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}k` : String(n));
@@ -84,5 +107,10 @@ export function formatUsage(u, settings = {}) {
   }
   L.push('', `known cost: $${u.total.toFixed(3)} · today: $${u.today.toFixed(3)}${settings.dailyBudgetUSD > 0 ? ` of $${settings.dailyBudgetUSD} daily budget` : ' (no daily budget set)'}`);
   L.push('CLI agents run on your subscriptions: they show runs and time, not tokens. "?" = an API provider without a `price` in config.');
+  if (u.savings?.total) {
+    L.push('', `Tokens saved (estimate, ~${CHARS_PER_TOKEN} characters per token): ~${k(u.savings.total)}`);
+    L.push(`  your controller: ~${k(u.savings.controller)} · workers: ~${k(u.savings.workers)}`);
+    for (const [src, t] of Object.entries(u.savings.by)) L.push(`  ${('~' + k(t)).padStart(8)}  ${SAVING_SOURCES[src] || src}`);
+  }
   return L.join('\n');
 }

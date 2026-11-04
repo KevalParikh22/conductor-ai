@@ -93,6 +93,41 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | `quotaPattern` | (regex) | Output that counts as a rate-limit error for CLIs |
 | `dailyBudgetUSD` | 0 | Daily cap on known API spend across all providers. 0 = no cap. Providers over budget are skipped like cooled-down ones; free ones never count |
 
+## Routing: which provider takes which task
+
+Pin one plan task by adding a line under it:
+```markdown
+### T3: Booking date picker
+- **role:** build
+- **provider:** codex-cli
+```
+Or set rules once, in `routes` (global or per project). The first matching rule puts its providers first; the role's chain stays behind them as fallback:
+```json
+{ "routes": [
+  { "files": "src/frontend/**", "provider": "grok-cli" },
+  { "files": ["*.sql", "migrations/**"], "provider": "codex-cli" },
+  { "text": "translate|copy|wording", "role": "docs", "provider": "kilo-free" }
+] }
+```
+A rule matches when everything it names holds: `role`, `files` (globs; `**` spans folders, a bare `*.sql` matches anywhere) against the task's listed files, and `text` (a case-insensitive regex) against the task. Highest precedence first: `--chain`, `--provider`, the plan's `provider:` line, routes, then the smart selector. `conductor batch` keeps routed tasks on their provider instead of spreading them.
+
+Check where a task would go without running it:
+```bash
+conductor route "add a date picker" --files src/frontend/Booking.tsx
+```
+```bash
+conductor route --plan docs/plan/booking.md --task T3
+```
+In `conductor ui` → Roles → Routing you can add rules and preview a task. Each run's summary shows a `route:` line, and the Runs page shows why each worker went first.
+
+## Local models
+
+Ollama, LM Studio, llama.cpp, vLLM, LocalAI, Jan and a LiteLLM proxy are found on their default ports:
+```bash
+conductor local
+```
+It lists what's running, its models and the best one for coding, or what to do next: start the server, or pull a first model (`ollama pull qwen3-coder`) when it only has embedding models. `conductor local --enable` turns the running ones on with that model. `conductor setup` and Providers in `conductor ui` offer the same. Local models are free and private, so the smart selector treats them like free API models.
+
 ## Saving tokens
 
 Your controller's context is the expensive part, so conductor keeps what it reads small:
@@ -101,6 +136,10 @@ Your controller's context is the expensive part, so conductor keeps what it read
 - **Compact diffs.** `conductor diff` (working tree, new files included), `conductor diff conductor/T3` (a parallel task's branch) or `conductor diff A..B`. Whitespace-only changes, lockfiles, build output and source maps are listed but not shown, with 2 lines of context and long files cut (`--lines`). It prints how much of the full diff it showed. Review workers get the same compact diff.
 - **Trimmed reports.** `report.md` starts at the worker's `## RESULT` line, so tool transcripts printed before it never reach the controller.
 - **The `/conduct-*` commands** tell the controller to read only the summary, `report.md` and `conductor diff`.
+- **What it adds up to.** Each run's summary has a `tokens:` line, `conductor diff` prints its saving, and `conductor usage` and the Runs page total them. They're estimates (about 4 characters per token):
+  - **Controller tokens:** diff and report text kept out of Claude's context.
+  - **Worker tokens:** compacted review diffs.
+  - **Free-model picks:** tokens spent on a free model where the role's first choice wasn't free.
 
 ## Usage and budgets
 

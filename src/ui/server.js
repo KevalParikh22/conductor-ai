@@ -10,11 +10,12 @@ import { DEFAULT_CONFIG, CLI_PRESETS, ROLES, CONTROLLERS } from '../presets.js';
 import { statusData } from '../status.js';
 import { listRuns } from '../runs.js';
 import { catalogStatus, addProviderAuto } from '../setup.js';
+import { detectLocal } from '../local.js';
 import { usageReport } from '../usage.js';
 import { testProvider } from '../providers.js';
 import { listFreeModels, listProviderModels } from '../models.js';
 import { initProject, setupGlobal } from '../init.js';
-import { clearCooldowns, getCooldowns } from '../core.js';
+import { clearCooldowns, getCooldowns, chooseChain } from '../core.js';
 import { deepMerge, isPlainObject, which, loadEnvFile } from '../util.js';
 import { VERSION } from '../version.js';
 import * as git from '../git.js';
@@ -51,7 +52,7 @@ function stateFor(root) {
   return {
     version: VERSION, root, inRepo, hasProjectConfig: fs.existsSync(projectConfigPath(root)),
     paths: { global: GLOBAL_CONFIG, secrets: GLOBAL_SECRETS, project: projectConfigPath(root) },
-    effective: { controller: cfg.controller, providers: cfg.providers, roles: cfg.roles, settings: cfg.settings },
+    effective: { controller: cfg.controller, providers: cfg.providers, roles: cfg.roles, settings: cfg.settings, routes: cfg.routes || [] },
     bases: { global: DEFAULT_CONFIG, project: deepMerge(DEFAULT_CONFIG, globalScope) },
     builtinProviders: Object.keys(DEFAULT_CONFIG.providers),
     status: statusData(cfg), secrets: secretsState(cfg), cooldowns: getCooldowns(), errors: validateConfig(cfg),
@@ -120,8 +121,18 @@ export function createUiServer({ cwd = process.cwd(), token = crypto.randomBytes
         case 'GET /api/runs': return send(200, { runs: listRuns(root, { limit: 50 }), usage: usageReport(7), budget: loadConfig(root).settings.dailyBudgetUSD || 0 });
         case 'GET /api/models': return send(200, { models: await listFreeModels() });
         case 'POST /api/providers/add': {
-          const r = await addProviderAuto(root, String(body.id || ''), { key: body.key || undefined, fields: body.fields || {}, scope: body.scope === 'project' ? 'project' : 'global' });
+          const r = await addProviderAuto(root, String(body.id || ''), { key: body.key || undefined, model: body.model || undefined, fields: body.fields || {}, scope: body.scope === 'project' ? 'project' : 'global' });
           return send(200, { ...stateFor(root), added: { name: r.name, model: r.provider.model, roles: r.roles, warning: r.warning } });
+        }
+        case 'GET /api/local': return send(200, { local: await detectLocal() });
+        case 'POST /api/route-preview': {
+          const cfg = loadConfig(root);
+          if (Array.isArray(body.routes)) cfg.routes = body.routes; // preview unsaved rules
+          if (body.roles) cfg.roles = { ...cfg.roles, ...body.roles };
+          const role = ROLES[body.role] ? body.role : 'build';
+          const files = String(body.files || '').split(',').map((x) => x.trim()).filter(Boolean);
+          const r = chooseChain(cfg, role, { body: String(body.task || ''), files });
+          return send(200, { role, how: r.how, note: r.note, chain: r.chain.map((c) => ({ name: c.name, skip: c.skip || null })) });
         }
         case 'POST /api/provider-models': {
           const p = loadConfig(root).providers[body.name];

@@ -138,6 +138,14 @@ conductor init --controller opencode      # AGENTS.md + opencode.json MCP entry
 - **Smart selector.** Every task tries the cheapest provider that can do it: free API models for small tasks with known files, agents for bigger ones, paid APIs last. Providers that keep failing drop to the end.
 - **Compact diffs.** `conductor diff` is what the controller reviews: whitespace-only changes, lockfiles and build output are left out, and long files are cut. On this repo's own last change it was about 40% smaller than `git diff`; far more when lockfiles change.
 - **Short reports.** The controller reads only the worker's RESULT block; tool transcripts stay in the run folder.
+- **See the savings.** Every run's summary, `conductor usage` and the Runs page show the estimated tokens saved.
+
+### You decide who does what
+
+- **Per task:** add `- **provider:** codex-cli` to a plan task.
+- **By rule:** `"routes": [{ "files": "src/frontend/**", "provider": "grok-cli" }]`, matched on files, task text or role.
+- **Preview:** `conductor route "task" --files a.tsx`, or Roles → Routing in the UI, shows where a task would go before anything runs.
+- **Local models:** `conductor local` finds Ollama, LM Studio, llama.cpp and others running on your machine and turns them on.
 
 ### Every agent runs under its own rules
 
@@ -197,6 +205,7 @@ Every one has a setup guide: **[docs/providers](docs/providers/README.md)**. See
 | `conductor build\|fix\|test\|docs\|review\|ask …` | Shortcuts for `run <role>`; add `--worktree` to run on branch `conductor/<id>` |
 | `conductor batch --plan f --tasks T2,T3 [--concurrency 4]` | Independent tasks in parallel, one worktree each |
 | `conductor diff [branch]` | Compact diff to review: lockfiles and whitespace left out, new files included |
+| `conductor route "task" [--files a,b]` · `conductor local [--enable]` | Where a task would go and why; find and turn on local models |
 | `conductor worktree [list]` · `conductor worktree rm <id>\|--all [--force]` | See and clean up worktrees |
 | `conductor setup` · `conductor add <provider>` · `conductor providers` · `conductor keys` | Guided setup; add any of 45 chat APIs; list them; manage keys |
 | `conductor init [--controller claude-code\|antigravity\|codex-cli\|opencode]` | Set up a project |

@@ -315,4 +315,5 @@ export const DEFAULT_CONFIG = {
   providers: DEFAULT_PROVIDERS,
   roles: DEFAULT_ROLES,
   settings: DEFAULT_SETTINGS,
+  routes: [], // which provider takes which task: see src/routing.js
 };

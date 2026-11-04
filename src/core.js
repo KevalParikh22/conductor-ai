@@ -7,11 +7,12 @@ import { runProvider } from './providers.js';
 import * as git from './git.js';
 import { runVerify } from './verify.js';
 import { autoModel } from './models.js';
-import { smartOrder } from './selector.js';
+import { smartOrder, isFree as isFreeProvider } from './selector.js';
+import { taskProviders, matchRoute, describeRoute } from './routing.js';
 import { compactDiff } from './diffview.js';
 import { createWorktree, commitWorktree, removeWorktree } from './worktree.js';
 import { GLOBAL_DIR, readJSON, writeJSON, timestamp, rel } from './util.js';
-import { budgetBlock, estimateCost, recordUsage } from './usage.js';
+import { budgetBlock, estimateCost, recordUsage, recordSaving } from './usage.js';
 
 const PROMPTS = new URL('./prompts/', import.meta.url);
 const loadPrompt = (n) => fs.readFileSync(new URL(`${n}.md`, PROMPTS), 'utf8');
@@ -124,6 +125,24 @@ export function applyFileBlocks(root, blocks, extraProtected = []) {
 }
 
 // ---------------- chain resolution ----------------
+/**
+ * Which providers take this task, in order, and why. Highest precedence first: an explicit chain, a provider
+ * given on the command line, the plan task's "provider:" line, a matching route in config, then the smart
+ * selector over the role's chain. Returns { chain (resolved entries), how, note }.
+ */
+export function chooseChain(cfg, role, { provider, chain, section = '', body = '', files = [], diffBytes = 0 } = {}) {
+  if (chain?.length) return { chain: resolveChain(cfg, role, { chain }), how: 'chain', note: 'chain given' };
+  if (provider) return { chain: resolveChain(cfg, role, { provider }), how: 'provider', note: `${provider} first (--provider)` };
+  const own = cfg.roles[role] || [];
+  const pinned = taskProviders(section);
+  if (pinned.length) return { chain: resolveChain(cfg, role, { chain: [...pinned, ...own.filter((n) => !pinned.includes(n))] }), how: 'plan', note: `plan says ${pinned.join(', ')}` };
+  const hit = matchRoute(cfg.routes, { role, body: `${body}\n${section}`, files });
+  if (hit?.providers.length) return { chain: resolveChain(cfg, role, { chain: [...hit.providers, ...own.filter((n) => !hit.providers.includes(n))] }), how: 'route', note: `route ${hit.index + 1}: ${describeRoute(hit.route)}` };
+  const base = resolveChain(cfg, role, {});
+  if (cfg.settings?.smartSelect === false) return { chain: base, how: 'role', note: '' };
+  const pick = smartOrder(base, { role, mode: ROLES[role]?.mode, body, files, diffBytes });
+  return { chain: pick.chain, how: pick.note ? 'selector' : 'role', note: pick.note };
+}
 export function resolveChain(cfg, role, { provider, chain } = {}) {
   let names = chain?.length ? chain : (cfg.roles[role] || []);
   if (provider) names = [provider, ...names.filter((n) => n !== provider)];
@@ -196,7 +215,7 @@ export async function dispatch(cfg, opts) {
 
   // ---- task body
   let body = '', planText = '', section = '';
-  let diffBytes = 0; // size of the full review diff, for the selector
+  let diffBytes = 0, reviewSaved = 0; // full review diff size (for the selector) and what compacting it saved
   if (opts.planPath) {
     const planAbs = path.resolve(root, opts.planPath);
     if (!fs.existsSync(planAbs)) throw new UsageError(`plan not found: ${opts.planPath}`);
@@ -210,6 +229,7 @@ export async function dispatch(cfg, opts) {
     if (cd.empty) throw new UsageError(`nothing to review: no changes vs ${base}`);
     let diff = cd.text;
     diffBytes = cd.fullChars;
+    reviewSaved = Math.max(0, cd.fullChars - cd.chars);
     const max = settings.maxDiffBytes || 100000;
     if (diff.length > max) diff = diff.slice(0, max) + `\n... [diff truncated at ${max} bytes: open the changed files directly for the rest]\n`;
     body = (opts.planPath ? `Plan file: ${opts.planPath}\n` : '') + (opts.focus ? `Extra focus: ${opts.focus}\n` : '') +
@@ -277,16 +297,13 @@ export async function dispatch(cfg, opts) {
   }
   const quotaRe = new RegExp(settings.quotaPattern, 'i');
   const timeoutMs = (settings.timeoutSec || 1200) * 1000;
-  let chain = resolveChain(cfg, role, { provider: opts.provider, chain: opts.chain });
-  // smart selector: cheapest capable provider first (not when the caller chose the chain or a provider)
-  if (settings.smartSelect !== false && !opts.chain?.length && !opts.provider) {
-    const pick = smartOrder(chain, { role, mode, body, files: [...(opts.files || []), ...taskFiles(section)], diffBytes });
-    chain = pick.chain;
-    if (pick.note) summary.selector = pick.note;
-  }
+  const picked = chooseChain(cfg, role, { provider: opts.provider, chain: opts.chain, section, body, files: [...(opts.files || []), ...taskFiles(section)], diffBytes });
+  const chain = picked.chain;
+  if (picked.how === 'selector' && picked.note) summary.selector = picked.note;
+  if (picked.how === 'plan' || picked.how === 'route') summary.route = picked.note;
   // files already modified before the run (allowed with --allow-dirty): can't be credited to the worker
   const preDirty = mode === 'write' && inRepo ? new Set(git.changedFiles(work)) : new Set();
-  let winnerText = '';
+  let winnerText = '', lastPromptChars = 0;
   // hooks and .git/config can run programs: snapshot them so whatever a worker writes there is undone
   const control = inRepo ? git.snapshotControl(work) : null;
   const headBefore = inRepo ? git.head(work) : '';
@@ -305,6 +322,7 @@ export async function dispatch(cfg, opts) {
     // chat APIs, and agents whose read mode has no tools (goose), get the project context inlined
     const inline = kind === 'chat' || (mode === 'read' && CLI_PRESETS[c.p.preset]?.readInlineContext);
     const userPrompt = inline ? `${chatContext()}\n---\n# TASK (role: ${role})\n${body}` : agentPrompt;
+    lastPromptChars = userPrompt.length;
     // an API provider without a model gets the best one from its live list (cached for a day)
     const p = kind === 'chat' && !c.p.model ? { ...c.p, model: await autoModel(c.name, c.p) } : c.p;
     let res = kind === 'chat' && !p.model
@@ -370,6 +388,15 @@ export async function dispatch(cfg, opts) {
   const report = trimReport(winnerText, settings.maxReportBytes || 8000);
   fs.writeFileSync(reportPath, report);
   if (report.length < winnerText.length) fs.writeFileSync(path.join(runDir, 'report.full.md'), winnerText);
+  // estimated tokens kept out of a model's context by this run
+  const proj = path.basename(root);
+  const saved = { report: recordSaving({ source: 'report', chars: winnerText.length - report.length, project: proj }), 'review-diff': recordSaving({ source: 'review-diff', chars: reviewSaved, project: proj }) };
+  const win = summary.attempts.at(-1);
+  if (summary.selector && win && isFreeProvider(cfg.providers[win.provider]) && !isFreeProvider(cfg.providers[(cfg.roles[role] || []).find((n) => providerReadiness(n, cfg.providers[n] || {}).ready)] || {})) {
+    saved['free-model'] = recordSaving({ source: 'free-model', tokens: (win.tokens?.input || 0) + (win.tokens?.output || 0) || Math.round((lastPromptChars + winnerText.length) / 4), project: proj });
+  }
+  const savedTotal = Object.values(saved).reduce((t, n) => t + n, 0);
+  if (savedTotal) summary.tokensSaved = { tokens: savedTotal, ...Object.fromEntries(Object.entries(saved).filter(([, n]) => n)) };
   summary.report = rel(root, reportPath);
   summary.status = (winnerText.match(/^#*\s*(RESULT|VERDICT):.*$/m) || [null])[0];
   summary.exitCode = 0;
@@ -447,6 +474,7 @@ export function formatSummary(s) {
   L.push('', '==================== CONDUCTOR RESULT ====================');
   L.push(`role:      ${s.role}${s.task ? `   task: ${s.task}` : ''}${s.plan ? `   plan: ${s.plan}` : ''}`);
   if (s.worktree) L.push(`worktree:  ${s.worktree.branch}${s.worktree.removed ? ' (removed: nothing to keep)' : `  ${s.worktree.dir}`}`);
+  if (s.route) L.push(`route:     ${s.route}`);
   if (s.selector) L.push(`selector:  ${s.selector}`);
   L.push(`attempts:  ${s.attempts.map((a) => `${a.provider}(${a.reason}${a.stashed ? ', stashed' : ''})`).join(' → ') || '(none)'}`);
   if (!s.winner) {
@@ -468,6 +496,7 @@ export function formatSummary(s) {
   if (s.mode === 'write') L.push(`changed:   ${s.changed.join(', ') || '(nothing)'}`);
   if (s.verify) L.push(`verify:    ${s.verify.status}${s.verify.scope === 'task' ? ' [task verify]' : ''}${s.verify.cmd ? ` (${s.verify.cmd})` : ''}${s.verify.status === 'FAIL' ? `, log: ${s.verify.log}` : ''}${s.verify.note ? `, ${s.verify.note}` : ''}`);
   if (s.saved) L.push(`saved:     ${s.saved}`);
+  if (s.tokensSaved?.tokens) L.push(`tokens:    ~${s.tokensSaved.tokens.toLocaleString()} saved (estimate: ${Object.entries(s.tokensSaved).filter(([k]) => k !== 'tokens').map(([k, n]) => `${{ report: 'report trimmed', 'review-diff': 'compact review diff', 'free-model': 'free model chosen' }[k] || k} ~${n.toLocaleString()}`).join(', ')})`);
   if (s.worktree?.commit) L.push(`commit:    ${s.worktree.commit} on ${s.worktree.branch} (from ${s.worktree.base})`);
   for (const w of s.warnings) L.push(`WARNING:   ${w}`);
   if (s.worktree) {
