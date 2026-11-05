@@ -20,7 +20,7 @@ function expandArgs(template, vars, modelArgs) {
     if (a === '{sessionSettings}') { out.push(vars.sessionSettings || '{}'); continue; }
     out.push(a.replaceAll('{prompt}', vars.prompt).replaceAll('{promptFile}', vars.promptFile)
       .replaceAll('{outFile}', vars.outFile).replaceAll('{ioDir}', vars.ioDir || '').replaceAll('{cwd}', vars.cwd || '')
-      .replaceAll('{devnull}', os.devNull).replaceAll('{model}', vars.model || ''));
+      .replaceAll('{devnull}', os.devNull).replaceAll('{model}', vars.model || '').replaceAll('{timeout}', vars.timeout || '0'));
   }
   return out;
 }
@@ -46,11 +46,13 @@ export function workerEnv(preset, mode, cwd) {
   return { ...env, ...(preset.env || {}), PWD: cwd };
 }
 
+const fmtMin = (ms) => (ms >= 3_600_000 && ms % 3_600_000 === 0 ? `${ms / 3_600_000}h` : `${Math.round(ms / 60_000)}m`);
+
 // Linux caps one argv string at 128 KiB; stay well below it.
 const MAX_PROMPT_ARG = 100_000;
 
 /** Run a CLI agent (antigravity, codex, opencode, kimi, claude, or a custom one). */
-export async function runCli(name, p, { mode, prompt, cwd, timeoutMs, runDir, quotaRe }) {
+export async function runCli(name, p, { mode, prompt, cwd, timeoutMs, idleTimeoutMs = 0, runDir, quotaRe }) {
   const preset = { ...(CLI_PRESETS[p.preset] || {}), ...p };
   if (!which(preset.bin)) return { ok: false, text: '', reason: 'not installed', log: '' };
   const promptFile = path.join(runDir, `${name}.prompt.md`);
@@ -66,11 +68,12 @@ export async function runCli(name, p, { mode, prompt, cwd, timeoutMs, runDir, qu
   const realCwd = fs.realpathSync(cwd);
   const settings = preset.sessionSettings?.[mode];
   const sessionSettings = settings ? JSON.stringify(fillPaths(settings, realCwd)) : '';
-  const args = expandArgs(template, { prompt: promptArg, promptFile, outFile, ioDir: path.dirname(promptFile), cwd: realCwd, model: p.model, sessionSettings }, preset.modelArgs || []);
+  const args = expandArgs(template, { prompt: promptArg, promptFile, outFile, ioDir: path.dirname(promptFile), cwd: realCwd, model: p.model, sessionSettings,
+    timeout: timeoutMs ? `${Math.max(1, Math.round(timeoutMs / 60_000))}m` : '0' }, preset.modelArgs || []);
   const env = workerEnv(preset, mode, realCwd);
-  const r = await run(preset.bin, args, { cwd, input: preset.stdin ? prompt : undefined, timeoutMs, env });
+  const r = await run(preset.bin, args, { cwd, input: preset.stdin ? prompt : undefined, timeoutMs, idleTimeoutMs, env });
   const log = `$ ${preset.bin} ${args.map((a) => (a.length > 80 ? JSON.stringify(a.slice(0, 77) + '...') : a)).join(' ')}\n` +
-    `--- exit ${r.code}${r.timedOut ? ' (timeout)' : ''}\n--- stdout\n${r.stdout}\n--- stderr\n${r.stderr}`;
+    `--- exit ${r.code}${r.timedOut ? (r.idle ? ' (stopped: no output)' : ' (stopped: time limit)') : ''}\n--- stdout\n${r.stdout}\n--- stderr\n${r.stderr}`;
   let text = '';
   try { text = fs.readFileSync(outFile, 'utf8'); } catch { /* none */ }
   if (!text.trim()) text = r.stdout;
@@ -80,7 +83,7 @@ export async function runCli(name, p, { mode, prompt, cwd, timeoutMs, runDir, qu
   }
   if (!text.trim()) text = r.stderr;
 
-  if (r.timedOut) return { ok: false, text, reason: 'timeout', log };
+  if (r.timedOut) return { ok: false, text, reason: r.idle ? `idle (no output for ${fmtMin(idleTimeoutMs)})` : `timeout (${fmtMin(timeoutMs)})`, log };
   if (r.error) return { ok: false, text, reason: 'spawn error', log };
   if (r.code !== 0) {
     return { ok: false, text, reason: quotaRe.test(r.stdout + r.stderr) ? 'quota' : `exit ${r.code}`, log };
@@ -124,7 +127,7 @@ export async function runOpenAI(name, p, { system, prompt, timeoutMs }) {
   const body = { model: p.model, messages: [{ role: 'system', content: system }, { role: 'user', content: prompt }] };
   if (p.maxTokens) body.max_tokens = p.maxTokens;
   if (p.temperature !== undefined) body.temperature = p.temperature;
-  if (Array.isArray(p.fallbackModels) && p.fallbackModels.length) body.models = [p.model, ...p.fallbackModels]; // OpenRouter
+  if (Array.isArray(p.fallbackModels) && p.fallbackModels.length && p.baseUrl.includes('openrouter.ai')) body.models = [...new Set([p.model, ...p.fallbackModels])]; // OpenRouter also falls back on its side
   const url = p.baseUrl.replace(/\/+$/, '') + '/chat/completions';
   let r = await httpJson(url, { headers, body, timeoutMs });
   // free routers (Kilo auto, OpenRouter free) now and then answer 200 with no content: ask once more

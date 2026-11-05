@@ -31,8 +31,8 @@ export const CLI_PRESETS = {
     // pointer to {promptFile} by runCli. {sessionSettings} is passed with --settings: it applies to this
     // run only and is never saved, so the user's own ~/.gemini/antigravity-cli/settings.json is untouched.
     // Not --mode plan for reads: plan mode saves its answer as a plan artifact and prints only a link.
-    write: ['{modelArgs}', '--mode', 'accept-edits', '--sandbox', '--settings', '{sessionSettings}', '--print-timeout', '0', '-p', '{prompt}'],
-    read: ['{modelArgs}', '--sandbox', '--settings', '{sessionSettings}', '--print-timeout', '0', '-p', '{prompt}'],
+    write: ['{modelArgs}', '--mode', 'accept-edits', '--sandbox', '--settings', '{sessionSettings}', '--print-timeout', '{timeout}', '-p', '{prompt}'],
+    read: ['{modelArgs}', '--sandbox', '--settings', '{sessionSettings}', '--print-timeout', '{timeout}', '-p', '{prompt}'],
     sessionSettings: {
       // shell commands run in agy's terminal sandbox without asking: no network, home folder read-only
       write: {
@@ -293,7 +293,9 @@ export const CONTROLLERS = {
 };
 
 export const DEFAULT_SETTINGS = {
-  timeoutSec: 1200,
+  timeoutSec: 1200, // an agent is stopped after this and the next provider runs (a plan task's eta: line can raise it)
+  timeoutFactor: 2, // a task with "- **eta:** 1h" gets eta × this before it is stopped
+  idleTimeoutSec: 0, // stop an agent that prints nothing for this long (0 = off: some agents print only at the end)
   protectedBranches: ['main', 'master'],
   protectedPaths: [], // extra regexes for files workers must never write, e.g. "^app/etc/env\\.php$"
   requireCleanTree: true,

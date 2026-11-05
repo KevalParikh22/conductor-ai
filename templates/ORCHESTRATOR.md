@@ -63,6 +63,7 @@ Keep `HANDOFF.md` current, especially when any tool is close to its limit.
 
 ## Who takes which task
 - Leave it to conductor by default: routing rules in config, then the smart selector.
+- For a big task, add `- **eta:** 1h` so its worker isn't stopped at the default 20-minute limit (it gets 2× the eta). A worker past its limit is stopped and the next provider runs.
 - The project's standing rules are listed by `conductor route --rules`. To pin one task, add `- **provider:** <name>` under it in the plan. To see where a task would go before running it: `conductor route --plan <file> --task T3`.
 
 ## Saving tokens

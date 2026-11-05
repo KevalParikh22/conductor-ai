@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.9.0 (in progress)
+
+- **Time limits that stop hung workers.**
+  - When a worker runs past its limit, conductor now stops its whole process group: the worker and every helper it started. Before, only the agent itself was killed, and a helper holding its output open could keep conductor waiting for hours.
+  - The stopped attempt is stashed and the next provider runs. Its reason shows as `timeout (20m)`.
+- **Setting the limit:**
+  - A plan task can set `- **eta:** 1h`; it is stopped at 2× the eta (`timeoutFactor`).
+  - `--timeout 45m` works on `run` and `batch`.
+  - Each provider can have its own `timeoutMin`, also in the UI.
+  - Optional `idleTimeoutSec` / `idleTimeoutMin` stop a worker that prints nothing for that long.
+  - Antigravity gets the same limit as `--print-timeout` instead of `0`.
+  - Stopping conductor (Ctrl-C) also stops the workers it started.
+- **Fallback models on the same provider.**
+  - With `fallbackModels`, a rate-limited model (or, for APIs, one that stalls or answers nothing) is followed by the next model on that provider before the chain moves on. Only the limited model cools down.
+  - Works for API providers and for agents that take a model (OpenCode, Codex…).
+  - Free and auto-picked API providers find fallbacks from their own model list.
+  - Summaries show the model per attempt, and the UI has a Fallback models field.
+
 ## 0.8.1 (2026-11-04)
 
 - **Rule library for routing.** 12 ready-made rules:

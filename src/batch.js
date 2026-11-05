@@ -62,7 +62,7 @@ export function spreadChains(cfg, items, { provider } = {}) {
 }
 
 /** Run tasks with at most `concurrency` at once. Results come back in task order. */
-export async function runBatch(cfg, { planPath, tasks, role, provider, concurrency, noVerify, replace, note, allowOpenQuestions, onEvent }) {
+export async function runBatch(cfg, { planPath, tasks, role, provider, concurrency, noVerify, replace, note, allowOpenQuestions, timeoutMs, onEvent }) {
   const { items, warnings } = planBatch(cfg, { planPath, tasks, role, allowOpenQuestions });
   const work = spreadChains(cfg, items, { provider });
   const limit = Math.max(1, Math.min(Number(concurrency) || 4, work.length));
@@ -76,7 +76,7 @@ export async function runBatch(cfg, { planPath, tasks, role, provider, concurren
       emit({ type: 'start', provider: t.chain[0] });
       try {
         const s = await dispatch(cfg, {
-          role: t.role, planPath, taskId: t.id, chain: t.chain, note, noVerify,
+          role: t.role, planPath, taskId: t.id, chain: t.chain, note, noVerify, timeoutMs,
           worktree: true, worktreeId: t.id, replace, allowOpenQuestions, onEvent: emit,
         });
         results[i] = { task: t.id, role: t.role, summary: s };
@@ -97,7 +97,7 @@ export function formatBatch(b) {
   for (const r of b.results) {
     const s = r.summary;
     if (!s) { L.push(`${r.task.padEnd(6)} ✗ ${r.error}`); continue; }
-    if (!s.winner) { L.push(`${r.task.padEnd(6)} ✗ every provider failed: ${s.attempts.map((a) => `${a.provider}(${a.reason})`).join(' → ')}`); continue; }
+    if (!s.winner) { L.push(`${r.task.padEnd(6)} ✗ every provider failed: ${s.attempts.map((a) => `${a.provider}${a.model ? `[${a.model}]` : ''}(${a.reason})`).join(' → ')}`); continue; }
     const v = s.verify ? `verify ${s.verify.status}` : 'not verified';
     const c = s.worktree.commit ? `${s.worktree.commit} on ${s.worktree.branch}` : 'no changes';
     L.push(`${r.task.padEnd(6)} ✓ ${s.winner} · ${v}${s.verify?.scope === 'task' ? ' (task)' : ''} · ${c} · ${s.changed.length} file(s)`);

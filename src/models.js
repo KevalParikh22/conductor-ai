@@ -60,3 +60,19 @@ export async function autoModel(name, p) {
   if (best) { cache[name] = { baseUrl: p.baseUrl, model: best, at: Date.now() }; try { writeJSON(AUTO_CACHE(), cache); } catch { /* cache is optional */ } }
   return best;
 }
+
+/**
+ * Up to `max` other models to fall back to on this provider when its model is rate-limited: the best-ranked
+ * from its live list (free ones only for a free provider), remembered for a day. [] when the list can't be fetched.
+ */
+export async function autoFallbacks(name, p, { freeOnly = false, except = '', max = 3 } = {}) {
+  const cache = readJSON(AUTO_CACHE(), {});
+  const key = `${name}#fallbacks`;
+  const hit = cache[key];
+  let list = hit && hit.baseUrl === p.baseUrl && hit.freeOnly === freeOnly && Date.now() - hit.at < AUTO_TTL ? hit.models : null;
+  if (!list) {
+    list = rankModels((await listProviderModels(p, { freeOnly })).models || []).slice(0, max + 2).map((m) => m.id);
+    if (list.length) { cache[key] = { baseUrl: p.baseUrl, freeOnly, models: list, at: Date.now() }; try { writeJSON(AUTO_CACHE(), cache); } catch { /* cache is optional */ } }
+  }
+  return list.filter((m) => m !== except).slice(0, max);
+}

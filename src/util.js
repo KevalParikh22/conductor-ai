@@ -57,31 +57,75 @@ export function which(bin) {
   return null;
 }
 
+// Worker processes still running: killed with their whole process group if conductor itself is stopped.
+const live = new Set();
+function onSignal(sig) {
+  for (const k of live) k('SIGKILL');
+  process.exit(sig === 'SIGINT' ? 130 : 143);
+}
+function track(kill) {
+  if (!live.size) { process.once('SIGINT', onSignal); process.once('SIGTERM', onSignal); }
+  live.add(kill);
+}
+function untrack(kill) {
+  live.delete(kill);
+  if (!live.size) { process.removeListener('SIGINT', onSignal); process.removeListener('SIGTERM', onSignal); }
+}
+
 /**
  * Run a process. Never throws for non-zero exits.
- * @returns {Promise<{code:number|null, stdout:string, stderr:string, timedOut:boolean, error?:string}>}
+ * On POSIX it runs in its own process group, so a timeout stops the helpers it started too: an agent's child
+ * processes can hold its output pipes open, and killing only the agent would leave conductor waiting forever.
+ * idleTimeoutMs stops it when it prints nothing for that long.
+ * @returns {Promise<{code:number|null, stdout:string, stderr:string, timedOut:boolean, idle?:boolean, error?:string}>}
  */
-export function run(cmd, args, { cwd, input, timeoutMs = 0, env, onData } = {}) {
+export function run(cmd, args, { cwd, input, timeoutMs = 0, idleTimeoutMs = 0, env, onData } = {}) {
   return new Promise((resolve) => {
     let child;
+    const group = process.platform !== 'win32';
     try {
-      child = spawn(cmd, args, { cwd, env: env || process.env, stdio: ['pipe', 'pipe', 'pipe'] });
+      child = spawn(cmd, args, { cwd, env: env || process.env, stdio: ['pipe', 'pipe', 'pipe'], detached: group });
     } catch (e) {
       resolve({ code: null, stdout: '', stderr: String(e), timedOut: false, error: String(e) });
       return;
     }
-    let stdout = '', stderr = '', timedOut = false, killer;
-    child.stdout.on('data', (d) => { stdout += d; onData?.(d); });
-    child.stderr.on('data', (d) => { stderr += d; onData?.(d); });
-    if (timeoutMs > 0) {
-      killer = setTimeout(() => {
-        timedOut = true;
-        child.kill('SIGTERM');
-        setTimeout(() => child.kill('SIGKILL'), 10_000).unref();
-      }, timeoutMs);
-    }
-    child.on('error', (e) => { clearTimeout(killer); resolve({ code: null, stdout, stderr: stderr + String(e), timedOut, error: String(e) }); });
-    child.on('close', (code) => { clearTimeout(killer); resolve({ code, stdout, stderr, timedOut }); });
+    let stdout = '', stderr = '', timedOut = false, idle = false, done = false, killer, idler, last;
+    const killTree = (sig) => {
+      if (!child.pid) return;
+      if (group) { try { process.kill(-child.pid, sig); return; } catch { /* group gone: fall through */ } }
+      else if (sig === 'SIGKILL') { try { spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' }); } catch { /* best effort */ } }
+      try { child.kill(sig); } catch { /* already gone */ }
+    };
+    const finish = (r) => {
+      if (done) return;
+      done = true;
+      clearTimeout(killer); clearTimeout(idler); clearTimeout(last);
+      untrack(killTree);
+      resolve(r);
+    };
+    const stop = (why) => {
+      if (timedOut) return;
+      timedOut = true; idle = why === 'idle';
+      killTree('SIGTERM');
+      setTimeout(() => {
+        killTree('SIGKILL');
+        // a grandchild in another group can still hold the pipes: give up waiting for them
+        last = setTimeout(() => finish({ code: null, stdout, stderr, timedOut, idle }), 5_000);
+        last.unref?.();
+      }, 10_000).unref();
+    };
+    const poke = () => {
+      if (!idleTimeoutMs) return;
+      clearTimeout(idler);
+      idler = setTimeout(() => stop('idle'), idleTimeoutMs);
+    };
+    track(killTree);
+    poke();
+    child.stdout.on('data', (d) => { stdout += d; poke(); onData?.(d); });
+    child.stderr.on('data', (d) => { stderr += d; poke(); onData?.(d); });
+    if (timeoutMs > 0) killer = setTimeout(() => stop('timeout'), timeoutMs);
+    child.on('error', (e) => finish({ code: null, stdout, stderr: stderr + String(e), timedOut, idle, error: String(e) }));
+    child.on('close', (code) => finish({ code, stdout, stderr, timedOut, idle }));
     child.stdin.on('error', () => { /* child may exit before reading stdin */ });
     if (input !== undefined) child.stdin.end(input); else child.stdin.end();
   });

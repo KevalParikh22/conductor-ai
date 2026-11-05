@@ -27,7 +27,7 @@ export function listRuns(root, { limit = 20 } = {}) {
       verify: s.verify?.status || null,
       changed: s.changed?.length || 0,
       warnings: s.warnings || [],
-      attempts: tried.map((a) => ({ provider: a.provider, ok: a.ok, reason: a.reason, seconds: a.seconds })),
+      attempts: tried.map((a) => ({ provider: a.provider, model: a.model, ok: a.ok, reason: a.reason, seconds: a.seconds })),
       seconds: Math.round(tried.reduce((t, a) => t + (a.seconds || 0), 0)),
       cost: known.length ? known.reduce((t, a) => t + a.cost, 0) : null,
       branch: s.worktree?.commit ? s.worktree.branch : null,
