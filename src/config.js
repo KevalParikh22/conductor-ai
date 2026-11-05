@@ -145,13 +145,28 @@ export function providerPermissions(p) {
   return { ...(CLI_PRESETS[p.preset]?.permissions || {}), ...(p.permissions || {}) };
 }
 
+// read-arg tokens an override may change or drop without weakening the sandbox: the prompt, model and time limit
+const ADJUSTABLE = /^(\{(prompt|promptFile|outFile|ioDir|modelArgs|model|timeout|devnull)\}|\d+[smh]?)$/;
+
+/**
+ * Tokens of the preset's read args that a provider's own `read` override leaves out (flags such as --sandbox,
+ * their values, {sessionSettings}). Empty when there is no override or it keeps them all.
+ */
+export function readOverrideMissing(p) {
+  const presetRead = CLI_PRESETS[p.preset]?.read;
+  if (p.type !== 'cli' || !p.read || !presetRead) return [];
+  const have = new Set(p.read);
+  return presetRead.filter((t) => !ADJUSTABLE.test(t) && !have.has(t));
+}
+
 /**
  * Is read-only enforced by the CLI itself (sandbox or permission rules), not just asked for in the prompt?
- * A provider that overrides the preset's read args without declaring permissions counts as not enforced.
+ * An override of the preset's read args keeps the guarantee when it still has every enforcing flag (changing
+ * only the model or time limit is fine); otherwise it counts as not enforced unless it declares `permissions`.
  */
 export function readOnlyEnforced(p) {
   if (p.type !== 'cli') return true; // chat APIs only return text
-  if (p.read && !p.permissions) return false;
+  if (p.read && !p.permissions && (!CLI_PRESETS[p.preset]?.read || readOverrideMissing(p).length)) return false;
   return providerPermissions(p).readOnlyEnforced === true;
 }
 

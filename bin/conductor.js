@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { loadConfig, findProjectRoot, validateConfig, GLOBAL_CONFIG, GLOBAL_SECRETS, projectConfigPath, readScope, providerPermissions, readOnlyEnforced } from '../src/config.js';
+import { loadConfig, findProjectRoot, validateConfig, GLOBAL_CONFIG, GLOBAL_SECRETS, projectConfigPath, readScope, providerPermissions, readOnlyEnforced, readOverrideMissing } from '../src/config.js';
 import { dispatch, formatSummary, UsageError, clearCooldowns, getCooldowns, chooseChain, extractTask, taskFiles, parseDuration } from '../src/core.js';
 import { runBatch, formatBatch } from '../src/batch.js';
 import { listWorktrees, removeWorktree } from '../src/worktree.js';
@@ -402,6 +402,8 @@ async function doctor(o) {
     if (r.permissions && o.details) {
       console.log(`    write: ${r.permissions.write || 'unknown (custom CLI): check its own permission settings'}`);
       console.log(`    read:  ${r.permissions.read || 'unknown'}${r.readOnlyEnforced ? '' : '  ⚠ read-only NOT enforced'}`);
+      const missing = readOverrideMissing(cfg.providers[r.name] || {});
+      if (missing.length) console.log(`           your "read" override drops ${missing.join(' ')}: put it back, or set timeoutMin / model instead of overriding the args`);
     }
   }
   errs.forEach((e) => console.log(`✗ config: ${e}`));

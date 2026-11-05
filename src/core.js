@@ -81,10 +81,25 @@ export function openQuestions(planText) {
 /**
  * The part of a worker's output the controller needs: from its RESULT/VERDICT line on (agents often print their
  * whole transcript before it), capped at maxBytes. Falls back to the end of the output.
+ * Findings or notes the worker wrote before that line are kept too, and a bare "VERDICT: CHANGES_REQUESTED"
+ * (or a PARTIAL/BLOCKED result) with nothing after it gets the end of the output before it.
  */
 export function trimReport(text, maxBytes = 8000) {
   const at = text.search(/^#{0,4}\s*(RESULT|VERDICT):/m);
   let r = at > 0 ? text.slice(at) : text;
+  if (at > 0) {
+    const before = text.slice(0, at);
+    const kept = [];
+    for (const name of ['Findings', 'Notes']) {
+      if (new RegExp(`^#{1,4}\\s*${name}\\b`, 'mi').test(r)) continue;
+      const last = [...before.matchAll(new RegExp(`^#{1,4}\\s*${name}\\b[^\\n]*\\n[\\s\\S]*?(?=^#{1,2}\\s|(?![\\s\\S]))`, 'gmi'))].at(-1);
+      if (last && last[0].trim().split('\n').length > 1) kept.push(last[0].trim());
+    }
+    if (kept.length) r = `${r.trimEnd()}\n\n${kept.join('\n\n')}\n`;
+    else if (/CHANGES_REQUESTED|PARTIAL|BLOCKED|FAIL/i.test(r.split('\n')[0]) && r.trim().split('\n').length < 3) {
+      r = `${r.trimEnd()}\n\n## Output before the verdict (last part; full output: report.full.md)\n${before.slice(-4000).trim()}\n`;
+    }
+  }
   if (r.length > maxBytes) r = at >= 0 ? r.slice(0, maxBytes) + `\n… [cut at ${maxBytes} characters; full output: report.full.md]\n` : `[… start cut; full output: report.full.md]\n` + r.slice(-maxBytes);
   return r;
 }
@@ -143,6 +158,17 @@ export function chooseChain(cfg, role, { provider, chain, section = '', body = '
   const pick = smartOrder(base, { role, mode: ROLES[role]?.mode, body, files, diffBytes });
   return { chain: pick.chain, how: pick.note ? 'selector' : 'role', note: pick.note };
 }
+/**
+ * How a finished run ended: 'done', 'partial' (the worker says it did only part: RESULT PARTIAL / BLOCKED /
+ * FAILED), 'verify-failed' (it finished but the checks fail) or 'failed' (no provider finished).
+ */
+export function outcome(s) {
+  if (!s?.winner) return 'failed';
+  if (s.verify?.status === 'FAIL') return 'verify-failed';
+  if (/RESULT:\s*\**\s*(PARTIAL|BLOCKED|FAILED|FAIL)\b/i.test(s.status || '')) return 'partial';
+  return 'done';
+}
+
 const modelKey = (name, model) => `${name}@${model || '(default)'}`;
 
 /**
@@ -454,7 +480,7 @@ export async function dispatch(cfg, opts) {
   const reportPath = path.join(runDir, 'report.md');
   const report = trimReport(winnerText, settings.maxReportBytes || 8000);
   fs.writeFileSync(reportPath, report);
-  if (report.length < winnerText.length) fs.writeFileSync(path.join(runDir, 'report.full.md'), winnerText);
+  if (report !== winnerText) fs.writeFileSync(path.join(runDir, 'report.full.md'), winnerText);
   // estimated tokens kept out of a model's context by this run
   const proj = path.basename(root);
   const saved = { report: recordSaving({ source: 'report', chars: winnerText.length - report.length, project: proj }), 'review-diff': recordSaving({ source: 'review-diff', chars: reviewSaved, project: proj }) };
@@ -473,7 +499,7 @@ export async function dispatch(cfg, opts) {
     const touched = summary.changed.filter((f) => isProtected(f, protectedExtra));
     if (touched.length) summary.warnings.push(`worker modified protected files: ${touched.join(', ')}`);
     if (summary.attempts.at(-1)?.kind === 'agent') { // chat replies are applied from their file blocks, so they can't misreport
-      const ev = checkEvidence(winnerText, summary.changed, summary.status, preDirty);
+      const ev = checkEvidence(winnerText, summary.changed, summary.status, preDirty, [work, root]);
       summary.evidence = { claimed: ev.claimed, notChanged: ev.notChanged, notReported: ev.notReported };
       summary.warnings.push(...ev.warnings);
     }
@@ -497,22 +523,57 @@ export async function dispatch(cfg, opts) {
     fs.writeFileSync(dest, winnerText);
     summary.saved = rel(root, dest);
   }
+  summary.outcome = outcome(summary);
   writeJSON(path.join(runDir, 'summary.json'), summary);
   return summary;
 }
 
+/** "src/{a,b}.ts" → ["src/a.ts", "src/b.ts"] (nested groups too). */
+export function expandBraces(p) {
+  const m = p.match(/^(.*?)\{([^{}]*)\}(.*)$/);
+  if (!m || !m[2].includes(',')) return [p];
+  return [...new Set(m[2].split(',').flatMap((alt) => expandBraces(`${m[1]}${alt.trim()}${m[3]}`)))];
+}
+
 /**
  * Paths a worker lists under "## Files changed" in its report, or null when the report has no such section.
- * Accepts "- path — summary", "- `path`: summary", "* path".
+ * Accepts "- path — summary", "- `path`: summary", "* path", "- `a.ts`, `b.ts`", markdown links
+ * "[a.ts](file:///…/a.ts)", absolute paths (made relative to `roots`), "src/{a,b}.ts" and "a.ts:12".
+ * Words that aren't paths ("No", "Tabs") are skipped unless they name a file in `known`.
  */
-export function claimedFiles(report) {
+export function claimedFiles(report, { roots = [], known = [] } = {}) {
   const m = report.match(/^#{1,4}\s*Files changed\s*$([\s\S]*?)(?=^#{1,4}\s|(?![\s\S]))/mi);
   if (!m) return null;
+  const bases = [...new Set(roots.flatMap((r) => { try { return [r, fs.realpathSync(r)]; } catch { return [r]; } }))].map((r) => r.replace(/\/+$/, ''));
+  const knownSet = new Set(known);
   const files = [];
+  const clean = (raw) => {
+    let p = decodeURIComponent(raw.trim()).replace(/^file:\/\//, '').replace(/^\*\*|\*\*$/g, '').replace(/[),.;:]+$/, '');
+    p = p.replace(/#L?\d+(-L?\d+)?$/, '').replace(/:\d+(:\d+)?$/, '');
+    if (path.isAbsolute(p)) {
+      const base = bases.find((b) => p === b || p.startsWith(b + '/'));
+      if (!base) return null; // outside the project
+      p = p.slice(base.length + 1);
+    }
+    p = p.replace(/^\.\//, '');
+    if (!p || /^\(?(none|nothing|n\/a)\)?\.?$/i.test(p)) return null;
+    return p;
+  };
+  const looksLikePath = (p) => knownSet.has(p) || /\//.test(p) || /\.[A-Za-z0-9_-]{1,10}$/.test(p) || /^(Dockerfile|Makefile|Procfile|Gemfile|Rakefile)$/.test(p);
   for (const line of m[1].split('\n')) {
-    const item = line.match(/^\s*[-*+]\s+`?([^`\s:—–]+?)`?(?:\s|:|$)/);
-    if (!item || /^\(?(none|nothing|n\/a)\)?\.?$/i.test(item[1])) continue;
-    files.push(item[1].replace(/^\.\//, ''));
+    const item = line.match(/^\s*(?:[-*+]|\d+[.)])\s+(.*)$/);
+    if (!item) continue;
+    const text = item[1];
+    let raw = [...text.matchAll(/\[([^\]]*)\]\(([^)\s]+)\)/g)].map((l) => (/^https?:/.test(l[2]) ? l[1] : l[2]));
+    if (!raw.length) raw = [...text.matchAll(/`([^`]+)`/g)].map((b) => b[1]).filter((b) => !/\s/.test(b.trim()));
+    if (!raw.length) raw = [text.trim().split(/\s+/)[0]];
+    // a backticked or linked path list may be followed by prose; only the first group of paths counts
+    for (const r of raw) {
+      for (const one of expandBraces(r.replace(/^\*\*|\*\*$/g, ''))) {
+        const p = clean(one);
+        if (p && looksLikePath(p) && !files.includes(p)) files.push(p);
+      }
+    }
   }
   return files;
 }
@@ -521,8 +582,8 @@ export function claimedFiles(report) {
  * Evidence check: does the worker's report match what git shows? Claims are not trusted on their own.
  * Returns warnings plus the details for the summary.
  */
-export function checkEvidence(report, changed, status, preDirty = new Set()) {
-  const claimed = claimedFiles(report);
+export function checkEvidence(report, changed, status, preDirty = new Set(), roots = []) {
+  const claimed = claimedFiles(report, { roots, known: changed });
   const actual = new Set(changed);
   const warnings = [];
   if (/RESULT:\s*DONE/i.test(status || '') && !changed.length) warnings.push('the worker reports DONE but changed no files');
@@ -559,6 +620,9 @@ export function formatSummary(s) {
   }
   L.push(`report:    ${s.report}`);
   L.push(`status:    ${s.status || '(no RESULT/VERDICT line, so read the report)'}`);
+  const out = outcome(s);
+  if (out === 'partial') L.push('outcome:   PARTIAL. The worker says it did only part of the task: read the report, then finish it or retry the rest');
+  if (out === 'verify-failed') L.push('outcome:   NOT DONE. The worker finished but verify fails: fix it, or retry with --note "<what failed>"');
   if (s.applied.length) L.push(`applied:   ${s.applied.join(', ')}`);
   if (s.rejected.length) L.push(`rejected:  ${s.rejected.join(', ')}`);
   if (s.mode === 'write') L.push(`changed:   ${s.changed.join(', ') || '(nothing)'}`);
