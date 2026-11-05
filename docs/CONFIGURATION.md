@@ -68,7 +68,10 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | `apiKeyEnv` | api | Name of the env var holding the key; empty for local servers |
 | `apiKeyOptional` | api | `true` = send the key if set, but run without one too (e.g. `kilo-free`) |
 | `headers`, `maxTokens`, `temperature` | api | Optional request tuning |
-| `fallbackModels` | openrouter | Extra models OpenRouter tries if the first is unavailable |
+| `fallbackModels` | api, cli | Models to try on this provider, in order, when `model` is rate-limited (APIs also switch when a model stalls or answers nothing). The limited model cools down alone; the provider is skipped only when every model is. Agents need a preset that takes a model (OpenCode, Codex, Claude, Kimi, Aider…). Free and auto-picked API providers find fallbacks from their live model list when this is unset |
+| `autoFallback` | api | `false` = don't look up fallback models automatically |
+| `timeoutMin` | all | Time limit for this provider, in minutes, instead of `timeoutSec` (or `apiTimeoutSec` for APIs) |
+| `idleTimeoutMin` | cli | Stop this agent when it prints nothing for this long |
 | `price` | api | `{ "input": 0.3, "output": 2.5 }`: dollars per 1M tokens, used for cost and budgets. Without it, cost is shown as unknown |
 | `free` | api | `true` = costs nothing (set on Kilo, OpenRouter free and local models). Remove it if you switch that provider to a paid model |
 | `dailyBudgetUSD` | api | Daily cap for this provider alone (needs `price`) |
@@ -78,7 +81,9 @@ An empty chain means the controller does that role itself. For one run, `--provi
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `timeoutSec` | 1200 | Max seconds per attempt; then the next provider runs |
+| `timeoutSec` | 1200 | Max seconds per agent attempt. The worker and everything it started are stopped, the attempt is stashed and the next provider runs. `--timeout 45m` on `run` or `batch` overrides it |
+| `timeoutFactor` | 2 | A plan task with `- **eta:** 1h` may run eta × this (here 2h) before it is stopped; an eta never lowers the limit |
+| `idleTimeoutSec` | 0 | Stop an agent that prints nothing for this long. Off by default because some agents print only at the end |
 | `apiTimeoutSec` | 300 | API (chat) providers give up after this and the next provider runs; a stalled free route shouldn't hold the chain for the agent timeout |
 | `cooldownMinutes` | 30 | How long a rate-limited provider is skipped (or its `Retry-After`) |
 | `protectedBranches` | `["main","master"]` | Write roles refuse to run on these |
@@ -119,6 +124,23 @@ conductor route "add a date picker" --files src/frontend/Booking.tsx
 conductor route --plan docs/plan/booking.md --task T3
 ```
 For a ready-made set, run `conductor route --add starter` (or pick from the 12 library rules with `conductor route --templates`). The [routing guide](ROUTING.md) explains every rule. In `conductor ui` → Roles → Routing you can add rules from the library, write your own and preview a task. Each run's summary shows a `route:` line, and the Runs page shows why each worker went first.
+
+## Time limits and model fallback
+
+A worker that runs too long is stopped, with every process it started, and the next provider takes over. The limit is `timeoutSec` (20 minutes), or the provider's `timeoutMin`. Big tasks can say how long they should take:
+```markdown
+### T4: Migrate the order history screen
+- **role:** build
+- **eta:** 1h
+```
+That task may run 2 hours (`timeoutFactor`) before conductor stops it. `--timeout 3h` sets the limit for one command. Antigravity also gets the limit as its own `--print-timeout`.
+
+When a model hits its rate limit, the same provider tries its next model before the chain moves on:
+```json
+"nvidia-nim": { "model": "qwen/qwen3-coder-480b-a35b-instruct", "fallbackModels": ["moonshotai/kimi-k2-instruct"] },
+"opencode":   { "model": "opencode/big-pickle", "fallbackModels": ["opencode/glm-5.3-flash-free"] }
+```
+Pick model ids from `conductor models <provider>`. Only the limited model cools down. Free API providers (Kilo, OpenRouter free) and providers whose model is picked automatically find fallbacks from their own model list. The run summary shows each model tried, e.g. `nvidia-nim[qwen3-coder](quota) → nvidia-nim[kimi-k2](ok)`.
 
 ## Local models
 

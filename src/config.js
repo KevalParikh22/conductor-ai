@@ -114,6 +114,8 @@ export function validateConfig(cfg) {
     if (!['cli', 'openai', 'anthropic'].includes(p.type)) errors.push(`provider ${name}: unknown type "${p.type}"`);
     if (p.type === 'cli' && !CLI_PRESETS[p.preset] && !(p.bin && p.write)) errors.push(`provider ${name}: unknown preset "${p.preset}" (or give bin + write/read args)`);
     if (p.type !== 'cli' && !p.baseUrl) errors.push(`provider ${name}: baseUrl is required`);
+    if (p.fallbackModels !== undefined && !(Array.isArray(p.fallbackModels) && p.fallbackModels.every((m) => typeof m === 'string'))) errors.push(`provider ${name}: fallbackModels must be a list of model names`);
+    for (const k of ['timeoutMin', 'idleTimeoutMin']) if (p[k] !== undefined && !(Number(p[k]) > 0)) errors.push(`provider ${name}: ${k} must be a number of minutes`);
   }
   errors.push(...routeErrors(cfg.routes, cfg.providers));
   for (const [role, chain] of Object.entries(cfg.roles || {})) {

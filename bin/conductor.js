@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { loadConfig, findProjectRoot, validateConfig, GLOBAL_CONFIG, GLOBAL_SECRETS, projectConfigPath, readScope, providerPermissions, readOnlyEnforced } from '../src/config.js';
-import { dispatch, formatSummary, UsageError, clearCooldowns, getCooldowns, chooseChain, extractTask, taskFiles } from '../src/core.js';
+import { dispatch, formatSummary, UsageError, clearCooldowns, getCooldowns, chooseChain, extractTask, taskFiles, parseDuration } from '../src/core.js';
 import { runBatch, formatBatch } from '../src/batch.js';
 import { listWorktrees, removeWorktree } from '../src/worktree.js';
 import { statusReport, statusData } from '../src/status.js';
@@ -66,6 +66,7 @@ Work (normally called by the controller)
      --base <ref> --focus "..."  review options
      --save <file>               ask: save the answer
      --worktree [--replace]      run in its own checkout on branch conductor/<id> and commit there
+     --timeout 45m               stop a worker after this and try the next (default: settings.timeoutSec, or 2× the task eta)
      --no-verify --allow-dirty --allow-open-questions --json
   conductor batch --plan <file> --tasks T1,T2,T3 [--concurrency 4] [--role r] [--provider p] [--replace] [--json]
   conductor diff [branch | A..B] [--lines 200]   compact diff for review (default: working tree, new files included)
@@ -128,6 +129,14 @@ function routeRules(cfg, o) {
   console.log('Routing rules, first match wins:');
   routes.forEach((r, i) => console.log(`  ${String(i + 1).padStart(2)}. ${describeRoute(r)}${r.from ? `   (${r.from})` : ''}`));
   return 0;
+}
+
+/** --timeout 45m / 2h / 90 (minutes) → ms, or undefined. */
+function timeoutOpt(o) {
+  if (o.timeout === undefined) return undefined;
+  const ms = parseDuration(o.timeout);
+  if (!ms) throw new UsageError(`--timeout: can't read "${o.timeout}" (try 45m, 2h or 1h30m)`);
+  return ms;
 }
 
 function parseArgs(argv) {
@@ -265,7 +274,7 @@ async function main() {
         role, task: o._.join(' ') || undefined, planPath: o.plan, taskId: o.task, provider: o.provider,
         chain: o.chain ? o.chain.split(',').map((x) => x.trim()).filter(Boolean) : undefined,
         note: o.note, files: o.files ? o.files.split(',').map((x) => x.trim()) : [], base: o.base, focus: o.focus,
-        save: o.save, noVerify: o['no-verify'], allowDirty: o['allow-dirty'], worktree: o.worktree, replace: o.replace, allowOpenQuestions: o['allow-open-questions'],
+        save: o.save, noVerify: o['no-verify'], allowDirty: o['allow-dirty'], worktree: o.worktree, timeoutMs: timeoutOpt(o), replace: o.replace, allowOpenQuestions: o['allow-open-questions'],
         onEvent: o.json ? undefined : (e) => {
           const m = { worktree: `working in ${e.dir} (branch ${e.branch})`, try: `trying ${e.provider} (${e.kind})…`, skip: `skip ${e.provider}: ${e.reason}`, fail: `${e.provider} failed: ${e.reason}`, ok: `${e.provider} finished`, verify: 'running verify…' }[e.type];
           if (m) process.stderr.write(`conductor: ${m}\n`);
@@ -298,7 +307,7 @@ async function main() {
       if (errs.length) throw new UsageError('config problems:\n  ' + errs.join('\n  '));
       const tasks = (o.tasks || o._.join(',')).split(',').map((x) => x.trim()).filter(Boolean);
       const b = await runBatch(cfg, {
-        planPath: o.plan, tasks, role: o.role, provider: o.provider, concurrency: o.concurrency, noVerify: o['no-verify'], replace: o.replace, note: o.note, allowOpenQuestions: o['allow-open-questions'],
+        planPath: o.plan, tasks, role: o.role, provider: o.provider, concurrency: o.concurrency, noVerify: o['no-verify'], timeoutMs: timeoutOpt(o), replace: o.replace, note: o.note, allowOpenQuestions: o['allow-open-questions'],
         onEvent: o.json ? undefined : (e) => {
           const m = { start: `starting (first choice: ${e.provider})`, try: `trying ${e.provider}…`, fail: `${e.provider} failed: ${e.reason}`, ok: `${e.provider} finished`, verify: 'running verify…', done: 'done' }[e.type];
           if (m) process.stderr.write(`conductor [${e.task}]: ${m}\n`);

@@ -44,7 +44,7 @@ curl -fsSL https://raw.githubusercontent.com/KevalParikh22/conductor-ai/main/scr
 ### ✨ At a glance
 
 - **One controller, many workers.** Claude Code by default; Antigravity CLI, Codex CLI or OpenCode can be the controller too. Workers are picked per role (`build`, `fix`, `test`, `docs`, `review`, `ask`) from an ordered fallback chain.
-- **Quota-aware fallback.** Rate limits (HTTP 429, CLI "usage limit" messages) put a provider on cooldown, honouring `Retry-After`, and the next one starts on a clean tree. If every provider fails, the controller does the task itself.
+- **Quota-aware fallback.** A rate-limited model first falls back to the provider's next model (`fallbackModels`); when none is left, the provider cools down (honouring `Retry-After`) and the next one starts on a clean tree. A worker that runs past its time limit (20 min, or 2× a task's `eta`) is stopped with everything it started. If every provider fails, the controller does the task itself.
 - **Free first.** Default chains lean on Kilo Gateway (no key needed), OpenCode's free models, OpenRouter `:free`, Gemini API and other free tiers, so your paid quota goes to planning and review.
 - **Every agent under its own rules.** Each CLI gets permission rules for that run: write roles edit only the project and can't push; read roles can't edit; your API keys stay out of their environment. Your own CLI settings are never touched.
 - **Parallel tasks.** `conductor batch` runs independent plan tasks at the same time, each in its own git worktree and branch, spread across providers. The controller reviews and merges.

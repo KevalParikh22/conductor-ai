@@ -20,6 +20,7 @@
 - **role:** build | fix | test | docs | controller
 - **provider:** (optional) who takes it first, e.g. `codex-cli`. Leave it out to let routing rules and the smart selector decide
 - **status:** todo | done | failed
+- **eta:** (optional) how long it should take, e.g. `1h`. The worker is stopped at 2× this and the next provider runs
 - **depends on:** none
 - **files:** `src/...`, `src/....test.ts`
 - **steps:**

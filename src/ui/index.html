@@ -397,7 +397,7 @@ const views = {
       <select data-addsel="${r}" style="max-width:220px"><option value="">+ add provider…</option>${names.filter((n) => !chain.includes(n)).map((n) => `<option>${esc(n)}</option>`).join('')}</select></div>`).join('')}</div>`;
   },
   providers() {
-    const field = (n, k, label, ph = '', list = '') => `<div><label class="f">${label}</label><input type="text" data-pf="${esc(n)}|${k}" value="${esc(W.providers[n][k] || '')}" placeholder="${esc(ph)}" ${list ? `list="${list}"` : ''}></div>`;
+    const field = (n, k, label, ph = '', list = '') => `<div><label class="f">${label}</label><input type="text" data-pf="${esc(n)}|${k}" value="${esc([].concat(W.providers[n][k] ?? '').join(', '))}" placeholder="${esc(ph)}" ${list ? `list="${list}"` : ''}></div>`;
     const permNote = (p) => { const m = { ...(S.presets[p.preset]?.permissions || {}), ...(p.permissions || {}) };
       if (!m.write) return '<div class="note">Permissions: custom CLI, check its own settings.</div>';
       return `<div class="note"><b>Write roles:</b> ${esc(m.write)}<br><b>Read roles:</b> ${esc(m.read)}${m.readOnlyEnforced ? '' : ' <span class="pill bad">read-only not enforced</span>'}</div>`; };
@@ -415,7 +415,10 @@ const views = {
         ${p.notes ? `<div class="note">${esc(p.notes)}</div>` : ''}
         ${p.type === 'cli' ? permNote(p) : ''}
         <div class="fields">${field(n, 'model', 'Model', p.type === 'cli' ? 'CLI default' : 'picked automatically', n.startsWith('openrouter') ? 'dl-or' : p.preset === 'opencode' ? 'dl-oc' : provModels[n] ? `dl-m-${n}` : '')}
+          ${p.type !== 'cli' || S.presets[p.preset]?.takesModel ? field(n, 'fallbackModels', 'Fallback models', p.type !== 'cli' && (p.free || !p.model) ? 'found automatically' : 'comma-separated', n.startsWith('openrouter') ? 'dl-or' : p.preset === 'opencode' ? 'dl-oc' : provModels[n] ? `dl-m-${n}` : '') : ''}
+          ${field(n, 'timeoutMin', 'Time limit (minutes)', p.type === 'cli' ? `default ${Math.round((W.settings.timeoutSec || 1200) / 60)}` : `default ${Math.round((W.settings.apiTimeoutSec || 300) / 60)}`)}
           ${p.type !== 'cli' ? field(n, 'baseUrl', 'Base URL') + field(n, 'apiKeyEnv', 'API key env var', 'none for local') : ''}</div>
+        <div class="note" style="margin-top:6px">When a model is rate-limited (or, for APIs, stalls), the next fallback model runs on the same provider before the chain moves on. A worker that runs past its time limit is stopped and the next provider takes over.</div>
         ${provModels[n] ? `<datalist id="dl-m-${esc(n)}">${provModels[n].map((m) => `<option value="${esc(m.id)}">${m.free ? 'free' : ''}</option>`).join('')}</datalist>` : ''}
         <div class="row" style="margin-top:10px">${p.type !== 'cli' ? `<button class="btn small" data-lm="${esc(n)}">${icon('list')} ${provModels[n] ? `${provModels[n].length} models loaded` : 'Load models'}</button>` : ''}${n.startsWith('openrouter') ? `<button class="btn small" id="loadfree">${freeModels ? `${freeModels.length} free models loaded` : 'Load free models'}</button>` : ''}${p.catalog ? `<a class="btn small" href="${GUIDE(p.catalog)}" target="_blank" rel="noopener">${icon('guide')} Guide</a>` : ''}${builtin ? '' : `<button class="btn small" data-del="${esc(n)}">Remove</button>`}</div>
       </div><div class="note" id="test-${esc(n)}" style="padding:0 14px"></div></div>`; };
@@ -512,7 +515,12 @@ function bind() {
   document.querySelectorAll('[data-rm]').forEach((b) => b.onclick = () => { const [r, i] = b.dataset.rm.split('|'); W.roles[r].splice(+i, 1); markDirty(); render(); });
   document.querySelectorAll('[data-addsel]').forEach((s) => s.onchange = () => { if (s.value) { W.roles[s.dataset.addsel].push(s.value); markDirty(); render(); } });
   document.querySelectorAll('[data-en]').forEach((c) => c.onchange = () => { W.providers[c.dataset.en].enabled = c.checked; markDirty(); render(); });
-  document.querySelectorAll('[data-pf]').forEach((i) => i.oninput = () => { const [n, k] = i.dataset.pf.split('|'); W.providers[n][k] = i.value.trim(); markDirty(); });
+  document.querySelectorAll('[data-pf]').forEach((i) => i.oninput = () => {
+    const [n, k] = i.dataset.pf.split('|'), v = i.value.trim(), pr = W.providers[n];
+    if (k === 'fallbackModels') { const l = v.split(',').map((x) => x.trim()).filter(Boolean); if (l.length) pr[k] = l; else delete pr[k]; }
+    else if (k === 'timeoutMin') { if (Number(v) > 0) pr[k] = Number(v); else delete pr[k]; }
+    else pr[k] = v;
+    markDirty(); });
   document.querySelectorAll('[data-test]').forEach((b) => b.onclick = async () => {
     const n = b.dataset.test, out = document.getElementById('test-' + n);
     out.style.paddingBottom = '10px';

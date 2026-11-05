@@ -6,7 +6,7 @@ import { providerReadiness, providerKind, readOnlyEnforced, PROJECT_DIRNAME } fr
 import { runProvider } from './providers.js';
 import * as git from './git.js';
 import { runVerify } from './verify.js';
-import { autoModel } from './models.js';
+import { autoModel, autoFallbacks } from './models.js';
 import { smartOrder, isFree as isFreeProvider } from './selector.js';
 import { taskProviders, matchRoute, describeRoute } from './routing.js';
 import { compactDiff } from './diffview.js';
@@ -143,6 +143,54 @@ export function chooseChain(cfg, role, { provider, chain, section = '', body = '
   const pick = smartOrder(base, { role, mode: ROLES[role]?.mode, body, files, diffBytes });
   return { chain: pick.chain, how: pick.note ? 'selector' : 'role', note: pick.note };
 }
+const modelKey = (name, model) => `${name}@${model || '(default)'}`;
+
+/**
+ * Models to try on one provider, in order: its model (or the best from its live list when blank), then
+ * fallbackModels. Free and auto-picked API providers get fallbacks from their live list when none are set.
+ * Agents take fallbacks only when their preset can pass a model. Rate-limited models are left out.
+ */
+export async function modelsToTry(name, p, kind) {
+  let first = p.model || '';
+  let rest = Array.isArray(p.fallbackModels) ? p.fallbackModels.filter(Boolean) : [];
+  if (kind === 'chat' && !first) first = await autoModel(name, p);
+  if (kind === 'agent' && !(CLI_PRESETS[p.preset]?.modelArgs?.length || p.modelArgs?.length)) rest = [];
+  const all = [...new Set([first, ...rest])];
+  const cooling = getCooldowns();
+  const left = all.filter((m) => !cooling[modelKey(name, m)]);
+  // with no fallbacks of its own, a free or auto-picked API provider looks some up, but only once one is needed
+  const auto = kind === 'chat' && !rest.length && p.autoFallback !== false && (!p.model || p.free)
+    ? async () => (await autoFallbacks(name, p, { freeOnly: !!p.free, except: first })).filter((m) => !cooling[modelKey(name, m)] && !all.includes(m))
+    : null;
+  return { models: all.length > 1 || auto ? left : all, auto };
+}
+
+/** "90m", "1h", "1h30m", "2 hours", "45 min", "1.5h" → milliseconds (0 when it can't be read). */
+export function parseDuration(text) {
+  if (!text) return 0;
+  const t = String(text).toLowerCase().replace(/`/g, '').trim();
+  if (/^\d+(\.\d+)?$/.test(t)) return Number(t) * 60_000; // a bare number is minutes
+  let ms = 0, any = false;
+  for (const m of t.matchAll(/(\d+(?:\.\d+)?)\s*(h(?:ours?|rs?)?|m(?:in(?:ute)?s?)?|s(?:ec(?:ond)?s?)?)(?![a-z])/g)) {
+    any = true;
+    ms += Number(m[1]) * (m[2][0] === 'h' ? 3_600_000 : m[2][0] === 'm' ? 60_000 : 1000);
+  }
+  return any ? Math.round(ms) : 0;
+}
+
+/**
+ * How long one worker may run before it is stopped and the next provider takes over.
+ * --timeout wins. Otherwise the provider's own timeoutMin, else settings.timeoutSec; a plan task's eta
+ * raises that to eta × timeoutFactor, never lowers it. API calls are capped at apiTimeoutSec.
+ */
+export function workerTimeout(p, kind, settings, { etaMs = 0, timeoutMs = 0 } = {}) {
+  if (kind === 'chat') return { timeoutMs: Math.min(timeoutMs || Infinity, (p.timeoutMin ? p.timeoutMin * 60 : settings.apiTimeoutSec || 300) * 1000) };
+  let limit = timeoutMs || (p.timeoutMin ? p.timeoutMin * 60_000 : (settings.timeoutSec || 1200) * 1000);
+  if (!timeoutMs && etaMs) limit = Math.max(limit, Math.round(etaMs * (settings.timeoutFactor || 2)));
+  const idleMin = p.idleTimeoutMin ?? (settings.idleTimeoutSec || 0) / 60;
+  return { timeoutMs: limit, idleTimeoutMs: Math.round(idleMin * 60_000) };
+}
+
 export function resolveChain(cfg, role, { provider, chain } = {}) {
   let names = chain?.length ? chain : (cfg.roles[role] || []);
   if (provider) names = [provider, ...names.filter((n) => n !== provider)];
@@ -296,7 +344,8 @@ export async function dispatch(cfg, opts) {
     emit({ type: 'worktree', dir: wt.dir, branch: wt.branch });
   }
   const quotaRe = new RegExp(settings.quotaPattern, 'i');
-  const timeoutMs = (settings.timeoutSec || 1200) * 1000;
+  const etaMs = parseDuration((section.match(/\*\*eta:\*\*\s*([^\n]+)/i) || [])[1]);
+  const limitFor = (p, kind) => workerTimeout(p, kind, settings, { etaMs, timeoutMs: opts.timeoutMs });
   const picked = chooseChain(cfg, role, { provider: opts.provider, chain: opts.chain, section, body, files: [...(opts.files || []), ...taskFiles(section)], diffBytes });
   const chain = picked.chain;
   if (picked.how === 'selector' && picked.note) summary.selector = picked.note;
@@ -310,63 +359,81 @@ export async function dispatch(cfg, opts) {
   const hooksRel = inRepo ? git.repoHooksPath(work) : null;
   const protectedExtra = [...(settings.protectedPaths || []), ...(hooksRel ? [`^${hooksRel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/`] : [])];
 
-  for (const c of chain) {
+  providers: for (const c of chain) {
     if (c.skip) { summary.attempts.push({ provider: c.name, ok: false, reason: c.skip, skipped: true }); emit({ type: 'skip', provider: c.name, reason: c.skip }); continue; }
     const kind = providerKind(c.p);
     if (mode === 'read' && kind === 'agent' && !readOnlyEnforced(c.p)) {
       summary.warnings.push(`${c.name} cannot be held to read-only (only the prompt asks it not to edit). Check git status after this run`);
     }
-    emit({ type: 'try', provider: c.name, kind });
-    const before = inRepo ? git.stateHash(work) : null;
-    const t0 = Date.now();
     // chat APIs, and agents whose read mode has no tools (goose), get the project context inlined
     const inline = kind === 'chat' || (mode === 'read' && CLI_PRESETS[c.p.preset]?.readInlineContext);
     const userPrompt = inline ? `${chatContext()}\n---\n# TASK (role: ${role})\n${body}` : agentPrompt;
-    lastPromptChars = userPrompt.length;
-    // an API provider without a model gets the best one from its live list (cached for a day)
-    const p = kind === 'chat' && !c.p.model ? { ...c.p, model: await autoModel(c.name, c.p) } : c.p;
-    let res = kind === 'chat' && !p.model
-      ? { ok: false, text: '', reason: 'no model set, and its model list could not be fetched', log: '' }
-      : await runProvider(c.name, p, { mode, prompt: userPrompt, system: chatSystem, cwd: work, runDir: ioDir, quotaRe,
-        // an API call that stalls (free routes sometimes do) should fall back long before an agent's timeout
-        timeoutMs: kind === 'chat' ? Math.min(timeoutMs, (settings.apiTimeoutSec || 300) * 1000) : timeoutMs });
-    if (p !== c.p && p.model && !res.model) res.model = p.model;
-    const tampered = control ? git.restoreControl(control) : [];
-    if (tampered.length) summary.warnings.push(`${c.name} changed git hooks or config, which can run programs. conductor put them back: ${tampered.join(', ')}`);
-    if (headBefore && git.head(work) !== headBefore) summary.warnings.push(`${c.name} made git commits itself (HEAD moved from ${headBefore.slice(0, 8)}). Check them with git log before merging`);
-    fs.writeFileSync(path.join(runDir, `${c.name}.log`), res.log || '');
-
-    if (res.ok && kind === 'chat' && mode === 'write') {
-      const blocks = parseFileBlocks(res.text);
-      const { applied, rejected } = applyFileBlocks(work, blocks, protectedExtra);
-      summary.rejected.push(...rejected);
-      if (!applied.length) res = { ...res, ok: false, reason: rejected.length ? 'only protected/outside files returned' : 'no file blocks in reply' };
-      else summary.applied = applied;
+    // the provider's model, then its fallback models: a model that is rate-limited is skipped until its cooldown ends
+    let { models, auto } = await modelsToTry(c.name, c.p, kind);
+    if (!models.length) {
+      const reason = 'every model is cooling down';
+      summary.attempts.push({ provider: c.name, ok: false, reason, skipped: true }); emit({ type: 'skip', provider: c.name, reason });
+      continue;
     }
-    const attempt = { provider: c.name, kind, ok: res.ok, reason: res.ok ? 'ok' : res.reason, seconds: Math.round((Date.now() - t0) / 100) / 10 };
-    if (res.tokens) { attempt.tokens = res.tokens; attempt.cost = estimateCost(c.p, res.tokens); }
-    recordUsage({ provider: c.name, model: res.model || c.p.model || null, kind: kind === 'agent' ? 'agent' : 'chat', role, project: path.basename(root),
-      ok: res.ok, reason: attempt.reason, seconds: attempt.seconds, tokens: res.tokens || null, cost: attempt.cost ?? null });
-    const changedDuringRead = mode === 'read' && inRepo && before !== git.stateHash(work);
-    if (changedDuringRead) summary.warnings.push(`${c.name} changed files during a read-only run. Check git status.`);
+    for (let mi = 0; mi < models.length; mi++) {
+      const model = models[mi];
+      emit({ type: 'try', provider: c.name, kind, model: mi ? model : undefined });
+      const before = inRepo ? git.stateHash(work) : null;
+      const t0 = Date.now();
+      lastPromptChars = userPrompt.length;
+      const p = model === (c.p.model || '') ? c.p : { ...c.p, model };
+      let res = kind === 'chat' && !p.model
+        ? { ok: false, text: '', reason: 'no model set, and its model list could not be fetched', log: '' }
+        : await runProvider(c.name, p, { mode, prompt: userPrompt, system: chatSystem, cwd: work, runDir: ioDir, quotaRe,
+          ...limitFor(c.p, kind) });
+      if (p !== c.p && p.model && !res.model) res.model = p.model;
+      const tampered = control ? git.restoreControl(control) : [];
+      if (tampered.length) summary.warnings.push(`${c.name} changed git hooks or config, which can run programs. conductor put them back: ${tampered.join(', ')}`);
+      if (headBefore && git.head(work) !== headBefore) summary.warnings.push(`${c.name} made git commits itself (HEAD moved from ${headBefore.slice(0, 8)}). Check them with git log before merging`);
+      fs.writeFileSync(path.join(runDir, `${c.name}${mi ? `.${mi + 1}` : ''}.log`), res.log || '');
 
-    if (res.ok) {
+      if (res.ok && kind === 'chat' && mode === 'write') {
+        const blocks = parseFileBlocks(res.text);
+        const { applied, rejected } = applyFileBlocks(work, blocks, protectedExtra);
+        summary.rejected.push(...rejected);
+        if (!applied.length) res = { ...res, ok: false, reason: rejected.length ? 'only protected/outside files returned' : 'no file blocks in reply' };
+        else summary.applied = applied;
+      }
+      const attempt = { provider: c.name, kind, ok: res.ok, reason: res.ok ? 'ok' : res.reason, seconds: Math.round((Date.now() - t0) / 100) / 10 };
+      if (p.model) attempt.model = p.model;
+      if (res.tokens) { attempt.tokens = res.tokens; attempt.cost = estimateCost(c.p, res.tokens); }
+      recordUsage({ provider: c.name, model: res.model || p.model || null, kind: kind === 'agent' ? 'agent' : 'chat', role, project: path.basename(root),
+        ok: res.ok, reason: attempt.reason, seconds: attempt.seconds, tokens: res.tokens || null, cost: attempt.cost ?? null });
+      const changedDuringRead = mode === 'read' && inRepo && before !== git.stateHash(work);
+      if (changedDuringRead) summary.warnings.push(`${c.name} changed files during a read-only run. Check git status.`);
+
+      if (res.ok) {
+        summary.attempts.push(attempt);
+        summary.winner = c.name; summary.model = res.model || p.model || '(default)';
+        winnerText = res.text;
+        emit({ type: 'ok', provider: c.name });
+        break providers;
+      }
+      const quota = res.reason === 'quota';
+      // another model can help when this one is rate-limited, or (for APIs) when it stalled or answered nothing
+      const modelProblem = quota || (kind === 'chat' && /^(timeout|empty output|server 5)/.test(res.reason || ''));
+      if (modelProblem && mi === models.length - 1 && auto) { models = [...models, ...(await auto())]; auto = null; }
+      const nextModel = models[mi + 1];
+      const tryNext = nextModel !== undefined && modelProblem;
+      if (quota) {
+        const mins = res.retryAfterSec ? Math.max(1, Math.ceil(res.retryAfterSec / 60)) : (settings.cooldownMinutes || 30);
+        if (models.length > 1 || mi) setCooldown(modelKey(c.name, p.model), mins, 'rate limited');
+        // the provider itself cools down only when it has no other model left to try
+        if (!tryNext) setCooldown(c.name, mins, 'rate limited');
+        attempt.reason += ` (cooldown ${mins}m)`;
+      }
+      if (mode === 'write' && (useWorktree || !opts.allowDirty) && git.isDirty(work)) {
+        if (git.stashPush(work, `conductor: failed attempt by ${c.name} ${opts.taskId || role} ${timestamp()}`)) attempt.stashed = true;
+      }
       summary.attempts.push(attempt);
-      summary.winner = c.name; summary.model = res.model || c.p.model || '(default)';
-      winnerText = res.text;
-      emit({ type: 'ok', provider: c.name });
-      break;
+      emit({ type: 'fail', provider: c.name, reason: attempt.reason + (tryNext ? `, trying model ${nextModel}` : '') });
+      if (!tryNext) break;
     }
-    if (res.reason === 'quota') {
-      const mins = res.retryAfterSec ? Math.max(1, Math.ceil(res.retryAfterSec / 60)) : (settings.cooldownMinutes || 30);
-      setCooldown(c.name, mins, 'rate limited');
-      attempt.reason += ` (cooldown ${mins}m)`;
-    }
-    if (mode === 'write' && (useWorktree || !opts.allowDirty) && git.isDirty(work)) {
-      if (git.stashPush(work, `conductor: failed attempt by ${c.name} ${opts.taskId || role} ${timestamp()}`)) attempt.stashed = true;
-    }
-    summary.attempts.push(attempt);
-    emit({ type: 'fail', provider: c.name, reason: attempt.reason });
   }
 
   if (useWorktree) {
@@ -476,7 +543,8 @@ export function formatSummary(s) {
   if (s.worktree) L.push(`worktree:  ${s.worktree.branch}${s.worktree.removed ? ' (removed: nothing to keep)' : `  ${s.worktree.dir}`}`);
   if (s.route) L.push(`route:     ${s.route}`);
   if (s.selector) L.push(`selector:  ${s.selector}`);
-  L.push(`attempts:  ${s.attempts.map((a) => `${a.provider}(${a.reason}${a.stashed ? ', stashed' : ''})`).join(' → ') || '(none)'}`);
+  const multi = (n) => s.attempts.filter((a) => a.provider === n).length > 1; // show models only where a provider switched model
+  L.push(`attempts:  ${s.attempts.map((a) => `${a.provider}${a.model && multi(a.provider) ? `[${a.model}]` : ''}(${a.reason}${a.stashed ? ', stashed' : ''})`).join(' → ') || '(none)'}`);
   if (!s.winner) {
     L.push('worker:    NONE. Every provider failed or was skipped (exit 3).');
     L.push('next:      orchestrator does this task itself, or fix providers (conductor doctor)');
