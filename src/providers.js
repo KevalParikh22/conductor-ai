@@ -3,6 +3,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { CLI_PRESETS } from './presets.js';
 import { run, which, GLOBAL_DIR, SECRET_VARS, keyValue } from './util.js';
+import { DEFAULT_LINKS } from './worktree.js';
 
 /**
  * Result of one provider attempt.
@@ -31,6 +32,26 @@ function fillPaths(value, cwd) {
   if (Array.isArray(value)) return value.map((v) => fillPaths(v, cwd));
   if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k, v]) => [fillPaths(k, cwd), fillPaths(v, cwd)]));
   return value;
+}
+
+/**
+ * Dependency folders a worktree links from the main checkout (node_modules, vendor, .venv) point outside the
+ * worker's folder, and a sandbox that shows only the workspace would hide them: tests then fail with missing
+ * modules. Allow reading (not writing) each such link target.
+ */
+export function withLinkedFolders(settings, cwd) {
+  if (!settings.permissions) return settings;
+  const allow = [];
+  for (const name of DEFAULT_LINKS) {
+    const p = path.join(cwd, name);
+    try {
+      if (!fs.lstatSync(p).isSymbolicLink()) continue;
+      const real = fs.realpathSync(p);
+      if (real !== cwd && !real.startsWith(cwd + path.sep)) allow.push(`read_file(${real})`);
+    } catch { /* missing or dangling link */ }
+  }
+  if (!allow.length) return settings;
+  return { ...settings, permissions: { ...settings.permissions, allow: [...(settings.permissions.allow || []), ...allow] } };
 }
 
 /**
@@ -66,8 +87,8 @@ export async function runCli(name, p, { mode, prompt, cwd, timeoutMs, idleTimeou
   // Use the resolved path: the process runs there, and through a symlink (macOS /var -> /private/var)
   // a deny rule for the unresolved path would not match what the CLI sees.
   const realCwd = fs.realpathSync(cwd);
-  const settings = preset.sessionSettings?.[mode];
-  const sessionSettings = settings ? JSON.stringify(fillPaths(settings, realCwd)) : '';
+  const settings = preset.sessionSettings?.[mode] ? withLinkedFolders(fillPaths(preset.sessionSettings[mode], realCwd), realCwd) : null;
+  const sessionSettings = settings ? JSON.stringify(settings) : '';
   const args = expandArgs(template, { prompt: promptArg, promptFile, outFile, ioDir: path.dirname(promptFile), cwd: realCwd, model: p.model, sessionSettings,
     timeout: timeoutMs ? `${Math.max(1, Math.round(timeoutMs / 60_000))}m` : '0' }, preset.modelArgs || []);
   const env = workerEnv(preset, mode, realCwd);

@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.9.0 (in progress)
+## 0.9.0 (2026-11-05)
 
 - **Time limits that stop hung workers.**
   - When a worker runs past its limit, conductor now stops its whole process group: the worker and every helper it started. Before, only the agent itself was killed, and a helper holding its output open could keep conductor waiting for hours.
@@ -17,6 +17,23 @@
   - Works for API providers and for agents that take a model (OpenCode, Codex…).
   - Free and auto-picked API providers find fallbacks from their own model list.
   - Summaries show the model per attempt, and the UI has a Fallback models field.
+- **Antigravity can read linked dependency folders in worktrees.** A worktree's `node_modules`, `vendor` or `.venv` links point back into the main checkout. When that checkout sits outside agy's sandbox (another drive, for example), tests failed with missing modules. Each link target is now allowed for reading, not writing.
+- **Batches report honestly.**
+  - A task whose verify fails is ✗.
+  - A task whose worker reports `RESULT: PARTIAL`, `BLOCKED` or `FAILED` is ⚠ partial.
+  - The result line reads `2 done, 1 partial, 1 failed`, and the batch exits non-zero unless everything is done.
+  - A single run's summary adds an `outcome:` line in those cases.
+- **Fewer false changed-file warnings.** The report's "Files changed" list now handles:
+  - markdown links (`[a.ts](file:///…/a.ts)`);
+  - absolute paths inside the worktree;
+  - `src/{a,b}.ts`;
+  - `a.ts:12`;
+  - several backticked paths on one line.
+
+  Lines that are prose ("No changes to the API") are ignored.
+- **Review findings stay in `report.md`.** When a reviewer writes its findings before the `VERDICT` line, they are kept. A bare `CHANGES_REQUESTED` with nothing after it gets the end of the output before it. `report.full.md` is always written when the two differ.
+- **Overriding an agent's read args no longer drops the read-only guarantee** when the override keeps the preset's sandbox flags (changing only the model or time limit). `doctor` names the flag an override dropped.
+- **Provider gallery filter fixed.** Category chips and search updated the count but hid nothing, because the cards' layout style overrode the `hidden` attribute.
 
 ## 0.8.1 (2026-11-04)
 

@@ -74,3 +74,10 @@ test('docs and the example file cover every template', () => {
   const example = JSON.parse(fs.readFileSync(path.join(root, 'templates/routes.example.json'), 'utf8'));
   assert.deepEqual(example.routes, addTemplates([], ROUTE_TEMPLATES.map((t) => t.id), P).routes, 'regenerate templates/routes.example.json');
 });
+
+test('UI: elements marked hidden stay hidden, whatever their layout style (provider gallery filter)', () => {
+  const html = fs.readFileSync(path.join(root, 'src/ui/index.html'), 'utf8');
+  assert.match(html, /\[hidden\]\s*\{\s*display:\s*none\s*!important;?\s*\}/);
+  const script = html.match(/<script>([\s\S]*)<\/script>/)[1];
+  assert.doesNotThrow(() => new Function(script), 'the page script parses');
+});

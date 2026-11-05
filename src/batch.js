@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ROLES } from './presets.js';
-import { dispatch, extractTask, taskFiles, resolveChain, chooseChain, openQuestions, UsageError } from './core.js';
+import { dispatch, extractTask, taskFiles, resolveChain, chooseChain, openQuestions, UsageError, outcome } from './core.js';
 
 const field = (section, name) => (section.match(new RegExp(`\\*\\*${name}:\\*\\*\\s*(.+)`, 'i')) || [])[1]?.trim() || '';
 
@@ -87,8 +87,10 @@ export async function runBatch(cfg, { planPath, tasks, role, provider, concurren
     }
   };
   await Promise.all(Array.from({ length: limit }, worker));
-  const ok = results.filter((r) => r.summary?.winner).length;
-  return { plan: planPath, warnings, results, ok, failed: results.length - ok, exitCode: ok === results.length ? 0 : 3 };
+  for (const r of results) r.outcome = r.summary ? outcome(r.summary) : 'failed';
+  const ok = results.filter((r) => r.outcome === 'done').length;
+  const partial = results.filter((r) => r.outcome === 'partial').length;
+  return { plan: planPath, warnings, results, ok, partial, failed: results.length - ok - partial, exitCode: ok === results.length ? 0 : 3 };
 }
 
 export function formatBatch(b) {
@@ -100,12 +102,15 @@ export function formatBatch(b) {
     if (!s.winner) { L.push(`${r.task.padEnd(6)} ✗ every provider failed: ${s.attempts.map((a) => `${a.provider}${a.model ? `[${a.model}]` : ''}(${a.reason})`).join(' → ')}`); continue; }
     const v = s.verify ? `verify ${s.verify.status}` : 'not verified';
     const c = s.worktree.commit ? `${s.worktree.commit} on ${s.worktree.branch}` : 'no changes';
-    L.push(`${r.task.padEnd(6)} ✓ ${s.winner} · ${v}${s.verify?.scope === 'task' ? ' (task)' : ''} · ${c} · ${s.changed.length} file(s)`);
+    const mark = { done: '✓', partial: '⚠', 'verify-failed': '✗' }[r.outcome] || '✓';
+    const why = r.outcome === 'partial' ? ` · ${(s.status || '').replace(/^#+\s*/, '')}` : '';
+    L.push(`${r.task.padEnd(6)} ${mark} ${s.winner} · ${v}${s.verify?.scope === 'task' ? ' (task)' : ''} · ${c} · ${s.changed.length} file(s)${why}`);
     for (const w of s.warnings) L.push(`         WARNING: ${w}`);
   }
-  L.push(`result:    ${b.ok} done, ${b.failed} failed`);
+  L.push(`result:    ${b.ok} done, ${b.partial ? `${b.partial} partial, ` : ''}${b.failed} failed`);
   if (b.results.some((r) => r.summary?.verify?.scope === 'task')) L.push('verify:    "(task)" = the task\'s own verify line from the plan; run `conductor verify` after merging');
   L.push('next:      for each ✓: review `conductor diff conductor/<id>`, then `git merge --no-ff conductor/<id>`; afterwards `conductor worktree rm <id>`.');
+  if (b.partial) L.push('           For each ⚠: the worker did only part of it. Read its report.md, then finish it or retry the rest.');
   L.push('           For each ✗: retry it alone with `conductor run <role> --plan … --task <id> --worktree --provider <other>`, or do it yourself.');
   return L.join('\n');
 }
