@@ -237,7 +237,7 @@ async function main() {
       if (d.empty) { console.log(t ? `no changes in ${t}` : 'no changes'); return 0; }
       console.log(d.text.trimEnd());
       recordSaving({ source: 'diff', chars: d.fullChars - d.chars, project: path.basename(findProjectRoot()) });
-      if (d.fullChars > d.chars) console.log(`\n[compact: ${d.chars.toLocaleString()} of ${d.fullChars.toLocaleString()} characters of the full diff (~${Math.round((d.fullChars - d.chars) / 4).toLocaleString()} tokens saved); full: ${t ? `git diff ${t.includes('..') ? t : `HEAD...${t}`}` : 'git diff, plus new files'}]`);
+      if (d.fullChars > d.chars) console.log(`\n[compact: ${d.chars.toLocaleString()} of ${d.fullChars.toLocaleString()} characters of the full diff, ~${Math.round((d.fullChars - d.chars) / 4).toLocaleString()} tokens kept out of review (estimate); full: ${t ? `git diff ${t.includes('..') ? t : `HEAD...${t}`}` : 'git diff, plus new files'}]`);
       return 0;
     }
     case 'init': {
@@ -249,7 +249,7 @@ async function main() {
       lines.forEach((l) => console.log(l));
       notes.forEach((n) => console.log('\n' + n));
       console.log(`\nNext:
-  1. Fill in section 1 of AGENTS.md (stack + Verify command)
+  1. Fill in section 1 of AGENTS.md (stack; check the Verify command)
   2. conductor ui         choose providers, models and fallback order
   3. conductor doctor     check every provider is ready
   4. In ${CONTROLLERS[controller].label}: /conduct-status, then /conduct-plan <feature>`);

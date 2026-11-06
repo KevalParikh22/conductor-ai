@@ -4,6 +4,14 @@
 
 - **Setup never turns on your controller as a worker.** With Claude Code as the controller, `claude-cli` stays off, and setup says why: work sent to it spends the quota conductor is meant to save. Routing rules never pick it either. You can still turn it on in the UI.
 - **Too-small local models aren't picked.** Models under 7B (read from the name, e.g. `qwen3.5:2b`) fail or produce junk on coding tasks. `conductor local` and setup list them and suggest a coding model to pull.
+- **Hanging free routes fail over fast.**
+  - Free API providers give up after 90s (`freeApiTimeoutSec`), down from 5 minutes.
+  - After one timeout, one more model is tried on that provider; a second timeout moves the chain on.
+  - The fallback model list is fetched with a short wait, and an older list is reused when the provider can't list its models.
+  - In a real check, Kilo's default free route hung and the task finished on another free Kilo model in 96s.
+- **`init` fills in the Verify command** in AGENTS.md from the project's scripts. PHP projects are now detected (`composer test`, `vendor/bin/phpunit`).
+- **Honest labels.** The savings figure is now "context kept out (estimate)" everywhere: run summaries (`context:`), `conductor diff`, `conductor usage` and the Runs page. It is counted from characters, not measured Claude usage. The README no longer quotes a one-sample "40% smaller diff".
+- **The Runs page and `conductor runs` show the real outcome:** done, partial, verify failed or failed.
 - **A fresh `doctor` isn't red.** A default provider with no key yet shows as ○ "optional: add a key". It's a problem (✗) only when you turned it on yourself.
 
 ## 0.9.1 (2026-11-06)

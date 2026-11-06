@@ -322,6 +322,7 @@ export const DEFAULT_SETTINGS = {
   dailyBudgetUSD: 0, // 0 = no cap; counts API providers that have a `price` set
   cooldownMinutes: 30,
   maxDiffBytes: 100000,
+  freeApiTimeoutSec: 90, // free API routes (Kilo, OpenRouter free…): give up sooner, they sometimes hang
   apiTimeoutSec: 300, // API (chat) providers: give up and fall back after this; agents use timeoutSec
   maxReportBytes: 8000, // report.md the controller reads; the full output is kept in report.full.md
   smartSelect: true, // reorder each chain for the cheapest capable provider (see src/selector.js)

@@ -312,12 +312,17 @@ const views = {
     if (!runsData) { loadRuns(); return '<div class="head"><h1>Runs</h1><p class="sub">Loading…</p></div>'; }
     const { runs, usage, budget } = runsData;
     const money = (n) => (n == null ? '–' : n ? `$${n.toFixed(n < 0.01 ? 4 : 2)}` : '$0');
-    const result = (r) => r.state === 'running' ? '<span class="pill warn">running</span>' : r.state === 'done' ? '<span class="pill ok">done</span>' : '<span class="pill bad">failed</span>';
+    const result = (r) => ({
+      running: '<span class="pill warn">running</span>',
+      done: '<span class="pill ok">done</span>',
+      partial: `<span class="pill warn" title="${esc(r.status || 'the worker did only part of the task')}">partial</span>`,
+      'verify-failed': '<span class="pill bad" title="The worker finished, but verify fails">verify failed</span>',
+    }[r.state] || '<span class="pill bad">failed</span>');
     const verify = (v) => !v ? '–' : `<span class="pill ${v === 'PASS' ? 'ok' : v === 'FAIL' ? 'bad' : ''}">${esc(v)}</span>`;
     return `<div class="head"><h1>Runs</h1><p class="sub">Work handed out in this project, newest first; updates every few seconds (<span class="mono">conductor runs</span> in the terminal).</p></div>
     <div class="grid">
       <div class="card stat"><div class="l">Runs (last ${usage.days} days, all projects)</div><div class="n">${usage.rows.reduce((t, r) => t + r.runs, 0)}</div></div>
-      <div class="card stat"><div class="l">Tokens saved (estimate)</div><div class="n">${usage.savings?.total ? `~${usage.savings.total.toLocaleString()}` : '<span class="note" style="font-size:16px">none yet</span>'}</div><div class="note">${usage.savings?.total ? `controller ~${usage.savings.controller.toLocaleString()} · workers ~${usage.savings.workers.toLocaleString()}${usage.savings.freeRuns ? ` · ${usage.savings.freeRuns} task${usage.savings.freeRuns === 1 ? '' : 's'} moved to free models` : ''}` : 'compact diffs, trimmed reports and free-model picks'}</div></div>
+      <div class="card stat"><div class="l" title="Estimated from characters (about 4 per token) kept out of each model's context. Not measured Claude usage.">Context kept out (estimate)</div><div class="n">${usage.savings?.total ? `~${usage.savings.total.toLocaleString()}` : '<span class="note" style="font-size:16px">none yet</span>'}</div><div class="note">${usage.savings?.total ? `controller ~${usage.savings.controller.toLocaleString()} · workers ~${usage.savings.workers.toLocaleString()}${usage.savings.freeRuns ? ` · ${usage.savings.freeRuns} task${usage.savings.freeRuns === 1 ? '' : 's'} moved to free models` : ''}` : 'compact diffs, trimmed reports and free-model picks'}</div></div>
       <div class="card stat"><div class="l">Known API cost today</div><div class="n">${money(usage.today)}</div><div class="note">${budget ? `daily budget ${money(budget)}` : 'no daily budget (Settings)'}</div></div>
     </div>
     <div class="card"><h2>Recent runs</h2>${runs.length ? `<table><tr><th>When</th><th>Role · task</th><th>Result</th><th>Worker</th><th>Verify</th><th>Files</th><th>Time</th></tr>

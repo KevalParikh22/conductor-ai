@@ -85,6 +85,7 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | `allowCommands` | `[]` | Extra commands write workers may run without a permission prompt (Antigravity), on top of the usual build and test tools and your verify command, e.g. `["npx expo export"]` |
 | `timeoutFactor` | 2 | A plan task with `- **eta:** 1h` may run eta × this (here 2h) before it is stopped; an eta never lowers the limit |
 | `idleTimeoutSec` | 0 | Stop an agent that prints nothing for this long. Off by default because some agents print only at the end |
+| `freeApiTimeoutSec` | 90 | Free API providers give up after this. Free routes sometimes hang; after a timeout one more model is tried on that provider, then the chain moves on |
 | `apiTimeoutSec` | 300 | API (chat) providers give up after this and the next provider runs; a stalled free route shouldn't hold the chain for the agent timeout |
 | `cooldownMinutes` | 30 | How long a rate-limited provider is skipped (or its `Retry-After`) |
 | `protectedBranches` | `["main","master"]` | Write roles refuse to run on these |
@@ -159,7 +160,7 @@ Your controller's context is the expensive part, so conductor keeps what it read
 - **Compact diffs.** `conductor diff` (working tree, new files included), `conductor diff conductor/T3` (a parallel task's branch) or `conductor diff A..B`. Whitespace-only changes, lockfiles, build output and source maps are listed but not shown, with 2 lines of context and long files cut (`--lines`). It prints how much of the full diff it showed. Review workers get the same compact diff.
 - **Trimmed reports.** `report.md` starts at the worker's `## RESULT` line, so tool transcripts printed before it never reach the controller.
 - **The `/conduct-*` commands** tell the controller to read only the summary, `report.md` and `conductor diff`.
-- **What it adds up to.** Each run's summary has a `tokens:` line, `conductor diff` prints its saving, and `conductor usage` and the Runs page total them. They're estimates (about 4 characters per token):
+- **What it adds up to.** Each run's summary has a `context:` line, `conductor diff` prints how much it kept out, and `conductor usage` and the Runs page total them. These are estimates of context kept out of each model (about 4 characters per token), not measured Claude usage:
   - **Controller tokens:** diff and report text kept out of Claude's context.
   - **Worker tokens:** compacted review diffs.
   - **Free-model picks:** tokens spent on a free model where the role's first choice wasn't free.

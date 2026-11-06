@@ -150,9 +150,9 @@ conductor init --controller opencode      # AGENTS.md + opencode.json MCP entry
 ### 💸 Built to save tokens
 
 - **Smart selector.** Every task tries the cheapest provider that can do it: free API models for small tasks with known files, agents for bigger ones, paid APIs last. Providers that keep failing drop to the end.
-- **Compact diffs.** `conductor diff` is what the controller reviews: whitespace-only changes, lockfiles and build output are left out, and long files are cut. On this repo's own last change it was about 40% smaller than `git diff`; far more when lockfiles change.
+- **Compact diffs.** `conductor diff` is what the controller reviews: whitespace-only changes, lockfiles and build output are left out, and long files are cut. It prints how much smaller than `git diff` it was, every time.
 - **Short reports.** The controller reads only the worker's RESULT block; tool transcripts stay in the run folder.
-- **See the savings.** Every run's summary, `conductor usage` and the Runs page show the estimated tokens saved.
+- **See what it kept out.** Every run's summary, `conductor usage` and the Runs page show an estimate of the context kept out of each model (counted from characters, not measured Claude usage).
 
 ### 🔀 You decide who does what
 

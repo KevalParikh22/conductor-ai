@@ -5,6 +5,7 @@ import path from 'node:path';
 import { CONTROLLERS, DEFAULT_CONFIG } from './presets.js';
 import { GLOBAL_CONFIG, GLOBAL_SECRETS, PROJECT_DIRNAME, projectConfigPath } from './config.js';
 import { readJSON, writeJSON } from './util.js';
+import { detectVerify } from './verify.js';
 
 const TPL = new URL('../templates/', import.meta.url);
 const tpl = (p) => fs.readFileSync(new URL(p, TPL), 'utf8');
@@ -72,7 +73,12 @@ export function initProject(root, { controller = 'claude-code', mcp = true, vsco
   // 1. AGENTS.md: full template if new, otherwise append just the rules/protocol block
   const agentsPath = path.join(root, 'AGENTS.md');
   const agentsTpl = tpl('AGENTS.md');
-  if (!fs.existsSync(agentsPath)) { fs.writeFileSync(agentsPath, agentsTpl); log('added', 'AGENTS.md   ← fill in section 1 (project facts + Verify command)'); }
+  if (!fs.existsSync(agentsPath)) {
+    // fill in the Verify line from the project's own scripts, so workers and the controller see the real command
+    const verify = detectVerify(root);
+    fs.writeFileSync(agentsPath, verify ? agentsTpl.replace(/`<e\.g\. [^`]*>`/, `\`${verify}\``) : agentsTpl);
+    log('added', `AGENTS.md   ← fill in section 1 (project facts)${verify ? `; Verify detected: ${verify} (check it)` : ' and the Verify command'}`);
+  }
   else {
     const s = '<!-- conductor:rules:start -->', e = '<!-- conductor:rules:end -->';
     mergeMarkedBlock(agentsPath, agentsTpl.slice(agentsTpl.indexOf(s), agentsTpl.indexOf(e) + e.length), s, e, log);
