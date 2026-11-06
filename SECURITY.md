@@ -25,7 +25,8 @@ For every agent, `git push`, `commit`, `reset`, `checkout`, `rebase`, `stash`, `
 - API keys live in `~/.config/conductor/secrets.env` (mode 600), never in config files or the repo.
 - Keys loaded from there are removed from each worker's environment, except the one key that CLI needs. They are also removed from the verify command's environment.
 - Files that look like secrets (`.env*`, `auth.json`, `secrets.env`, `.npmrc`, SSH keys, `*.pem`/`*.key`, and anything in `protectedPaths`) are never sent to an API model as context, even if a task asks for them.
-- `.env*`, `auth.json`, `app/etc/env.php` and the conductor config folder are unreadable through Antigravity's file tools.
+- `.env*`, `auth.json`, `app/etc/env.php` and conductor's own `secrets.env`, `config.json`, `state.json` and `usage.jsonl` are unreadable through Antigravity's file tools. (Task worktrees live in conductor's folder too, so the folder as a whole stays open to the worker working there.)
+- Antigravity may run the usual build, lint and test commands and your verify command without asking, still inside its sandbox with no network. Add others with `settings.allowCommands`.
 
 ### 3. Git can't be turned against you
 

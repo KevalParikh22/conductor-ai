@@ -53,7 +53,7 @@ Everything for a run lives in `.conductor/runs/<timestamp>-<role>-<task>/`: the 
 | Path traversal from model output | File blocks must resolve inside the repo |
 | Worker runs dangerous commands | Every CLI gets permission rules for that run only (agy `--settings` + `--sandbox`, Codex OS sandbox, OpenCode `OPENCODE_CONFIG_CONTENT`, Claude `--disallowedTools`): project-only edits, no push/commit/reset/sudo, no "skip permissions" flags. See [Providers → Permissions](PROVIDERS.md#permissions-what-each-agent-may-do) |
 | "Read-only" worker edits files | Enforced by the CLI where it can be (agy, Codex, OpenCode, Claude); a warning when the agent can't be held to read-only (Kimi, custom CLIs); the tree is also hashed before and after, with a warning in the summary |
-| Worker reads your API keys | Keys conductor loaded from `secrets.env` / `.conductor/.env` are removed from CLI workers' environment, except the one that CLI needs (`passEnv`); agy is also denied conductor's folder and `.env`-type files |
+| Worker reads your API keys | Keys conductor loaded from `secrets.env` / `.conductor/.env` are removed from CLI workers' environment, except the one that CLI needs (`passEnv`); agy is also denied conductor's config, secrets, state and usage files and `.env`-type files |
 | Fake success | Verify runs independently of the worker's claim, and the controller reviews `git diff` |
 | Keys leaking | Keys only in env or `secrets.env` (0600); config stores env var *names* |
 | Settings UI abused by other sites | Binds 127.0.0.1 only, Host-header check (anti DNS rebinding), per-launch token required for the API |
