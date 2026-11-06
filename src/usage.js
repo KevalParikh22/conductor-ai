@@ -108,7 +108,7 @@ export function formatUsage(u, settings = {}) {
   L.push('', `known cost: $${u.total.toFixed(3)} · today: $${u.today.toFixed(3)}${settings.dailyBudgetUSD > 0 ? ` of $${settings.dailyBudgetUSD} daily budget` : ' (no daily budget set)'}`);
   L.push('CLI agents run on your subscriptions: they show runs and time, not tokens. "?" = an API provider without a `price` in config.');
   if (u.savings?.total) {
-    L.push('', `Tokens saved (estimate, ~${CHARS_PER_TOKEN} characters per token): ~${k(u.savings.total)}`);
+    L.push('', `Context kept out of models (estimate from characters, ~${CHARS_PER_TOKEN} per token; not measured Claude usage): ~${k(u.savings.total)} tokens`);
     L.push(`  your controller: ~${k(u.savings.controller)} · workers: ~${k(u.savings.workers)}`);
     for (const [src, t] of Object.entries(u.savings.by)) L.push(`  ${('~' + k(t)).padStart(8)}  ${SAVING_SOURCES[src] || src}`);
   }

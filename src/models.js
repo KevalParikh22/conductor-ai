@@ -84,10 +84,13 @@ export async function autoFallbacks(name, p, { freeOnly = false, except = '', ma
   const cache = readJSON(AUTO_CACHE(), {});
   const key = `${name}#fallbacks`;
   const hit = cache[key];
-  let list = hit && hit.baseUrl === p.baseUrl && hit.freeOnly === freeOnly && Date.now() - hit.at < AUTO_TTL ? hit.models : null;
+  const same = hit && hit.baseUrl === p.baseUrl && hit.freeOnly === freeOnly;
+  let list = same && Date.now() - hit.at < AUTO_TTL ? hit.models : null;
   if (!list) {
-    list = rankModels((await listProviderModels(p, { freeOnly })).models || []).slice(0, max + 2).map((m) => m.id);
+    // short wait: this runs right after a model failed, often because the provider is slow
+    list = rankModels((await listProviderModels(p, { freeOnly, timeoutMs: 8000 })).models || []).slice(0, max + 2).map((m) => m.id);
     if (list.length) { cache[key] = { baseUrl: p.baseUrl, freeOnly, models: list, at: Date.now() }; try { writeJSON(AUTO_CACHE(), cache); } catch { /* cache is optional */ } }
+    else if (same) list = hit.models; // the provider can't list its models right now: an older list beats none
   }
   return list.filter((m) => m !== except).slice(0, max);
 }

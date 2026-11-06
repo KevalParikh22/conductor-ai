@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { PROJECT_DIRNAME } from './config.js';
 import { readJSON } from './util.js';
+import { outcome } from './core.js';
 
 export const runsDir = (root) => path.join(root, PROJECT_DIRNAME, 'runs');
 
@@ -19,7 +20,7 @@ export function listRuns(root, { limit = 20 } = {}) {
     const known = s.attempts.filter((a) => a.cost != null);
     return {
       id,
-      state: s.winner ? 'done' : 'failed',
+      state: s.outcome || outcome(s), // done | partial | verify-failed | failed
       startedAt: s.startedAt || null,
       role: s.role, task: s.task, plan: s.plan,
       winner: s.winner, model: s.model,
@@ -50,11 +51,11 @@ export function readRun(root, id) {
 
 export function formatRuns(rows) {
   if (!rows.length) return 'No runs yet in this project.';
-  const L = [`${'run'.padEnd(30)}${'result'.padEnd(9)}${'worker'.padEnd(18)}${'verify'.padEnd(8)}${'files'.padStart(6)}${'time'.padStart(7)}  notes`];
+  const L = [`${'run'.padEnd(30)}${'result'.padEnd(10)}${'worker'.padEnd(18)}${'verify'.padEnd(8)}${'files'.padStart(6)}${'time'.padStart(7)}  notes`];
   for (const r of rows) {
     if (r.state === 'running') { L.push(`${r.id.padEnd(30)}running…`); continue; }
     const notes = [r.branch && `branch ${r.branch}`, r.warnings.length && `${r.warnings.length} warning(s)`, r.cost && `$${r.cost.toFixed(4)}`].filter(Boolean).join(' · ');
-    L.push(`${r.id.slice(0, 29).padEnd(30)}${(r.state === 'done' ? '✓ done' : '✗ failed').padEnd(9)}${(r.winner || '-').padEnd(18)}${(r.verify || '-').padEnd(8)}${String(r.changed).padStart(6)}${`${r.seconds}s`.padStart(7)}  ${notes}`);
+    L.push(`${r.id.slice(0, 29).padEnd(30)}${({ done: '✓ done', partial: '⚠ partial', 'verify-failed': '✗ verify' }[r.state] || '✗ failed').padEnd(10)}${(r.winner || '-').padEnd(18)}${(r.verify || '-').padEnd(8)}${String(r.changed).padStart(6)}${`${r.seconds}s`.padStart(7)}  ${notes}`);
   }
   L.push('', 'Details: conductor runs show <run>');
   return L.join('\n');

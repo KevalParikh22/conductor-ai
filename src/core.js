@@ -216,7 +216,11 @@ export function parseDuration(text) {
  * raises that to eta × timeoutFactor, never lowers it. API calls are capped at apiTimeoutSec.
  */
 export function workerTimeout(p, kind, settings, { etaMs = 0, timeoutMs = 0 } = {}) {
-  if (kind === 'chat') return { timeoutMs: Math.min(timeoutMs || Infinity, (p.timeoutMin ? p.timeoutMin * 60 : settings.apiTimeoutSec || 300) * 1000) };
+  if (kind === 'chat') {
+    // free routes now and then hang for minutes: give up on them sooner and let the next model or provider try
+    const sec = p.timeoutMin ? p.timeoutMin * 60 : p.free ? settings.freeApiTimeoutSec || 90 : settings.apiTimeoutSec || 300;
+    return { timeoutMs: Math.min(timeoutMs || Infinity, sec * 1000) };
+  }
   let limit = timeoutMs || (p.timeoutMin ? p.timeoutMin * 60_000 : (settings.timeoutSec || 1200) * 1000);
   if (!timeoutMs && etaMs) limit = Math.max(limit, Math.round(etaMs * (settings.timeoutFactor || 2)));
   const idleMin = p.idleTimeoutMin ?? (settings.idleTimeoutSec || 0) / 60;
@@ -419,6 +423,7 @@ export async function dispatch(cfg, opts) {
     const userPrompt = inline ? `${chatContext()}\n---\n# TASK (role: ${role})\n${body}` : agentPrompt;
     // the provider's model, then its fallback models: a model that is rate-limited is skipped until its cooldown ends
     let { models, auto } = await modelsToTry(c.name, c.p, kind);
+    let timeouts = 0;
     if (!models.length) {
       const reason = 'every model is cooling down';
       summary.attempts.push({ provider: c.name, ok: false, reason, skipped: true }); emit({ type: 'skip', provider: c.name, reason });
@@ -465,7 +470,10 @@ export async function dispatch(cfg, opts) {
       }
       const quota = res.reason === 'quota';
       // another model can help when this one is rate-limited, or (for APIs) when it stalled or answered nothing
-      const modelProblem = quota || (kind === 'chat' && /^(timeout|empty output|server 5)/.test(res.reason || ''));
+      const timedOut = /^timeout/.test(res.reason || '');
+      if (timedOut) timeouts++;
+      // one more model after a timeout; a second timeout means the provider itself is hanging, so move on
+      const modelProblem = quota || (kind === 'chat' && /^(timeout|empty output|server 5)/.test(res.reason || '') && timeouts < 2);
       if (modelProblem && mi === models.length - 1 && auto) { models = [...models, ...(await auto())]; auto = null; }
       const nextModel = models[mi + 1];
       const tryNext = nextModel !== undefined && modelProblem;
@@ -654,7 +662,7 @@ export function formatSummary(s) {
   if (s.mode === 'write') L.push(`changed:   ${s.changed.join(', ') || '(nothing)'}`);
   if (s.verify) L.push(`verify:    ${s.verify.status}${s.verify.scope === 'task' ? ' [task verify]' : ''}${s.verify.cmd ? ` (${s.verify.cmd})` : ''}${s.verify.status === 'FAIL' ? `, log: ${s.verify.log}` : ''}${s.verify.note ? `, ${s.verify.note}` : ''}`);
   if (s.saved) L.push(`saved:     ${s.saved}`);
-  if (s.tokensSaved?.tokens) L.push(`tokens:    ~${s.tokensSaved.tokens.toLocaleString()} saved (estimate: ${Object.entries(s.tokensSaved).filter(([k]) => k !== 'tokens').map(([k, n]) => `${{ report: 'report trimmed', 'review-diff': 'compact review diff', 'free-model': 'free model chosen' }[k] || k} ~${n.toLocaleString()}`).join(', ')})`);
+  if (s.tokensSaved?.tokens) L.push(`context:   ~${s.tokensSaved.tokens.toLocaleString()} tokens kept out (estimate: ${Object.entries(s.tokensSaved).filter(([k]) => k !== 'tokens').map(([k, n]) => `${{ report: 'report trimmed', 'review-diff': 'compact review diff', 'free-model': 'free model chosen' }[k] || k} ~${n.toLocaleString()}`).join(', ')})`);
   if (s.worktree?.commit) L.push(`commit:    ${s.worktree.commit} on ${s.worktree.branch} (from ${s.worktree.base})`);
   for (const w of s.warnings) L.push(`WARNING:   ${w}`);
   if (s.worktree) {

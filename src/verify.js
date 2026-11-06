@@ -25,6 +25,12 @@ export function detectVerify(root, settings = {}) {
     if (which('ruff')) cmds.push('ruff check .');
     if (which('pytest')) cmds.push('pytest -q');
   }
+  if (has('composer.json')) {
+    let scripts = {};
+    try { scripts = JSON.parse(fs.readFileSync(path.join(root, 'composer.json'), 'utf8')).scripts || {}; } catch { /* bad json */ }
+    if (scripts.test) cmds.push('composer test');
+    else if (has('phpunit.xml') || has('phpunit.xml.dist')) cmds.push('vendor/bin/phpunit');
+  }
   if (has('Cargo.toml')) cmds.push('cargo test');
   if (has('go.mod')) cmds.push('go test ./...');
   if (!cmds.length && has('Makefile') && /^test:/m.test(fs.readFileSync(path.join(root, 'Makefile'), 'utf8'))) cmds.push('make test');
