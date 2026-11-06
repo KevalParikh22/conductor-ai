@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- **Setup never turns on your controller as a worker.** With Claude Code as the controller, `claude-cli` stays off, and setup says why: work sent to it spends the quota conductor is meant to save. Routing rules never pick it either. You can still turn it on in the UI.
+- **Too-small local models aren't picked.** Models under 7B (read from the name, e.g. `qwen3.5:2b`) fail or produce junk on coding tasks. `conductor local` and setup list them and suggest a coding model to pull.
+- **A fresh `doctor` isn't red.** A default provider with no key yet shows as ○ "optional: add a key". It's a problem (✗) only when you turned it on yourself.
+
 ## 0.9.1 (2026-11-06)
 
 - **A worker can fix its own work.**

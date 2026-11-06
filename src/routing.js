@@ -128,8 +128,8 @@ export const WANT_LABELS = { strong: 'your strongest agent', ui: 'an agent good 
 const isLocalUrl = (u = '') => /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(u);
 
 /** Up to two enabled providers of the kind a template wants, best first. */
-export function wantProviders(want, providers = {}) {
-  const on = (n) => providers[n]?.enabled;
+export function wantProviders(want, providers = {}, { exclude = [] } = {}) {
+  const on = (n) => providers[n]?.enabled && !exclude.includes(n);
   const cli = (n) => providers[n]?.type === 'cli';
   const free = (n) => providers[n]?.type !== 'cli' && (providers[n]?.free || isLocalUrl(providers[n]?.baseUrl));
   const local = (n) => providers[n]?.type !== 'cli' && isLocalUrl(providers[n]?.baseUrl);
@@ -145,8 +145,8 @@ export function wantProviders(want, providers = {}) {
 }
 
 /** A template as a route for these providers: { id, label, why, route, missing }. */
-export function resolveTemplate(t, providers) {
-  const provider = wantProviders(t.want, providers);
+export function resolveTemplate(t, providers, opts = {}) {
+  const provider = wantProviders(t.want, providers, opts);
   const route = { ...t.rule, provider: provider.length === 1 ? provider[0] : provider, from: t.id };
   return { id: t.id, label: t.label, why: t.why, starter: !!t.starter, want: WANT_LABELS[t.want], route,
     missing: provider.length ? null : `enable ${WANT_LABELS[t.want]} first` };
@@ -156,14 +156,14 @@ export function resolveTemplate(t, providers) {
  * Add templates to a routes list, keeping the library's order among template rules (risky ones first).
  * Returns { routes, added, skipped: [{ id, why }] }. A template already in the list is skipped.
  */
-export function addTemplates(routes = [], ids, providers) {
+export function addTemplates(routes = [], ids, providers, opts = {}) {
   const order = (r) => ROUTE_TEMPLATES.findIndex((t) => t.id === r?.from);
   const out = [...routes], added = [], skipped = [];
   for (const id of ids) {
     const t = ROUTE_TEMPLATES.find((x) => x.id === id);
     if (!t) { skipped.push({ id, why: 'no such template' }); continue; }
     if (out.some((r) => r?.from === id)) { skipped.push({ id, why: 'already added' }); continue; }
-    const r = resolveTemplate(t, providers);
+    const r = resolveTemplate(t, providers, opts);
     if (r.missing) { skipped.push({ id, why: r.missing }); continue; }
     const mine = order(r.route);
     const at = out.findIndex((x) => order(x) > mine);

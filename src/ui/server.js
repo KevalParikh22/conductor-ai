@@ -6,7 +6,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { loadConfig, findProjectRoot, readScope, writeScope, validateConfig, GLOBAL_CONFIG, GLOBAL_SECRETS, GLOBAL_SECRETS as SECRETS, projectConfigPath, loadSecrets, writeSecrets } from '../config.js';
-import { DEFAULT_CONFIG, CLI_PRESETS, ROLES, CONTROLLERS } from '../presets.js';
+import { DEFAULT_CONFIG, CLI_PRESETS, ROLES, CONTROLLERS, controllerWorker } from '../presets.js';
 import { statusData } from '../status.js';
 import { listRuns } from '../runs.js';
 import { catalogStatus, addProviderAuto } from '../setup.js';
@@ -131,9 +131,10 @@ export function createUiServer({ cwd = process.cwd(), token = crypto.randomBytes
           const providers = isPlainObject(body.providers) ? body.providers : loadConfig(root).providers;
           const routes = Array.isArray(body.routes) ? body.routes : [];
           const have = new Set(routes.map((r) => r?.from).filter(Boolean));
-          const templates = ROUTE_TEMPLATES.map((t) => ({ ...resolveTemplate(t, providers), added: have.has(t.id) }));
+          const exclude = [controllerWorker(loadConfig(root).controller)]; // never route work to the controller's own CLI
+          const templates = ROUTE_TEMPLATES.map((t) => ({ ...resolveTemplate(t, providers, { exclude }), added: have.has(t.id) }));
           if (!Array.isArray(body.add)) return send(200, { templates });
-          return send(200, { templates, ...addTemplates(routes, body.add.map(String), providers) });
+          return send(200, { templates, ...addTemplates(routes, body.add.map(String), providers, { exclude }) });
         }
         case 'POST /api/route-preview': {
           const cfg = loadConfig(root);

@@ -149,7 +149,7 @@ Ollama, LM Studio, llama.cpp, vLLM, LocalAI, Jan and a LiteLLM proxy are found o
 ```bash
 conductor local
 ```
-It lists what's running, its models and the best one for coding, or what to do next: start the server, or pull a first model (`ollama pull qwen3-coder`) when it only has embedding models. `conductor local --enable` turns the running ones on with that model. `conductor setup` and Providers in `conductor ui` offer the same. Local models are free and private, so the smart selector treats them like free API models.
+It lists what's running, its models and the best one for coding (models under 7B are skipped: too small for coding tasks), or what to do next: start the server, or pull a first model (`ollama pull qwen3-coder`) when it only has embedding models. `conductor local --enable` turns the running ones on with that model. `conductor setup` and Providers in `conductor ui` offer the same. Local models are free and private, so the smart selector treats them like free API models.
 
 ## Saving tokens
 
