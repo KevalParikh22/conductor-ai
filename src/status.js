@@ -1,4 +1,4 @@
-import { providerReadiness, providerLocation, providerKind } from './config.js';
+import { providerReadiness, providerLocation, providerKind, optionalNoKey } from './config.js';
 import { CLI_PRESETS, CONTROLLERS } from './presets.js';
 import { getCooldowns } from './core.js';
 import * as git from './git.js';
@@ -10,9 +10,11 @@ export function statusData(cfg) {
   const providers = Object.entries(cfg.providers).map(([name, p]) => {
     const r = providerReadiness(name, p);
     const c = cooldowns[name];
+    const optional = optionalNoKey(cfg, name, p);
     return {
+      optional, // on by default, no key yet: not broken
       name, type: p.type, preset: p.preset, model: p.model || '', enabled: !!p.enabled,
-      location: providerLocation(p), kind: providerKind(p), ready: r.ready && !c, reason: c ? `cooling down until ${new Date(c.until).toLocaleTimeString()}` : r.reason,
+      location: providerLocation(p), kind: providerKind(p), ready: r.ready && !c, reason: c ? `cooling down until ${new Date(c.until).toLocaleTimeString()}` : optional ? `optional: add ${p.apiKeyEnv} to use it` : r.reason,
       label: p.type === 'cli' ? (CLI_PRESETS[p.preset]?.label || p.bin) : name, notes: p.notes || '',
     };
   });
@@ -34,13 +36,14 @@ export function statusReport(cfg) {
   L.push(`config:     global=${d.sources.global || '(defaults)'}  project=${d.sources.project || '(none)'}`);
   L.push(d.repo ? `repo:       branch ${d.repo.branch}, ${d.repo.dirty ? 'dirty' : 'clean'}${d.repo.failedStashes ? `, ${d.repo.failedStashes} failed-attempt stash(es)` : ''}` : 'repo:       (not a git repo)');
   L.push(`verify:     ${d.verify || '(none detected)'}`);
-  L.push('', 'roles (fallback order, ✓ = ready):');
+  L.push('', 'roles (fallback order, ✓ = ready, ○ = optional, add a key to use):');
+  const mark = (p) => (p?.ready ? '✓' : p?.optional ? '○' : '✗');
   for (const [role, chain] of Object.entries(d.roles)) {
-    L.push(`  ${role.padEnd(7)} ${chain.map((n) => `${byName[n]?.ready ? '✓' : '✗'} ${n}`).join('  →  ')}`);
+    L.push(`  ${role.padEnd(7)} ${chain.map((n) => `${mark(byName[n])} ${n}`).join('  →  ')}`);
   }
   L.push('', 'providers:');
   for (const p of d.providers.filter((x) => x.enabled)) {
-    L.push(`  ${p.ready ? '✓' : '✗'} ${p.name.padEnd(16)} ${p.location.padEnd(12)} ${(p.model || 'default').padEnd(24)} ${p.reason}`);
+    L.push(`  ${mark(p)} ${p.name.padEnd(16)} ${p.location.padEnd(12)} ${(p.model || 'default').padEnd(24)} ${p.reason}`);
   }
   const off = d.providers.filter((x) => !x.enabled).map((x) => x.name);
   if (off.length) L.push(`  (disabled: ${off.join(', ')})`);

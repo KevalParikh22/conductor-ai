@@ -128,3 +128,36 @@ test('runs list shows verify failures and partial results, not just "done"', asy
   const states = Object.fromEntries(listRuns(dir).map((r) => [r.id.slice(-12), r.state]));
   assert.deepEqual(states, { '000004-build': 'failed', '000003-build': 'done', '000002-build': 'partial', '000001-build': 'verify-failed' });
 });
+
+test('status, doctor and the UI data agree: a default provider with no key is optional, not broken', async () => {
+  const { statusData, statusReport } = await import('../src/status.js');
+  const { dir } = makeRepo();
+  const saved = process.env.GEMINI_API_KEY; process.env.GEMINI_API_KEY = '';
+  try {
+    const cfg = loadConfig(dir);
+    const g = statusData(cfg).providers.find((p) => p.name === 'gemini-api');
+    assert.equal(g.optional, true);
+    assert.match(g.reason, /optional: add GEMINI_API_KEY/);
+    assert.match(statusReport(cfg), /○ gemini-api/);
+    assert.doesNotMatch(statusReport(cfg), /✗ gemini-api/);
+  } finally { if (saved === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = saved; }
+});
+
+test('CLI: a typo gets a suggestion; piped output has no colour codes; long descriptions are cut at a word', () => {
+  const run = (...a) => { try { return execFileSync(process.execPath, [bin, ...a], { stdio: 'pipe', env: { ...process.env, FORCE_COLOR: '' } }).toString(); } catch (e) { return e.stderr.toString() + e.stdout.toString(); } };
+  assert.match(run('bulid'), /Did you mean: conductor build\?/);
+  assert.doesNotMatch(run('xyzzy'), /Did you mean/);
+  const list = run('providers');
+  assert.doesNotMatch(list, /\x1b\[/, 'no ANSI codes when piped');
+  assert.doesNotMatch(list, /limits, e$/m, 'not cut mid-word');
+  const colored = execFileSync(process.execPath, [bin, 'providers', '--json'], { env: { ...process.env, FORCE_COLOR: '1' } }).toString();
+  assert.doesNotMatch(colored, /\x1b\[/, '--json is never coloured');
+});
+
+test('UI: the open page lives in the address, and links never drop the token', () => {
+  const html = fs.readFileSync(new URL('../src/ui/index.html', import.meta.url), 'utf8');
+  assert.match(html, /function pageFromHash\(\)/);
+  assert.match(html, /history\.pushState/);
+  assert.match(html, /addEventListener\('popstate'/);
+  assert.match(html, /\[data-goto\][^\n]*preventDefault/);
+});

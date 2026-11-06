@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { loadConfig, findProjectRoot, validateConfig, GLOBAL_CONFIG, GLOBAL_SECRETS, projectConfigPath, readScope, providerPermissions, readOnlyEnforced, readOverrideMissing } from '../src/config.js';
+import { loadConfig, findProjectRoot, validateConfig, GLOBAL_CONFIG, GLOBAL_SECRETS, projectConfigPath, readScope, providerPermissions, readOnlyEnforced, readOverrideMissing, optionalNoKey } from '../src/config.js';
 import { dispatch, formatSummary, UsageError, clearCooldowns, getCooldowns, chooseChain, extractTask, taskFiles, parseDuration } from '../src/core.js';
 import { runBatch, formatBatch } from '../src/batch.js';
 import { listWorktrees, removeWorktree, readWorktreeMeta } from '../src/worktree.js';
@@ -133,6 +133,40 @@ function routeRules(cfg, o) {
   return 0;
 }
 
+const COMMANDS = ['setup', 'providers', 'add', 'keys', 'local', 'route', 'diff', 'init', 'ui', 'mcp', 'status', 'doctor', 'verify', 'run', 'models', 'batch', 'worktree', 'runs', 'usage', 'cooldown', 'config', 'retry', 'help'];
+/** The command closest to a typo (edit distance ≤ 2), or null. */
+function closest(word, options) {
+  const d = (a, b) => {
+    const row = Array.from({ length: b.length + 1 }, (_, j) => j);
+    for (let i = 1; i <= a.length; i++) {
+      let prev = row[0]; row[0] = i;
+      for (let j = 1; j <= b.length; j++) { const t = row[j]; row[j] = Math.min(row[j] + 1, row[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1)); prev = t; }
+    }
+    return row[b.length];
+  };
+  const best = options.map((o) => [o, d(word.toLowerCase(), o)]).sort((x, y) => x[1] - y[1])[0];
+  return best && best[1] <= 2 ? best[0] : null;
+}
+
+// Colour for people at a terminal: ✓ green, ✗ red, ⚠ and WARNING yellow, ○ dim. Off for pipes, NO_COLOR, --no-color
+// and TERM=dumb, so logs and controllers reading the output get plain text.
+const useColor = () => (!!process.env.FORCE_COLOR && process.env.FORCE_COLOR !== '0')
+  || (process.stdout.isTTY && !('NO_COLOR' in process.env) && process.env.TERM !== 'dumb' && !process.argv.includes('--no-color'));
+function colorize(s) {
+  return s.replace(/✓/g, '\x1b[32m✓\x1b[39m').replace(/✗/g, '\x1b[31m✗\x1b[39m').replace(/⚠/g, '\x1b[33m⚠\x1b[39m')
+    .replace(/○/g, '\x1b[2m○\x1b[22m').replace(/^(WARNING:|next:)/gm, (m) => (m === 'next:' ? `\x1b[36m${m}\x1b[39m` : `\x1b[33m${m}\x1b[39m`))
+    .replace(/^(={5,}.*={5,})$/gm, '\x1b[1m$1\x1b[22m');
+}
+
+const termWidth = () => (process.stdout.isTTY && process.stdout.columns) || 120;
+/** Shorten text to max characters at a word boundary, with "…" when cut. */
+function fit(text, max) {
+  const t = String(text).replace(/\s+/g, ' ').trim();
+  if (max < 12 || t.length <= max) return max < 12 ? '' : t;
+  const cut = t.slice(0, max - 1);
+  return `${cut.slice(0, cut.lastIndexOf(' ') > max / 2 ? cut.lastIndexOf(' ') : cut.length).replace(/[\s,;:(—–-]+$/, '')}…`;
+}
+
 /** --timeout 45m / 2h / 90 (minutes) → ms, or undefined. */
 function timeoutOpt(o) {
   if (o.timeout === undefined) return undefined;
@@ -158,9 +192,11 @@ function parseArgs(argv) {
 }
 
 async function main() {
-  const argv = process.argv.slice(2);
+  const argv = process.argv.slice(2).filter((a) => a !== '--no-color');
   let cmd = argv[0] && !argv[0].startsWith('-') ? argv.shift() : 'help';
   const o = parseArgs(argv);
+  // never colour machine output: the MCP protocol and --json
+  if (useColor() && cmd !== 'mcp' && !o.json) { const log = console.log; console.log = (...a) => log(...a.map((x) => (typeof x === 'string' ? colorize(x) : x))); }
   if (o.version) { console.log(VERSION); return 0; }
   if (o.help || cmd === 'help') { console.log(o._[0] === 'all' || o.all ? HELP_ALL : HELP); return 0; }
   if (ROLES[cmd]) { o._.unshift(cmd); cmd = 'run'; }
@@ -377,16 +413,14 @@ async function main() {
       return 0;
     }
     default:
-      throw new UsageError(`unknown command "${cmd}". Run: conductor help`);
+      const guess = closest(cmd, [...COMMANDS, ...Object.keys(ROLES)]);
+      throw new UsageError(`unknown command "${cmd}".${guess ? ` Did you mean: conductor ${guess}?` : ''} Run: conductor help`);
   }
 }
 
 async function doctor(o) {
   const cfg = loadConfig();
   const results = [];
-  // a built-in API provider that is on by default but has no key yet is optional, not a problem; one you turned on yourself is
-  const scopes = [readScope('global', cfg.root), readScope('project', cfg.root)];
-  const turnedOn = (name) => scopes.some((s) => s.providers?.[name]?.enabled === true);
   for (const [name, p] of Object.entries(cfg.providers)) {
     if (!p.enabled) continue;
     const r = { name, kind: p.type === 'cli' ? 'agent' : 'chat', ok: true, status: 'ready', next: null, permissions: providerPermissions(p), readOnlyEnforced: readOnlyEnforced(p) };
@@ -396,7 +430,7 @@ async function doctor(o) {
       if (!which(preset.bin)) { Object.assign(r, { ok: false, status: 'not installed', next: `install: ${preset.install}\n    login:   ${preset.login}` }); continue; }
     } else if (p.apiKeyEnv && !p.apiKeyOptional && !keyValue(p.apiKeyEnv)) {
       const add = p.catalog ? `conductor add ${p.catalog}` : `conductor keys set ${p.apiKeyEnv}`;
-      if (!turnedOn(name) && !process.env[p.apiKeyEnv]) Object.assign(r, { optional: true, status: `optional: add a key to use it (${add})` });
+      if (optionalNoKey(cfg, name, p)) Object.assign(r, { optional: true, status: `optional: add a key to use it (${add})` });
       else Object.assign(r, { ok: false, status: `${p.apiKeyEnv} not set${process.env[p.apiKeyEnv] ? ' (placeholder value)' : ''}`, next: add });
       continue;
     }
@@ -479,7 +513,7 @@ function providers(o) {
     for (const c of list) {
       const state = c.enabled ? '✓ on ' : c.added ? '· off' : '     ';
       const key = c.apiKeyEnv && !c.apiKeyOptional ? (c.keySet ? 'key ✓' : 'key needed') : 'no key';
-      console.log(`  ${state} ${c.id.padEnd(16)} ${c.label.padEnd(26)} ${key.padEnd(11)} ${c.free ? c.free.split(/[.(]/)[0].trim() : ''}`);
+      console.log(`  ${state} ${c.id.padEnd(16)} ${c.label.padEnd(26)} ${key.padEnd(11)} ${c.free ? fit(c.free, termWidth() - 64) : ''}`);
     }
   }
   console.log(`\nAdd one: conductor add <name>   Guides: docs/providers/<name>.md`);

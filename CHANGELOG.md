@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **UI keeps your page on reload.** The open page is in the address (`#…&p=roles`), and back/forward move between pages. Before, every reload went to Overview.
+- **One rule for "optional" providers.** A default provider with no key yet shows as ○ / grey "optional · add key" in the UI, `conductor status` and `doctor` alike, never as red. Overview counts "4 of 4 ready + 2 optional".
+- **Setup page:** your controller's CLI is shown as off as a worker, and the step for the Verify command says it's detected now. Settings shows the detected verify command.
+- **CLI:**
+  - A typo gets a suggestion ("Did you mean: conductor build?").
+  - Output uses colour at a terminal (✓ green, ✗ red, ⚠ yellow, ○ dim), but never for pipes, `NO_COLOR`, `--no-color`, `--json` or the MCP server.
+  - `conductor providers` cuts descriptions at a word to fit the terminal.
+
 - **Setup never turns on your controller as a worker.** With Claude Code as the controller, `claude-cli` stays off, and setup says why: work sent to it spends the quota conductor is meant to save. Routing rules never pick it either. You can still turn it on in the UI.
 - **Too-small local models aren't picked.** Models under 7B (read from the name, e.g. `qwen3.5:2b`) fail or produce junk on coding tasks. `conductor local` and setup list them and suggest a coding model to pull.
 - **Hanging free routes fail over fast.**

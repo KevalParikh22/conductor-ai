@@ -170,6 +170,15 @@ export function readOnlyEnforced(p) {
   return providerPermissions(p).readOnlyEnforced === true;
 }
 
+/**
+ * An API provider that is on only because it's a built-in default, and has no key yet: optional, not broken.
+ * Shown as "○ add a key" by doctor, status and the UI. One you turned on yourself without a key is a problem.
+ */
+export function optionalNoKey(cfg, name, p = cfg.providers[name]) {
+  if (!p?.enabled || p.type === 'cli' || !p.apiKeyEnv || p.apiKeyOptional || keyValue(p.apiKeyEnv) || process.env[p.apiKeyEnv]) return false;
+  return ![readScope('global', cfg.root), readScope('project', cfg.root)].some((s) => s.providers?.[name]?.enabled === true);
+}
+
 /** Readiness check without making network calls. */
 export function providerReadiness(name, p) {
   if (!p.enabled) return { ready: false, reason: 'disabled' };

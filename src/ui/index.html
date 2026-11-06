@@ -70,6 +70,8 @@ label.f { display: block; font-size: 12px; color: var(--muted); margin-bottom: 3
 .pill.warn { background: var(--warn-soft); color: var(--warn); }
 .pill.local-agent, .pill.local-model { background: var(--local-soft); color: var(--local); } .pill.cloud-api { background: var(--cloud-soft); color: var(--cloud); }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bad); flex: none; } .dot.ok { background: var(--ok); }
+.dot.opt { background: transparent; border: 1.5px solid var(--muted); width: 7px; height: 7px; } /* optional: on by default, no key yet */
+.status.opt { color: var(--muted); }
 .chain { display: flex; flex-direction: column; gap: 4px; margin: 10px 0; }
 .link { display: grid; grid-template-columns: 18px 1fr auto; gap: 8px; align-items: center; padding: 4px 6px 4px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); }
 .link .idx { color: var(--muted); font-size: 12px; text-align: center; }
@@ -176,6 +178,16 @@ body { overflow-x: hidden; }
 <div id="toast" role="status"></div>
 <script>
 const TOKEN = new URLSearchParams(location.hash.slice(1)).get('t') || '';
+// the open page lives in the address (#t=…&p=roles), so a reload or a shared link opens the same page
+function pageFromHash() { const p = new URLSearchParams(location.hash.slice(1)).get('p'); return ['overview', 'runs', 'roles', 'providers', 'keys', 'settings', 'setup'].includes(p) ? p : 'overview'; }
+function go(page) {
+  if (page === tab) return render();
+  tab = page;
+  const h = new URLSearchParams(location.hash.slice(1)); h.set('p', page);
+  history.pushState(null, '', `#${h}`);
+  render();
+}
+addEventListener('popstate', () => { tab = pageFromHash(); if (S) render(); });
 // small stroke icons (24x24 paths), drawn for this page
 const ICONS = {
   overview: 'M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 3v6h8V3z',
@@ -194,7 +206,7 @@ const ICONS = {
 };
 const icon = (n, t = '') => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true"${t ? ` title="${t}"` : ''}><path d="${ICONS[n]}"/></svg>`;
 const TABS = [['overview', 'Overview'], ['runs', 'Runs'], ['roles', 'Roles'], ['providers', 'Providers'], ['keys', 'API keys'], ['settings', 'Settings'], ['setup', 'Setup']];
-let S = null, W = null, tab = 'overview', dirty = false, freeModels = null, runsData = null, gOpen = null, gFilter = { q: '', cat: 'all' };
+let S = null, W = null, tab = pageFromHash(), dirty = false, freeModels = null, runsData = null, gOpen = null, gFilter = { q: '', cat: 'all' };
 let rPreview = null; // routing preview result
 let rtLib = null, rtLibKey = '', rtLibOpen = null; // rule library, resolved against the current (unsaved) providers
 const ROUTING_GUIDE = 'https://github.com/KevalParikh22/conductor-ai/blob/main/docs/ROUTING.md';
@@ -241,11 +253,11 @@ $('#scope').onchange = () => { if (dirty) markDirty(); try { localStorage.setIte
 
 function renderNav() {
   $('#nav').innerHTML = TABS.map(([k, l]) => `<button data-tab="${k}" class="${k === tab ? 'active' : ''}">${icon(k)}${l}</button>`).join('');
-  $('#nav').querySelectorAll('button').forEach((b) => b.onclick = () => { tab = b.dataset.tab; render(); });
+  $('#nav').querySelectorAll('button').forEach((b) => b.onclick = () => go(b.dataset.tab));
 }
 function provStatus(name) { return S.status.providers.find((p) => p.name === name) || { ready: false, reason: 'unknown' }; }
 function locPill(p) { const l = p.location || 'cloud-api'; return `<span class="pill ${l}">${{ 'local-agent': 'local agent', 'local-model': 'local model', 'cloud-api': 'cloud API' }[l]}</span>`; }
-function readyPill(name) { const st = provStatus(name); const w = W.providers[name]; if (w && !w.enabled) return '<span class="pill">disabled</span>'; return st.ready ? '<span class="pill ok">ready</span>' : `<span class="pill bad">${esc(st.reason)}</span>`; }
+function readyPill(name) { const st = provStatus(name); const w = W.providers[name]; if (w && !w.enabled) return '<span class="pill">disabled</span>'; if (st.optional) return '<span class="pill">optional: add key</span>'; return st.ready ? '<span class="pill ok">ready</span>' : `<span class="pill bad">${esc(st.reason)}</span>`; }
 // short status for tight rows; the full reason is in the title
 const shortReason = (r) => /not set/.test(r) ? 'no key' : /not installed/.test(r) ? 'not installed' : r.length > 22 ? r.slice(0, 20) + '…' : r;
 function copyBtn(text) { return `<button class="btn small copy" data-copy="${esc(text)}" title="Copy">${icon('copy')}</button>`; }
@@ -339,18 +351,19 @@ const views = {
   },
   overview() {
     const st = S.status; const ready = st.providers.filter((p) => p.ready).length; const enabled = st.providers.filter((p) => p.enabled).length;
+    const optional = st.providers.filter((p) => p.enabled && p.optional).length;
     const cds = Object.entries(S.cooldowns);
     return `<div class="head"><h1>Overview</h1><p class="sub">${esc(S.controllers[W.controller]?.label || W.controller)} plans and reviews; the providers below do the work, in fallback order.</p></div>
     ${S.errors.length ? `<div class="err">Config problems: ${S.errors.map(esc).join('; ')}</div>` : ''}
     <div class="grid">
       <div class="card stat"><div class="l">Controller</div><div class="n" style="font-size:18px">${esc(S.controllers[W.controller]?.label || W.controller)}</div><div class="note">Change in Settings</div></div>
-      <div class="card stat"><div class="l">Providers ready</div><div class="n">${ready}<span class="note" style="font-size:14px"> / ${enabled} enabled</span></div></div>
+      <div class="card stat"><div class="l">Providers ready</div><div class="n">${ready}<span class="note" style="font-size:14px"> of ${enabled - optional} ready</span></div>${optional ? `<div class="note">+ ${optional} optional: add a key in <a href="#" data-goto="keys">API keys</a></div>` : ''}</div>
       <div class="card stat"><div class="l">Repo</div><div class="n" style="font-size:16px">${st.repo ? esc(st.repo.branch) : 'not a git repo'}</div><div class="note">${st.repo ? (st.repo.dirty ? 'uncommitted changes' : 'clean') + (st.repo.failedStashes ? ` · ${st.repo.failedStashes} failed-attempt stash(es)` : '') : 'write roles need git'}</div></div>
       <div class="card stat"><div class="l">Verify command</div><div class="mono" style="margin-top:6px">${esc(st.verify || 'none detected')}</div></div>
     </div>
     <div class="card"><h2>Who does what</h2>
       <table><tr><th>Role</th><th>Fallback chain</th></tr>
-      ${Object.entries(W.roles).map(([r, chain]) => `<tr><td><b>${esc(S.roles[r]?.label || r)}</b> ${S.roles[r]?.mode === 'read' ? '<span class="pill">read-only</span>' : ''}</td><td><div class="chainline">${chain.map((n, i) => `${i ? '<span class="arrow">→</span>' : ''}<span class="pill"><span class="dot ${provStatus(n).ready && W.providers[n]?.enabled ? 'ok' : ''}"></span>${esc(n)}</span>`).join('')}</div></td></tr>`).join('')}
+      ${Object.entries(W.roles).map(([r, chain]) => `<tr><td><b>${esc(S.roles[r]?.label || r)}</b> ${S.roles[r]?.mode === 'read' ? '<span class="pill">read-only</span>' : ''}</td><td><div class="chainline">${chain.map((n, i) => `${i ? '<span class="arrow">→</span>' : ''}<span class="pill"><span class="dot ${provStatus(n).ready && W.providers[n]?.enabled ? 'ok' : provStatus(n).optional ? 'opt' : ''}" title="${esc(provStatus(n).reason || '')}"></span>${esc(n)}</span>`).join('')}</div></td></tr>`).join('')}
       </table></div>
     ${cds.length ? `<div class="card"><h2>Cooling down (rate-limited)</h2>${cds.map(([n, c]) => `<div class="row" style="margin-bottom:6px"><b>${esc(n)}</b><span class="note">until ${new Date(c.until).toLocaleTimeString()}</span><button class="btn small" data-clear="${esc(n)}">clear</button></div>`).join('')}</div>` : ''}
     ${!S.hasProjectConfig && S.inRepo ? `<div class="card"><h2>This project isn't set up yet</h2><p class="note">Add the rules file, controller commands and plan template to <span class="mono">${esc(S.root)}</span>.</p><button class="btn primary" data-goto="settings">Set up this project</button></div>` : ''}`;
@@ -362,6 +375,7 @@ const views = {
     const st = (n) => { const p = W.providers[n], s = provStatus(n);
       if (!p) return '<span class="status bad">unknown</span>';
       if (!p.enabled) return '<span class="status">off</span>';
+      if (s.optional) return `<span class="status opt" title="${esc(s.reason)}"><span class="dot opt"></span>add key</span>`;
       return s.ready ? '<span class="status"><span class="dot ok"></span></span>' : `<span class="status bad" title="${esc(s.reason)}"><span class="dot"></span>${esc(shortReason(s.reason))}</span>`; };
     const routes = W.routes || [];
     loadRtLib();
@@ -412,7 +426,9 @@ const views = {
     const shown = (pAll ? all : on).sort((x, y) => order(x) - order(y));
     const row = (n) => { const p = W.providers[n], builtin = S.builtinProviders.includes(n), open = pOpen.has(n), s = provStatus(n);
       const l = s.location || (p.type === 'cli' ? 'local-agent' : 'cloud-api');
-      const status = !p.enabled ? '<span class="status">off</span>' : s.ready ? '<span class="status"><span class="dot ok"></span>ready</span>' : `<span class="status bad" title="${esc(s.reason)}"><span class="dot"></span>${esc(s.reason)}</span>`;
+      const status = !p.enabled ? '<span class="status">off</span>' : s.ready ? '<span class="status"><span class="dot ok"></span>ready</span>'
+        : s.optional ? `<span class="status opt" title="${esc(s.reason)}"><span class="dot opt"></span>optional · <a href="#" data-goto="keys">add key</a></span>`
+        : `<span class="status bad" title="${esc(s.reason)}"><span class="dot"></span>${esc(s.reason)}</span>`;
       return `<div class="prow ${open ? 'open' : ''}"><div class="prow-main">
         <label class="switch" title="Enable"><input type="checkbox" data-en="${esc(n)}" ${p.enabled ? 'checked' : ''}><span></span></label>
         <div class="prow-name"><span class="kind" title="${l.replace('-', ' ')}">${icon(l === 'local-agent' ? 'agent' : l === 'local-model' ? 'chip' : 'cloud')}</span><b>${esc(n)}</b>${status}${p.model ? `<span class="prow-model">${esc(p.model)}</span>` : ''}</div>
@@ -461,7 +477,7 @@ const views = {
       ${num('maxDiffBytes', 'Max review diff (bytes)', 'Larger diffs are truncated')}
       ${num('maxContextBytes', 'Max context for API models (bytes)', 'File content sent to chat-only providers')}
       ${num('dailyBudgetUSD', 'Daily budget for paid APIs ($)', '0 = no cap. Counts API providers with a price set; free ones never count')}
-      <div><label class="f">Verify command</label><input type="text" data-sets="verify" value="${esc(st.verify)}" placeholder="auto: AGENTS.md Verify line, then npm/pytest/cargo/go"><div class="note">Must pass before a task counts as done</div></div>
+      <div><label class="f">Verify command</label><input type="text" data-sets="verify" value="${esc(st.verify)}" placeholder="auto: AGENTS.md Verify line, then npm/composer/pytest/cargo/go"><div class="note">Must pass before a task counts as done.${!st.verify && S.status.verify ? ` Detected now: <span class="mono">${esc(S.status.verify)}</span>` : ''}</div></div>
       <div><label class="f">Protected branches</label><input type="text" data-setl="protectedBranches" value="${esc((st.protectedBranches || []).join(', '))}"><div class="note">Workers never write on these</div></div>
       </div><div style="margin-top:12px;display:grid;gap:6px">${chk('smartSelect', 'Smart selector: try the cheapest capable provider first (free API models for small tasks, agents for big ones)')}${chk('requireCleanTree', 'Require a clean git tree before write roles (enables safe stash-on-failure)')}${chk('autoVerify', 'Run verify automatically after each write task')}</div></div>`;
   },
@@ -491,11 +507,13 @@ const views = {
             <li><b>Ollama</b>, <b>LM Studio</b>: local and private</li></ul>
             <span class="note">Add any with <span class="mono">conductor add &lt;name&gt;</span> or Providers → Add provider.</span></div>
           <div class="mini"><b>Coding agents (your subscriptions)</b><ul class="note" style="margin:6px 0 0;padding-left:0;list-style:none">
-            ${Object.values(p).map((v) => `<li>${v.installed ? '✓' : '○'} <b>${esc(v.label)}</b></li>`).join('')}</ul>
+            ${Object.entries(p).map(([k, v]) => k === S.controllerPreset
+              ? `<li>· <b>${esc(v.label.replace(/ \(as a worker\)$/, ''))}</b> <span class="note">your controller, so off as a worker (it would spend the quota conductor saves)</span></li>`
+              : `<li>${v.installed ? '✓' : '○'} <b>${esc(v.label)}</b></li>`).join('')}</ul>
             <span class="note">Agents edit files and run tests themselves, each under its own permission rules. Install commands are below.</span></div>
         </div></li>
       <li><b>Add providers</b>: <span class="mono">conductor add groq</span> asks for the key, picks a model and tests it. Or use <button class="btn small" data-goto="providers">Providers → Add provider</button></li>
-      <li><b>Set up each project</b>${cmd('cd my-project\nconductor init            # controller: claude-code (default), antigravity, codex-cli, opencode')}<span class="note">Then fill in section 1 of AGENTS.md: the stack and the Verify command (for example <span class="mono">npm test</span>).</span></li>
+      <li><b>Set up each project</b>${cmd('cd my-project\nconductor init            # controller: claude-code (default), antigravity, codex-cli, opencode')}<span class="note">init detects the Verify command from your project (e.g. <span class="mono">npm run test</span>, <span class="mono">vendor/bin/phpunit</span>) and writes it into AGENTS.md. Check it, and fill in the stack in section 1.</span></li>
       <li><b>Check everything</b>: <span class="mono">--live</span> sends one tiny prompt to each enabled provider and shows which ones answer.${cmd('conductor doctor --live')}</li>
       <li><b>Try a free run</b> (read-only, changes nothing):${cmd('conductor ask "What does this project do? List the main folders." --chain kilo-free')}<span class="note">Then try a small write task on a test branch: <span class="mono">conductor docs "add a usage section to README" --chain kilo-free,openrouter-free</span>. Check the result on the Runs page.</span></li>
       <li><b>Use it from your controller.</b> In Claude Code: <span class="mono">/conduct-plan add password reset</span>, answer the plan's open questions, then <span class="mono">/conduct-run docs/plan/password-reset.md</span>. Other controllers read the same instructions from AGENTS.md or GEMINI.md.</li>
@@ -515,7 +533,7 @@ function render() {
 }
 
 function bind() {
-  document.querySelectorAll('[data-goto]').forEach((b) => b.onclick = () => { tab = b.dataset.goto; render(); });
+  document.querySelectorAll('[data-goto]').forEach((b) => b.onclick = (e) => { e.preventDefault(); go(b.dataset.goto); }); // links too: "#" would drop the token
   document.querySelectorAll('[data-clear]').forEach((b) => b.onclick = async () => { load(await api('POST', '/api/cooldowns/clear', { name: b.dataset.clear })); toast('Cooldown cleared'); });
   document.querySelectorAll('[data-mv]').forEach((b) => b.onclick = () => { const [r, i, d] = b.dataset.mv.split('|'); const c = W.roles[r]; const j = +i + +d; [c[i], c[j]] = [c[j], c[i]]; markDirty(); render(); });
   document.querySelectorAll('[data-rm]').forEach((b) => b.onclick = () => { const [r, i] = b.dataset.rm.split('|'); W.roles[r].splice(+i, 1); markDirty(); render(); });
