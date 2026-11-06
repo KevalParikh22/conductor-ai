@@ -45,6 +45,21 @@ export function rankModels(models) {
   return models.filter((m) => !NOT_CHAT.test(m.id)).sort((a, b) => score(b) - score(a));
 }
 
+/**
+ * Parameter count in billions read from a model id ("qwen3.5:2b" → 2, "llama-3.1-8b" → 8, "mixtral:8x7b" → 56,
+ * "qwen3-coder:30b-a3b" → 30), or null when the id doesn't say.
+ */
+export function modelSizeB(id) {
+  const s = String(id).toLowerCase();
+  const moe = s.match(/(?:^|[^a-z0-9.])(\d+)x(\d+(?:\.\d+)?)b(?![a-z])/);
+  if (moe) return Number(moe[1]) * Number(moe[2]);
+  const sizes = [...s.matchAll(/(?:^|[^a-z0-9.])(\d+(?:\.\d+)?)b(?![a-z])/g)].map((m) => Number(m[1]));
+  return sizes.length ? sizes[0] : null;
+}
+
+/** Smallest local model conductor turns on by itself for coding work (billions of parameters). */
+export const MIN_LOCAL_MODEL_B = 7;
+
 const AUTO_CACHE = () => path.join(GLOBAL_DIR, 'models-cache.json');
 const AUTO_TTL = 24 * 3600_000;
 

@@ -2,7 +2,7 @@
 // and the settings UI, so both behave the same.
 import readline from 'node:readline';
 import { CATALOG, CATEGORIES, providerFromCatalog, urlFields } from './catalog.js';
-import { CLI_PRESETS, ROLES, DEFAULT_CONFIG } from './presets.js';
+import { CLI_PRESETS, ROLES, DEFAULT_CONFIG, controllerWorker } from './presets.js';
 import { loadConfig, loadSecrets, readScope, writeScope, writeSecrets, GLOBAL_SECRETS } from './config.js';
 import { keyValue, which, loadEnvFile } from './util.js';
 import { listProviderModels, rankModels } from './models.js';
@@ -161,8 +161,10 @@ export async function runAdd(root, id, o = {}) {
 // ---------------- conductor setup ----------------
 /** What is already on this machine: agent CLIs on PATH and catalog keys in the environment. */
 export function detect(cfg) {
+  const own = controllerWorker(cfg.controller);
   const agents = Object.entries(cfg.providers).filter(([, p]) => p.type === 'cli')
-    .map(([name, p]) => ({ name, label: CLI_PRESETS[p.preset]?.label || name, installed: !!which({ ...(CLI_PRESETS[p.preset] || {}), ...p }.bin), enabled: !!p.enabled }));
+    .map(([name, p]) => ({ name, label: CLI_PRESETS[p.preset]?.label || name, installed: !!which({ ...(CLI_PRESETS[p.preset] || {}), ...p }.bin), enabled: !!p.enabled,
+      ...(name === own ? { controller: true } : {}) }));
   const keys = Object.entries(CATALOG).filter(([, e]) => e.apiKeyEnv && keyValue(e.apiKeyEnv))
     .map(([id, e]) => ({ id, name: providerNameFor(cfg, id), label: e.label, env: e.apiKeyEnv, enabled: !!cfg.providers[providerNameFor(cfg, id)]?.enabled }));
   return { agents, keys };
@@ -173,7 +175,7 @@ export function enableDetected(root, found) {
   const on = [];
   const data = readScope('global', root);
   data.providers ||= {};
-  for (const a of found.agents) if (a.installed && !a.enabled) { data.providers[a.name] = { ...(data.providers[a.name] || {}), enabled: true }; on.push(a.name); }
+  for (const a of found.agents) if (a.installed && !a.enabled && !a.controller) { data.providers[a.name] = { ...(data.providers[a.name] || {}), enabled: true }; on.push(a.name); }
   if (on.length) writeScope('global', root, data);
   for (const k of found.keys) if (!k.enabled) { addProvider(root, k.id); on.push(k.name); }
   return on;

@@ -297,11 +297,17 @@ export const DEFAULT_ROLES = {
 
 /** Who plans, reviews and commits. `conductor init` writes the matching instruction files. */
 export const CONTROLLERS = {
-  'claude-code': { label: 'Claude Code', file: 'CLAUDE.md' },
-  'antigravity': { label: 'Antigravity CLI', file: 'GEMINI.md' },
-  'codex-cli': { label: 'Codex CLI', file: 'AGENTS.md' },
-  'opencode': { label: 'OpenCode', file: 'AGENTS.md' },
+  'claude-code': { label: 'Claude Code', file: 'CLAUDE.md', worker: 'claude-cli' },
+  'antigravity': { label: 'Antigravity CLI', file: 'GEMINI.md', worker: 'antigravity-cli' },
+  'codex-cli': { label: 'Codex CLI', file: 'AGENTS.md', worker: 'codex-cli' },
+  'opencode': { label: 'OpenCode', file: 'AGENTS.md', worker: 'opencode' },
 };
+
+/**
+ * The worker provider that is the controller's own CLI (claude-cli under Claude Code). conductor never turns it
+ * on or picks it by itself: work handed to it spends the very quota conductor is meant to save.
+ */
+export const controllerWorker = (controller) => CONTROLLERS[controller]?.worker || null;
 
 export const DEFAULT_SETTINGS = {
   timeoutSec: 1200, // an agent is stopped after this and the next provider runs (a plan task's eta: line can raise it)

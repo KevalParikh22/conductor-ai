@@ -12,7 +12,7 @@ import { initProject, setupGlobal } from '../src/init.js';
 import { startMcpServer } from '../src/mcp.js';
 import { testProvider } from '../src/providers.js';
 import { listFreeModels, listProviderModels } from '../src/models.js';
-import { CLI_PRESETS, ROLES, CONTROLLERS } from '../src/presets.js';
+import { CLI_PRESETS, ROLES, CONTROLLERS, controllerWorker } from '../src/presets.js';
 import { VERSION } from '../src/version.js';
 import { which, keyValue } from '../src/util.js';
 import { usageReport, formatUsage, recordSaving } from '../src/usage.js';
@@ -96,7 +96,7 @@ function routeRules(cfg, o) {
     const have = new Set((cfg.routes || []).map((r) => r.from).filter(Boolean));
     console.log('Rule library (★ = in the starter set). Add with: conductor route --add <id>   or   --add starter\n');
     for (const t of ROUTE_TEMPLATES) {
-      const r = resolveTemplate(t, cfg.providers);
+      const r = resolveTemplate(t, cfg.providers, { exclude: [controllerWorker(cfg.controller)] });
       console.log(`${t.starter ? '★' : ' '} ${t.id.padEnd(13)} ${t.label}${have.has(t.id) ? '   [added]' : ''}`);
       console.log(`  ${''.padEnd(13)} ${describeRoute(r.route).replace(/ → .*/, '')} → ${r.missing ? `(${r.missing})` : [].concat(r.route.provider).join(', ')}`);
       console.log(`  ${''.padEnd(13)} ${t.why}`);
@@ -114,7 +114,7 @@ function routeRules(cfg, o) {
       console.log(`✓ removed rule ${n}: ${describeRoute(gone)}`);
     } else {
       const ids = String(o.add).split(',').map((x) => x.trim()).filter(Boolean).flatMap((x) => (x === 'starter' ? starterIds() : [x]));
-      const r = addTemplates(routes, ids, cfg.providers);
+      const r = addTemplates(routes, ids, cfg.providers, { exclude: [controllerWorker(cfg.controller)] });
       routes = r.routes;
       for (const id of r.added) console.log(`✓ added ${id}: ${describeRoute(routes.find((x) => x.from === id))}`);
       for (const s of r.skipped) console.log(`- skipped ${s.id}: ${s.why}`);
@@ -384,6 +384,9 @@ async function main() {
 async function doctor(o) {
   const cfg = loadConfig();
   const results = [];
+  // a built-in API provider that is on by default but has no key yet is optional, not a problem; one you turned on yourself is
+  const scopes = [readScope('global', cfg.root), readScope('project', cfg.root)];
+  const turnedOn = (name) => scopes.some((s) => s.providers?.[name]?.enabled === true);
   for (const [name, p] of Object.entries(cfg.providers)) {
     if (!p.enabled) continue;
     const r = { name, kind: p.type === 'cli' ? 'agent' : 'chat', ok: true, status: 'ready', next: null, permissions: providerPermissions(p), readOnlyEnforced: readOnlyEnforced(p) };
@@ -392,7 +395,9 @@ async function doctor(o) {
       const preset = { ...CLI_PRESETS[p.preset], ...p };
       if (!which(preset.bin)) { Object.assign(r, { ok: false, status: 'not installed', next: `install: ${preset.install}\n    login:   ${preset.login}` }); continue; }
     } else if (p.apiKeyEnv && !p.apiKeyOptional && !keyValue(p.apiKeyEnv)) {
-      Object.assign(r, { ok: false, status: `${p.apiKeyEnv} not set${process.env[p.apiKeyEnv] ? ' (placeholder value)' : ''}`, next: p.catalog ? `conductor add ${p.catalog}` : `conductor keys set ${p.apiKeyEnv}` });
+      const add = p.catalog ? `conductor add ${p.catalog}` : `conductor keys set ${p.apiKeyEnv}`;
+      if (!turnedOn(name) && !process.env[p.apiKeyEnv]) Object.assign(r, { optional: true, status: `optional: add a key to use it (${add})` });
+      else Object.assign(r, { ok: false, status: `${p.apiKeyEnv} not set${process.env[p.apiKeyEnv] ? ' (placeholder value)' : ''}`, next: add });
       continue;
     }
     if (o.live) {
@@ -410,7 +415,7 @@ async function doctor(o) {
   console.log(`project: ${cfg.root}\n`);
   for (const n of cfg.notices || []) console.log(`! ${n}`);
   for (const r of results) {
-    console.log(`${r.ok ? '✓' : '✗'} ${r.name.padEnd(16)} ${r.ok && !o.live ? 'ready (use --live to test a real call)' : r.status}${r.sample ? `: ${r.sample}` : ''}`);
+    console.log(`${r.optional ? '○' : r.ok ? '✓' : '✗'} ${r.name.padEnd(16)} ${r.optional ? r.status : r.ok && !o.live ? 'ready (use --live to test a real call)' : r.status}${r.sample ? `: ${r.sample}` : ''}`);
     if (r.next) console.log(`    next: ${r.next}`);
     if (r.permissions && o.details) {
       console.log(`    write: ${r.permissions.write || 'unknown (custom CLI): check its own permission settings'}`);
@@ -439,7 +444,9 @@ async function setup(o) {
   const installed = found.agents.filter((a) => a.installed);
   console.log(`\nAgents installed: ${installed.length ? installed.map((a) => a.label).join(', ') : 'none (optional: free API providers work without one)'}`);
   console.log(`API keys found:   ${found.keys.length ? found.keys.map((k) => `${k.label} (${k.env})`).join(', ') : 'none yet'}`);
-  const off = [...installed.filter((a) => !a.enabled), ...found.keys.filter((k) => !k.enabled)];
+  const own = installed.find((a) => a.controller && !a.enabled);
+  if (own) console.log(`                  ${own.name} stays off: it is your controller, and work sent to it would spend the quota conductor saves (turn it on in conductor ui only as a last resort)`);
+  const off = [...installed.filter((a) => !a.enabled && !a.controller), ...found.keys.filter((k) => !k.enabled)];
   if (off.length && (!ask || await confirm(`Enable ${off.map((x) => x.name).join(', ')}?`))) console.log(`✓ enabled: ${enableDetected(root, found).join(', ')}`);
 
   const local = await detectLocal();
