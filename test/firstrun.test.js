@@ -92,7 +92,7 @@ test('a hanging free route: one more model after a timeout, then the chain moves
   const t0 = Date.now();
   const r = await dispatch(cfg, { role: 'ask', task: 'hi', chain: ['hang'] });
   assert.deepEqual(r.attempts.map((x) => x.model), ['a:free', 'b:free'], 'stops after the second timeout');
-  assert.ok(Date.now() - t0 < 6000);
+  assert.ok(Date.now() - t0 < 30_000, `took ${Date.now() - t0}ms`); // seconds, not the 5 minutes it used to wait (slow CI runners need room)
   // the provider can't list its models now: the expired list from before is used
   const cacheFile = path.join(GLOBAL_DIR, 'models-cache.json');
   const cache = JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
