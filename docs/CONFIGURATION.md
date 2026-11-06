@@ -82,6 +82,7 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | Setting | Default | Meaning |
 |---|---|---|
 | `timeoutSec` | 1200 | Max seconds per agent attempt. The worker and everything it started are stopped, the attempt is stashed and the next provider runs. `--timeout 45m` on `run` or `batch` overrides it |
+| `allowCommands` | `[]` | Extra commands write workers may run without a permission prompt (Antigravity), on top of the usual build and test tools and your verify command, e.g. `["npx expo export"]` |
 | `timeoutFactor` | 2 | A plan task with `- **eta:** 1h` may run eta × this (here 2h) before it is stopped; an eta never lowers the limit |
 | `idleTimeoutSec` | 0 | Stop an agent that prints nothing for this long. Off by default because some agents print only at the end |
 | `apiTimeoutSec` | 300 | API (chat) providers give up after this and the next provider runs; a stalled free route shouldn't hold the chain for the agent timeout |

@@ -7,8 +7,19 @@ export const DENIED_COMMANDS = ['git push', 'git commit', 'git reset', 'git chec
 // Shell commands read-only workers may still run (prefixes).
 export const READ_ONLY_COMMANDS = ['git diff', 'git log', 'git show', 'git status', 'git blame', 'git grep', 'ls', 'cat', 'head', 'tail', 'wc', 'grep', 'rg', 'pwd'];
 // Files no worker may read (agy rules; deny read also denies write). {cwd} = the folder the worker runs in.
+// Only conductor's own sensitive files, not its whole folder: task worktrees live inside that folder, and
+// denying all of it locked agy out of the very files it was asked to edit.
 const SECRET_FILE_RULES = ['read_file({cwd}/.env)', 'read_file({cwd}/.conductor/.env)', 'read_file({cwd}/auth.json)',
-  'read_file({cwd}/app/etc/env.php)', 'read_file({conductorHome})'];
+  'read_file({cwd}/app/etc/env.php)', 'read_file({conductorHome}/secrets.env)', 'read_file({conductorHome}/config.json)',
+  'read_file({conductorHome}/state.json)', 'read_file({conductorHome}/usage.jsonl)'];
+
+// Build, lint and test commands a write worker may run without asking (inside its sandbox: no network). Headless
+// runs can't answer a permission prompt, so an unlisted command is denied and the task fails. The project's
+// verify command and settings.allowCommands are added to these.
+export const BUILD_COMMANDS = ['npm test', 'npm run', 'npx tsc', 'npx jest', 'npx vitest', 'npx eslint', 'npx prettier', 'npx expo lint',
+  'npx playwright test', 'pnpm test', 'pnpm run', 'pnpm exec', 'yarn test', 'yarn run', 'bun test', 'bun run', 'composer test',
+  'vendor/bin/phpunit', 'php vendor/bin/phpunit', 'php -l', 'pytest', 'python -m pytest', 'python3 -m pytest', 'go test', 'go build',
+  'go vet', 'cargo test', 'cargo build', 'cargo check', 'make test', 'make lint'];
 
 /**
  * CLI agent presets. Arg tokens:
@@ -294,6 +305,7 @@ export const CONTROLLERS = {
 
 export const DEFAULT_SETTINGS = {
   timeoutSec: 1200, // an agent is stopped after this and the next provider runs (a plan task's eta: line can raise it)
+  allowCommands: [], // more commands write workers may run without asking (agy), e.g. "npx expo export"
   timeoutFactor: 2, // a task with "- **eta:** 1h" gets eta × this before it is stopped
   idleTimeoutSec: 0, // stop an agent that prints nothing for this long (0 = off: some agents print only at the end)
   protectedBranches: ['main', 'master'],

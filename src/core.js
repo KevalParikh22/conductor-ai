@@ -1,7 +1,7 @@
 // The routing engine: role -> provider chain -> attempt with fallback -> verify -> summary.
 import fs from 'node:fs';
 import path from 'node:path';
-import { ROLES, CLI_PRESETS } from './presets.js';
+import { ROLES, CLI_PRESETS, BUILD_COMMANDS } from './presets.js';
 import { providerReadiness, providerKind, readOnlyEnforced, PROJECT_DIRNAME } from './config.js';
 import { runProvider } from './providers.js';
 import * as git from './git.js';
@@ -10,7 +10,7 @@ import { autoModel, autoFallbacks } from './models.js';
 import { smartOrder, isFree as isFreeProvider } from './selector.js';
 import { taskProviders, matchRoute, describeRoute } from './routing.js';
 import { compactDiff } from './diffview.js';
-import { createWorktree, commitWorktree, removeWorktree } from './worktree.js';
+import { createWorktree, openWorktree, commitWorktree, removeWorktree, readWorktreeMeta, writeWorktreeMeta } from './worktree.js';
 import { GLOBAL_DIR, readJSON, writeJSON, timestamp, rel } from './util.js';
 import { budgetBlock, estimateCost, recordUsage, recordSaving } from './usage.js';
 
@@ -169,6 +169,12 @@ export function outcome(s) {
   return 'done';
 }
 
+/** Commands write workers may run without a permission prompt: the usual build/test tools, the verify command, allowCommands. */
+export function buildCommands(settings) {
+  const verify = String(settings.verify || '').split(/&&|\|\||;|\|/).map((c) => c.trim()).filter(Boolean);
+  return [...new Set([...BUILD_COMMANDS, ...verify, ...(settings.allowCommands || [])])];
+}
+
 const modelKey = (name, model) => `${name}@${model || '(default)'}`;
 
 /**
@@ -257,7 +263,8 @@ function readContextFiles(root, files, budget, extraSecret = []) {
 /**
  * Run a role with fallback.
  * opts: role, task, planPath, taskId, provider, chain, note, files, base, focus, save, noVerify, allowDirty, onEvent,
- *       worktree (run in an isolated checkout on branch conductor/<id> and commit there), worktreeId, replace
+ *       worktree (run in an isolated checkout on branch conductor/<id> and commit there), worktreeId, replace,
+ *       continue (keep working in that task's existing worktree: a retry with a note, by the same worker by default)
  */
 export async function dispatch(cfg, opts) {
   const { root, settings } = cfg;
@@ -267,7 +274,15 @@ export async function dispatch(cfg, opts) {
   const mode = meta.mode;
   const emit = opts.onEvent || (() => {});
   const inRepo = git.isRepo(root);
-  const useWorktree = !!opts.worktree;
+  const useWorktree = !!(opts.worktree || opts.continue);
+  const wtId = opts.worktreeId || opts.taskId;
+  let prior = null;
+  if (opts.continue) {
+    if (!wtId) throw new UsageError('--continue needs the task id (--task T3) of the worktree to continue');
+    prior = readWorktreeMeta(root, wtId);
+    // the same worker fixes its own work unless another one is named
+    if (!opts.provider && !opts.chain?.length && prior?.winner && cfg.providers[prior.winner]) opts = { ...opts, provider: prior.winner };
+  }
   if (useWorktree && mode !== 'write') throw new UsageError(`--worktree is for write roles (build, fix, test, docs); ${role} is read-only and can already run in parallel`);
   const preWarnings = [];
 
@@ -328,8 +343,9 @@ export async function dispatch(cfg, opts) {
     throw new UsageError(role === 'ask' ? 'ask needs a question' : `${role} needs a task: --plan <file> --task <id>, or a task description`);
   }
   if (opts.note) body += `\n## Orchestrator note (important)\n${opts.note}\n`;
+  let continueNote = '';
 
-  const agentPrompt = `${loadPrompt('_worker')}\n${loadPrompt(meta.prompt)}\n---\n# TASK (role: ${role})\n${body}`;
+  let agentPrompt = `${loadPrompt('_worker')}\n${loadPrompt(meta.prompt)}\n---\n# TASK (role: ${role})\n${body}`;
   const chatSystem = `${loadPrompt('_worker')}\n${loadPrompt(meta.prompt)}${mode === 'write' ? '\n' + loadPrompt('_chat_write') : ''}`;
   let work = root; // where the worker runs: the repo, or its own worktree
   const chatContext = () => {
@@ -360,13 +376,20 @@ export async function dispatch(cfg, opts) {
   let mainBefore = null;
   if (useWorktree) {
     let wt;
-    try { wt = createWorktree(root, opts.worktreeId || opts.taskId || `${role}-${stamp}`, { replace: opts.replace }); } catch (e) { throw new UsageError(e.message); }
+    try { wt = opts.continue ? openWorktree(root, wtId) : createWorktree(root, wtId || `${role}-${stamp}`, { replace: opts.replace }); } catch (e) { throw new UsageError(e.message); }
+    if (!wt.continued) writeWorktreeMeta(root, wt.id, { role, plan: opts.planPath || null, task: opts.taskId || null });
     work = wt.dir;
     // keep the prompt file out of the main repo: agents that see its path may start working there instead
     ioDir = path.join(path.dirname(wt.dir), '.io', `${wt.id}-${stamp}`);
     fs.mkdirSync(ioDir, { recursive: true });
     mainBefore = new Set(git.status(root).split('\n').filter(Boolean));
-    summary.worktree = { id: wt.id, branch: wt.branch, dir: wt.dir, base: wt.base.slice(0, 7), commit: null, linked: wt.linked };
+    summary.worktree = { id: wt.id, branch: wt.branch, dir: wt.dir, base: wt.base.slice(0, 7), commit: null, linked: wt.linked, ...(wt.continued ? { continued: true } : {}) };
+    if (wt.continued) {
+      const done = git.diffStatVs(wt.dir, wt.base);
+      continueNote = `\n## You are continuing this task\nThis checkout already holds the earlier work on it (branch ${wt.branch}). Do not start over: review what is there, keep what is right and fix what the orchestrator note asks.\n${done ? `Changed so far (vs ${wt.base.slice(0, 7)}):\n\`\`\`\n${done}\n\`\`\`\n` : ''}`;
+      body += continueNote;
+      agentPrompt += continueNote;
+    }
     emit({ type: 'worktree', dir: wt.dir, branch: wt.branch });
   }
   const quotaRe = new RegExp(settings.quotaPattern, 'i');
@@ -411,7 +434,7 @@ export async function dispatch(cfg, opts) {
       let res = kind === 'chat' && !p.model
         ? { ok: false, text: '', reason: 'no model set, and its model list could not be fetched', log: '' }
         : await runProvider(c.name, p, { mode, prompt: userPrompt, system: chatSystem, cwd: work, runDir: ioDir, quotaRe,
-          ...limitFor(c.p, kind) });
+          allowCommands: buildCommands(settings), ...limitFor(c.p, kind) });
       if (p !== c.p && p.model && !res.model) res.model = p.model;
       const tampered = control ? git.restoreControl(control) : [];
       if (tampered.length) summary.warnings.push(`${c.name} changed git hooks or config, which can run programs. conductor put them back: ${tampered.join(', ')}`);
@@ -471,7 +494,8 @@ export async function dispatch(cfg, opts) {
     }
   }
   if (!summary.winner) {
-    if (useWorktree) { removeWorktree(root, summary.worktree.id, { force: true }); summary.worktree.removed = true; }
+    // a fresh worktree with nothing in it goes; a continued one keeps the earlier work
+    if (useWorktree && !summary.worktree.continued) { removeWorktree(root, summary.worktree.id, { force: true }); summary.worktree.removed = true; }
     writeJSON(path.join(runDir, 'summary.json'), summary);
     return summary;
   }
@@ -514,7 +538,8 @@ export async function dispatch(cfg, opts) {
     }
     if (useWorktree) {
       const v = summary.verify ? `verify ${summary.verify.status}` : 'not verified';
-      summary.worktree.commit = commitWorktree(work, `conductor: ${opts.taskId || role} by ${summary.winner} (${v})\n\n${(summary.status || '').replace(/^#+\s*/, '')}`);
+      writeWorktreeMeta(root, summary.worktree.id, { winner: summary.winner, model: summary.model });
+      summary.worktree.commit = commitWorktree(work, `conductor: ${opts.taskId || role}${summary.worktree.continued ? ' (continued)' : ''} by ${summary.winner} (${v})\n\n${(summary.status || '').replace(/^#+\s*/, '')}`);
     }
   }
   if (opts.save) {
@@ -608,6 +633,7 @@ export function formatSummary(s) {
   L.push(`attempts:  ${s.attempts.map((a) => `${a.provider}${a.model && multi(a.provider) ? `[${a.model}]` : ''}(${a.reason}${a.stashed ? ', stashed' : ''})`).join(' → ') || '(none)'}`);
   if (!s.winner) {
     L.push('worker:    NONE. Every provider failed or was skipped (exit 3).');
+    if (s.worktree?.continued) L.push(`kept:      the earlier work is still on ${s.worktree.branch}; failed attempts were stashed there`);
     L.push('next:      orchestrator does this task itself, or fix providers (conductor doctor)');
     return L.join('\n');
   }
@@ -634,7 +660,9 @@ export function formatSummary(s) {
   if (s.worktree) {
     L.push(s.worktree.commit
       ? `next:      orchestrator reviews \`conductor diff ${s.worktree.branch}\`, then \`git merge --no-ff ${s.worktree.branch}\` and \`conductor worktree rm ${s.worktree.id}\` (or rm --force to reject)`
-      : `next:      the worker changed nothing; \`conductor worktree rm ${s.worktree.id}\``);
+      : s.worktree.continued
+        ? `next:      nothing new this time; the earlier work is still on ${s.worktree.branch}. Retry with another note or provider, or merge it as it is`
+        : `next:      the worker changed nothing; \`conductor worktree rm ${s.worktree.id}\``);
     return L.join('\n');
   }
   L.push(s.mode === 'write'

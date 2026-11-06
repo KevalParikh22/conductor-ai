@@ -68,6 +68,33 @@ export function createWorktree(root, id, { replace = false, links = DEFAULT_LINK
   return { id: sid, branch, dir, base: git(root, ['rev-parse', 'HEAD']).trim(), linked };
 }
 
+/**
+ * Reopen a task's existing worktree to continue the work in it (a retry with the orchestrator's note).
+ * Throws when there is none. base = where the branch left the current HEAD.
+ */
+export function openWorktree(root, id) {
+  const sid = safeId(id);
+  const branch = BRANCH_PREFIX + sid;
+  const dir = path.join(worktreesDir(root), sid);
+  if (!fs.existsSync(dir) || !branchExists(root, branch)) {
+    throw new Error(`no worktree for "${sid}" to continue. Start the task with --worktree (or conductor batch) first`);
+  }
+  const base = (git(root, ['merge-base', 'HEAD', branch], { allowFail: true }) || git(root, ['rev-parse', 'HEAD'])).trim();
+  const linked = DEFAULT_LINKS.filter((n) => { try { return fs.lstatSync(path.join(dir, n)).isSymbolicLink(); } catch { return false; } });
+  return { id: sid, branch, dir, base, linked, continued: true };
+}
+
+const metaFile = (root, id) => path.join(worktreesDir(root), '.meta', `${safeId(id)}.json`);
+/** What a worktree was made for (role, plan, task) and who last worked in it, so `conductor retry` can continue it. */
+export function readWorktreeMeta(root, id) {
+  try { return JSON.parse(fs.readFileSync(metaFile(root, id), 'utf8')); } catch { return null; }
+}
+export function writeWorktreeMeta(root, id, data) {
+  const f = metaFile(root, id);
+  fs.mkdirSync(path.dirname(f), { recursive: true });
+  fs.writeFileSync(f, JSON.stringify({ ...(readWorktreeMeta(root, id) || {}), ...data, updatedAt: new Date().toISOString() }, null, 2));
+}
+
 /** Commit everything in the worktree on its branch. Returns the short sha, or null if nothing changed. */
 export function commitWorktree(dir, message) {
   if (!git(dir, ['status', '--porcelain']).trim()) return null;
@@ -109,6 +136,7 @@ export function removeWorktree(root, id, { force = false } = {}) {
   git(root, ['worktree', 'prune'], { allowFail: true });
   const io = path.join(worktreesDir(root), '.io');
   if (fs.existsSync(io)) for (const f of fs.readdirSync(io)) if (f.startsWith(`${sid}-`)) fs.rmSync(path.join(io, f), { recursive: true, force: true });
+  fs.rmSync(metaFile(root, sid), { force: true });
   if (branchExists(root, branch)) {
     if (git(root, ['branch', force ? '-D' : '-d', branch], { allowFail: true }) !== null) notes.push(`deleted branch ${branch}`);
     else notes.push(`kept branch ${branch}: it has commits that are not merged (merge it, or use --force to discard)`);

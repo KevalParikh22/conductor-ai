@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.1 (2026-11-06)
+
+- **A worker can fix its own work.**
+  - `conductor retry T3 --note "what to fix"` continues task T3 in its existing worktree. By default it goes to the same worker, which keeps what is right, fixes what the note asks and commits on the same branch.
+  - `--provider` hands the fix to someone else.
+  - Also available as `--continue` on `run`, and as `continue: true` in the MCP tool, which also takes `timeout`.
+  - A failed retry keeps the earlier work.
+  - Before, the only option was to start the task over, which threw the work away.
+- **Antigravity no longer gives up when it runs unattended.**
+  - It was denied conductor's whole folder, and task worktrees live inside that folder, so it was locked out of its own files. Now only conductor's `secrets.env`, `config.json`, `state.json` and `usage.jsonl` are denied.
+  - Usual build, lint and test commands run without a permission prompt that nobody could answer: `npx tsc`, `npx jest`, `npx expo lint`, `npm test`, `pytest`, `go test` and others, plus your verify command and `settings.allowCommands`. They still run inside agy's sandbox, with no network.
+
 ## 0.9.0 (2026-11-05)
 
 - **Time limits that stop hung workers.**

@@ -5,7 +5,7 @@ import os from 'node:os';
 import { loadConfig, findProjectRoot, validateConfig, GLOBAL_CONFIG, GLOBAL_SECRETS, projectConfigPath, readScope, providerPermissions, readOnlyEnforced, readOverrideMissing } from '../src/config.js';
 import { dispatch, formatSummary, UsageError, clearCooldowns, getCooldowns, chooseChain, extractTask, taskFiles, parseDuration } from '../src/core.js';
 import { runBatch, formatBatch } from '../src/batch.js';
-import { listWorktrees, removeWorktree } from '../src/worktree.js';
+import { listWorktrees, removeWorktree, readWorktreeMeta } from '../src/worktree.js';
 import { statusReport, statusData } from '../src/status.js';
 import { runVerify } from '../src/verify.js';
 import { initProject, setupGlobal } from '../src/init.js';
@@ -66,6 +66,7 @@ Work (normally called by the controller)
      --base <ref> --focus "..."  review options
      --save <file>               ask: save the answer
      --worktree [--replace]      run in its own checkout on branch conductor/<id> and commit there
+     --continue                  keep working in the task's existing worktree (same worker by default; add --note)
      --timeout 45m               stop a worker after this and try the next (default: settings.timeoutSec, or 2× the task eta)
      --no-verify --allow-dirty --allow-open-questions --json
   conductor batch --plan <file> --tasks T1,T2,T3 [--concurrency 4] [--role r] [--provider p] [--replace] [--json]
@@ -73,6 +74,7 @@ Work (normally called by the controller)
   conductor route "task" [--role r] [--files a,b] | --plan f --task T1   which providers would take a task, and why
   conductor route --rules | --templates | --add starter|<id,id> | --rm <n> [--global]   list, add or remove routing rules
   conductor verify                     run the project's verify command
+  conductor retry <task> --note "…" [--provider p]   the task's worker continues in its worktree with your note
   conductor worktree [list] | rm <id>|--all [--force]
 
 Inspect
@@ -141,7 +143,7 @@ function timeoutOpt(o) {
 
 function parseArgs(argv) {
   const opts = { _: [] };
-  const flags = new Set(['no-verify', 'allow-dirty', 'json', 'live', 'no-open', 'no-mcp', 'all', 'clear', 'global', 'help', 'version', 'worktree', 'replace', 'force', 'allow-open-questions', 'vscode', 'yes', 'free', 'project', 'details', 'enable', 'rules', 'templates']);
+  const flags = new Set(['no-verify', 'allow-dirty', 'json', 'live', 'no-open', 'no-mcp', 'all', 'clear', 'global', 'help', 'version', 'worktree', 'replace', 'force', 'allow-open-questions', 'vscode', 'yes', 'free', 'project', 'details', 'enable', 'rules', 'templates', 'continue']);
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '-h') { opts.help = true; continue; }
@@ -162,6 +164,17 @@ async function main() {
   if (o.version) { console.log(VERSION); return 0; }
   if (o.help || cmd === 'help') { console.log(o._[0] === 'all' || o.all ? HELP_ALL : HELP); return 0; }
   if (ROLES[cmd]) { o._.unshift(cmd); cmd = 'run'; }
+  if (cmd === 'retry') {
+    // conductor retry T3 --note "…": the task's worker continues in its existing worktree with your note
+    const id = o._.shift();
+    if (!id) throw new UsageError('usage: conductor retry <task id> --note "what to fix" [--provider p] [--role fix]');
+    if (!o.note) throw new UsageError('retry needs --note "what to fix", so the worker knows what you found');
+    const m = readWorktreeMeta(findProjectRoot(), id);
+    if (!m && !(o.plan && o.role)) throw new UsageError(`no record of a worktree task "${id}". Use: conductor run <role> --plan <file> --task ${id} --continue --note "…"`);
+    o._ = [o.role || m.role];
+    o.plan ||= m?.plan || undefined; o.task = m?.task || id; o.continue = true; o.worktreeId = id;
+    cmd = 'run';
+  }
 
   switch (cmd) {
     case 'setup': return setup(o);
@@ -274,7 +287,7 @@ async function main() {
         role, task: o._.join(' ') || undefined, planPath: o.plan, taskId: o.task, provider: o.provider,
         chain: o.chain ? o.chain.split(',').map((x) => x.trim()).filter(Boolean) : undefined,
         note: o.note, files: o.files ? o.files.split(',').map((x) => x.trim()) : [], base: o.base, focus: o.focus,
-        save: o.save, noVerify: o['no-verify'], allowDirty: o['allow-dirty'], worktree: o.worktree, timeoutMs: timeoutOpt(o), replace: o.replace, allowOpenQuestions: o['allow-open-questions'],
+        save: o.save, noVerify: o['no-verify'], allowDirty: o['allow-dirty'], worktree: o.worktree, continue: o.continue, worktreeId: o.worktreeId, timeoutMs: timeoutOpt(o), replace: o.replace, allowOpenQuestions: o['allow-open-questions'],
         onEvent: o.json ? undefined : (e) => {
           const m = { worktree: `working in ${e.dir} (branch ${e.branch})`, try: `trying ${e.provider} (${e.kind})…`, skip: `skip ${e.provider}: ${e.reason}`, fail: `${e.provider} failed: ${e.reason}`, ok: `${e.provider} finished`, verify: 'running verify…' }[e.type];
           if (m) process.stderr.write(`conductor: ${m}\n`);

@@ -15,8 +15,9 @@ Work in **waves**. A wave is every `status: todo` task whose `depends on` tasks 
   Each task runs in its own git worktree on branch `conductor/<id>`, spread across different providers, and conductor commits the result on that branch. When the batch finishes, for each ✓ task:
   1. `conductor diff conductor/<id>`: in scope? matches the Design notes and acceptance criteria? Check its verify result.
   2. Good: `git merge --no-ff conductor/<id> -m "<slug>: <id> <title>"`, then `conductor worktree rm <id>` and set `status: done`.
-  3. Bad: `conductor worktree rm <id> --force`, then retry it alone with `conductor run <role> --plan <plan> --task <id> --worktree --provider <different> --note "<what was wrong>"`, or do it yourself.
-  For each ✗ task, retry it alone the same way. If a merge conflicts, resolve it yourself, or abort and retry that task after the others are merged.
+  3. Fixable: `conductor retry <id> --note "<what to fix>"`. The same worker continues in that worktree, keeps what is right and commits the fix on the same branch; add `--provider <other>` to hand it to someone else. Then review again.
+  4. Wrong from the start: `conductor worktree rm <id> --force`, then `conductor run <role> --plan <plan> --task <id> --worktree --provider <different> --note "<what was wrong>"`, or do it yourself.
+  For each ✗ or ⚠ task, `conductor retry <id> --note "…"` first; start over only when the work is unusable. If a merge conflicts, resolve it yourself, or abort and retry that task after the others are merged.
 - If tasks in a wave list the same file, run them one after another instead.
 
 While running:

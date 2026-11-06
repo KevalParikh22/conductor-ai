@@ -53,6 +53,11 @@ export const diffRaw = (root, args) => git(root, ['diff', '--no-color', '--no-ex
 /** Untracked files that are not ignored. */
 export const untracked = (root) => git(root, ['ls-files', '--others', '--exclude-standard', '-z']).split('\0').filter(Boolean);
 
+/** `git diff --stat base` in root, committed and uncommitted changes together ('' when none). */
+export function diffStatVs(root, base) {
+  return (git(root, ['diff', '--stat', base], { allowFail: true }) || '').trim();
+}
+
 export function diffAgainst(root, base) {
   let d = git(root, ['diff', base], { allowFail: true });
   const untracked = git(root, ['ls-files', '--others', '--exclude-standard', '-z']).split('\0').filter(Boolean);

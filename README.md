@@ -168,7 +168,7 @@ conductor passes each CLI its permission rules **for that run only**, through th
 
 | Agent | Write roles (`build`, `fix`, `test`, `docs`) | Read roles (`review`, `ask`) |
 |---|---|---|
-| **Antigravity** (`agy`) | `--sandbox`: commands run without network, home folder read-only; `.git`, `.env` files and conductor's folder denied | writes to the project denied |
+| **Antigravity** (`agy`) | `--sandbox`: commands run without network, home folder read-only; build and test commands (`npx tsc`, `npx jest`, your verify command…) run without asking; `.git`, `.env` files and conductor's secrets denied | writes to the project denied |
 | **Codex** | OS sandbox `workspace-write`, no network, never asks | OS sandbox `read-only` |
 | **OpenCode** | edits inside the project; outside folders denied (shell not OS-sandboxed) | edits, web and mutating shell commands denied |
 | **Claude Code** | edits auto-approved; other commands that would ask are refused | edit tools disabled |
@@ -221,6 +221,7 @@ Every one has a setup guide: **[docs/providers](docs/providers/README.md)**. See
 | `conductor batch --plan f --tasks T2,T3 [--concurrency 4]` | Independent tasks in parallel, one worktree each |
 | `conductor diff [branch]` | Compact diff to review: lockfiles and whitespace left out, new files included |
 | `conductor route "task" [--files a,b]` · `conductor local [--enable]` | Where a task would go and why; find and turn on local models |
+| `conductor retry <task> --note "…" [--provider p]` | The task's worker continues in its existing worktree with your note, instead of starting over |
 | `conductor worktree [list]` · `conductor worktree rm <id>\|--all [--force]` | See and clean up worktrees |
 | `conductor setup` · `conductor add <provider>` · `conductor providers` · `conductor keys` | Guided setup; add any of 45 chat APIs; list them; manage keys |
 | `conductor init [--controller claude-code\|antigravity\|codex-cli\|opencode]` | Set up a project |

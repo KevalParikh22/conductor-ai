@@ -34,7 +34,7 @@ Rules for every agent (where the CLI supports them; the table says which do):
 
 | Agent | Write roles | Read roles | Read-only enforced? |
 |---|---|---|---|
-| Antigravity (`agy`) | `--mode accept-edits --sandbox`: shell commands run in agy's terminal sandbox without asking (no network; home folder read-only; only the project and temp folders writable). `.git`, `.env`-type files and conductor's own folder are denied. | `--sandbox` with `write_file(<project>)` denied | ✓ |
+| Antigravity (`agy`) | `--mode accept-edits --sandbox`: shell commands run in agy's terminal sandbox without asking (no network; home folder read-only; only the project and temp folders writable). Build, lint and test commands (`npm test`, `npx tsc`, `npx jest`, `npx expo lint`, `pytest`, `go test`…, plus your verify command and `settings.allowCommands`) are allowed without a prompt, since a headless run can't answer one. `.git`, `.env`-type files and conductor's own secrets, config, state and usage files are denied. | `--sandbox` with `write_file(<project>)` denied | ✓ |
 | Codex | `--sandbox workspace-write`, `approval_policy="never"`, network off. Codex keeps `.git` read-only. | `--sandbox read-only` | ✓ |
 | OpenCode (2.x) | `--standalone --auto` with `external_directory: deny` and the git/sudo commands denied. Its shell is **not** OS-sandboxed: OpenCode blocks outside paths it can detect in a command, not all of them | `edit: deny`, `webfetch: deny`, `external_directory: deny`, shell denied except read-only commands | ✓ |
 | Claude Code | `--permission-mode acceptEdits`; the git/sudo commands disallowed; other commands that would ask are refused in `-p` mode | `Edit`, `Write`, `NotebookEdit` disallowed | ✓ |

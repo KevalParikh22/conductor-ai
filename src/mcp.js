@@ -4,7 +4,7 @@ import readline from 'node:readline';
 import fs from 'node:fs';
 import path from 'node:path';
 import { loadConfig, findProjectRoot } from './config.js';
-import { dispatch, formatSummary, UsageError } from './core.js';
+import { dispatch, formatSummary, UsageError, parseDuration } from './core.js';
 import { runBatch, formatBatch } from './batch.js';
 import { statusReport } from './status.js';
 import { runVerify } from './verify.js';
@@ -37,6 +37,8 @@ const TOOLS = [
         allow_dirty: { type: 'boolean' },
         worktree: { type: 'boolean', description: 'Write roles: run in an isolated checkout on branch conductor/<task_id> and commit there, so several tasks can run at once. Merge the branch afterwards.' },
         replace: { type: 'boolean', description: 'With worktree: discard an existing worktree/branch for this task first' },
+        continue: { type: 'boolean', description: 'Keep working in task_id\'s existing worktree instead of starting over: give a note with what to fix. The same worker runs unless provider is set' },
+        timeout: { type: 'string', description: 'Stop a worker after this long and try the next one, e.g. "45m" or "2h"' },
       },
       required: ['role'],
     },
@@ -93,7 +95,8 @@ async function callTool(name, args, root) {
       const s = await dispatch(cfg, {
         role: args.role, task: args.task, planPath: args.plan, taskId: args.task_id, provider: args.provider, note: args.note,
         files: args.files, base: args.base, focus: args.focus, save: args.save, noVerify: args.no_verify, allowDirty: args.allow_dirty, allowOpenQuestions: args.allow_open_questions,
-        worktree: args.worktree, worktreeId: args.task_id, replace: args.replace,
+        worktree: args.worktree, worktreeId: args.task_id, replace: args.replace, continue: args.continue,
+        timeoutMs: args.timeout ? parseDuration(args.timeout) || undefined : undefined,
         onEvent: (e) => process.stderr.write(`[conductor] ${e.type} ${e.provider || ''} ${e.reason || ''}\n`),
       });
       let out = formatSummary(s);

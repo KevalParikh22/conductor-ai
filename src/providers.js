@@ -54,6 +54,14 @@ export function withLinkedFolders(settings, cwd) {
   return { ...settings, permissions: { ...settings.permissions, allow: [...(settings.permissions.allow || []), ...allow] } };
 }
 
+/** Let a write worker run these commands without asking (agy `command(...)` allow rules; deny rules still win). */
+export function withCommands(settings, commands) {
+  if (!settings.permissions || !commands.length) return settings;
+  const have = new Set(settings.permissions.allow || []);
+  const add = [...new Set(commands.map((c) => c.trim()).filter(Boolean))].map((c) => `command(${c})`).filter((r) => !have.has(r));
+  return { ...settings, permissions: { ...settings.permissions, allow: [...(settings.permissions.allow || []), ...add] } };
+}
+
 /**
  * Environment for a CLI worker: the user's shell environment, minus the secrets conductor loaded from
  * secrets.env / .conductor/.env (except those this CLI needs, `passEnv`), plus the mode's own variables.
@@ -73,7 +81,7 @@ const fmtMin = (ms) => (ms >= 3_600_000 && ms % 3_600_000 === 0 ? `${ms / 3_600_
 const MAX_PROMPT_ARG = 100_000;
 
 /** Run a CLI agent (antigravity, codex, opencode, kimi, claude, or a custom one). */
-export async function runCli(name, p, { mode, prompt, cwd, timeoutMs, idleTimeoutMs = 0, runDir, quotaRe }) {
+export async function runCli(name, p, { mode, prompt, cwd, timeoutMs, idleTimeoutMs = 0, runDir, quotaRe, allowCommands = [] }) {
   const preset = { ...(CLI_PRESETS[p.preset] || {}), ...p };
   if (!which(preset.bin)) return { ok: false, text: '', reason: 'not installed', log: '' };
   const promptFile = path.join(runDir, `${name}.prompt.md`);
@@ -87,7 +95,9 @@ export async function runCli(name, p, { mode, prompt, cwd, timeoutMs, idleTimeou
   // Use the resolved path: the process runs there, and through a symlink (macOS /var -> /private/var)
   // a deny rule for the unresolved path would not match what the CLI sees.
   const realCwd = fs.realpathSync(cwd);
-  const settings = preset.sessionSettings?.[mode] ? withLinkedFolders(fillPaths(preset.sessionSettings[mode], realCwd), realCwd) : null;
+  const settings = preset.sessionSettings?.[mode]
+    ? withCommands(withLinkedFolders(fillPaths(preset.sessionSettings[mode], realCwd), realCwd), mode === 'write' ? allowCommands : [])
+    : null;
   const sessionSettings = settings ? JSON.stringify(settings) : '';
   const args = expandArgs(template, { prompt: promptArg, promptFile, outFile, ioDir: path.dirname(promptFile), cwd: realCwd, model: p.model, sessionSettings,
     timeout: timeoutMs ? `${Math.max(1, Math.round(timeoutMs / 60_000))}m` : '0' }, preset.modelArgs || []);
