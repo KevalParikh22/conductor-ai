@@ -18,9 +18,11 @@ const { loadConfig, validateConfig } = await import('../src/config.js');
 
 test('a timeout stops the whole process tree, even when a grandchild holds the output open', async () => {
   const t0 = Date.now();
-  const r = await run('agent-hang', [], { timeoutMs: 500 });
+  // 2s gives a slow CI runner time to start the script and print; the grandchild sleeps 60s, so finishing well
+  // before that proves the whole group was stopped
+  const r = await run('agent-hang', [], { timeoutMs: 2000 });
   assert.equal(r.timedOut, true);
-  assert.ok(Date.now() - t0 < 5000, `stopped in ${Date.now() - t0}ms`);
+  assert.ok(Date.now() - t0 < 30_000, `stopped in ${Date.now() - t0}ms`);
   assert.match(r.stdout, /working/);
 });
 
@@ -51,13 +53,14 @@ test('a worker past its limit is stopped and the next provider takes over', asyn
   clearCooldowns();
   const { dir } = makeRepo();
   const cfg = loadConfig(dir);
-  cfg.providers.hang = { type: 'cli', enabled: true, bin: 'agent-hang', write: ['x'], read: ['x'] };
+  // only the hanging worker gets a short limit (3s); the one that works keeps the normal limit, so a slow runner can't time it out
+  cfg.providers.hang = { type: 'cli', enabled: true, bin: 'agent-hang', write: ['x'], read: ['x'], timeoutMin: 0.05 };
   cfg.providers.ok = { type: 'cli', enabled: true, bin: 'agent-ok', write: ['x'], read: ['x'] };
   const t0 = Date.now();
-  const s = await dispatch(cfg, { role: 'ask', task: 'what?', chain: ['hang', 'ok'], timeoutMs: 600 });
+  const s = await dispatch(cfg, { role: 'ask', task: 'what?', chain: ['hang', 'ok'] });
   assert.equal(s.winner, 'ok');
   assert.match(s.attempts[0].reason, /^timeout \(\d+m\)/);
-  assert.ok(Date.now() - t0 < 8000);
+  assert.ok(Date.now() - t0 < 40_000, `took ${Date.now() - t0}ms`); // well under the 60s the hanging worker would take
 });
 
 // fake OpenAI-compatible API: model "busy" is rate-limited, everything else answers; /models lists free models
