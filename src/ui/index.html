@@ -179,7 +179,7 @@ body { overflow-x: hidden; }
 <script>
 const TOKEN = new URLSearchParams(location.hash.slice(1)).get('t') || '';
 // the open page lives in the address (#t=…&p=roles), so a reload or a shared link opens the same page
-function pageFromHash() { const p = new URLSearchParams(location.hash.slice(1)).get('p'); return ['overview', 'runs', 'roles', 'providers', 'keys', 'settings', 'setup'].includes(p) ? p : 'overview'; }
+function pageFromHash() { const p = new URLSearchParams(location.hash.slice(1)).get('p'); return ['overview', 'runs', 'roles', 'providers', 'skills', 'keys', 'settings', 'setup'].includes(p) ? p : 'overview'; }
 function go(page) {
   if (page === tab) return render();
   tab = page;
@@ -202,12 +202,13 @@ const ICONS = {
   up: 'M12 19V5M5 12l7-7 7 7', down: 'M12 5v14M19 12l-7 7-7-7', agent: 'M4 17l6-6-6-6M12 19h8', cloud: 'M18 10h-1.3A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z',
   chip: 'M5 5h14v14H5zM9 9h6v6H9zM9 1v4M15 1v4M9 19v4M15 19v4M1 9h4M1 15h4M19 9h4M19 15h4',
   sun: 'M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4',
-  moon: 'M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z', copy: 'M9 9h11v11H9zM5 15H4V4h11v1',
+  moon: 'M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z', skills: 'M13 2L3 14h9l-1 8 10-12h-9l1-8z', copy: 'M9 9h11v11H9zM5 15H4V4h11v1',
 };
 const icon = (n, t = '') => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true"${t ? ` title="${t}"` : ''}><path d="${ICONS[n]}"/></svg>`;
-const TABS = [['overview', 'Overview'], ['runs', 'Runs'], ['roles', 'Roles'], ['providers', 'Providers'], ['keys', 'API keys'], ['settings', 'Settings'], ['setup', 'Setup']];
+const TABS = [['overview', 'Overview'], ['runs', 'Runs'], ['roles', 'Roles'], ['providers', 'Providers'], ['skills', 'Skills'], ['keys', 'API keys'], ['settings', 'Settings'], ['setup', 'Setup']];
 let S = null, W = null, tab = pageFromHash(), dirty = false, freeModels = null, runsData = null, gOpen = null, gFilter = { q: '', cat: 'all' };
 let rPreview = null; // routing preview result
+let ctrlPick = null; // controller picked in Settings but not applied yet (a project action, not part of Save)
 let rtLib = null, rtLibKey = '', rtLibOpen = null; // rule library, resolved against the current (unsaved) providers
 const ROUTING_GUIDE = 'https://github.com/KevalParikh22/conductor-ai/blob/main/docs/ROUTING.md';
 function loadRtLib() {
@@ -264,6 +265,8 @@ function copyBtn(text) { return `<button class="btn small copy" data-copy="${esc
 function cmd(text) { return `<pre class="cmd">${esc(text)}${copyBtn(text)}</pre>`; }
 function bindCopy() { document.querySelectorAll('[data-copy]').forEach((b) => b.onclick = () => { navigator.clipboard?.writeText(b.dataset.copy).then(() => toast('Copied'), () => toast('Copy failed')); }); }
 
+let skillsData = null, skillEdit = null, skillNew = false; // skills page: library, the skill open in the editor, new-skill form
+function loadSkills() { api('GET', '/api/skills').then((d) => { skillsData = d; if (tab === 'skills') render(); }, (e) => toast(e.message)); }
 function loadRuns() { api('GET', '/api/runs').then((d) => { runsData = d; if (tab === 'runs') render(); }, (e) => toast(e.message)); }
 // keep the Runs page current while it is open (runs started from the terminal show up on their own)
 setInterval(() => { if (tab === 'runs' && document.visibilityState === 'visible') loadRuns(); }, 5000);
@@ -320,6 +323,32 @@ function applyGalleryFilter() {
 }
 
 const views = {
+  skills() {
+    if (!skillsData) { loadSkills(); return '<div class="head"><h1>Skills</h1><p class="sub">Loading…</p></div>'; }
+    const { skills, dirs } = skillsData;
+    const when = (s) => ['roles', 'files', 'text'].filter((k) => s.when?.[k]).map((k) => `${k} <span class="mono">${esc(s.when[k])}</span>`).join(' · ') || 'every task';
+    const on = skills.filter((s) => s.on).length;
+    return `<div class="head"><h1>Skills</h1><span class="spacer"></span><button class="btn ${skillNew ? '' : 'primary'}" id="sk-newbtn">${icon(skillNew ? 'x' : 'plus')} ${skillNew ? 'Close' : 'New skill'}</button>
+        <p class="sub">One skill library for every controller and worker. Global skills apply to all projects; switch any off for this one. Active skills are copied into <span class="mono">.claude/skills</span> and <span class="mono">.agents/skills</span> (Claude Code, Antigravity, Codex, OpenCode load them), and each worker gets the ones that match its task.</p></div>
+      ${skillNew ? `<div class="card"><h2>New skill</h2><div class="fields" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr))">
+          <div><label class="f">Name</label><input type="text" id="sk-name" placeholder="php-conventions"></div>
+          <div><label class="f">Available in</label><select id="sk-scope"><option value="global">All projects</option><option value="project">This project only</option></select></div>
+          <div style="grid-column:span 2"><label class="f">Description (when to use it)</label><input type="text" id="sk-desc" placeholder="How PHP modules are written in this codebase"></div>
+          <div><label class="f">Workers: files (glob)</label><input type="text" id="sk-files" placeholder="*.php, app/code/**"></div>
+          <div><label class="f">Workers: roles</label><input type="text" id="sk-roles" placeholder="build, fix"></div>
+          <div><label class="f">Workers: task text (regex)</label><input type="text" id="sk-text" placeholder="checkout|payment"></div></div>
+        <div class="row" style="margin-top:10px"><button class="btn primary" id="sk-create">${icon('plus')} Create</button><span class="note">Leave the worker fields empty to give it to every task. Same as <span class="mono">conductor skills new &lt;name&gt; --files … --roles …</span></span></div></div>` : ''}
+      <div class="card"><div class="row"><h2 style="margin:0">Library</h2><span class="note">${on} of ${skills.length} on for this project</span><span class="spacer"></span><button class="btn small" id="sk-sync" title="conductor skills sync">Sync now</button></div>
+        ${skills.length ? `<div class="plist" style="margin-top:10px">${skills.map((s) => `<div class="prow ${skillEdit === s.name ? 'open' : ''}"><div class="prow-main">
+            <label class="switch" title="${s.on ? 'On' : 'Off'} for this project (conductor skills ${s.on ? 'off' : 'on'} ${esc(s.name)})"><input type="checkbox" data-skon="${esc(s.name)}" ${s.on ? 'checked' : ''}><span></span></label>
+            <div class="prow-name">${icon('skills')}<b>${esc(s.name)}</b><span class="pill">${s.scope === 'global' ? 'all projects' : 'this project'}${s.overrides ? ' · overrides global' : ''}</span><span class="note">${esc(s.description)}</span></div>
+            <div class="row" style="gap:4px"><button class="btn small ghost" data-skedit="${esc(s.name)}">${skillEdit === s.name ? 'Close' : 'Edit'}</button></div></div>
+          <div class="prow-body" ${skillEdit === s.name ? '' : 'hidden'}><div class="note">Workers: ${when(s)} · file: <span class="mono">${esc(s.file)}</span></div>
+            <textarea id="sk-text-${esc(s.name)}" rows="14" style="width:100%;margin-top:8px;font-family:var(--mono);font-size:12.5px">${esc(s.text)}</textarea>
+            <div class="row" style="margin-top:8px"><button class="btn small primary" data-sksave="${esc(s.name)}">Save</button><button class="btn small" data-skrm="${esc(s.name)}|${s.scope}">Remove from library</button></div></div></div>`).join('')}</div>`
+          : `<p class="note" style="margin-top:8px">No skills yet. Create one above, or put a folder with a SKILL.md in <span class="mono">${esc(dirs.global)}</span> (all projects) or <span class="mono">${esc(dirs.project)}</span> (this project).</p>`}
+        <p class="note" style="margin-top:10px">Library folders: all projects <span class="mono">${esc(dirs.global)}</span> · this project <span class="mono">${esc(dirs.project)}</span>. Terminal: <span class="mono">conductor skills</span>.</p></div>`;
+  },
   runs() {
     if (!runsData) { loadRuns(); return '<div class="head"><h1>Runs</h1><p class="sub">Loading…</p></div>'; }
     const { runs, usage, budget } = runsData;
@@ -468,8 +497,9 @@ const views = {
     const chk = (k, l) => `<label class="row"><input type="checkbox" data-setb="${k}" ${st[k] ? 'checked' : ''}> ${l}</label>`;
     return `<div class="head"><h1>Settings</h1><p class="sub">Defaults suit most projects.</p></div>
     <div class="card"><h2>Controller</h2><p class="note" style="margin-top:-4px">The agent that plans, delegates, reviews and commits. Applying writes its instruction file, <span class="mono">/conduct-*</span> commands and MCP entry into this project, keeping your own content.</p>
-      <div class="ctrl">${Object.entries(S.controllers).map(([k, c]) => `<label class="${W.controller === k ? 'sel' : ''}"><input type="radio" name="ctrl" value="${k}" ${W.controller === k ? 'checked' : ''}><b>${esc(c.label)}</b><div class="note">${esc(c.file)}</div></label>`).join('')}</div>
-      <div class="row" style="margin-top:12px"><button class="btn primary" id="apply-ctrl" ${S.inRepo ? '' : 'disabled'}>Apply to this project</button><label class="row note"><input type="checkbox" id="ctrl-mcp" checked> also register the MCP server</label>${S.inRepo ? '' : '<span class="note">Open the UI inside a git project to apply.</span>'}</div>
+      ${(() => { const cur = S.effective.controller, pick = ctrlPick || cur, lbl = (k) => esc(S.controllers[k]?.label || k); return `
+      <div class="ctrl">${Object.entries(S.controllers).map(([k, c]) => `<label class="${pick === k ? 'sel' : ''}"><input type="radio" name="ctrl" value="${k}" ${pick === k ? 'checked' : ''}><b>${esc(c.label)}</b><div class="note">${esc(c.file)}${k === cur ? ' · current' : ''}</div></label>`).join('')}</div>
+      <div class="row" style="margin-top:12px"><button class="btn primary" id="apply-ctrl" ${S.inRepo && pick !== cur ? '' : 'disabled'}>${pick !== cur ? `Switch this project to ${lbl(pick)}` : `${lbl(cur)} is this project's controller`}</button>`; })()}<label class="row note"><input type="checkbox" id="ctrl-mcp" checked> also register the MCP server</label>${S.inRepo ? '' : '<span class="note">Open the UI inside a git project to apply.</span>'}</div>
       <pre class="cmd" id="init-out" style="display:none"></pre></div>
     <div class="card"><h2>Runs</h2><div class="fields">
       ${num('timeoutSec', 'Timeout per attempt (seconds)', 'A worker is stopped and the next one tried')}
@@ -487,7 +517,7 @@ const views = {
     const agents = Object.values(p).filter((v) => v.installed).length;
     const freeKeys = ['OPENROUTER_API_KEY', 'OPENCODE_API_KEY', 'GEMINI_API_KEY', 'GROQ_API_KEY', 'CEREBRAS_API_KEY'].filter((n) => sec[n]).length;
     const link = (u) => `<a href="https://${u}" target="_blank" rel="noopener">${u}</a>`;
-    return `<div class="head"><h1>Setup</h1><p class="sub">Install once per machine, run <span class="mono">conductor setup</span>, then <span class="mono">conductor init</span> in each project. kilo-free works with no key and no install.</p></div>
+    return `<div class="head"><h1>Setup</h1><p class="sub">Install once per machine, run <span class="mono">conductor setup</span>, then <span class="mono">conductor init</span> in each project. kilo-free works with no key and no install. Everything in one place: <a href="https://github.com/KevalParikh22/conductor-ai/blob/main/docs/GUIDE.md" target="_blank" rel="noopener">the conductor guide</a>.</p></div>
     <div class="card"><h2>This machine</h2><table><tr><th>Check</th><th>Status</th><th>How to fix</th></tr>
       <tr><td>Node.js 20+</td><td>${pill(+S.env.node.slice(1).split('.')[0] >= 20, esc(S.env.node), esc(S.env.node) + ' (too old)')}</td><td class="mono">nvm install 22</td></tr>
       <tr><td>git</td><td>${pill(S.env.git, 'installed', 'missing')}</td><td class="note">Needed for worktrees, evidence checks and rollback</td></tr>
@@ -533,6 +563,14 @@ function render() {
 }
 
 function bind() {
+  const skr = async (p, body, msg) => { try { skillsData = await api('POST', p, body); render(); if (msg) toast(msg); return true; } catch (e) { toast(e.message); return false; } };
+  const skn = $('#sk-newbtn'); if (skn) skn.onclick = () => { skillNew = !skillNew; render(); };
+  const skc = $('#sk-create'); if (skc) skc.onclick = () => skr('/api/skills/new', { name: $('#sk-name').value.trim(), scope: $('#sk-scope').value, description: $('#sk-desc').value.trim(), files: $('#sk-files').value.trim(), roles: $('#sk-roles').value.trim(), text: $('#sk-text').value.trim() }, 'Skill created. Write its instructions with Edit').then((ok) => { if (ok) { skillNew = false; render(); } });
+  const sks = $('#sk-sync'); if (sks) sks.onclick = () => skr('/api/skills/sync', {}, 'Skills synced');
+  document.querySelectorAll('[data-skon]').forEach((i) => i.onchange = () => skr('/api/skills/toggle', { name: i.dataset.skon, on: i.checked }, `${i.dataset.skon} ${i.checked ? 'on' : 'off'} for this project`));
+  document.querySelectorAll('[data-skedit]').forEach((b) => b.onclick = () => { skillEdit = skillEdit === b.dataset.skedit ? null : b.dataset.skedit; render(); });
+  document.querySelectorAll('[data-sksave]').forEach((b) => b.onclick = () => skr('/api/skills/save', { name: b.dataset.sksave, text: $(`#sk-text-${b.dataset.sksave}`).value }, 'Saved and synced'));
+  document.querySelectorAll('[data-skrm]').forEach((b) => b.onclick = () => { const [name, scope] = b.dataset.skrm.split('|'); if (confirm(`Remove ${name} from the ${scope === 'global' ? 'library for all projects' : 'project library'}? This deletes its folder.`)) { skillEdit = null; skr('/api/skills/remove', { name, scope }, 'Removed'); } });
   document.querySelectorAll('[data-goto]').forEach((b) => b.onclick = (e) => { e.preventDefault(); go(b.dataset.goto); }); // links too: "#" would drop the token
   document.querySelectorAll('[data-clear]').forEach((b) => b.onclick = async () => { load(await api('POST', '/api/cooldowns/clear', { name: b.dataset.clear })); toast('Cooldown cleared'); });
   document.querySelectorAll('[data-mv]').forEach((b) => b.onclick = () => { const [r, i, d] = b.dataset.mv.split('|'); const c = W.roles[r]; const j = +i + +d; [c[i], c[j]] = [c[j], c[i]]; markDirty(); render(); });
@@ -624,13 +662,13 @@ function bind() {
     try { load(await api('PUT', '/api/secrets', { updates: { [k]: v } })); toast(`${k} saved`); } catch (e) { toast(e.message); }
   });
   document.querySelectorAll('[data-delkey]').forEach((b) => b.onclick = async () => { try { load(await api('PUT', '/api/secrets', { updates: { [b.dataset.delkey]: null } })); toast('Removed'); } catch (e) { toast(e.message); } });
-  document.querySelectorAll('input[name=ctrl]').forEach((r) => r.onchange = () => { W.controller = r.value; markDirty(); render(); });
+  document.querySelectorAll('input[name=ctrl]').forEach((r) => r.onchange = () => { ctrlPick = r.value; render(); });
   const ap = $('#apply-ctrl'); if (ap) ap.onclick = async () => {
     ap.disabled = true;
     try {
-      const r = await api('POST', '/api/init', { controller: W.controller, mcp: $('#ctrl-mcp').checked });
+      const r = await api('POST', '/api/init', { controller: ctrlPick || S.effective.controller, mcp: $('#ctrl-mcp').checked });
       const out = r.lines.join('\n') + (r.notes.length ? '\n\n' + r.notes.join('\n') : '');
-      S = r.state; W.controller = S.effective.controller; render();
+      S = r.state; W.controller = S.effective.controller; ctrlPick = null; render();
       const pre = $('#init-out'); pre.style.display = 'block'; pre.textContent = out; toast('Project updated');
     } catch (e) { toast(e.message); ap.disabled = false; }
   };

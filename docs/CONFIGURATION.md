@@ -100,6 +100,14 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | `quotaPattern` | (regex) | Output that counts as a rate-limit error for CLIs |
 | `dailyBudgetUSD` | 0 | Daily cap on known API spend across all providers. 0 = no cap. Providers over budget are skipped like cooled-down ones; free ones never count |
 
+## Skills
+
+Your skill library lives in `~/.config/conductor/skills/` (all projects) and `.conductor/skills/` (one project). A project switches skills off in its `.conductor/config.json`:
+```json
+{ "skills": { "off": ["php-conventions"] } }
+```
+Manage them with `conductor skills` or the Skills page in `conductor ui`. See [the guide](GUIDE.md#7-skills-one-library-for-every-controller-and-worker).
+
 ## Routing: which provider takes which task
 
 Pin one plan task by adding a line under it:

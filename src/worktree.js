@@ -6,6 +6,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { GLOBAL_DIR } from './util.js';
+import { copyIntoWorktree } from './localfiles.js';
 
 export const BRANCH_PREFIX = 'conductor/';
 
@@ -57,12 +58,14 @@ export function createWorktree(root, id, { replace = false, links = DEFAULT_LINK
     fs.symlinkSync(src, dst, 'dir');
     linked.push(name);
   }
-  if (linked.length) {
-    // keep the symlinks out of `git status` in the worktree (info/exclude is shared by all worktrees)
+  // conductor's own files (AGENTS.md, skills…) are git-ignored, so the checkout lacks them: copy them in
+  const copied = copyIntoWorktree(root, dir);
+  if (linked.length || copied.length) {
+    // keep the symlinks and copies out of `git status` in the worktree (info/exclude is shared by all worktrees)
     const exclude = path.join(git(root, ['rev-parse', '--git-common-dir']).trim(), 'info', 'exclude');
     const abs = path.isAbsolute(exclude) ? exclude : path.join(root, exclude);
     const cur = fs.existsSync(abs) ? fs.readFileSync(abs, 'utf8') : '';
-    const add = linked.map((n) => `/${n}`).filter((l) => !cur.split('\n').includes(l));
+    const add = [...linked, ...copied].map((n) => `/${n}`).filter((l) => !cur.split('\n').includes(l));
     if (add.length) { fs.mkdirSync(path.dirname(abs), { recursive: true }); fs.appendFileSync(abs, `${cur && !cur.endsWith('\n') ? '\n' : ''}${add.join('\n')}\n`); }
   }
   return { id: sid, branch, dir, base: git(root, ['rev-parse', 'HEAD']).trim(), linked };

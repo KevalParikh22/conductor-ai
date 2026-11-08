@@ -6,6 +6,7 @@ import { loadConfig, findProjectRoot, validateConfig, GLOBAL_CONFIG, GLOBAL_SECR
 import { dispatch, formatSummary, UsageError, clearCooldowns, getCooldowns, chooseChain, extractTask, taskFiles, parseDuration } from '../src/core.js';
 import { runBatch, formatBatch } from '../src/batch.js';
 import { listWorktrees, removeWorktree, readWorktreeMeta } from '../src/worktree.js';
+import { listSkills, setSkillOn, newSkill, addSkill, removeSkill, syncSkills, globalSkillsDir, projectSkillsDir } from '../src/skills.js';
 import { statusReport, statusData } from '../src/status.js';
 import { runVerify } from '../src/verify.js';
 import { initProject, setupGlobal } from '../src/init.js';
@@ -39,6 +40,8 @@ Work
   conductor batch --plan <file> --tasks T1,T2   parallel, one worktree each
   conductor diff [branch]         compact diff to review (lockfiles hidden, whitespace ignored)
   conductor runs                  what ran, who did it, verify results
+  conductor retry <task> --note … the same worker fixes its task in place
+  conductor skills                your skill library: one set for every controller and worker
 
 All commands and options: conductor help all`;
 
@@ -50,7 +53,7 @@ Setup
   conductor add <provider> [--model m] [--yes] [--project]   add one: key, model, test, role chains
   conductor keys [set NAME | rm NAME]  list, set (hidden input or stdin) or remove API keys
   conductor local [--enable]           find local model servers (Ollama, LM Studio, llama.cpp…) and turn them on
-  conductor init [--controller <c>] [--vscode] [--no-mcp]   add conductor to the current project
+  conductor init [--controller <c>] [--vscode] [--no-mcp] [--share]   add conductor to the current project (its files go in .gitignore unless --share)
                                        controllers: ${Object.keys(CONTROLLERS).join(', ')}
   conductor ui [--port 4545] [--no-open]   settings page
   conductor doctor [--live] [--details] [--json]   check installs and keys (--live sends a test prompt)
@@ -74,6 +77,7 @@ Work (normally called by the controller)
   conductor route "task" [--role r] [--files a,b] | --plan f --task T1   which providers would take a task, and why
   conductor route --rules | --templates | --add starter|<id,id> | --rm <n> [--global]   list, add or remove routing rules
   conductor verify                     run the project's verify command
+  conductor skills [list] | new <name> | add <path> | on|off <name> | rm <name> | sync   one skill library for every controller and worker
   conductor retry <task> --note "…" [--provider p]   the task's worker continues in its worktree with your note
   conductor worktree [list] | rm <id>|--all [--force]
 
@@ -87,6 +91,62 @@ Inspect
   conductor mcp                        run as an MCP server (stdio)
 
 Exit codes: 0 ok · 2 usage/unsafe state · 3 every provider failed (controller takes over)`;
+
+/** conductor skills [list] | new <name> | add <path> | on|off <name> | rm <name> | sync: one skill library for every controller. */
+function skillsCmd(o) {
+  const root = findProjectRoot();
+  const [sub = 'list', name] = o._;
+  const scope = o.project ? 'project' : 'global';
+  const synced = () => { const r = syncSkills(root); const n = (r.added.length + r.updated.length) / 2; console.log(`synced: ${n} active skill${n === 1 ? '' : 's'} → .claude/skills and .agents/skills${r.removed.length ? ` (${r.removed.length / 2} removed)` : ''}`); r.skipped.forEach((s) => console.log(`- not synced: ${s}`)); };
+  const need = () => { if (!name) throw new UsageError(`usage: conductor skills ${sub} <name>`); };
+  switch (sub) {
+    case 'list': case 'ls': {
+      const all = listSkills(root);
+      if (o.json) { console.log(JSON.stringify(all, null, 2)); return 0; }
+      if (!all.length) {
+        console.log(`No skills yet. Your library: ${globalSkillsDir()} (all projects) and ${path.relative(root, projectSkillsDir(root)) || '.'} (this project).`);
+        console.log('Make one:   conductor skills new php-conventions --description "How PHP is written here" --files "*.php"');
+        console.log('Or add one: conductor skills add ./path/to/skill-folder');
+        return 0;
+      }
+      console.log('Skills for this project (✓ on, ○ off). Controllers load them natively; workers get the ones that match their task.\n');
+      for (const s of all) {
+        const when = Object.entries(s.when).filter(([k]) => ['roles', 'files', 'text'].includes(k)).map(([k, v]) => `${k} ${v}`).join(' · ') || 'every task';
+        console.log(`  ${s.on ? '✓' : '○'} ${s.name.padEnd(24)} ${s.scope.padEnd(8)} ${fit(s.description, termWidth() - 50)}`);
+        console.log(`    ${''.padEnd(24)} ${''.padEnd(8)} workers: ${when}`);
+      }
+      console.log('\nSwitch for this project: conductor skills off <name> | on <name>   Edit: open the SKILL.md, then conductor skills sync');
+      return 0;
+    }
+    case 'new': {
+      need();
+      const dir = newSkill(root, name, { scope, description: o.description, files: o.files, roles: o.roles, text: o.text });
+      console.log(`✓ created ${path.join(dir, 'SKILL.md')} (${scope}). Write the instructions in it, then: conductor skills sync`);
+      synced(); return 0;
+    }
+    case 'add': {
+      need();
+      const r = addSkill(root, name, { scope, name: o.name });
+      console.log(`✓ added ${r.name} to the ${scope} library (${r.dir})`);
+      synced(); return 0;
+    }
+    case 'on': case 'off': {
+      need();
+      if (!listSkills(root).some((s) => s.name === name)) throw new UsageError(`no skill "${name}" (see: conductor skills)`);
+      setSkillOn(root, name, sub === 'on');
+      console.log(`✓ ${name} ${sub} for this project`);
+      synced(); return 0;
+    }
+    case 'rm': case 'remove': {
+      need();
+      const s = removeSkill(root, name, { scope: o.global ? 'global' : o.project ? 'project' : undefined });
+      console.log(`✓ removed ${name} from the ${s.scope} library`);
+      return 0;
+    }
+    case 'sync': synced(); return 0;
+    default: throw new UsageError('usage: conductor skills [list] | new <name> [--project] [--description …] [--files …] [--roles …] | add <path> [--project] | on|off <name> | rm <name> | sync');
+  }
+}
 
 /** conductor route --rules | --templates | --add | --rm: manage routing rules (project scope unless --global). */
 function routeRules(cfg, o) {
@@ -133,7 +193,7 @@ function routeRules(cfg, o) {
   return 0;
 }
 
-const COMMANDS = ['setup', 'providers', 'add', 'keys', 'local', 'route', 'diff', 'init', 'ui', 'mcp', 'status', 'doctor', 'verify', 'run', 'models', 'batch', 'worktree', 'runs', 'usage', 'cooldown', 'config', 'retry', 'help'];
+const COMMANDS = ['skills', 'setup', 'providers', 'add', 'keys', 'local', 'route', 'diff', 'init', 'ui', 'mcp', 'status', 'doctor', 'verify', 'run', 'models', 'batch', 'worktree', 'runs', 'usage', 'cooldown', 'config', 'retry', 'help'];
 /** The command closest to a typo (edit distance ≤ 2), or null. */
 function closest(word, options) {
   const d = (a, b) => {
@@ -177,7 +237,7 @@ function timeoutOpt(o) {
 
 function parseArgs(argv) {
   const opts = { _: [] };
-  const flags = new Set(['no-verify', 'allow-dirty', 'json', 'live', 'no-open', 'no-mcp', 'all', 'clear', 'global', 'help', 'version', 'worktree', 'replace', 'force', 'allow-open-questions', 'vscode', 'yes', 'free', 'project', 'details', 'enable', 'rules', 'templates', 'continue']);
+  const flags = new Set(['no-verify', 'allow-dirty', 'json', 'live', 'no-open', 'no-mcp', 'all', 'clear', 'global', 'help', 'version', 'worktree', 'replace', 'force', 'allow-open-questions', 'vscode', 'yes', 'free', 'project', 'details', 'enable', 'rules', 'templates', 'continue', 'share']);
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '-h') { opts.help = true; continue; }
@@ -247,6 +307,7 @@ async function main() {
       else if (ready.length) console.log('\nTurn them on (free, private, in the docs/test/review/ask roles): conductor local --enable');
       return 0;
     }
+    case 'skills': case 'skill': return skillsCmd(o);
     case 'route': {
       const cfg = loadConfig();
       if (o.rules || o.templates || o.add || o.rm) return routeRules(cfg, o);
@@ -280,7 +341,7 @@ async function main() {
       const root = findProjectRoot();
       const controller = o.controller || 'claude-code';
       setupGlobal();
-      const { lines, notes } = initProject(root, { controller, mcp: !o['no-mcp'], vscode: o.vscode || undefined });
+      const { lines, notes } = initProject(root, { controller, mcp: !o['no-mcp'], vscode: o.vscode || undefined, share: !!o.share });
       console.log(`conductor init → ${root}  (controller: ${CONTROLLERS[controller].label})`);
       lines.forEach((l) => console.log(l));
       notes.forEach((n) => console.log('\n' + n));
@@ -288,7 +349,9 @@ async function main() {
   1. Fill in section 1 of AGENTS.md (stack; check the Verify command)
   2. conductor ui         choose providers, models and fallback order
   3. conductor doctor     check every provider is ready
-  4. In ${CONTROLLERS[controller].label}: /conduct-status, then /conduct-plan <feature>`);
+  4. ${controller === 'claude-code'
+    ? 'In Claude Code: /conduct-status, then /conduct-plan <feature> (approve the "conductor" MCP server when Claude asks)'
+    : `In ${CONTROLLERS[controller].label}: use the conduct-* skills (in .agents/skills), e.g. ask it to run conduct-status, then conduct-plan <feature>`}`);
       if (!which('conductor')) console.log('\nNOTE: "conductor" is not on your PATH. Install globally so controllers can call it: npm install -g .');
       return 0;
     }

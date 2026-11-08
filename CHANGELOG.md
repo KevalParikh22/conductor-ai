@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+- **One skill library for every controller and worker.**
+  - **Where skills live:** in conductor, in `~/.config/conductor/skills/` (all projects) or `.conductor/skills/` (one project). The format is the standard SKILL.md.
+  - **Controllers:** the active skills are copied into `.claude/skills` and `.agents/skills`, so Claude Code, Antigravity, Codex and OpenCode load them natively.
+  - **Workers:** each worker gets only the skills that match its task (optional `metadata`: roles, files, text). Agents get paths; API models get the text.
+  - **Per project:** each project can switch any skill off.
+  - **CLI and UI alike:** `conductor skills` (list, new, add, on/off, rm, sync) and a **Skills** page.
+  - **Checked for real:** Antigravity received a skill and followed it.
+- **conductor's files stay out of git.**
+  - `conductor init` adds a marked block to `.gitignore`, creating the file if needed. It lists conductor's folders and the files it created, never a file you already had. `--share` opts out.
+  - Workers still see these files: conductor copies them into each task's worktree. Because git can't see changes to ignored files, conductor puts back any a worker changes, with a warning.
+  - Task branches contain only the real changes.
+- **One guide.** [docs/GUIDE.md](docs/GUIDE.md) replaces the install, editors and cloud pages. It covers:
+  - global vs project setup;
+  - the setup and daily command sequences;
+  - controllers;
+  - skills;
+  - CLI and UI side by side;
+  - git, editors, cloud and troubleshooting.
+
+- **Switching the controller works in the UI.** Picking one in Settings no longer goes through the save bar. Saving to the global config was silently overridden by the project's own setting, so the choice snapped back. The button now says "Switch this project to …" and does it in one step.
+- **Every controller gets its commands where it reads them.** Checked against each tool:
+  - **Claude Code:** `.claude/commands`, plus `.mcp.json`, which Claude asks you to approve on first run.
+  - **Antigravity, Codex and OpenCode:** the `/conduct-*` commands are skills in `.agents/skills/`. Codex and OpenCode used to get prompts in `.conductor/commands/`, which no tool reads. OpenCode loads the skills and conductor's MCP tools from the project.
+- **Antigravity and Codex only load MCP servers from their own global config.** `init` now says so, with the one command to run (`agy mcp add conductor conductor mcp` or `codex mcp add conductor -- conductor mcp`), unless conductor is already registered. It never edits those configs itself.
+
 - **UI keeps your page on reload.** The open page is in the address (`#…&p=roles`), and back/forward move between pages. Before, every reload went to Overview.
 - **One rule for "optional" providers.** A default provider with no key yet shows as ○ / grey "optional · add key" in the UI, `conductor status` and `doctor` alike, never as red. Overview counts "4 of 4 ready + 2 optional".
 - **Setup page:** your controller's CLI is shown as off as a worker, and the step for the Verify command says it's detected now. Settings shows the detected verify command.
