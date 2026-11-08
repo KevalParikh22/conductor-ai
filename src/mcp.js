@@ -4,7 +4,11 @@ import readline from 'node:readline';
 import fs from 'node:fs';
 import path from 'node:path';
 import { loadConfig, findProjectRoot } from './config.js';
-import { dispatch, formatSummary, UsageError, parseDuration } from './core.js';
+import { dispatch, formatSummary, UsageError, parseDuration, chooseChain, extractTask, taskFiles } from './core.js';
+import { compactDiff } from './diffview.js';
+import { listRuns, readRun, formatRuns } from './runs.js';
+import { readWorktreeMeta } from './worktree.js';
+import { listSkills } from './skills.js';
 import { runBatch, formatBatch } from './batch.js';
 import { statusReport } from './status.js';
 import { runVerify } from './verify.js';
@@ -62,17 +66,102 @@ const TOOLS = [
       required: ['plan', 'tasks'],
     },
   },
+  {
+    name: 'conductor_retry',
+    description: 'Have a worktree task\'s worker fix its own work in place: it continues in the existing worktree (branch conductor/<task_id>) with your note and commits the fix on the same branch. ' +
+      'Use this instead of starting over when a task is close but wrong. The same worker runs unless provider is set.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        task_id: { type: 'string', description: 'The task id whose worktree to continue, e.g. T3' },
+        note: { type: 'string', description: 'What to fix: what was wrong and what to do instead' },
+        provider: { type: 'string', description: 'Hand the fix to this provider instead of the original worker' },
+        role: { type: 'string', enum: Object.keys(ROLES), description: 'Role for the retry (default: the task\'s original role)' },
+        timeout: { type: 'string', description: 'Time limit, e.g. "45m"' },
+      },
+      required: ['task_id', 'note'],
+    },
+  },
+  {
+    name: 'conductor_diff',
+    description: 'The compact diff to review: whitespace-only changes, lockfiles and build output left out, long files cut. ' +
+      'No target = the working tree (new files included); a branch like conductor/T3 = that task\'s work; or a range A..B.',
+    inputSchema: { type: 'object', properties: { target: { type: 'string', description: 'Branch (conductor/T3) or range (A..B). Empty = working tree' }, lines: { type: 'number', description: 'Max lines per file (default 200)' } } },
+  },
+  {
+    name: 'conductor_route',
+    description: 'Preview which providers would take a task, in what order, and why (routing rule, plan line or smart selector). Nothing runs.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        task: { type: 'string', description: 'Task description' },
+        role: { type: 'string', enum: Object.keys(ROLES), description: 'Role (default build, or the plan task\'s role)' },
+        files: { type: 'array', items: { type: 'string' }, description: 'Files the task touches' },
+        plan: { type: 'string', description: 'Plan file (with task_id)' },
+        task_id: { type: 'string', description: 'Task id inside the plan' },
+      },
+    },
+  },
+  {
+    name: 'conductor_runs',
+    description: 'Recent runs in this project: who did each task, the outcome (done / partial / verify failed / failed), verify result and files. Give run to see one run in full.',
+    inputSchema: { type: 'object', properties: { run: { type: 'string', description: 'A run id (or unique prefix) to show in full' }, limit: { type: 'number', description: 'How many recent runs (default 15)' } } },
+  },
+  { name: 'conductor_skills', description: 'The skill library for this project: each skill, whether it is on here, and which tasks it goes to. Skills reach workers automatically when they match.', inputSchema: { type: 'object', properties: {} } },
   { name: 'conductor_status', description: 'Show providers (installed / key set / cooling down), role chains, controller and repo state.', inputSchema: { type: 'object', properties: {} } },
   { name: 'conductor_verify', description: "Run the project's verify command (lint/typecheck/tests) and return the result.", inputSchema: { type: 'object', properties: {} } },
 ];
+// every tool takes the project folder too: controllers that register conductor globally (Antigravity, Codex) may start
+// it outside the project
+for (const t of TOOLS) t.inputSchema.properties.project = { type: 'string', description: 'Absolute path of the project (default: the folder the MCP server started in)' };
 
 const send = (msg) => process.stdout.write(JSON.stringify(msg) + '\n');
 const reply = (id, result) => send({ jsonrpc: '2.0', id, result });
 const fail = (id, code, message) => send({ jsonrpc: '2.0', id, error: { code, message } });
 const text = (t, isError = false) => ({ content: [{ type: 'text', text: t }], ...(isError ? { isError: true } : {}) });
 
-async function callTool(name, args, root) {
+async function callTool(name, args, startRoot) {
+  const root = args.project ? findProjectRoot(path.resolve(args.project)) : startRoot;
   const cfg = loadConfig(root);
+  if (name === 'conductor_retry') {
+    const m = readWorktreeMeta(root, args.task_id);
+    if (!m && !args.role) return text(`conductor: no record of a worktree task "${args.task_id}". Start it with conductor_run (worktree: true) first`, true);
+    args = { ...args, role: args.role || m.role, plan: m?.plan || undefined, continue: true };
+    name = 'conductor_run';
+  }
+  if (name === 'conductor_diff') {
+    const t = args.target;
+    const d = compactDiff(root, { ...(t ? { range: t.includes('..') ? t : `HEAD...${t}` } : {}), maxFileLines: Number(args.lines) || 200 });
+    return text(d.empty ? (t ? `no changes in ${t}` : 'no changes') : `${d.text.trimEnd()}\n\n[compact: ${d.chars.toLocaleString()} of ${d.fullChars.toLocaleString()} characters of the full diff]`);
+  }
+  if (name === 'conductor_route') {
+    let section = '', role = args.role;
+    const files = [...(args.files || [])];
+    if (args.plan && args.task_id) {
+      section = extractTask(fs.readFileSync(path.resolve(root, args.plan), 'utf8'), args.task_id);
+      if (!section) return text(`conductor: task "${args.task_id}" not found in ${args.plan}`, true);
+      role ||= (section.match(/\*\*role:\*\*\s*(\w+)/i) || [])[1];
+      files.push(...taskFiles(section));
+    }
+    role = ROLES[role] ? role : 'build';
+    const r = chooseChain(cfg, role, { section, body: args.task || '', files });
+    const how = { plan: 'set by the plan', route: 'routing rule', selector: 'smart selector', role: "role's chain" }[r.how] || r.how;
+    return text(`role ${role} · ${how}${r.note ? `: ${r.note}` : ''}\n${r.chain.map((c, i) => `  ${c.skip ? '-' : `${i + 1}.`} ${c.name}${c.skip ? `  (skipped: ${c.skip})` : ''}`).join('\n')}`);
+  }
+  if (name === 'conductor_runs') {
+    if (args.run) {
+      const r = readRun(root, args.run);
+      if (!r) return text(`conductor: no run "${args.run}" (or the prefix matches several)`, true);
+      let report = ''; try { report = r.summary.report ? fs.readFileSync(path.join(root, r.summary.report), 'utf8') : ''; } catch { /* gone */ }
+      return text(`${formatSummary(r.summary)}${report ? `\n\n---- report ----\n${report.slice(-20000)}` : ''}`);
+    }
+    return text(formatRuns(listRuns(root, { limit: Number(args.limit) || 15 })));
+  }
+  if (name === 'conductor_skills') {
+    const all = listSkills(root);
+    if (!all.length) return text('No skills yet. Make one with: conductor skills new <name> (or the Skills page in conductor ui).');
+    return text(all.map((s) => `${s.on ? '✓' : '○'} ${s.name} (${s.scope}): ${s.description}  → workers: ${['roles', 'files', 'text'].filter((k) => s.when?.[k]).map((k) => `${k} ${s.when[k]}`).join(' · ') || 'every task'}`).join('\n'));
+  }
   if (name === 'conductor_status') return text(statusReport(cfg));
   if (name === 'conductor_verify') {
     const v = await runVerify(cfg.root, cfg.settings);

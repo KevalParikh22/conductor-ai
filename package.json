@@ -46,7 +46,15 @@
     "src",
     "templates",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "skills",
+    "hooks",
+    "hooks.json",
+    ".claude-plugin",
+    ".antigravity-plugin",
+    ".mcp.json",
+    "mcp_config.json",
+    "assets"
   ],
   "engines": {
     "node": ">=20"

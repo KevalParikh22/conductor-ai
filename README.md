@@ -116,6 +116,13 @@ cd my-app && conductor init     # rules, commands, MCP entry
 conductor add groq              # add any of 45 chat APIs: key, model, test, roles
 ```
 
+Using Claude Code or Antigravity? Install the plugin for the skills and MCP tools:
+
+```text
+/plugin install conductor-ai --marketplace KevalParikh22/conductor-ai     # Claude Code (or: /plugin marketplace add KevalParikh22/conductor-ai, then /plugin install conductor-ai@conductor-ai)
+agy plugin install "$(npm root -g)/conductor-ai"                          # Antigravity
+```
+
 Then, in Claude Code inside the project:
 
 ```text

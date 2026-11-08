@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- **Claude Code and Antigravity plugin.**
+  - **What it brings:** in one install, the 9 `conduct-*` skills, conductor's MCP server and a startup check that says when the CLI is missing or the project isn't set up.
+  - **Claude Code:** `/plugin install conductor-ai --marketplace KevalParikh22/conductor-ai`.
+  - **Antigravity:** `agy plugin install "$(npm root -g)/conductor-ai"`. This replaces the manual `agy mcp add` step.
+  - **Checked:** both tools' validators pass, and both installed it in a clean config.
+  - **Kept in sync:** the skills are generated from the same command templates as `init` (`node scripts/gen-plugin.mjs`), and a test keeps them in sync.
+- **More MCP tools.**
+  - `conductor_retry` (a worker fixes its own task), `conductor_diff` (compact diff), `conductor_route` (preview), `conductor_runs` (history and one run in full), `conductor_skills`.
+  - Every tool takes an optional `project` path, for controllers that start conductor outside the project.
+- **Skill headers are valid YAML.** `[--plan <file>]`-style argument hints are now quoted; Antigravity skipped that skill before.
+
+
 ## 0.10.0 (2026-11-08)
 
 ### Skills, git and docs

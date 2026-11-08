@@ -1,0 +1,24 @@
+{
+  "name": "conductor-ai",
+  "version": "0.10.0",
+  "description": "Claude plans and reviews; free and cheap models write the code. Skills to plan, delegate, review and hand off work to Antigravity, Codex, OpenCode, 45+ APIs and local models, plus conductor's MCP tools.",
+  "author": {
+    "name": "Keval Parikh",
+    "url": "https://github.com/KevalParikh22"
+  },
+  "homepage": "https://github.com/KevalParikh22/conductor-ai#readme",
+  "repository": "https://github.com/KevalParikh22/conductor-ai",
+  "license": "MIT",
+  "keywords": [
+    "orchestration",
+    "multi-agent",
+    "delegation",
+    "mcp",
+    "skills",
+    "codex",
+    "antigravity",
+    "opencode",
+    "ollama"
+  ],
+  "logo": "assets/icon.svg"
+}

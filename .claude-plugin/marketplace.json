@@ -1,0 +1,15 @@
+{
+  "name": "conductor-ai",
+  "owner": {
+    "name": "Keval Parikh",
+    "url": "https://github.com/KevalParikh22"
+  },
+  "plugins": [
+    {
+      "name": "conductor-ai",
+      "source": "./",
+      "description": "Plan, delegate, review and hand off work to cheaper worker LLMs with conductor"
+    }
+  ],
+  "description": "conductor-ai: one controller plans and reviews, cheaper worker LLMs do the coding"
+}

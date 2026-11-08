@@ -55,6 +55,22 @@ function mergeJsonFile(root, relPath, mutate, log) {
   log(existed ? 'merged' : 'added', relPath);
 }
 
+/**
+ * The /conduct-* command templates as SKILL.md files: for .agents/skills (Antigravity, Codex, OpenCode) and, with
+ * plugin: true, for the Claude Code / Antigravity plugin, which keeps Claude's extra fields (argument hint, allowed tools).
+ */
+export function commandSkills({ plugin = false } = {}) {
+  const dir = new URL('commands/', TPL);
+  return fs.readdirSync(dir).filter((x) => x.endsWith('.md')).sort().map((f) => {
+    const { meta, body } = parseCommand(fs.readFileSync(new URL(f, dir), 'utf8'));
+    const name = f.replace(/\.md$/, '');
+    const text = body.replaceAll('$ARGUMENTS', 'the arguments the user gave')
+      .replaceAll('.claude/commands/conduct-build.md', plugin ? 'the conduct-build skill' : '.agents/skills/conduct-build/SKILL.md');
+    const extra = plugin ? ['argument-hint', 'disable-model-invocation', 'allowed-tools'].filter((k) => meta[k]).map((k) => `${k}: ${k === 'disable-model-invocation' ? meta[k] : JSON.stringify(meta[k])}\n`).join('') : ''; // quoted: "[--plan <file>]" isn't valid YAML bare
+    return { name, content: `---\nname: ${name}\ndescription: ${JSON.stringify(meta.description || name)}\n${extra}---\n\n${text}\n` };
+  });
+}
+
 /** Split a command template into frontmatter fields and body. */
 function parseCommand(md) {
   const m = md.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
@@ -124,12 +140,7 @@ export function initProject(root, { controller = 'claude-code', mcp = true, vsco
   if (controller === 'antigravity' || controller === 'codex-cli' || controller === 'opencode') {
     // agy, Codex and OpenCode all load workspace skills from .agents/skills/ (checked against each tool): the
     // /conduct-* commands become skills there
-    for (const f of fs.readdirSync(cmdDir).filter((x) => x.endsWith('.md')).sort()) {
-      const { meta, body } = parseCommand(fs.readFileSync(new URL(f, cmdDir), 'utf8'));
-      const name = f.replace(/\.md$/, '');
-      const text = body.replaceAll('$ARGUMENTS', 'the arguments the user gave').replaceAll('.claude/commands/conduct-build.md', `.agents/skills/conduct-build/SKILL.md`);
-      writeOwned(root, `.agents/skills/${name}/SKILL.md`, `---\nname: ${name}\ndescription: ${JSON.stringify(meta.description || name)}\n---\n\n${text}\n`, log);
-    }
+    for (const s of commandSkills()) writeOwned(root, `.agents/skills/${s.name}/SKILL.md`, s.content, log);
   }
 
   // 4. MCP registration (optional second interface next to the CLI)

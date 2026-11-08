@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if ! command -v conductor >/dev/null 2>&1; then echo 'conductor-ai plugin: the conductor CLI is not installed, so its skills and MCP tools cannot run. Install it: npm install -g github:KevalParikh22/conductor-ai && conductor setup'; elif [ ! -d .conductor ] && git rev-parse --git-dir >/dev/null 2>&1; then echo 'conductor-ai plugin: this project is not set up for conductor yet. Run: conductor init'; fi; exit 0"
+          }
+        ]
+      }
+    ]
+  }
+}

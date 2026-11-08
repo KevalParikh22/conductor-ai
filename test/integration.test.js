@@ -106,7 +106,8 @@ test('MCP server: handshake, tools/list, status and usage errors', async () => {
   const disc = await m.request('server/discover', {});
   assert.ok(disc.result.supportedVersions.includes('2026-07-28'));
   const list = await m.request('tools/list', {});
-  assert.deepEqual(list.result.tools.map((t) => t.name), ['conductor_run', 'conductor_batch', 'conductor_status', 'conductor_verify']);
+  assert.deepEqual(list.result.tools.map((t) => t.name), ['conductor_run', 'conductor_batch', 'conductor_retry', 'conductor_diff', 'conductor_route', 'conductor_runs', 'conductor_skills', 'conductor_status', 'conductor_verify']);
+  assert.ok(list.result.tools.every((t) => t.inputSchema.properties.project), 'every tool takes a project path');
   const st = await m.request('tools/call', { name: 'conductor_status', arguments: {} });
   assert.match(st.result.content[0].text, /roles \(fallback order/);
   const bad = await m.request('tools/call', { name: 'conductor_run', arguments: { role: 'build', task: 'x' } });
@@ -115,6 +116,24 @@ test('MCP server: handshake, tools/list, status and usage errors', async () => {
   const unk = await m.request('nope/method', {});
   assert.equal(unk.error.code, -32601);
   m.close();
+});
+
+test('MCP server: route, diff, runs, skills and retry tools; project path from another folder', async () => {
+  const { dir } = makeRepo();
+  fs.writeFileSync(path.join(dir, 'new.js'), 'export const x = 1;\n');
+  const elsewhere = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-elsewhere-'));
+  const m = mcpSession(elsewhere); // started outside the project, like a globally registered server
+  try {
+    await m.request('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 't', version: '1' } });
+    const call = async (name, args) => (await m.request('tools/call', { name, arguments: { project: dir, ...args } })).result;
+    assert.match((await call('conductor_route', { task: 'fix a typo', files: ['a.md'], role: 'docs' })).content[0].text, /^role docs · /);
+    assert.match((await call('conductor_diff', {})).content[0].text, /new\.js/);
+    assert.match((await call('conductor_runs', {})).content[0].text, /No runs yet|run +result/);
+    assert.match((await call('conductor_skills', {})).content[0].text, /No skills yet|✓|○/);
+    const r = await call('conductor_retry', { task_id: 'T9', note: 'x' });
+    assert.equal(r.isError, true);
+    assert.match(r.content[0].text, /no record of a worktree task "T9"/);
+  } finally { m.close(); }
 });
 
 test('UI server: host + token checks, config save writes a minimal diff, secrets file is private', async () => {
