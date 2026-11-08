@@ -39,7 +39,13 @@ You use conductor in three ways, and they all do the same things:
 | **The CLI**: `conductor …` | Setup, checks, and running tasks yourself |
 | **The UI**: `conductor ui` | The same setup and history in the browser |
 
-The controller reaches conductor through its **MCP server** (`conductor mcp`), so tools like `conductor_run` appear inside it.
+The controller reaches conductor through its **MCP server** (`conductor mcp`). Its tools:
+- `conductor_run`, `conductor_batch`, `conductor_retry`: run tasks.
+- `conductor_diff`, `conductor_runs`: review what ran.
+- `conductor_route`, `conductor_skills`, `conductor_status`: see how work will be handled.
+- `conductor_verify`: run your checks.
+
+Each tool also takes an optional `project` path.
 
 ---
 
@@ -105,6 +111,18 @@ Setup does the following:
 
 **API providers (optional):** `conductor providers --free` lists 45. `conductor add groq` then asks for the key (hidden input), lets you pick a model, tests it and adds it to the roles. To manage keys: `conductor keys`, or the UI's **API keys** page.
 
+**Plugin (recommended for Claude Code and Antigravity):** it brings the `conduct-*` skills, conductor's MCP tools and a startup check, in one install per machine. You still need the CLI installed, since the plugin calls it.
+
+| Tool | Install |
+|---|---|
+| Claude Code | `/plugin marketplace add KevalParikh22/conductor-ai`, then `/plugin install conductor-ai@conductor-ai`. On Claude Code 2.1.275 or later, one step: `/plugin install conductor-ai --marketplace KevalParikh22/conductor-ai` |
+| Antigravity | `agy plugin install "$(npm root -g)/conductor-ai"` (or the path of a clone) |
+
+Notes:
+- In Claude Code, plugin skills are namespaced: `/conductor-ai:conduct-plan`. The project's own `/conduct-plan` from `conductor init` works too.
+- With the plugin, Antigravity needs no `agy mcp add` step.
+- The startup check tells you when the CLI is missing or the project isn't set up.
+
 **Check:** `conductor doctor --live` sends one tiny prompt to each enabled provider.
 - ✓ ready.
 - ○ optional (add a key to use it).
@@ -162,8 +180,8 @@ In your controller, inside the project:
 
 | Controller | Commands | conductor's MCP tools | One-time step |
 |---|---|---|---|
-| **Claude Code** | `/conduct-*` in `.claude/commands` | from `.mcp.json` | Approve the "conductor" server when Claude asks |
-| **Antigravity** (Gemini) | `conduct-*` skills in `.agents/skills` | only from agy's own config | `agy mcp add conductor conductor mcp` |
+| **Claude Code** | `/conduct-*` in `.claude/commands` (or the plugin's skills) | from `.mcp.json` or the plugin | Approve the "conductor" server when Claude asks, or install the plugin |
+| **Antigravity** (Gemini) | `conduct-*` skills in `.agents/skills` (or the plugin's skills) | only from agy's own config or a plugin | Install the plugin (section 3), or `agy mcp add conductor conductor mcp` |
 | **Codex** | `conduct-*` skills in `.agents/skills` | only from `~/.codex/config.toml` | `codex mcp add conductor -- conductor mcp` |
 | **OpenCode** | `conduct-*` skills in `.agents/skills` | from `opencode.json` | none |
 
