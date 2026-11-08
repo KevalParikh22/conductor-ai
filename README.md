@@ -18,7 +18,7 @@
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-22c55e)](CONTRIBUTING.md)
 [![Stars](https://img.shields.io/github/stars/KevalParikh22/conductor-ai?style=flat&color=f59e0b)](https://github.com/KevalParikh22/conductor-ai/stargazers)
 
-[Quick start](#-quick-start) &middot; [How it works](#-how-it-works) &middot; [Routing](docs/ROUTING.md) &middot; [Security](SECURITY.md) &middot; [Providers](docs/providers/README.md) &middot; [Install guide](docs/INSTALL.md) &middot; [Changelog](CHANGELOG.md)
+[Quick start](#-quick-start) &middot; [How it works](#-how-it-works) &middot; [Routing](docs/ROUTING.md) &middot; [Security](SECURITY.md) &middot; [Providers](docs/providers/README.md) &middot; [**Guide**](docs/GUIDE.md) &middot; [Changelog](CHANGELOG.md)
 
 </div>
 
@@ -50,6 +50,8 @@ curl -fsSL https://raw.githubusercontent.com/KevalParikh22/conductor-ai/main/scr
 - **Parallel tasks.** `conductor batch` runs independent plan tasks at the same time, each in its own git worktree and branch, spread across providers. The controller reviews and merges.
 - **Trust, but check.** Your tests and lint run after every write task, and the worker's list of changed files is compared with what git shows. Plans must answer their open questions before any task is handed out.
 - **Usage and budgets.** Every run is logged with time, tokens and known cost; set a daily budget and paid APIs stop when it's reached. `conductor runs` and the Runs page show who did what.
+- **One skill library.** Write a skill once in conductor; every controller (Claude Code, Antigravity, Codex, OpenCode) loads it, and each worker gets the skills that match its task. Switch skills off per project. `conductor skills` or the Skills page.
+- **Stays out of your git.** `conductor init` puts conductor's own files in `.gitignore`. Workers still see them in their worktrees, and edits to them are undone.
 - **Works everywhere.** Install once, `conductor init` in any repo. CLI and MCP server. Settings page in the browser. Zero dependencies, no telemetry.
 
 ### 🧭 How it works
@@ -131,7 +133,7 @@ npm install -g @openai/codex && codex login
 curl -fsSL https://opencode.ai/install | bash                          # free models
 ```
 
-Free API providers need no install: `kilo-free` works without a key; add more with `conductor add <name>` (45 chat APIs: [setup guides](docs/providers/README.md)). Full guide: [docs/INSTALL.md](docs/INSTALL.md).
+Free API providers need no install: `kilo-free` works without a key; add more with `conductor add <name>` (45 chat APIs: [setup guides](docs/providers/README.md)). Full guide: [docs/GUIDE.md](docs/GUIDE.md).
 
 </details>
 
@@ -140,9 +142,9 @@ Free API providers need no install: `kilo-free` works without a key; add more wi
 <br>
 
 ```bash
-conductor init --controller antigravity   # writes .agents/skills/conduct-* and .agents/mcp_config.json
-conductor init --controller codex-cli     # AGENTS.md + prompts in .conductor/commands
-conductor init --controller opencode      # AGENTS.md + opencode.json MCP entry
+conductor init --controller antigravity   # GEMINI.md + skills in .agents/skills; then once: agy mcp add conductor conductor mcp
+conductor init --controller codex-cli     # AGENTS.md + skills in .agents/skills; then once: codex mcp add conductor -- conductor mcp
+conductor init --controller opencode      # AGENTS.md + skills in .agents/skills + opencode.json MCP entry
 ```
 
 </details>
@@ -237,13 +239,11 @@ Exit codes: `0` ok · `2` usage or unsafe repo state · `3` every provider faile
 
 | Page | What it covers |
 |---|---|
-| [Install guide](docs/INSTALL.md) | Step by step, for every project |
+| [**Guide**](docs/GUIDE.md) | **Start here:** install, global vs project setup, the daily workflow, controllers, skills, CLI and UI side by side, git, editors, cloud, troubleshooting |
 | [Routing](docs/ROUTING.md) | Which worker takes which task: rule library and your own rules |
 | [Provider guides](docs/providers/README.md) | One setup page for each of the 45 APIs and 10 agents |
 | [Configuration](docs/CONFIGURATION.md) | Roles, providers, settings, config files |
 | [Providers](docs/PROVIDERS.md) | Every provider, free tiers, permissions, adding your own |
-| [tmux and editors](docs/EDITORS.md) | tmux layout, VS Code (Claude Code, Copilot agent mode), Cursor |
-| [Local, cloud and CI](docs/CLOUD.md) | Claude Code on the web, GitHub Actions, servers |
 | [Security](SECURITY.md) | What is protected, known limits, setup for sensitive code |
 | [How it works](docs/ARCHITECTURE.md) | Design, safety model, parallel runs, inspirations |
 

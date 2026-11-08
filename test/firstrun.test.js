@@ -161,3 +161,24 @@ test('UI: the open page lives in the address, and links never drop the token', (
   assert.match(html, /addEventListener\('popstate'/);
   assert.match(html, /\[data-goto\][^\n]*preventDefault/);
 });
+
+test('switching to Antigravity says how to register conductor with agy, unless it already is', async () => {
+  const { initProject, agyHasConductor } = await import('../src/init.js');
+  const cfgFile = path.join(home, 'agy-mcp.json');
+  assert.equal(agyHasConductor(cfgFile), false, 'missing file');
+  fs.writeFileSync(cfgFile, '');
+  assert.equal(agyHasConductor(cfgFile), false, 'empty file');
+  fs.writeFileSync(cfgFile, JSON.stringify({ mcpServers: { conductor: { command: 'conductor', args: ['mcp'] } } }));
+  assert.equal(agyHasConductor(cfgFile), true);
+  const { dir } = makeRepo();
+  const r = initProject(dir, { controller: 'antigravity' });
+  assert.ok(fs.existsSync(path.join(dir, '.agents/skills/conduct-plan/SKILL.md')), 'skills written where agy reads them');
+  assert.ok(r.notes.some((n) => /agy mcp add conductor conductor mcp/.test(n)) || agyHasConductor(), 'register hint unless already registered');
+});
+
+test('UI: picking a controller is a project action, not part of Save (Save to global used to be silently overridden)', () => {
+  const html = fs.readFileSync(new URL('../src/ui/index.html', import.meta.url), 'utf8');
+  assert.match(html, /input\[name=ctrl\]'\)\.forEach\(\(r\) => r\.onchange = \(\) => \{ ctrlPick = r\.value; render\(\); \}\)/);
+  assert.doesNotMatch(html, /W\.controller = r\.value; markDirty\(\)/);
+  assert.match(html, /Switch this project to/);
+});

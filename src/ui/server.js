@@ -11,6 +11,7 @@ import { statusData } from '../status.js';
 import { listRuns } from '../runs.js';
 import { catalogStatus, addProviderAuto } from '../setup.js';
 import { detectLocal } from '../local.js';
+import { listSkills, setSkillOn, newSkill, removeSkill, saveSkill, syncSkills, globalSkillsDir, projectSkillsDir } from '../skills.js';
 import { ROUTE_TEMPLATES, resolveTemplate, addTemplates } from '../routing.js';
 import { usageReport } from '../usage.js';
 import { testProvider } from '../providers.js';
@@ -45,6 +46,10 @@ function secretsState(cfg) {
   }));
 }
 
+
+function skillsState(root, sync) {
+  return { skills: listSkills(root).map((s) => ({ ...s, text: fs.readFileSync(s.file, 'utf8') })), dirs: { global: globalSkillsDir(), project: projectSkillsDir(root) }, sync: sync || null };
+}
 
 function stateFor(root) {
   const cfg = loadConfig(root);
@@ -126,6 +131,13 @@ export function createUiServer({ cwd = process.cwd(), token = crypto.randomBytes
           const r = await addProviderAuto(root, String(body.id || ''), { key: body.key || undefined, model: body.model || undefined, fields: body.fields || {}, scope: body.scope === 'project' ? 'project' : 'global' });
           return send(200, { ...stateFor(root), added: { name: r.name, model: r.provider.model, roles: r.roles, warning: r.warning } });
         }
+        // skills: the same functions as `conductor skills`; every change re-syncs the controller folders
+        case 'GET /api/skills': return send(200, skillsState(root));
+        case 'POST /api/skills/toggle': setSkillOn(root, String(body.name), !!body.on); return send(200, skillsState(root, syncSkills(root)));
+        case 'POST /api/skills/new': newSkill(root, String(body.name || ''), { scope: body.scope === 'project' ? 'project' : 'global', description: body.description, files: body.files, roles: body.roles, text: body.text }); return send(200, skillsState(root, syncSkills(root)));
+        case 'POST /api/skills/save': saveSkill(root, String(body.name), String(body.text || '')); return send(200, skillsState(root, syncSkills(root)));
+        case 'POST /api/skills/remove': removeSkill(root, String(body.name), { scope: body.scope }); return send(200, skillsState(root));
+        case 'POST /api/skills/sync': return send(200, skillsState(root, syncSkills(root)));
         case 'GET /api/local': return send(200, { local: await detectLocal() });
         case 'POST /api/route-templates': {
           // the rule library resolved against the (possibly unsaved) providers; with `add`, the routes with those templates inserted

@@ -10,6 +10,8 @@ import { autoModel, autoFallbacks } from './models.js';
 import { smartOrder, isFree as isFreeProvider } from './selector.js';
 import { taskProviders, matchRoute, describeRoute } from './routing.js';
 import { compactDiff } from './diffview.js';
+import { snapshot as snapshotLocal } from './localfiles.js';
+import { skillsForTask } from './skills.js';
 import { createWorktree, openWorktree, commitWorktree, removeWorktree, readWorktreeMeta, writeWorktreeMeta } from './worktree.js';
 import { GLOBAL_DIR, readJSON, writeJSON, timestamp, rel } from './util.js';
 import { budgetBlock, estimateCost, recordUsage, recordSaving } from './usage.js';
@@ -349,7 +351,10 @@ export async function dispatch(cfg, opts) {
   if (opts.note) body += `\n## Orchestrator note (important)\n${opts.note}\n`;
   let continueNote = '';
 
-  let agentPrompt = `${loadPrompt('_worker')}\n${loadPrompt(meta.prompt)}\n---\n# TASK (role: ${role})\n${body}`;
+  // skills from the library that match this task: listed for agents (they open what they need), inlined for API models
+  const skillTask = { role, files: [...(opts.files || []), ...taskFiles(section)], body };
+  const skillsAgent = skillsForTask(root, skillTask), skillsChat = skillsForTask(root, skillTask, { inline: true });
+  let agentPrompt = `${loadPrompt('_worker')}\n${loadPrompt(meta.prompt)}\n---\n# TASK (role: ${role})\n${body}${skillsAgent.text ? `\n${skillsAgent.text}` : ''}`;
   const chatSystem = `${loadPrompt('_worker')}\n${loadPrompt(meta.prompt)}${mode === 'write' ? '\n' + loadPrompt('_chat_write') : ''}`;
   let work = root; // where the worker runs: the repo, or its own worktree
   const chatContext = () => {
@@ -402,12 +407,15 @@ export async function dispatch(cfg, opts) {
   const picked = chooseChain(cfg, role, { provider: opts.provider, chain: opts.chain, section, body, files: [...(opts.files || []), ...taskFiles(section)], diffBytes });
   const chain = picked.chain;
   if (picked.how === 'selector' && picked.note) summary.selector = picked.note;
+  if (skillsAgent.names.length) summary.skills = skillsAgent.names;
   if (picked.how === 'plan' || picked.how === 'route') summary.route = picked.note;
   // files already modified before the run (allowed with --allow-dirty): can't be credited to the worker
   const preDirty = mode === 'write' && inRepo ? new Set(git.changedFiles(work)) : new Set();
   let winnerText = '', lastPromptChars = 0;
   // hooks and .git/config can run programs: snapshot them so whatever a worker writes there is undone
   const control = inRepo ? git.snapshotControl(work) : null;
+  // conductor's git-ignored files (AGENTS.md, plans, skills): git can't see a worker's edits there, so keep a copy
+  const restoreLocal = snapshotLocal(root, work);
   const headBefore = inRepo ? git.head(work) : '';
   const hooksRel = inRepo ? git.repoHooksPath(work) : null;
   const protectedExtra = [...(settings.protectedPaths || []), ...(hooksRel ? [`^${hooksRel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/`] : [])];
@@ -420,7 +428,7 @@ export async function dispatch(cfg, opts) {
     }
     // chat APIs, and agents whose read mode has no tools (goose), get the project context inlined
     const inline = kind === 'chat' || (mode === 'read' && CLI_PRESETS[c.p.preset]?.readInlineContext);
-    const userPrompt = inline ? `${chatContext()}\n---\n# TASK (role: ${role})\n${body}` : agentPrompt;
+    const userPrompt = inline ? `${chatContext()}\n---\n# TASK (role: ${role})\n${body}${skillsChat.text ? `\n${skillsChat.text}` : ''}` : agentPrompt;
     // the provider's model, then its fallback models: a model that is rate-limited is skipped until its cooldown ends
     let { models, auto } = await modelsToTry(c.name, c.p, kind);
     let timeouts = 0;
@@ -442,6 +450,8 @@ export async function dispatch(cfg, opts) {
           allowCommands: buildCommands(settings), ...limitFor(c.p, kind) });
       if (p !== c.p && p.model && !res.model) res.model = p.model;
       const tampered = control ? git.restoreControl(control) : [];
+      const putBack = restoreLocal();
+      if (putBack.length) summary.warnings.push(`${c.name} changed conductor's own files, which workers must not edit. conductor put them back: ${putBack.join(', ')}`);
       if (tampered.length) summary.warnings.push(`${c.name} changed git hooks or config, which can run programs. conductor put them back: ${tampered.join(', ')}`);
       if (headBefore && git.head(work) !== headBefore) summary.warnings.push(`${c.name} made git commits itself (HEAD moved from ${headBefore.slice(0, 8)}). Check them with git log before merging`);
       fs.writeFileSync(path.join(runDir, `${c.name}${mi ? `.${mi + 1}` : ''}.log`), res.log || '');
@@ -637,6 +647,7 @@ export function formatSummary(s) {
   if (s.worktree) L.push(`worktree:  ${s.worktree.branch}${s.worktree.removed ? ' (removed: nothing to keep)' : `  ${s.worktree.dir}`}`);
   if (s.route) L.push(`route:     ${s.route}`);
   if (s.selector) L.push(`selector:  ${s.selector}`);
+  if (s.skills?.length) L.push(`skills:    ${s.skills.join(', ')}`);
   const multi = (n) => s.attempts.filter((a) => a.provider === n).length > 1; // show models only where a provider switched model
   L.push(`attempts:  ${s.attempts.map((a) => `${a.provider}${a.model && multi(a.provider) ? `[${a.model}]` : ''}(${a.reason}${a.stashed ? ', stashed' : ''})`).join(' → ') || '(none)'}`);
   if (!s.winner) {

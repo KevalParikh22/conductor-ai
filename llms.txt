@@ -12,11 +12,10 @@ Key facts for agents working in this repo:
 ## Docs
 
 - [README](README.md): what it does, quick start, permissions table
-- [Install guide](docs/INSTALL.md): setup for every project
+- [Guide](docs/GUIDE.md): install, global vs project setup, daily workflow, controllers, skills, CLI and UI, git, editors, cloud
 - [Configuration](docs/CONFIGURATION.md): roles, providers, settings, budgets, config files
 - [Providers](docs/PROVIDERS.md): every provider, free tiers, permissions per agent, adding your own
 - [Architecture](docs/ARCHITECTURE.md): dispatch flow, safety model, parallel runs
-- [Local, cloud and CI](docs/CLOUD.md): running in the cloud and in GitHub Actions
 
 ## Optional
 

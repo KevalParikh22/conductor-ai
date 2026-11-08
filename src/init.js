@@ -2,10 +2,13 @@
 // `conductor setup`: first-time global setup (~/.config/conductor).
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { CONTROLLERS, DEFAULT_CONFIG } from './presets.js';
 import { GLOBAL_CONFIG, GLOBAL_SECRETS, PROJECT_DIRNAME, projectConfigPath } from './config.js';
 import { readJSON, writeJSON } from './util.js';
 import { detectVerify } from './verify.js';
+import { syncSkills } from './skills.js';
+import { BASE_ENTRIES, CREATED_FILES, readBlock, writeBlock, removeBlock, trackedEntries } from './localfiles.js';
 
 const TPL = new URL('../templates/', import.meta.url);
 const tpl = (p) => fs.readFileSync(new URL(p, TPL), 'utf8');
@@ -64,10 +67,21 @@ function parseCommand(md) {
 }
 
 
-export function initProject(root, { controller = 'claude-code', mcp = true, vscode } = {}) {
+/** Is conductor registered in Codex's own config (~/.codex/config.toml)? */
+export function codexHasConductor(file = path.join(process.env.CODEX_HOME || path.join(os.homedir(), '.codex'), 'config.toml')) {
+  try { return /^\s*\[mcp_servers\.(conductor|"conductor")\]/m.test(fs.readFileSync(file, 'utf8')); } catch { return false; }
+}
+
+/** Is conductor registered as an MCP server in agy's own config (~/.gemini/config/mcp_config.json)? */
+export function agyHasConductor(file = path.join(os.homedir(), '.gemini', 'config', 'mcp_config.json')) {
+  try { return !!JSON.parse(fs.readFileSync(file, 'utf8'))?.mcpServers?.conductor; } catch { return false; }
+}
+
+export function initProject(root, { controller = 'claude-code', mcp = true, vscode, share = false } = {}) {
   if (!CONTROLLERS[controller]) throw new Error(`unknown controller "${controller}". Options: ${Object.keys(CONTROLLERS).join(', ')}`);
   const lines = [];
-  const log = (what, p) => lines.push(`  ${what.padEnd(8)} ${p}`);
+  const created = new Set(); // files this run created (not ones you already had)
+  const log = (what, p) => { lines.push(`  ${what.padEnd(8)} ${p}`); if (what === 'added') created.add(p.split(/\s/)[0]); };
   const notes = [];
 
   // 1. AGENTS.md: full template if new, otherwise append just the rules/protocol block
@@ -107,8 +121,9 @@ export function initProject(root, { controller = 'claude-code', mcp = true, vsco
     const src = fs.readFileSync(new URL(f, cmdDir), 'utf8');
     if (controller === 'claude-code') writeOwned(root, `.claude/commands/${f}`, src, log);
   }
-  if (controller === 'antigravity') {
-    // agy has no custom slash commands; workspace skills in .agents/skills/ play that part
+  if (controller === 'antigravity' || controller === 'codex-cli' || controller === 'opencode') {
+    // agy, Codex and OpenCode all load workspace skills from .agents/skills/ (checked against each tool): the
+    // /conduct-* commands become skills there
     for (const f of fs.readdirSync(cmdDir).filter((x) => x.endsWith('.md')).sort()) {
       const { meta, body } = parseCommand(fs.readFileSync(new URL(f, cmdDir), 'utf8'));
       const name = f.replace(/\.md$/, '');
@@ -116,20 +131,19 @@ export function initProject(root, { controller = 'claude-code', mcp = true, vsco
       writeOwned(root, `.agents/skills/${name}/SKILL.md`, `---\nname: ${name}\ndescription: ${JSON.stringify(meta.description || name)}\n---\n\n${text}\n`, log);
     }
   }
-  if (controller === 'codex-cli' || controller === 'opencode') {
-    writeOwned(root, '.conductor/commands/README.md', '# Controller prompts\n\nThese prompts mirror the Claude `/conduct-*` commands. Paste or reference them in your controller.\n', log);
-    for (const f of fs.readdirSync(cmdDir).filter((x) => x.endsWith('.md'))) {
-      writeOwned(root, `.conductor/commands/${f}`, parseCommand(fs.readFileSync(new URL(f, cmdDir), 'utf8')).body + '\n', log);
-    }
-  }
 
   // 4. MCP registration (optional second interface next to the CLI)
   if (mcp) {
     const server = { command: 'conductor', args: ['mcp'] };
     if (controller === 'claude-code') mergeJsonFile(root, '.mcp.json', (d) => { d.mcpServers ||= {}; d.mcpServers.conductor ||= server; }, log);
-    if (controller === 'antigravity') mergeJsonFile(root, '.agents/mcp_config.json', (d) => { d.mcpServers ||= {}; d.mcpServers.conductor ||= server; }, log);
+    if (controller === 'antigravity') {
+      mergeJsonFile(root, '.agents/mcp_config.json', (d) => { d.mcpServers ||= {}; d.mcpServers.conductor ||= server; }, log);
+      // agy CLI reads MCP servers only from its own config (agy mcp add), not from the project: say how, don't edit it for the user
+      if (!agyHasConductor()) notes.push('Antigravity: agy loads MCP servers from its own config, not from this project. Register conductor once (for all projects):\n    agy mcp add conductor conductor mcp\n  Then check with: agy mcp list');
+    }
     if (controller === 'opencode') mergeJsonFile(root, 'opencode.json', (d) => { d.$schema ||= 'https://opencode.ai/config.json'; d.mcp ||= {}; d.mcp.conductor ||= { type: 'local', command: ['conductor', 'mcp'], enabled: true }; }, log);
-    if (controller === 'codex-cli') notes.push('Codex: add to ~/.codex/config.toml:\n    [mcp_servers.conductor]\n    command = "conductor"\n    args = ["mcp"]');
+    // Codex reads MCP servers only from ~/.codex/config.toml: say how, don't edit it for the user
+    if (controller === 'codex-cli' && !codexHasConductor()) notes.push('Codex: Codex loads MCP servers from ~/.codex/config.toml, not from this project. Register conductor once (for all projects):\n    codex mcp add conductor -- conductor mcp\n  Then check with: codex mcp list');
     // VS Code (Copilot agent mode and other MCP extensions) reads .vscode/mcp.json: on request, or when the project already has a .vscode folder
     if (vscode ?? fs.existsSync(path.join(root, '.vscode'))) mergeJsonFile(root, '.vscode/mcp.json', (d) => { d.servers ||= {}; d.servers.conductor ||= { type: 'stdio', ...server }; }, log);
   }
@@ -146,6 +160,23 @@ export function initProject(root, { controller = 'claude-code', mcp = true, vsco
   copyIfMissing(root, 'docs/plan/_TEMPLATE.md', tpl('plan-template.md'), log);
   copyIfMissing(root, 'HANDOFF.md', tpl('HANDOFF.md'), log);
   copyIfMissing(root, 'docs/architecture.md', tpl('architecture.md'), log);
+
+  // 6. Keep conductor's files out of git (unless --share): the ones it created, plus its folders and skills
+  if (share) {
+    if (removeBlock(root)) log('updated', '.gitignore (conductor block removed: its files can be committed)');
+  } else {
+    const entries = [...new Set([...readBlock(root), ...BASE_ENTRIES, ...CREATED_FILES.filter((f) => created.has(f))])];
+    const r = writeBlock(root, entries);
+    log(r, `.gitignore (conductor's files kept out of git${r === 'kept' ? '' : ': commit .gitignore'})`);
+    const tracked = trackedEntries(root, entries);
+    if (tracked.length) notes.push(`Already committed, so .gitignore won't hide them: ${tracked.join(', ')}\n  To stop tracking them (the files stay on disk): git rm -r --cached ${tracked.map((t) => t.replace(/\/$/, '')).join(' ')}`);
+  }
+
+  // 7. Your skill library (global + this project's) into the folders every controller reads
+  const sk = syncSkills(root);
+  const n = sk.added.length + sk.updated.length;
+  if (n || sk.removed.length) log('synced', `skills: ${n / 2} active → .claude/skills and .agents/skills${sk.removed.length ? `, ${sk.removed.length / 2} removed` : ''}`);
+  for (const s of sk.skipped) notes.push(`Skill not synced: ${s}`);
 
   return { lines, notes };
 }

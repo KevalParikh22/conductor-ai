@@ -3,11 +3,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { spawn } from 'node:child_process';
 import { isolateHome, makeRepo } from './helpers.js';
 
 const home = isolateHome();
-const { initProject } = await import('../src/init.js');
+const { initProject, codexHasConductor } = await import('../src/init.js');
 const { createUiServer } = await import('../src/ui/server.js');
 const BIN = new URL('../bin/conductor.js', import.meta.url).pathname;
 
@@ -60,7 +61,23 @@ test('init (codex-cli) keeps the controller section conditional in AGENTS.md', (
   const { dir } = makeRepo();
   const r = initProject(dir, { controller: 'codex-cli' });
   assert.match(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), /Workers: ignore this section/);
-  assert.ok(r.notes.some((n) => n.includes('mcp_servers.conductor')));
+  assert.ok(r.notes.some((n) => n.includes('codex mcp add conductor -- conductor mcp')) || codexHasConductor(), 'register hint unless already registered');
+  assert.ok(fs.existsSync(path.join(dir, '.agents/skills/conduct-plan/SKILL.md')), 'Codex reads skills from .agents/skills');
+  assert.ok(!fs.existsSync(path.join(dir, '.conductor/commands')), 'no prompts in a folder no tool reads');
+});
+
+test('init (opencode) writes skills where OpenCode reads them, plus its MCP entry', () => {
+  const { dir } = makeRepo();
+  initProject(dir, { controller: 'opencode' });
+  assert.ok(fs.existsSync(path.join(dir, '.agents/skills/conduct-run/SKILL.md')));
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'opencode.json'), 'utf8')).mcp.conductor.command.join(' '), 'conductor mcp');
+});
+
+test('codexHasConductor reads ~/.codex/config.toml', () => {
+  const f = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'codex-')), 'config.toml');
+  assert.equal(codexHasConductor(f), false);
+  fs.writeFileSync(f, 'model = "x"\n\n[mcp_servers.conductor]\ncommand = "conductor"\nargs = ["mcp"]\n');
+  assert.equal(codexHasConductor(f), true);
 });
 
 function mcpSession(cwd) {
