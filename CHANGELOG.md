@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.10.0 (2026-11-08)
+
+### Skills, git and docs
 
 - **One skill library for every controller and worker.**
   - **Where skills live:** in conductor, in `~/.config/conductor/skills/` (all projects) or `.conductor/skills/` (one project). The format is the standard SKILL.md.
@@ -21,11 +23,15 @@
   - CLI and UI side by side;
   - git, editors, cloud and troubleshooting.
 
+### Controllers
+
 - **Switching the controller works in the UI.** Picking one in Settings no longer goes through the save bar. Saving to the global config was silently overridden by the project's own setting, so the choice snapped back. The button now says "Switch this project to …" and does it in one step.
 - **Every controller gets its commands where it reads them.** Checked against each tool:
   - **Claude Code:** `.claude/commands`, plus `.mcp.json`, which Claude asks you to approve on first run.
   - **Antigravity, Codex and OpenCode:** the `/conduct-*` commands are skills in `.agents/skills/`. Codex and OpenCode used to get prompts in `.conductor/commands/`, which no tool reads. OpenCode loads the skills and conductor's MCP tools from the project.
 - **Antigravity and Codex only load MCP servers from their own global config.** `init` now says so, with the one command to run (`agy mcp add conductor conductor mcp` or `codex mcp add conductor -- conductor mcp`), unless conductor is already registered. It never edits those configs itself.
+
+### UI and CLI
 
 - **UI keeps your page on reload.** The open page is in the address (`#…&p=roles`), and back/forward move between pages. Before, every reload went to Overview.
 - **One rule for "optional" providers.** A default provider with no key yet shows as ○ / grey "optional · add key" in the UI, `conductor status` and `doctor` alike, never as red. Overview counts "4 of 4 ready + 2 optional".
@@ -34,6 +40,8 @@
   - A typo gets a suggestion ("Did you mean: conductor build?").
   - Output uses colour at a terminal (✓ green, ✗ red, ⚠ yellow, ○ dim), but never for pipes, `NO_COLOR`, `--no-color`, `--json` or the MCP server.
   - `conductor providers` cuts descriptions at a word to fit the terminal.
+
+### First run and reliability
 
 - **Setup never turns on your controller as a worker.** With Claude Code as the controller, `claude-cli` stays off, and setup says why: work sent to it spends the quota conductor is meant to save. Routing rules never pick it either. You can still turn it on in the UI.
 - **Too-small local models aren't picked.** Models under 7B (read from the name, e.g. `qwen3.5:2b`) fail or produce junk on coding tasks. `conductor local` and setup list them and suggest a coding model to pull.

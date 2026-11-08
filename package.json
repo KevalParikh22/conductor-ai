@@ -1,6 +1,6 @@
 {
   "name": "conductor-ai",
-  "version": "0.9.1",
+  "version": "0.10.0",
   "description": "Claude plans and reviews; free and cheap models write the code. Multi-LLM orchestrator for Claude Code, Codex, Antigravity, OpenCode, Ollama and 45+ APIs, with quota-aware fallback, task routing, per-agent sandboxes and parallel worktrees.",
   "keywords": [
     "claude",

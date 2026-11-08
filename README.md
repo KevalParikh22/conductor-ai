@@ -23,7 +23,7 @@
 </div>
 
 > [!NOTE]
-> **Early and moving fast (v0.9), solo-maintained.** 93 tests run in CI on Linux and macOS with Node 20, 22 and 24. The agents it drives change their CLI flags often; each one is a small preset you can override in config.
+> **Early and moving fast (v0.10), solo-maintained.** 119 tests run in CI on Linux and macOS with Node 20, 22 and 24. The agents it drives change their CLI flags often; each one is a small preset you can override in config.
 
 A Claude subscription runs out fast when Claude types every line. Claude is best at judgement: planning, design and catching bugs. **conductor-ai** keeps Claude (or any agent you choose) as the controller and quality gate, and hands the typing to Antigravity, Codex, OpenCode, free Kilo / OpenRouter / Groq / Gemini models, Kimi or local models. When one hits its limit, the next one takes over.
 
