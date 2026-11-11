@@ -28,6 +28,7 @@ The user can change any of this in `conductor ui`.
 ### 1. Plan
 - Copy `docs/plan/_TEMPLATE.md` to `docs/plan/<slug>.md`.
 - Write concrete **Design notes** (names, types, signatures, API shapes, file locations), so workers never make design decisions.
+- Run `conductor plan check docs/plan/<slug>.md` and fix what it reports: conductor refuses tasks without files, checkable acceptance criteria or a verify command, or with more than 4 files besides tests.
 - Split into tasks of about 1–3 files and under ~200 lines, in dependency order, each with steps, acceptance criteria and verify.
 - Assign `role` (build/fix/test/docs) per task. Mark judgement-heavy tasks `role: controller`.
 - If `docs/architecture.md` is empty, generate it first: `conductor run ask "Map this codebase..." --save docs/architecture.md`.

@@ -13,7 +13,7 @@ fakeBins({
   codex: `let p='';process.stdin.on('data',d=>p+=d).on('end',()=>{const o=args[args.indexOf('-o')+1];
     if(p.includes('code review')){fs.writeFileSync(o,'## Findings\\nnone\\n## VERDICT: APPROVE\\n');return;}
     fs.mkdirSync('src',{recursive:true});fs.writeFileSync('src/add.js','export const add=(a,b)=>a+b;\\n');
-    fs.writeFileSync(o,'## RESULT: DONE\\n## Files changed\\n- src/add.js\\n## Checks run\\n- none\\n## Notes\\n- none\\n');});`,
+    fs.writeFileSync(o,'## RESULT: DONE\\n## Files changed\\n- src/add.js\\n## Checks run\\n- none\\n## Acceptance\\n- [x] 1. add(2, 3) returns 5 — evidence: src/add.js:1\\n## Notes\\n- none\\n');});`,
   // read-only offender
   sneaky: `fs.writeFileSync('sneaky.txt','x'); console.log('## Findings\\nnone\\n## VERDICT: APPROVE padding padding');`,
   // exits 0 with nothing on stdout (like agy auto-denying a tool in headless mode)
@@ -202,7 +202,7 @@ test('no proof, no "done": code with no verify command ends unverified (exit 4) 
   };
   const { formatSummary, outcome } = await import('../src/core.js');
   let dir = noVerifyRepo();
-  let s = await dispatch(cfgFor(dir), { role: 'build', planPath: 'docs/plan/p.md', taskId: 'T1', chain: ['codex-cli'] });
+  let s = await dispatch(cfgFor(dir), { role: 'build', planPath: 'docs/plan/p.md', taskId: 'T1', chain: ['codex-cli'], allowWeakPlan: true });
   assert.equal(s.winner, 'codex-cli');
   assert.equal(s.verify.status, 'SKIPPED');
   assert.equal(s.outcome, 'unverified');
@@ -211,12 +211,12 @@ test('no proof, no "done": code with no verify command ends unverified (exit 4) 
   assert.equal(JSON.parse(fs.readFileSync(path.join(dir, s.runDir, 'summary.json'), 'utf8')).outcome, 'unverified');
 
   dir = noVerifyRepo();
-  s = await dispatch(cfgFor(dir), { role: 'build', planPath: 'docs/plan/p.md', taskId: 'T1', chain: ['codex-cli'], allowUnverified: true });
+  s = await dispatch(cfgFor(dir), { role: 'build', planPath: 'docs/plan/p.md', taskId: 'T1', chain: ['codex-cli'], allowUnverified: true, allowWeakPlan: true });
   assert.equal(s.outcome, 'unverified', 'allowed, but still reported honestly');
   assert.equal(s.exitCode, 0);
 
   dir = noVerifyRepo();
-  s = await dispatch(cfgFor(dir), { role: 'build', planPath: 'docs/plan/p.md', taskId: 'T1', chain: ['codex-cli'], noVerify: true });
+  s = await dispatch(cfgFor(dir), { role: 'build', planPath: 'docs/plan/p.md', taskId: 'T1', chain: ['codex-cli'], noVerify: true, allowWeakPlan: true });
   assert.deepEqual([s.outcome, s.exitCode, s.verify.chosen], ['unverified', 0, true]);
   assert.match(formatSummary(s), /Verify was skipped/);
 
@@ -273,7 +273,7 @@ test('a worker is told the base already fails, and isn\'t blamed for it; extra f
   fakeBins({
     codexextra: `let p='';process.stdin.on('data',d=>p+=d).on('end',()=>{const o=args[args.indexOf('-o')+1];
       fs.mkdirSync('src',{recursive:true});fs.writeFileSync('src/add.js','export const add=(a,b)=>a+b;\\n');fs.writeFileSync('src/extra.js','x\\n');
-      fs.writeFileSync(o,'## RESULT: DONE\\n## Files changed\\n- src/add.js\\n- src/extra.js\\n## Checks run\\n- none\\n## Notes\\n- none\\n');});`,
+      fs.writeFileSync(o,'## RESULT: DONE\\n## Files changed\\n- src/add.js\\n- src/extra.js\\n## Checks run\\n- none\\n## Acceptance\\n- [x] 1. add(2, 3) returns 5 — evidence: src/add.js:1\\n## Notes\\n- none\\n');});`,
   });
   const failing = JSON.stringify({ name: 'r', scripts: { test: 'node -e "console.log(\'FAIL old.test.js\');process.exit(1)"' } });
   const { dir } = makeRepo({ files: { 'docs/plan/p.md': PLAN, 'src/.keep': '', 'package.json': failing } });

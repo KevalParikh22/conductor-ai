@@ -43,6 +43,7 @@ function cfgFor(dir, extra = {}) {
   cfg.providers = { ...cfg.providers, 'claims-too-much': cli('claims-too-much'), idle: cli('idle'), honest: cli('honest'),
     'paid-api': { type: 'openai', enabled: true, baseUrl: `http://127.0.0.1:${port}/v1`, apiKeyEnv: '', model: 'paid-model', price: { input: 2, output: 10 } },
     ...extra };
+  cfg.settings = { ...cfg.settings, planGate: false }; // these plans test other things; the plan gate has its own tests
   return cfg;
 }
 

@@ -8,7 +8,8 @@ import { runBatch, formatBatch } from '../src/batch.js';
 import { listWorktrees, removeWorktree, readWorktreeMeta } from '../src/worktree.js';
 import { listSkills, setSkillOn, newSkill, addSkill, removeSkill, syncSkills, globalSkillsDir, projectSkillsDir } from '../src/skills.js';
 import { statusReport, statusData } from '../src/status.js';
-import { runVerify } from '../src/verify.js';
+import { runVerify, detectVerify } from '../src/verify.js';
+import { checkPlan, formatPlanCheck } from '../src/plancheck.js';
 import { initProject, setupGlobal } from '../src/init.js';
 import { startMcpServer } from '../src/mcp.js';
 import { testProvider } from '../src/providers.js';
@@ -71,12 +72,13 @@ Work (normally called by the controller)
      --worktree [--replace]      run in its own checkout on branch conductor/<id> and commit there
      --continue                  keep working in the task's existing worktree (same worker by default; add --note)
      --timeout 45m               stop a worker after this and try the next (default: settings.timeoutSec, or 2× the task eta)
-     --no-verify --allow-unverified --allow-scope --allow-dirty --allow-open-questions --json
+     --no-verify --allow-unverified --allow-scope --allow-weak-plan --allow-dirty --allow-open-questions --json
                                  exit 4 = the worker wrote code but no verify command proved it (--allow-unverified accepts it)
   conductor batch --plan <file> --tasks T1,T2,T3 [--concurrency 4] [--role r] [--provider p] [--replace] [--json]
   conductor diff [branch | A..B] [--lines 200]   compact diff for review (default: working tree, new files included)
   conductor route "task" [--role r] [--files a,b] | --plan f --task T1   which providers would take a task, and why
   conductor route --rules | --templates | --add starter|<id,id> | --rm <n> [--global]   list, add or remove routing rules
+  conductor plan check <file> [--task T1,T2]   is each task ready for a worker? (files, checkable acceptance, verify, size)
   conductor verify                     run the project's verify command
   conductor skills [list] | new <name> | add <path> | on|off <name> | rm <name> | sync   one skill library for every controller and worker
   conductor retry <task> --note "…" [--provider p]   the task's worker continues in its worktree with your note
@@ -238,7 +240,7 @@ function timeoutOpt(o) {
 
 function parseArgs(argv) {
   const opts = { _: [] };
-  const flags = new Set(['no-verify', 'allow-dirty', 'json', 'live', 'no-open', 'no-mcp', 'all', 'clear', 'global', 'help', 'version', 'worktree', 'replace', 'force', 'allow-open-questions', 'vscode', 'yes', 'free', 'project', 'details', 'enable', 'rules', 'templates', 'continue', 'share', 'allow-unverified', 'allow-scope']);
+  const flags = new Set(['no-verify', 'allow-dirty', 'json', 'live', 'no-open', 'no-mcp', 'all', 'clear', 'global', 'help', 'version', 'worktree', 'replace', 'force', 'allow-open-questions', 'vscode', 'yes', 'free', 'project', 'details', 'enable', 'rules', 'templates', 'continue', 'share', 'allow-unverified', 'allow-scope', 'allow-weak-plan']);
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '-h') { opts.help = true; continue; }
@@ -309,6 +311,17 @@ async function main() {
       return 0;
     }
     case 'skills': case 'skill': return skillsCmd(o);
+    case 'plan': {
+      if (o._[0] !== 'check' || !o._[1]) throw new UsageError('usage: conductor plan check <plan-file> [--task T1,T2]');
+      const cfg = loadConfig();
+      const file = o._[1];
+      const abs = path.resolve(cfg.root, file);
+      if (!fs.existsSync(abs)) throw new UsageError(`plan not found: ${file}`);
+      const rows = checkPlan(fs.readFileSync(abs, 'utf8'), { ids: o.task ? String(o.task).split(',').map((x) => x.trim()).filter(Boolean) : undefined, verifyCmd: detectVerify(cfg.root, cfg.settings), maxFiles: cfg.settings.maxTaskFiles || 4 });
+      if (!rows.length) throw new UsageError(`no tasks found in ${file} (expected headings like "### T1: title")`);
+      console.log(o.json ? JSON.stringify(rows, null, 2) : formatPlanCheck(file, rows));
+      return rows.some((r) => r.problems.length) ? 1 : 0;
+    }
     case 'route': {
       const cfg = loadConfig();
       if (o.rules || o.templates || o.add || o.rm) return routeRules(cfg, o);
@@ -388,7 +401,7 @@ async function main() {
         role, task: o._.join(' ') || undefined, planPath: o.plan, taskId: o.task, provider: o.provider,
         chain: o.chain ? o.chain.split(',').map((x) => x.trim()).filter(Boolean) : undefined,
         note: o.note, files: o.files ? o.files.split(',').map((x) => x.trim()) : [], base: o.base, focus: o.focus,
-        save: o.save, noVerify: o['no-verify'], allowUnverified: o['allow-unverified'], allowScope: o['allow-scope'], allowDirty: o['allow-dirty'], worktree: o.worktree, continue: o.continue, worktreeId: o.worktreeId, timeoutMs: timeoutOpt(o), replace: o.replace, allowOpenQuestions: o['allow-open-questions'],
+        save: o.save, noVerify: o['no-verify'], allowUnverified: o['allow-unverified'], allowScope: o['allow-scope'], allowWeakPlan: o['allow-weak-plan'], allowDirty: o['allow-dirty'], worktree: o.worktree, continue: o.continue, worktreeId: o.worktreeId, timeoutMs: timeoutOpt(o), replace: o.replace, allowOpenQuestions: o['allow-open-questions'],
         onEvent: o.json ? undefined : (e) => {
           const m = { worktree: `working in ${e.dir} (branch ${e.branch})`, try: `trying ${e.provider} (${e.kind})…`, skip: `skip ${e.provider}: ${e.reason}`, fail: `${e.provider} failed: ${e.reason}`, ok: `${e.provider} finished`, verify: 'running verify…', base: 'checking the starting commit (verify, cached per commit)…' }[e.type];
           if (m) process.stderr.write(`conductor: ${m}\n`);
@@ -421,7 +434,7 @@ async function main() {
       if (errs.length) throw new UsageError('config problems:\n  ' + errs.join('\n  '));
       const tasks = (o.tasks || o._.join(',')).split(',').map((x) => x.trim()).filter(Boolean);
       const b = await runBatch(cfg, {
-        planPath: o.plan, tasks, role: o.role, provider: o.provider, concurrency: o.concurrency, noVerify: o['no-verify'], allowUnverified: o['allow-unverified'], allowScope: o['allow-scope'], timeoutMs: timeoutOpt(o), replace: o.replace, note: o.note, allowOpenQuestions: o['allow-open-questions'],
+        planPath: o.plan, tasks, role: o.role, provider: o.provider, concurrency: o.concurrency, noVerify: o['no-verify'], allowUnverified: o['allow-unverified'], allowScope: o['allow-scope'], allowWeakPlan: o['allow-weak-plan'], timeoutMs: timeoutOpt(o), replace: o.replace, note: o.note, allowOpenQuestions: o['allow-open-questions'],
         onEvent: o.json ? undefined : (e) => {
           const m = { start: `starting (first choice: ${e.provider})`, try: `trying ${e.provider}…`, fail: `${e.provider} failed: ${e.reason}`, ok: `${e.provider} finished`, verify: 'running verify…', base: 'checking the starting commit…', done: 'done' }[e.type];
           if (m) process.stderr.write(`conductor [${e.task}]: ${m}\n`);

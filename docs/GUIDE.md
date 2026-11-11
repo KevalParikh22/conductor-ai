@@ -42,7 +42,7 @@ You use conductor in three ways, and they all do the same things:
 The controller reaches conductor through its **MCP server** (`conductor mcp`). Its tools:
 - `conductor_run`, `conductor_batch`, `conductor_retry`: run tasks.
 - `conductor_diff`, `conductor_runs`: review what ran.
-- `conductor_route`, `conductor_skills`, `conductor_status`: see how work will be handled.
+- `conductor_plan_check`, `conductor_route`, `conductor_skills`, `conductor_status`: check a plan and see how work will be handled.
 - `conductor_verify`: run your checks.
 
 Each tool also takes an optional `project` path.
@@ -288,6 +288,8 @@ AGENTS.md
   - A worker is stopped at 20 minutes, or 2× a task's `eta:`, or the `--timeout` you give. Everything it started is stopped too, and the next provider runs.
   - Free API routes give up after 90 seconds, since they sometimes hang.
 - **If every worker fails:** exit code 3. The controller does the task itself.
+- **Plans are checked before work starts:** `conductor plan check <plan>` (also run automatically, and the MCP tool `conductor_plan_check`). A write task needs `files:`, acceptance criteria a check can confirm, a verify command and at most 4 files besides tests; otherwise conductor refuses it and says what is missing. `--allow-weak-plan` overrides.
+- **Acceptance is answered, not assumed:** the task's criteria are repeated at the end of the worker's prompt, and the worker must answer each one with evidence in an `## Acceptance` section. A DONE that leaves any unanswered or unmet is **partial**.
 - **Checks before and after a task:**
   - **The starting commit is checked first.** conductor runs verify on the commit the worker starts from (once per commit). If it already fails, the worker is told, and the result says which failure lines are new.
   - **Scope:** when a task lists `files:`, changing other files (beyond their tests, lockfiles and snapshots) makes the outcome **out of scope**, with the files listed. `--allow-scope` accepts it.

@@ -3,12 +3,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ROLES } from './presets.js';
+import { checkTask } from './plancheck.js';
+import { detectVerify } from './verify.js';
 import { dispatch, extractTask, taskFiles, resolveChain, chooseChain, openQuestions, UsageError, outcome, unverifiedBlocks } from './core.js';
 
 const field = (section, name) => (section.match(new RegExp(`\\*\\*${name}:\\*\\*\\s*(.+)`, 'i')) || [])[1]?.trim() || '';
 
 /** Read and check the tasks before anything runs. */
-export function planBatch(cfg, { planPath, tasks, role, allowOpenQuestions }) {
+export function planBatch(cfg, { planPath, tasks, role, allowOpenQuestions, allowWeakPlan }) {
   const planAbs = path.resolve(cfg.root, planPath || '');
   if (!planPath || !fs.existsSync(planAbs)) throw new UsageError(`plan not found: ${planPath || '(none given)'}`);
   if (!tasks?.length) throw new UsageError('batch needs --tasks T1,T2,...');
@@ -25,6 +27,12 @@ export function planBatch(cfg, { planPath, tasks, role, allowOpenQuestions }) {
     const deps = field(section, 'depends on').split(/[\s,]+/).filter((d) => /^T?\w+$/.test(d) && d !== '-' && !/^none$/i.test(d));
     return { id, role: r, files: taskFiles(section), deps, section };
   });
+  // Q1: every task must be ready for a worker before any of them starts
+  if (cfg.settings?.planGate !== false && !allowWeakPlan) {
+    const verifyCmd = detectVerify(cfg.root, cfg.settings || {});
+    const bad = items.map((t) => ({ id: t.id, problems: checkTask(t.section, { verifyCmd, maxFiles: cfg.settings?.maxTaskFiles || 4 }) })).filter((x) => x.problems.length);
+    if (bad.length) throw new UsageError(`not ready to hand to workers:\n${bad.map((b) => `  ${b.id}:\n    - ${b.problems.join('\n    - ')}`).join('\n')}\nFix the tasks in ${planPath} (conductor plan check ${planPath}), or pass --allow-weak-plan`);
+  }
   for (const t of items) {
     const inBatch = t.deps.filter((d) => ids.includes(d));
     if (inBatch.length) throw new UsageError(`${t.id} depends on ${inBatch.join(', ')} in the same batch. Run ${inBatch.join(', ')} first, merge, then batch the rest`);
@@ -62,8 +70,8 @@ export function spreadChains(cfg, items, { provider } = {}) {
 }
 
 /** Run tasks with at most `concurrency` at once. Results come back in task order. */
-export async function runBatch(cfg, { planPath, tasks, role, provider, concurrency, noVerify, allowUnverified, allowScope, replace, note, allowOpenQuestions, timeoutMs, onEvent }) {
-  const { items, warnings } = planBatch(cfg, { planPath, tasks, role, allowOpenQuestions });
+export async function runBatch(cfg, { planPath, tasks, role, provider, concurrency, noVerify, allowUnverified, allowScope, allowWeakPlan, replace, note, allowOpenQuestions, timeoutMs, onEvent }) {
+  const { items, warnings } = planBatch(cfg, { planPath, tasks, role, allowOpenQuestions, allowWeakPlan });
   const work = spreadChains(cfg, items, { provider });
   const limit = Math.max(1, Math.min(Number(concurrency) || 4, work.length));
   const results = new Array(work.length);
@@ -76,7 +84,7 @@ export async function runBatch(cfg, { planPath, tasks, role, provider, concurren
       emit({ type: 'start', provider: t.chain[0] });
       try {
         const s = await dispatch(cfg, {
-          role: t.role, planPath, taskId: t.id, chain: t.chain, note, noVerify, allowUnverified, allowScope, timeoutMs,
+          role: t.role, planPath, taskId: t.id, chain: t.chain, note, noVerify, allowUnverified, allowScope, allowWeakPlan, timeoutMs,
           worktree: true, worktreeId: t.id, replace, allowOpenQuestions, onEvent: emit,
         });
         results[i] = { task: t.id, role: t.role, summary: s };

@@ -25,7 +25,7 @@
 - **files:** `src/...`, `src/....test.ts`
 - **steps:**
   1. ...
-- **acceptance:**
+- **acceptance:** (things a check can confirm: a return value, an HTTP status, a command that passes. Not "works". Workers answer each one with evidence)
   - [ ] ...
 - **verify:** `<command>`
 

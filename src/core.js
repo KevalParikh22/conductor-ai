@@ -7,6 +7,8 @@ import { runProvider } from './providers.js';
 import * as git from './git.js';
 import { runVerify } from './verify.js';
 import { baseVerify, scopeCheck, newFailures } from './gates.js';
+import { checkTask, taskAcceptance, acceptancePrompt, readAcceptance } from './plancheck.js';
+import { detectVerify } from './verify.js';
 import { autoModel, autoFallbacks } from './models.js';
 import { smartOrder, isFree as isFreeProvider } from './selector.js';
 import { taskProviders, matchRoute, describeRoute } from './routing.js';
@@ -171,6 +173,9 @@ export function outcome(s) {
   if (!s?.winner) return 'failed';
   if (s.verify?.status === 'FAIL') return 'verify-failed';
   if (/RESULT:\s*\**\s*(PARTIAL|BLOCKED|FAILED|FAIL)\b/i.test(s.status || '')) return 'partial';
+  // H5: DONE, but not every acceptance criterion answered with evidence
+  const a = s.acceptance;
+  if (a && !a.waived && (!a.answered || a.met < a.total)) return 'partial';
   if (s.scope?.outside?.length && !s.scope.allowed) return 'out-of-scope';
   // no proof, no "done": code a worker wrote counts as done only when verify ran and passed
   if (isWriteRun(s) && s.verify?.status !== 'PASS') return 'unverified';
@@ -353,6 +358,11 @@ export async function dispatch(cfg, opts) {
       throw new UsageError(`${opts.planPath} still has ${open.length} open question(s): ${open.map((q) => `"${q}"`).join('; ')}. ` +
         'Answer them in the plan (mark "- [x] question → answer") before handing out tasks, or pass --allow-open-questions');
     }
+    // Q1: a task a worker can't do well (no files, nothing checkable, no verify, too big) goes back to the controller
+    if (mode === 'write' && settings.planGate !== false && !opts.allowWeakPlan) {
+      const problems = checkTask(section, { verifyCmd: detectVerify(root, settings), maxFiles: settings.maxTaskFiles || 4 });
+      if (problems.length) throw new UsageError(`${opts.taskId} isn't ready to hand to a worker:\n  - ${problems.join('\n  - ')}\nFix the task in ${opts.planPath} (conductor plan check ${opts.planPath}), or pass --allow-weak-plan`);
+    }
     const notes = useWorktree ? extractSection(planText, 'Design notes') : '';
     body = useWorktree
       ? `Plan: ${opts.planPath} (its Design notes are copied below; the file itself may not exist in your checkout)\nYour task id: ${opts.taskId}\n\n## Design notes\n${notes || '(none)'}\n\n${section}\n`
@@ -370,6 +380,9 @@ export async function dispatch(cfg, opts) {
   const skillTask = { role, files: [...(opts.files || []), ...taskFiles(section)], body };
   const skillsAgent = skillsForTask(root, skillTask), skillsChat = skillsForTask(root, skillTask, { inline: true });
   let agentPrompt = `${loadPrompt('_worker')}\n${loadPrompt(meta.prompt)}\n---\n# TASK (role: ${role})\n${body}${skillsAgent.text ? `\n${skillsAgent.text}` : ''}`;
+  // H5: the criteria again at the very end, with how to answer them
+  const criteria = mode === 'write' ? taskAcceptance(section) : [];
+  const recite = acceptancePrompt(criteria);
   const chatSystem = `${loadPrompt('_worker')}\n${loadPrompt(meta.prompt)}${mode === 'write' ? '\n' + loadPrompt('_chat_write') : ''}`;
   let work = root; // where the worker runs: the repo, or its own worktree
   const chatContext = () => {
@@ -460,7 +473,7 @@ export async function dispatch(cfg, opts) {
     }
     // chat APIs, and agents whose read mode has no tools (goose), get the project context inlined
     const inline = kind === 'chat' || (mode === 'read' && CLI_PRESETS[c.p.preset]?.readInlineContext);
-    const userPrompt = inline ? `${chatContext()}\n---\n# TASK (role: ${role})\n${body}${skillsChat.text ? `\n${skillsChat.text}` : ''}` : agentPrompt;
+    const userPrompt = inline ? `${chatContext()}\n---\n# TASK (role: ${role})\n${body}${skillsChat.text ? `\n${skillsChat.text}` : ''}${recite}` : agentPrompt + recite;
     // the provider's model, then its fallback models: a model that is rate-limited is skipped until its cooldown ends
     let { models, auto } = await modelsToTry(c.name, c.p, kind);
     let timeouts = 0;
@@ -578,6 +591,10 @@ export async function dispatch(cfg, opts) {
       const ev = checkEvidence(winnerText, summary.changed, summary.status, preDirty, [work, root]);
       summary.evidence = { claimed: ev.claimed, notChanged: ev.notChanged, notReported: ev.notReported };
       summary.warnings.push(...ev.warnings);
+    }
+    if (criteria.length) {
+      summary.acceptance = readAcceptance(winnerText, criteria);
+      if (settings.requireAcceptance === false) summary.acceptance.waived = true;
     }
     // Q5: files the worker changed that the task doesn't list
     const listed = taskFiles(section).flatMap(expandBraces);
@@ -711,7 +728,12 @@ export function formatSummary(s) {
   L.push(`report:    ${s.report}`);
   L.push(`status:    ${s.status || '(no RESULT/VERDICT line, so read the report)'}`);
   const out = outcome(s);
-  if (out === 'partial') L.push('outcome:   PARTIAL. The worker says it did only part of the task: read the report, then finish it or retry the rest');
+  const acc = s.acceptance;
+  const accShort = acc && !acc.waived && (!acc.answered || acc.met < acc.total);
+  if (out === 'partial') L.push(accShort && !/RESULT:\s*\**\s*(PARTIAL|BLOCKED|FAILED|FAIL)\b/i.test(s.status || '')
+    ? `outcome:   PARTIAL. ${acc.answered ? `Only ${acc.met} of ${acc.total} acceptance criteria are met with evidence` : 'The worker reports DONE but did not answer the acceptance criteria'}: check them, then finish or retry with --note`
+    : 'outcome:   PARTIAL. The worker says it did only part of the task: read the report, then finish it or retry the rest');
+  if (acc) L.push(`acceptance: ${acc.met}/${acc.total} met with evidence${acc.waived ? ' (not required)' : ''}${acc.unmet.length ? `; not met: ${acc.unmet.slice(0, 4).join(' | ')}` : ''}`);
   if (out === 'verify-failed') L.push(s.verify?.baseFailed
     ? `outcome:   NOT PROVEN. Verify already failed before the worker started, so it can't prove this work. ${s.verify.newFailures?.length ? `${s.verify.newFailures.length} failure line(s) are new: check them first` : 'No new failure lines: the worker probably added no new failures'}`
     : 'outcome:   NOT DONE. The worker finished but verify fails: fix it, or retry with --note "<what failed>"');

@@ -51,6 +51,7 @@ function cfgFor(dir) {
   const cli = (bin) => ({ type: 'cli', enabled: true, bin, write: ['{promptFile}'], read: ['{promptFile}'] });
   cfg.providers = { ...cfg.providers, 'agent-a': cli('agent-a'), 'agent-b': cli('agent-b'), 'agent-broken': cli('agent-broken'), 'agent-leaky': cli('agent-leaky') };
   cfg.roles = { ...cfg.roles, build: ['agent-a', 'agent-b'] };
+  cfg.settings = { ...cfg.settings, planGate: false }; // these plans test other things; the plan gate has its own tests
   return cfg;
 }
 
