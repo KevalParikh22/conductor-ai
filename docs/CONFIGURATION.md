@@ -93,6 +93,9 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | `requireCleanTree` | true | Write roles need a clean tree (enables stash-on-failure) |
 | `verify` | `""` | Verify command. Empty = `AGENTS.md` Verify line, then auto-detect |
 | `autoVerify` | true | Run verify after each write task |
+| `checkBase` | true | Run verify on the starting commit before a write task (cached per commit), so failures that were already there aren't blamed on the worker |
+| `scopeAllow` | [] | Globs workers may change without the task listing them (lockfiles and test snapshots are always allowed) |
+| `allowScope` | false | Accept changes outside a task's `files:`. Off: the outcome is `out-of-scope` |
 | `allowUnverified` | false | Accept code no verify command checked. Off: such a run ends `unverified` with exit 4 (batch: exit 3) |
 | `smartSelect` | true | Reorder each role's chain for the task: free API models first for small tasks with listed files, agents first for larger or open-ended ones, paid APIs last, and providers that failed 3 times in a row moved to the end. Off when you pass `--chain` or `--provider` |
 | `maxReportBytes` | 8000 | `report.md` (what the controller reads) keeps only the worker's RESULT block, up to this size; the full output is saved as `report.full.md` |

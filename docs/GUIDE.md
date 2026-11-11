@@ -288,6 +288,9 @@ AGENTS.md
   - A worker is stopped at 20 minutes, or 2× a task's `eta:`, or the `--timeout` you give. Everything it started is stopped too, and the next provider runs.
   - Free API routes give up after 90 seconds, since they sometimes hang.
 - **If every worker fails:** exit code 3. The controller does the task itself.
+- **Checks before and after a task:**
+  - **The starting commit is checked first.** conductor runs verify on the commit the worker starts from (once per commit). If it already fails, the worker is told, and the result says which failure lines are new.
+  - **Scope:** when a task lists `files:`, changing other files (beyond their tests, lockfiles and snapshots) makes the outcome **out of scope**, with the files listed. `--allow-scope` accepts it.
 - **No proof, no "done":** code a worker wrote counts as done only when the verify command ran and passed. Without a verify command the outcome is **unverified** and the exit code is 4. Set one with `conductor init --verify "<cmd>"` (or the Verify line in AGENTS.md). `--no-verify` and `--allow-unverified` accept unverified work on purpose.
 - **If the controller runs out:** run `/conduct-handoff` while you still can. Then open another agent and say: *"Read HANDOFF.md and act as the controller described in .conductor/ORCHESTRATOR.md."*
 

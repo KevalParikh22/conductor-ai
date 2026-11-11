@@ -50,6 +50,7 @@ conductor batch --plan docs/plan/<slug>.md --tasks T2,T3,T4
 - A single task can also run isolated: `conductor run build --plan … --task T3 --worktree`.
 
 ### 3. Accept or retry
+Read the `outcome:` line first. **OUT OF SCOPE:** check the listed files in the diff; keep them only if the task needs them. **NOT PROVEN** (verify failed before the worker started): check the new failure lines it lists. **UNVERIFIED:** run the checks yourself.
 - **Verify PASS, diff in scope, matches the plan:** `git add -A && git commit -m "<slug>: T3 <title>"`, then mark the task done.
 - **Small issue (<10 lines):** fix it yourself, run `conductor verify`, commit.
 - **Bigger issue:** `git stash push -u -m "conductor: rejected T3"`, then retry once with `--provider <other> --note "<what was wrong, what to do>"`.

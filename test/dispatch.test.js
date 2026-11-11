@@ -267,3 +267,31 @@ test('agy JSON: refused actions are caught even though agy exits 0 with status S
   assert.equal(s.winner, 'g-partly', 'an answer despite refusals is kept…');
   assert.ok(s.warnings.some((w) => /g-partly refused 2 action\(s\) it needed \(command\)/.test(w)), '…with a warning');
 });
+
+test('a worker is told the base already fails, and isn\'t blamed for it; extra files make it out of scope', async () => {
+  clearCooldowns();
+  fakeBins({
+    codexextra: `let p='';process.stdin.on('data',d=>p+=d).on('end',()=>{const o=args[args.indexOf('-o')+1];
+      fs.mkdirSync('src',{recursive:true});fs.writeFileSync('src/add.js','export const add=(a,b)=>a+b;\\n');fs.writeFileSync('src/extra.js','x\\n');
+      fs.writeFileSync(o,'## RESULT: DONE\\n## Files changed\\n- src/add.js\\n- src/extra.js\\n## Checks run\\n- none\\n## Notes\\n- none\\n');});`,
+  });
+  const failing = JSON.stringify({ name: 'r', scripts: { test: 'node -e "console.log(\'FAIL old.test.js\');process.exit(1)"' } });
+  const { dir } = makeRepo({ files: { 'docs/plan/p.md': PLAN, 'src/.keep': '', 'package.json': failing } });
+  const cfg = cfgFor(dir, { cx: { type: 'cli', preset: 'codex', enabled: true, bin: 'codexextra' } });
+  const s = await dispatch(cfg, { role: 'build', planPath: 'docs/plan/p.md', taskId: 'T1', chain: ['cx'] });
+  assert.equal(s.base.status, 'FAIL');
+  assert.ok(s.warnings.some((w) => /already fails on the starting commit/.test(w)));
+  const prompt = fs.readFileSync(path.join(dir, s.runDir, 'cx.prompt.md'), 'utf8');
+  assert.match(prompt, /checks already fail before your change[\s\S]*FAIL old\.test\.js/);
+  assert.equal(s.verify.baseFailed, true);
+  assert.deepEqual(s.verify.newFailures, [], 'the same failure as before');
+  assert.deepEqual(s.scope.outside, ['src/extra.js']);
+  assert.equal(s.outcome, 'verify-failed', 'verify still fails; the summary says it is not the worker\'s');
+
+  const ok = makeRepo({ files: { 'docs/plan/p.md': PLAN, 'src/.keep': '' } }).dir;
+  const s2 = await dispatch(cfgFor(ok, { cx: { type: 'cli', preset: 'codex', enabled: true, bin: 'codexextra' } }), { role: 'build', planPath: 'docs/plan/p.md', taskId: 'T1', chain: ['cx'] });
+  assert.deepEqual([s2.base.status, s2.verify.status, s2.outcome], ['PASS', 'PASS', 'out-of-scope']);
+  const s3 = await dispatch(cfgFor(makeRepo({ files: { 'docs/plan/p.md': PLAN, 'src/.keep': '' } }).dir, { cx: { type: 'cli', preset: 'codex', enabled: true, bin: 'codexextra' } }),
+    { role: 'build', planPath: 'docs/plan/p.md', taskId: 'T1', chain: ['cx'], allowScope: true });
+  assert.deepEqual([s3.scope.allowed, s3.outcome], [true, 'done']);
+});

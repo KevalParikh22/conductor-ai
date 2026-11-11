@@ -16,6 +16,8 @@ You are the controller (see `.conductor/ORCHESTRATOR.md`). Arguments: `$ARGUMENT
    - **Good:** `git add -A && git commit -m "<slug>: <id> <title>"`, then set `status: done` in the plan.
    - **Small issue (<10 lines):** fix it, run `conductor verify`, commit.
    - **Bigger issue:** `git stash push -u -m "conductor: rejected <id>"`, then retry once with `--provider <different> --note "<what was wrong; what to do>"`.
+   - **Outcome OUT OF SCOPE:** look at the files it lists in the diff. Keep them only if the task really needs them; otherwise revert them (`git checkout -- <files>`) before committing.
+   - **Outcome NOT PROVEN** (verify already failed on the starting commit): judge by the new failure lines it lists, not by the verify status.
    - **Outcome UNVERIFIED (exit 4):** nothing proved it works. Run the project's checks yourself before committing, and ask the user for a verify command (`conductor init --verify "<cmd>"`).
    - **Second failure, or exit code 3:** do it yourself.
 5. Tell the user in 2–3 lines: who did it, verify result, commit, any concern.

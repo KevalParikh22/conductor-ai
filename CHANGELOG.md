@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **The starting commit is checked before a worker is blamed.**
+  - Before a write task, conductor runs verify on the commit the worker starts from (cached per commit and command, shared by parallel tasks; `checkBase: false` turns it off).
+  - If it already fails, the worker is told which failures were already there, the summary shows a warning, and a failing verify afterwards reads **NOT PROVEN** with the failure lines that are new.
+- **Scope gate.**
+  - When a task lists `files:`, changes to other files make the outcome **out-of-scope**, listing them. Tests of the listed files, lockfiles and snapshots are always fine; `scopeAllow` adds globs.
+  - `--allow-scope` (MCP `allow_scope`, setting `allowScope`) accepts it. A batch counts out-of-scope tasks separately and doesn't treat them as done.
 - **Antigravity: refused actions are no longer missed.**
   - In headless mode, agy exits 0 and reports `SUCCESS` even when it was refused an action it needed (for example a shell command without an allow rule). conductor now runs it with `--output-format json` and reads the `denied_actions` list (checked against agy 1.5.3).
   - Refused with no answer: the attempt fails with `denied: command (add an allow rule …)` and the next provider runs. Refused but answered: the answer is kept, with a warning that it may have skipped steps such as running tests.
