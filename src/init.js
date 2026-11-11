@@ -93,7 +93,7 @@ export function agyHasConductor(file = path.join(os.homedir(), '.gemini', 'confi
   try { return !!JSON.parse(fs.readFileSync(file, 'utf8'))?.mcpServers?.conductor; } catch { return false; }
 }
 
-export function initProject(root, { controller = 'claude-code', mcp = true, vscode, share = false } = {}) {
+export function initProject(root, { controller = 'claude-code', mcp = true, vscode, share = false, verify: verifyCmd } = {}) {
   if (!CONTROLLERS[controller]) throw new Error(`unknown controller "${controller}". Options: ${Object.keys(CONTROLLERS).join(', ')}`);
   const lines = [];
   const created = new Set(); // files this run created (not ones you already had)
@@ -105,13 +105,14 @@ export function initProject(root, { controller = 'claude-code', mcp = true, vsco
   const agentsTpl = tpl('AGENTS.md');
   if (!fs.existsSync(agentsPath)) {
     // fill in the Verify line from the project's own scripts, so workers and the controller see the real command
-    const verify = detectVerify(root);
+    const verify = verifyCmd || detectVerify(root);
     fs.writeFileSync(agentsPath, verify ? agentsTpl.replace(/`<e\.g\. [^`]*>`/, `\`${verify}\``) : agentsTpl);
-    log('added', `AGENTS.md   ← fill in section 1 (project facts)${verify ? `; Verify detected: ${verify} (check it)` : ' and the Verify command'}`);
+    log('added', `AGENTS.md   ← fill in section 1 (project facts)${verify ? `; Verify ${verifyCmd ? 'set' : 'detected'}: ${verify}${verifyCmd ? '' : ' (check it)'}` : ' and the Verify command'}`);
   }
   else {
     const s = '<!-- conductor:rules:start -->', e = '<!-- conductor:rules:end -->';
     mergeMarkedBlock(agentsPath, agentsTpl.slice(agentsTpl.indexOf(s), agentsTpl.indexOf(e) + e.length), s, e, log);
+    if (verifyCmd) setVerifyLine(agentsPath, verifyCmd, log);
   }
 
   // 2. Controller instructions
@@ -189,7 +190,24 @@ export function initProject(root, { controller = 'claude-code', mcp = true, vsco
   if (n || sk.removed.length) log('synced', `skills: ${n / 2} active → .claude/skills and .agents/skills${sk.removed.length ? `, ${sk.removed.length / 2} removed` : ''}`);
   for (const s of sk.skipped) notes.push(`Skill not synced: ${s}`);
 
+  // no proof, no "done": without a verify command every write task ends "unverified" (exit 4)
+  const configured = readJSON(pcfg, {}).settings?.verify || readJSON(GLOBAL_CONFIG, {}).settings?.verify;
+  if (!configured && !detectVerify(root)) notes.push('No verify command found. Until there is one, code a worker writes ends as "unverified" (exit 4), because nothing proves it works.\n  Set it once:  conductor init --verify "npm test"   (any command that exits 0 when the project is healthy)');
+
   return { lines, notes };
+}
+
+/** Put `cmd` on the "Verify" line of an existing AGENTS.md (or add the line under section 1). */
+function setVerifyLine(file, cmd, log) {
+  const text = fs.readFileSync(file, 'utf8');
+  const line = `- **Verify (must pass before any task is "done"):** \`${cmd}\``;
+  const has = /^\s*-\s*\*\*Verify[^\n]*$/m, section = /(^## 1\.[^\n]*\n\n?)/m;
+  const next = has.test(text) ? text.replace(has, line)
+    : section.test(text) ? text.replace(section, `$1${line}\n`)
+      : `${text.trimEnd()}\n\n${line}\n`;
+  if (next === text) return log('kept', `AGENTS.md (Verify: ${cmd})`);
+  fs.writeFileSync(file, next);
+  log('updated', `AGENTS.md (Verify: ${cmd})`);
 }
 
 export function setupGlobal() {

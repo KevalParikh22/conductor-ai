@@ -74,4 +74,4 @@ Your context is the expensive part. conductor is built to keep it small:
 - **Retry with a note, don't rewrite:** `--note "<what was wrong>"` costs a sentence; redoing the task yourself costs the whole task. For a worktree task, `conductor retry <id> --note "…"` (MCP: `continue: true`) lets the same worker fix its own work in place instead of starting over.
 
 ## Exit codes
-`0` a worker finished (still check verify) · `2` usage error or unsafe repo state · `3` every provider failed: the controller takes over.
+`0` a worker finished (still check verify) · `2` usage error or unsafe repo state · `3` every provider failed: the controller takes over · `4` the worker wrote code but no verify command proved it (outcome `unverified`): set a verify command, or check the work yourself. Never commit unverified work without checking it.

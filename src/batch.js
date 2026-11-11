@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ROLES } from './presets.js';
-import { dispatch, extractTask, taskFiles, resolveChain, chooseChain, openQuestions, UsageError, outcome } from './core.js';
+import { dispatch, extractTask, taskFiles, resolveChain, chooseChain, openQuestions, UsageError, outcome, unverifiedBlocks } from './core.js';
 
 const field = (section, name) => (section.match(new RegExp(`\\*\\*${name}:\\*\\*\\s*(.+)`, 'i')) || [])[1]?.trim() || '';
 
@@ -62,7 +62,7 @@ export function spreadChains(cfg, items, { provider } = {}) {
 }
 
 /** Run tasks with at most `concurrency` at once. Results come back in task order. */
-export async function runBatch(cfg, { planPath, tasks, role, provider, concurrency, noVerify, replace, note, allowOpenQuestions, timeoutMs, onEvent }) {
+export async function runBatch(cfg, { planPath, tasks, role, provider, concurrency, noVerify, allowUnverified, replace, note, allowOpenQuestions, timeoutMs, onEvent }) {
   const { items, warnings } = planBatch(cfg, { planPath, tasks, role, allowOpenQuestions });
   const work = spreadChains(cfg, items, { provider });
   const limit = Math.max(1, Math.min(Number(concurrency) || 4, work.length));
@@ -76,7 +76,7 @@ export async function runBatch(cfg, { planPath, tasks, role, provider, concurren
       emit({ type: 'start', provider: t.chain[0] });
       try {
         const s = await dispatch(cfg, {
-          role: t.role, planPath, taskId: t.id, chain: t.chain, note, noVerify, timeoutMs,
+          role: t.role, planPath, taskId: t.id, chain: t.chain, note, noVerify, allowUnverified, timeoutMs,
           worktree: true, worktreeId: t.id, replace, allowOpenQuestions, onEvent: emit,
         });
         results[i] = { task: t.id, role: t.role, summary: s };
@@ -90,7 +90,10 @@ export async function runBatch(cfg, { planPath, tasks, role, provider, concurren
   for (const r of results) r.outcome = r.summary ? outcome(r.summary) : 'failed';
   const ok = results.filter((r) => r.outcome === 'done').length;
   const partial = results.filter((r) => r.outcome === 'partial').length;
-  return { plan: planPath, warnings, results, ok, partial, failed: results.length - ok - partial, exitCode: ok === results.length ? 0 : 3 };
+  const unverified = results.filter((r) => r.outcome === 'unverified').length;
+  // unverified work fails the batch too, unless the caller skipped or allowed it
+  const accepted = ok + results.filter((r) => r.outcome === 'unverified' && !unverifiedBlocks(r.summary, { allowUnverified: allowUnverified || cfg.settings?.allowUnverified })).length;
+  return { plan: planPath, warnings, results, ok, partial, unverified, failed: results.length - ok - partial - unverified, exitCode: accepted === results.length ? 0 : 3 };
 }
 
 export function formatBatch(b) {
@@ -102,14 +105,15 @@ export function formatBatch(b) {
     if (!s.winner) { L.push(`${r.task.padEnd(6)} ✗ every provider failed: ${s.attempts.map((a) => `${a.provider}${a.model ? `[${a.model}]` : ''}(${a.reason})`).join(' → ')}`); continue; }
     const v = s.verify ? `verify ${s.verify.status}` : 'not verified';
     const c = s.worktree.commit ? `${s.worktree.commit} on ${s.worktree.branch}` : 'no changes';
-    const mark = { done: '✓', partial: '⚠', 'verify-failed': '✗' }[r.outcome] || '✓';
+    const mark = { done: '✓', partial: '⚠', unverified: '?', 'verify-failed': '✗' }[r.outcome] || '✓';
     const why = r.outcome === 'partial' ? ` · ${(s.status || '').replace(/^#+\s*/, '')}` : '';
     L.push(`${r.task.padEnd(6)} ${mark} ${s.winner} · ${v}${s.verify?.scope === 'task' ? ' (task)' : ''} · ${c} · ${s.changed.length} file(s)${why}`);
     for (const w of s.warnings) L.push(`         WARNING: ${w}`);
   }
-  L.push(`result:    ${b.ok} done, ${b.partial ? `${b.partial} partial, ` : ''}${b.failed} failed`);
+  L.push(`result:    ${b.ok} done, ${b.partial ? `${b.partial} partial, ` : ''}${b.unverified ? `${b.unverified} unverified, ` : ''}${b.failed} failed`);
   if (b.results.some((r) => r.summary?.verify?.scope === 'task')) L.push('verify:    "(task)" = the task\'s own verify line from the plan; run `conductor verify` after merging');
   L.push('next:      for each ✓: review `conductor diff conductor/<id>`, then `git merge --no-ff conductor/<id>`; afterwards `conductor worktree rm <id>`.');
+  if (b.unverified) L.push('           For each ?: no verify ran, so nothing proves it works. Set a verify command (conductor init --verify "<cmd>"), or check it yourself before merging.');
   if (b.partial) L.push('           For each ⚠: the worker did only part of it. Read its report.md, then finish it or retry the rest.');
   L.push('           For each ✗: retry it alone with `conductor run <role> --plan … --task <id> --worktree --provider <other>`, or do it yourself.');
   return L.join('\n');

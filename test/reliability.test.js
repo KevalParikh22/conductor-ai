@@ -84,3 +84,16 @@ test('overriding only the time limit keeps read-only enforced; dropping --sandbo
   const custom = { type: 'cli', bin: 'mine', read: ['x'] };
   assert.equal(readOnlyEnforced(custom), false);
 });
+
+test('batch: unverified results are counted, marked "?" and fail the batch unless allowed', () => {
+  const base = { winner: 'codex-cli', mode: 'write', changed: ['a.js'], warnings: [], worktree: { commit: 'abc1234', branch: 'conductor/T1' } };
+  const results = [
+    { task: 'T1', summary: { ...base, status: '## RESULT: DONE', verify: { status: 'PASS' } } },
+    { task: 'T2', summary: { ...base, status: '## RESULT: DONE', verify: { status: 'SKIPPED', cmd: '' } } },
+  ].map((r) => ({ ...r, outcome: outcome(r.summary) }));
+  assert.deepEqual(results.map((r) => r.outcome), ['done', 'unverified']);
+  const out = formatBatch({ plan: 'p.md', warnings: [], results, ok: 1, partial: 0, unverified: 1, failed: 0 });
+  assert.match(out, /T2 +\? codex-cli · verify SKIPPED/);
+  assert.match(out, /result: +1 done, 1 unverified, 0 failed/);
+  assert.match(out, /For each \?: no verify ran/);
+});

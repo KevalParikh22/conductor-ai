@@ -53,7 +53,7 @@ Setup
   conductor add <provider> [--model m] [--yes] [--project]   add one: key, model, test, role chains
   conductor keys [set NAME | rm NAME]  list, set (hidden input or stdin) or remove API keys
   conductor local [--enable]           find local model servers (Ollama, LM Studio, llama.cpp…) and turn them on
-  conductor init [--controller <c>] [--vscode] [--no-mcp] [--share]   add conductor to the current project (its files go in .gitignore unless --share)
+  conductor init [--controller <c>] [--verify "<cmd>"] [--vscode] [--no-mcp] [--share]   add conductor to the current project (its files go in .gitignore unless --share)
                                        controllers: ${Object.keys(CONTROLLERS).join(', ')}
   conductor ui [--port 4545] [--no-open]   settings page
   conductor doctor [--live] [--details] [--json]   check installs and keys (--live sends a test prompt)
@@ -71,7 +71,8 @@ Work (normally called by the controller)
      --worktree [--replace]      run in its own checkout on branch conductor/<id> and commit there
      --continue                  keep working in the task's existing worktree (same worker by default; add --note)
      --timeout 45m               stop a worker after this and try the next (default: settings.timeoutSec, or 2× the task eta)
-     --no-verify --allow-dirty --allow-open-questions --json
+     --no-verify --allow-unverified --allow-dirty --allow-open-questions --json
+                                 exit 4 = the worker wrote code but no verify command proved it (--allow-unverified accepts it)
   conductor batch --plan <file> --tasks T1,T2,T3 [--concurrency 4] [--role r] [--provider p] [--replace] [--json]
   conductor diff [branch | A..B] [--lines 200]   compact diff for review (default: working tree, new files included)
   conductor route "task" [--role r] [--files a,b] | --plan f --task T1   which providers would take a task, and why
@@ -237,7 +238,7 @@ function timeoutOpt(o) {
 
 function parseArgs(argv) {
   const opts = { _: [] };
-  const flags = new Set(['no-verify', 'allow-dirty', 'json', 'live', 'no-open', 'no-mcp', 'all', 'clear', 'global', 'help', 'version', 'worktree', 'replace', 'force', 'allow-open-questions', 'vscode', 'yes', 'free', 'project', 'details', 'enable', 'rules', 'templates', 'continue', 'share']);
+  const flags = new Set(['no-verify', 'allow-dirty', 'json', 'live', 'no-open', 'no-mcp', 'all', 'clear', 'global', 'help', 'version', 'worktree', 'replace', 'force', 'allow-open-questions', 'vscode', 'yes', 'free', 'project', 'details', 'enable', 'rules', 'templates', 'continue', 'share', 'allow-unverified']);
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '-h') { opts.help = true; continue; }
@@ -341,7 +342,8 @@ async function main() {
       const root = findProjectRoot();
       const controller = o.controller || 'claude-code';
       setupGlobal();
-      const { lines, notes } = initProject(root, { controller, mcp: !o['no-mcp'], vscode: o.vscode || undefined, share: !!o.share });
+      if (o.verify === true || (o.verify !== undefined && !String(o.verify).trim())) throw new UsageError('usage: conductor init --verify "<command>" (e.g. --verify "npm test")');
+      const { lines, notes } = initProject(root, { controller, mcp: !o['no-mcp'], vscode: o.vscode || undefined, share: !!o.share, verify: o.verify ? String(o.verify).trim() : undefined });
       console.log(`conductor init → ${root}  (controller: ${CONTROLLERS[controller].label})`);
       lines.forEach((l) => console.log(l));
       notes.forEach((n) => console.log('\n' + n));
@@ -386,7 +388,7 @@ async function main() {
         role, task: o._.join(' ') || undefined, planPath: o.plan, taskId: o.task, provider: o.provider,
         chain: o.chain ? o.chain.split(',').map((x) => x.trim()).filter(Boolean) : undefined,
         note: o.note, files: o.files ? o.files.split(',').map((x) => x.trim()) : [], base: o.base, focus: o.focus,
-        save: o.save, noVerify: o['no-verify'], allowDirty: o['allow-dirty'], worktree: o.worktree, continue: o.continue, worktreeId: o.worktreeId, timeoutMs: timeoutOpt(o), replace: o.replace, allowOpenQuestions: o['allow-open-questions'],
+        save: o.save, noVerify: o['no-verify'], allowUnverified: o['allow-unverified'], allowDirty: o['allow-dirty'], worktree: o.worktree, continue: o.continue, worktreeId: o.worktreeId, timeoutMs: timeoutOpt(o), replace: o.replace, allowOpenQuestions: o['allow-open-questions'],
         onEvent: o.json ? undefined : (e) => {
           const m = { worktree: `working in ${e.dir} (branch ${e.branch})`, try: `trying ${e.provider} (${e.kind})…`, skip: `skip ${e.provider}: ${e.reason}`, fail: `${e.provider} failed: ${e.reason}`, ok: `${e.provider} finished`, verify: 'running verify…' }[e.type];
           if (m) process.stderr.write(`conductor: ${m}\n`);
@@ -419,7 +421,7 @@ async function main() {
       if (errs.length) throw new UsageError('config problems:\n  ' + errs.join('\n  '));
       const tasks = (o.tasks || o._.join(',')).split(',').map((x) => x.trim()).filter(Boolean);
       const b = await runBatch(cfg, {
-        planPath: o.plan, tasks, role: o.role, provider: o.provider, concurrency: o.concurrency, noVerify: o['no-verify'], timeoutMs: timeoutOpt(o), replace: o.replace, note: o.note, allowOpenQuestions: o['allow-open-questions'],
+        planPath: o.plan, tasks, role: o.role, provider: o.provider, concurrency: o.concurrency, noVerify: o['no-verify'], allowUnverified: o['allow-unverified'], timeoutMs: timeoutOpt(o), replace: o.replace, note: o.note, allowOpenQuestions: o['allow-open-questions'],
         onEvent: o.json ? undefined : (e) => {
           const m = { start: `starting (first choice: ${e.provider})`, try: `trying ${e.provider}…`, fail: `${e.provider} failed: ${e.reason}`, ok: `${e.provider} finished`, verify: 'running verify…', done: 'done' }[e.type];
           if (m) process.stderr.write(`conductor [${e.task}]: ${m}\n`);

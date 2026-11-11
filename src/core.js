@@ -162,13 +162,25 @@ export function chooseChain(cfg, role, { provider, chain, section = '', body = '
 }
 /**
  * How a finished run ended: 'done', 'partial' (the worker says it did only part: RESULT PARTIAL / BLOCKED /
- * FAILED), 'verify-failed' (it finished but the checks fail) or 'failed' (no provider finished).
+ * FAILED), 'verify-failed' (it finished but the checks fail), 'unverified' (it wrote code but no verify ran, so
+ * nothing proves it works) or 'failed' (no provider finished).
  */
 export function outcome(s) {
   if (!s?.winner) return 'failed';
   if (s.verify?.status === 'FAIL') return 'verify-failed';
   if (/RESULT:\s*\**\s*(PARTIAL|BLOCKED|FAILED|FAIL)\b/i.test(s.status || '')) return 'partial';
+  // no proof, no "done": code a worker wrote counts as done only when verify ran and passed
+  if (isWriteRun(s) && s.verify?.status !== 'PASS') return 'unverified';
   return 'done';
+}
+
+const WRITE_ROLES = new Set(['build', 'fix', 'test', 'docs']);
+const isWriteRun = (s) => (s.mode ? s.mode === 'write' : WRITE_ROLES.has(s.role));
+
+/** Exit code 4: a worker finished but nothing proved its work (no verify command), and the caller didn't choose that. */
+export const EXIT_UNVERIFIED = 4;
+export function unverifiedBlocks(s, { allowUnverified = false } = {}) {
+  return outcome(s) === 'unverified' && !allowUnverified && !s.verify?.chosen;
 }
 
 /** Commands write workers may run without a permission prompt: the usual build/test tools, the verify command, allowCommands. */
@@ -268,7 +280,7 @@ function readContextFiles(root, files, budget, extraSecret = []) {
 // ---------------- dispatch ----------------
 /**
  * Run a role with fallback.
- * opts: role, task, planPath, taskId, provider, chain, note, files, base, focus, save, noVerify, allowDirty, onEvent,
+ * opts: role, task, planPath, taskId, provider, chain, note, files, base, focus, save, noVerify, allowUnverified, allowDirty, onEvent,
  *       worktree (run in an isolated checkout on branch conductor/<id> and commit there), worktreeId, replace,
  *       continue (keep working in that task's existing worktree: a retry with a note, by the same worker by default)
  */
@@ -553,6 +565,9 @@ export async function dispatch(cfg, opts) {
       summary.verify = await runVerify(work, vs, path.join(runDir, 'verify.log'));
       if (vs !== settings) summary.verify.scope = 'task';
       if (summary.verify.log) summary.verify.log = rel(root, summary.verify.log);
+    } else {
+      // skipped on purpose: the outcome is still "unverified", but it doesn't fail the run
+      summary.verify = { status: 'SKIPPED', cmd: '', chosen: true, note: opts.noVerify ? 'skipped with --no-verify' : 'autoVerify is off in settings' };
     }
     if (useWorktree) {
       const v = summary.verify ? `verify ${summary.verify.status}` : 'not verified';
@@ -567,6 +582,7 @@ export async function dispatch(cfg, opts) {
     summary.saved = rel(root, dest);
   }
   summary.outcome = outcome(summary);
+  if (unverifiedBlocks(summary, { allowUnverified: opts.allowUnverified || settings.allowUnverified })) summary.exitCode = EXIT_UNVERIFIED;
   writeJSON(path.join(runDir, 'summary.json'), summary);
   return summary;
 }
@@ -668,6 +684,9 @@ export function formatSummary(s) {
   const out = outcome(s);
   if (out === 'partial') L.push('outcome:   PARTIAL. The worker says it did only part of the task: read the report, then finish it or retry the rest');
   if (out === 'verify-failed') L.push('outcome:   NOT DONE. The worker finished but verify fails: fix it, or retry with --note "<what failed>"');
+  if (out === 'unverified') L.push(s.verify?.chosen
+    ? 'outcome:   UNVERIFIED. Verify was skipped, so nothing proves this works: check it yourself before committing'
+    : 'outcome:   UNVERIFIED (exit 4). No verify command, so nothing proves this works. Set one: conductor init --verify "<cmd>" (or the Verify line in AGENTS.md), then run conductor verify');
   if (s.applied.length) L.push(`applied:   ${s.applied.join(', ')}`);
   if (s.rejected.length) L.push(`rejected:  ${s.rejected.join(', ')}`);
   if (s.mode === 'write') L.push(`changed:   ${s.changed.join(', ') || '(nothing)'}`);
