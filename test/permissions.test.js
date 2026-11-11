@@ -174,3 +174,17 @@ test('a worker that commits on its own is reported', async () => {
   const s = await dispatch(cfg, { role: 'fix', task: 'x', chain: ['committer'], noVerify: true });
   assert.ok(s.warnings.some((w) => /made git commits itself/.test(w)), JSON.stringify(s.warnings));
 });
+
+test('worker flags stay on supported, contained settings (Codex, OpenCode v2)', async () => {
+  const { CLI_PRESETS } = await import('../src/presets.js');
+  const codex = [...CLI_PRESETS.codex.write, ...CLI_PRESETS.codex.read].join(' ');
+  assert.ok(!codex.includes('--full-auto'), '--full-auto was removed from Codex');
+  assert.ok(!/approval_policy="?untrusted/.test(codex), 'untrusted is retired and can stop Codex from starting');
+  assert.match(codex, /approval_policy="never"/);
+  // OpenCode 2 turns these rules into an ordered list where the LAST match wins: the catch-all must come first
+  const { read, write } = CLI_PRESETS.opencode.modeEnv;
+  const rb = Object.entries(read.OPENCODE_CONFIG_CONTENT.permission.bash), wb = Object.entries(write.OPENCODE_CONFIG_CONTENT.permission.bash);
+  assert.deepEqual(rb[0], ['*', 'deny']); assert.ok(rb.slice(1).every(([, v]) => v === 'allow'));
+  assert.deepEqual(wb[0], ['*', 'allow']); assert.ok(wb.slice(1).every(([, v]) => v === 'deny'));
+  assert.equal(read.OPENCODE_CONFIG_CONTENT.permission.edit, 'deny');
+});

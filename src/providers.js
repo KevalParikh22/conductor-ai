@@ -80,6 +80,24 @@ const fmtMin = (ms) => (ms >= 3_600_000 && ms % 3_600_000 === 0 ? `${ms / 3_600_
 // Linux caps one argv string at 128 KiB; stay well below it.
 const MAX_PROMPT_ARG = 100_000;
 
+/**
+ * agy's --output-format json result → { text, status, denied, tokens }, or null when stdout isn't that JSON (an older
+ * agy, or a custom args override without the flag). Its exit code and "SUCCESS" status don't show refused actions:
+ * `denied_actions` does.
+ */
+export function parseAgyJson(stdout) {
+  const line = String(stdout || '').trim().split('\n').reverse().find((l) => l.trim().startsWith('{'));
+  let j; try { j = JSON.parse(line); } catch { return null; }
+  if (!j || typeof j !== 'object' || !('response' in j || 'status' in j)) return null;
+  const u = j.usage || {};
+  return {
+    text: typeof j.response === 'string' ? j.response : '',
+    status: j.status || '',
+    denied: Array.isArray(j.denied_actions) ? j.denied_actions.map((d) => d.action || d.display_name || '?') : [],
+    tokens: u.input_tokens != null ? { input: u.input_tokens, output: (u.output_tokens || 0) + (u.thinking_tokens || 0) } : undefined,
+  };
+}
+
 /** Run a CLI agent (antigravity, codex, opencode, kimi, claude, or a custom one). */
 export async function runCli(name, p, { mode, prompt, cwd, timeoutMs, idleTimeoutMs = 0, runDir, quotaRe, allowCommands = [] }) {
   const preset = { ...(CLI_PRESETS[p.preset] || {}), ...p };
@@ -107,7 +125,22 @@ export async function runCli(name, p, { mode, prompt, cwd, timeoutMs, idleTimeou
     `--- exit ${r.code}${r.timedOut ? (r.idle ? ' (stopped: no output)' : ' (stopped: time limit)') : ''}\n--- stdout\n${r.stdout}\n--- stderr\n${r.stderr}`;
   let text = '';
   try { text = fs.readFileSync(outFile, 'utf8'); } catch { /* none */ }
-  if (!text.trim()) text = r.stdout;
+  const agy = preset.output === 'agy-json' ? parseAgyJson(r.stdout) : null;
+  const extra = {};
+  if (agy) {
+    if (agy.tokens) extra.tokens = agy.tokens;
+    if (agy.denied.length) extra.denied = agy.denied;
+    const refused = `refused ${agy.denied.length} action(s) it needed (${[...new Set(agy.denied)].join(', ')}): headless mode can't ask for permission`;
+    if (!agy.text.trim() && agy.denied.length && !r.timedOut) {
+      return { ok: false, text: r.stderr, reason: `denied: ${[...new Set(agy.denied)].join(', ')} (add an allow rule, e.g. settings.allowCommands)`, log, ...extra };
+    }
+    if (agy.status && agy.status !== 'SUCCESS' && !r.timedOut) {
+      return { ok: false, text: agy.text || r.stderr, reason: quotaRe.test(agy.text + r.stderr) ? 'quota' : `agy status ${agy.status}`, log, ...extra };
+    }
+    if (agy.denied.length) extra.warnings = [`${name} ${refused}, so it may have skipped steps such as running tests. Check its report and the verify result`];
+    text = agy.text;
+  }
+  if (!text.trim() && !agy) text = r.stdout; // agy's JSON wrapper is not the answer
   // exit 0 with nothing on stdout is a failure (e.g. agy auto-denying a tool in headless mode); stderr says why
   if (!text.trim() && r.code === 0 && !r.timedOut && !r.error) {
     return { ok: false, text: r.stderr, reason: `empty output${r.stderr.trim() ? ': ' + r.stderr.trim().split('\n').pop().slice(0, 160) : ''}`, log };
@@ -121,8 +154,8 @@ export async function runCli(name, p, { mode, prompt, cwd, timeoutMs, idleTimeou
   }
   if (text.trim().length < 20) return { ok: false, text, reason: 'empty output', log };
   // Some CLIs exit 0 but only print a rate-limit message.
-  if (text.length < 2000 && !/RESULT:|VERDICT:/.test(text) && quotaRe.test(text)) return { ok: false, text, reason: 'quota', log };
-  return { ok: true, text, log };
+  if (text.length < 2000 && !/RESULT:|VERDICT:/.test(text) && quotaRe.test(text)) return { ok: false, text, reason: 'quota', log, ...extra };
+  return { ok: true, text, log, ...extra };
 }
 
 async function httpJson(url, { headers, body, timeoutMs }) {
