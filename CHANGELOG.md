@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **Chat models get instructions made for them** (found by the eval baseline).
+  - API workers (no tools) now get their own prompt: everything inlined, a project map (files and the names each defines), no "read the files" steps, and "reply now with the file blocks". The shared agent prompt had told them to read files, so some answered "Let me check the project first" and changed nothing.
+  - A reply with no file blocks gets **one repair turn** that shows the model what it said and asks for the files. Both turns' tokens are counted.
+  - Chat logs show the answer and the model's hidden reasoning in full, with their sizes, instead of raw JSON cut at 4,000 characters.
+- **Edit guard: broken or misnamed work is rejected before verify.**
+  - Changed files are syntax-checked: JavaScript (`node --check`), JSON, PHP (`php -l`) and Python, whichever is available.
+  - **Contract check:** a function or class the task names in a code span (`` `toQuery(…)` ``, `` `new LRUCache(2)` ``) must be defined somewhere in the project after the change. The eval baseline caught a worker that "finished" under a name of its own while its own tests passed.
+  - A rejected attempt is stashed and the next model or provider runs. `syntaxCheck: false` and `contractCheck: false` turn the checks off.
 - **`conductor eval`: measure conductor itself.**
   - 10 tasks in `evals/` (bug fixes, features, test-writing), each with a starting project, a plan, hidden tests the worker never sees and a reference solution. Test-writing tasks are scored by planted bugs the worker's tests must catch.
   - `conductor eval run [--tasks …] [--provider p | --chain a,b] [--label x] [--compare last]` runs them the way a user would, scores each against the hidden tests and reports pass rate, cost, and conductor's verdict against reality ("done" and right, **"done" but wrong**, caught, false alarm). Results are saved in `~/.config/conductor/evals/`.

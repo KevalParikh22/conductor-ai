@@ -6,9 +6,10 @@ import { providerReadiness, providerKind, readOnlyEnforced, PROJECT_DIRNAME } fr
 import { runProvider } from './providers.js';
 import * as git from './git.js';
 import { runVerify } from './verify.js';
-import { baseVerify, scopeCheck, newFailures } from './gates.js';
+import { baseVerify, scopeCheck, newFailures, syntaxErrors, missingContract } from './gates.js';
 import { checkTask, taskAcceptance, acceptancePrompt, readAcceptance } from './plancheck.js';
 import { detectVerify } from './verify.js';
+import { repoMap } from './context.js';
 import { autoModel, autoFallbacks } from './models.js';
 import { smartOrder, isFree as isFreeProvider } from './selector.js';
 import { taskProviders, matchRoute, describeRoute } from './routing.js';
@@ -285,6 +286,25 @@ function readContextFiles(root, files, budget, extraSecret = []) {
   return out;
 }
 
+// ---------------- chat workers (H7) ----------------
+const CHAT_JOB = {
+  build: 'Implement the task below, and add or update tests for the behaviour you change.',
+  fix: 'Fix the bug the task describes with the smallest complete change, and add or adjust a test that would have caught it.',
+  test: "Write tests only: do NOT change production code. Use the project's test framework and layout. Your tests must pass on the current code and fail if the behaviour in the acceptance criteria breaks.",
+  docs: 'Write or update only the documentation the task asks for. Do not change code.',
+};
+const CHAT_REPORT = `After the file blocks, end with this report:
+
+## RESULT: DONE | PARTIAL | BLOCKED
+## Files changed
+- path — one-line summary
+## Checks run
+- not run (no tool access)
+## Notes
+- assumptions, open questions, problems you noticed`;
+const CHAT_CLOSE = '\n---\nReply now, in this message: the complete <<<FILE blocks for every file the task needs, then the report. You cannot read files or run commands; everything you need is above.\n';
+const CHAT_REPAIR = 'Your reply had no <<<FILE blocks, so nothing was applied. You have no tools: you cannot read files, search or run commands, and nobody will do it for you. Everything you need is in my first message. Reply now with the complete <<<FILE blocks for every file the task needs (exact format: a line "<<<FILE path", the whole file, then a line "FILE>>>"), then the report.';
+
 // ---------------- dispatch ----------------
 /**
  * Run a role with fallback.
@@ -383,7 +403,11 @@ export async function dispatch(cfg, opts) {
   // H5: the criteria again at the very end, with how to answer them
   const criteria = mode === 'write' ? taskAcceptance(section) : [];
   const recite = acceptancePrompt(criteria);
-  const chatSystem = `${loadPrompt('_worker')}\n${loadPrompt(meta.prompt)}${mode === 'write' ? '\n' + loadPrompt('_chat_write') : ''}`;
+  // H7: chat models (no tools) get their own instructions: everything inlined, no "read the files" steps, answer now.
+  // Fixed text only, so providers can cache it (H8); the task goes in the user message.
+  const chatSystem = mode === 'write'
+    ? `${loadPrompt('_chat_worker')}\n## Your job\n${CHAT_JOB[role] || CHAT_JOB.build}\n\n${loadPrompt('_chat_write')}\n\n${CHAT_REPORT}`
+    : `${loadPrompt('_worker')}\n${loadPrompt(meta.prompt)}`;
   let work = root; // where the worker runs: the repo, or its own worktree
   const chatContext = () => {
     let ctx = '';
@@ -391,6 +415,10 @@ export async function dispatch(cfg, opts) {
     if (fs.existsSync(agents)) ctx += `# AGENTS.md (project rules, authoritative)\n${fs.readFileSync(agents, 'utf8').slice(0, 20000)}\n`;
     const notes = planText && extractSection(planText, 'Design notes');
     if (notes) ctx += `\n# Design notes from ${opts.planPath}\n${notes}\n`;
+    if (mode === 'write' && inRepo) {
+      const map = repoMap(work, { budget: settings.repoMapBytes || 6000 });
+      if (map) ctx += `\n# Project map (files, and the names each code file defines)\n${map}\n`;
+    }
     const files = [...(opts.files || []), ...taskFiles(section)];
     if (files.length) ctx += `\n# Relevant files (current content)\n${readContextFiles(work, files, settings.maxContextBytes || 60000, settings.protectedPaths || [])}`;
     return ctx;
@@ -473,7 +501,10 @@ export async function dispatch(cfg, opts) {
     }
     // chat APIs, and agents whose read mode has no tools (goose), get the project context inlined
     const inline = kind === 'chat' || (mode === 'read' && CLI_PRESETS[c.p.preset]?.readInlineContext);
-    const userPrompt = inline ? `${chatContext()}\n---\n# TASK (role: ${role})\n${body}${skillsChat.text ? `\n${skillsChat.text}` : ''}${recite}` : agentPrompt + recite;
+    const chatBody = body.replace('(read its Design notes)', '(its Design notes are included above)');
+    const userPrompt = inline
+      ? `${chatContext()}\n---\n# TASK (role: ${role})\n${chatBody}${skillsChat.text ? `\n${skillsChat.text}` : ''}${recite}${mode === 'write' ? CHAT_CLOSE : ''}`
+      : agentPrompt + recite;
     // the provider's model, then its fallback models: a model that is rate-limited is skipped until its cooldown ends
     let { models, auto } = await modelsToTry(c.name, c.p, kind);
     let timeouts = 0;
@@ -501,6 +532,15 @@ export async function dispatch(cfg, opts) {
       if (headBefore && git.head(work) !== headBefore) summary.warnings.push(`${c.name} made git commits itself (HEAD moved from ${headBefore.slice(0, 8)}). Check them with git log before merging`);
       fs.writeFileSync(path.join(runDir, `${c.name}${mi ? `.${mi + 1}` : ''}.log`), res.log || '');
 
+      // H7: a chat reply without file blocks gets one repair turn that shows the model what it said and what is needed
+      if (res.ok && kind === 'chat' && mode === 'write' && !parseFileBlocks(res.text).length && settings.chatRepair !== false) {
+        emit({ type: 'repair', provider: c.name });
+        const again = await runProvider(c.name, p, { mode, prompt: userPrompt, system: chatSystem, cwd: work, runDir: ioDir, quotaRe, ...limitFor(c.p, kind),
+          history: [{ role: 'assistant', content: res.text.slice(0, 8000) }, { role: 'user', content: CHAT_REPAIR }] });
+        const sum = (a, b) => (a || b ? { input: (a?.input || 0) + (b?.input || 0), output: (a?.output || 0) + (b?.output || 0) } : undefined);
+        res = { ...(again.ok ? again : { ...res, text: res.text }), tokens: sum(res.tokens, again.tokens), log: `${res.log}\n\n==== repair turn ====\n${again.log || ''}`, repaired: true };
+        fs.writeFileSync(path.join(runDir, `${c.name}${mi ? `.${mi + 1}` : ''}.log`), res.log || '');
+      }
       if (res.ok && kind === 'chat' && mode === 'write') {
         const blocks = parseFileBlocks(res.text);
         const { applied, rejected } = applyFileBlocks(work, blocks, protectedExtra);
@@ -508,8 +548,23 @@ export async function dispatch(cfg, opts) {
         if (!applied.length) res = { ...res, ok: false, reason: rejected.length ? 'only protected/outside files returned' : 'no file blocks in reply' };
         else summary.applied = applied;
       }
+      // H6: the edit guard. Broken syntax, or a function/class the task names that still doesn't exist anywhere,
+      // rejects the attempt before verify (its edits are stashed and the next provider or model runs)
+      let guard = null;
+      if (res.ok && mode === 'write' && inRepo) {
+        const edited = git.changedFiles(work).filter((f) => !preDirty.has(f));
+        const syntax = settings.syntaxCheck === false ? [] : syntaxErrors(work, edited);
+        const missing = settings.contractCheck === false || !section ? [] : missingContract(work, section);
+        if (syntax.length || missing.length) {
+          guard = { syntax, missing };
+          res = { ...res, ok: false, reason: syntax.length ? `syntax error in ${syntax.map((x) => x.file).join(', ')}` : `missing from the code: ${missing.join(', ')} (the task names ${missing.length > 1 ? 'them' : 'it'})` };
+          summary.warnings.push(`${c.name}: ${syntax.length ? syntax.map((x) => `${x.file}: ${x.error}`).join('; ') : `the task names ${missing.join(', ')}, but the code doesn't define ${missing.length > 1 ? 'them' : 'it'}`}`);
+        }
+      }
       const attempt = { provider: c.name, kind, ok: res.ok, reason: res.ok ? 'ok' : res.reason, seconds: Math.round((Date.now() - t0) / 100) / 10 };
       if (p.model) attempt.model = p.model;
+      if (res.repaired) attempt.repaired = true;
+      if (guard) attempt.guard = guard;
       if (res.tokens) { attempt.tokens = res.tokens; attempt.cost = estimateCost(c.p, res.tokens); }
       if (res.denied?.length) attempt.denied = res.denied;
       if (res.ok && res.warnings?.length) summary.warnings.push(...res.warnings);
