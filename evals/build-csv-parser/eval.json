@@ -1,0 +1,9 @@
+{
+  "title": "Build an RFC 4180 CSV parser",
+  "role": "build",
+  "difficulty": "hard",
+  "tags": [
+    "parsing",
+    "edge-cases"
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "title": "Fix interval merging (touching, contained, mutation)",
+  "role": "fix",
+  "difficulty": "medium",
+  "tags": [
+    "bug",
+    "arrays"
+  ]
+}

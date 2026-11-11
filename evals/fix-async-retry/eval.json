@@ -1,0 +1,9 @@
+{
+  "title": "Fix an async retry helper",
+  "role": "fix",
+  "difficulty": "medium",
+  "tags": [
+    "bug",
+    "async"
+  ]
+}

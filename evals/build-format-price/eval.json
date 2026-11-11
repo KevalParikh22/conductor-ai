@@ -1,0 +1,9 @@
+{
+  "title": "Add formatPrice without touching unrelated code",
+  "role": "build",
+  "difficulty": "easy",
+  "tags": [
+    "scope",
+    "i18n"
+  ]
+}

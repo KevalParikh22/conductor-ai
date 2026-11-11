@@ -54,7 +54,8 @@
     ".antigravity-plugin",
     ".mcp.json",
     "mcp_config.json",
-    "assets"
+    "assets",
+    "evals"
   ],
   "engines": {
     "node": ">=20"

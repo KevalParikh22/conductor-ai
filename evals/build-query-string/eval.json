@@ -1,0 +1,9 @@
+{
+  "title": "Build a query-string encoder",
+  "role": "build",
+  "difficulty": "easy",
+  "tags": [
+    "strings",
+    "encoding"
+  ]
+}

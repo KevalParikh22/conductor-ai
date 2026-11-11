@@ -1,0 +1,9 @@
+{
+  "title": "Fix pagination off-by-one",
+  "role": "fix",
+  "difficulty": "easy",
+  "tags": [
+    "bug",
+    "arrays"
+  ]
+}

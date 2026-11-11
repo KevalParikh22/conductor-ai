@@ -30,6 +30,8 @@ export function listRuns(root, { limit = 20 } = {}) {
       warnings: s.warnings || [],
       outside: s.scope?.outside || [],
       base: s.base?.status || null,
+      acceptance: s.acceptance ? { met: s.acceptance.met, total: s.acceptance.total, answered: s.acceptance.answered } : null,
+      baseFailed: !!s.verify?.baseFailed,
       attempts: tried.map((a) => ({ provider: a.provider, model: a.model, ok: a.ok, reason: a.reason, seconds: a.seconds })),
       seconds: Math.round(tried.reduce((t, a) => t + (a.seconds || 0), 0)),
       cost: known.length ? known.reduce((t, a) => t + a.cost, 0) : null,

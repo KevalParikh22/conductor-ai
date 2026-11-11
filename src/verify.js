@@ -45,6 +45,7 @@ export async function runVerify(root, settings, logFile) {
   // verify runs code the worker may have written: it gets your environment minus conductor's API keys
   const env = { ...process.env };
   for (const k of SECRET_VARS) delete env[k];
+  delete env.NODE_TEST_CONTEXT; // set when conductor itself runs under node --test: the project's tests would report to it
   const r = await run(shell, args, { cwd: root, env, timeoutMs: (settings.timeoutSec || 1200) * 1000 });
   if (logFile) fs.writeFileSync(logFile, `$ ${cmd}\n--- exit ${r.code}\n${r.stdout}\n${r.stderr}`);
   return { status: r.code === 0 ? 'PASS' : 'FAIL', cmd, log: logFile, tail: (r.stdout + r.stderr).split('\n').slice(-25).join('\n') };

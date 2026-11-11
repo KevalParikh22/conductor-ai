@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **`conductor eval`: measure conductor itself.**
+  - 10 tasks in `evals/` (bug fixes, features, test-writing), each with a starting project, a plan, hidden tests the worker never sees and a reference solution. Test-writing tasks are scored by planted bugs the worker's tests must catch.
+  - `conductor eval run [--tasks …] [--provider p | --chain a,b] [--label x] [--compare last]` runs them the way a user would, scores each against the hidden tests and reports pass rate, cost, and conductor's verdict against reality ("done" and right, **"done" but wrong**, caught, false alarm). Results are saved in `~/.config/conductor/evals/`.
+  - `conductor eval check` proves every task is fair with no LLM: it fails on the starting project and passes with the reference solution. It runs in CI.
+- **`conductor stats --failures`** groups failed attempts and runs by cause, biggest first, so the top cause is fixed first.
+- **Tests and verify run in a clean environment** (`NODE_TEST_CONTEXT` removed), so a project's `node --test` can't misreport when conductor itself runs under a test runner.
 - **Plan check: vague tasks never reach a worker.**
   - `conductor plan check <plan>` (and the MCP tool `conductor_plan_check`) lists each task as ready or not, with exactly what is missing. The same check runs before `run` and `batch` hand out a task.
   - A write task needs: `files:`, acceptance criteria a check can confirm (not "works" or "done"), a verify command (the task's or the project's), and at most `maxTaskFiles` (4) files besides tests.

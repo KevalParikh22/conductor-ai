@@ -10,6 +10,8 @@ import { listSkills, setSkillOn, newSkill, addSkill, removeSkill, syncSkills, gl
 import { statusReport, statusData } from '../src/status.js';
 import { runVerify, detectVerify } from '../src/verify.js';
 import { checkPlan, formatPlanCheck } from '../src/plancheck.js';
+import { listEvals, checkEvals, runEvals, formatEvals, loadResult } from '../src/evals.js';
+import { failureStats, formatFailureStats } from '../src/stats.js';
 import { initProject, setupGlobal } from '../src/init.js';
 import { startMcpServer } from '../src/mcp.js';
 import { testProvider } from '../src/providers.js';
@@ -79,6 +81,9 @@ Work (normally called by the controller)
   conductor route "task" [--role r] [--files a,b] | --plan f --task T1   which providers would take a task, and why
   conductor route --rules | --templates | --add starter|<id,id> | --rm <n> [--global]   list, add or remove routing rules
   conductor plan check <file> [--task T1,T2]   is each task ready for a worker? (files, checkable acceptance, verify, size)
+  conductor eval [list] | check | run [--tasks a,b] [--provider p | --chain a,b] [--label x] [--compare last|<file>] [--keep]
+                                       measure conductor on fixed tasks with hidden tests (check = prove the tasks are fair, no LLM)
+  conductor stats --failures [--days 30]   why work fails, biggest cause first
   conductor verify                     run the project's verify command
   conductor skills [list] | new <name> | add <path> | on|off <name> | rm <name> | sync   one skill library for every controller and worker
   conductor retry <task> --note "…" [--provider p]   the task's worker continues in its worktree with your note
@@ -240,7 +245,7 @@ function timeoutOpt(o) {
 
 function parseArgs(argv) {
   const opts = { _: [] };
-  const flags = new Set(['no-verify', 'allow-dirty', 'json', 'live', 'no-open', 'no-mcp', 'all', 'clear', 'global', 'help', 'version', 'worktree', 'replace', 'force', 'allow-open-questions', 'vscode', 'yes', 'free', 'project', 'details', 'enable', 'rules', 'templates', 'continue', 'share', 'allow-unverified', 'allow-scope', 'allow-weak-plan']);
+  const flags = new Set(['no-verify', 'allow-dirty', 'json', 'live', 'no-open', 'no-mcp', 'all', 'clear', 'global', 'help', 'version', 'worktree', 'replace', 'force', 'allow-open-questions', 'vscode', 'yes', 'free', 'project', 'details', 'enable', 'rules', 'templates', 'continue', 'share', 'allow-unverified', 'allow-scope', 'allow-weak-plan', 'keep', 'failures']);
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '-h') { opts.help = true; continue; }
@@ -321,6 +326,39 @@ async function main() {
       if (!rows.length) throw new UsageError(`no tasks found in ${file} (expected headings like "### T1: title")`);
       console.log(o.json ? JSON.stringify(rows, null, 2) : formatPlanCheck(file, rows));
       return rows.some((r) => r.problems.length) ? 1 : 0;
+    }
+    case 'eval': case 'evals': {
+      const sub = o._[0] || 'list';
+      const ids = o.tasks ? String(o.tasks).split(',').map((x) => x.trim()).filter(Boolean) : undefined;
+      if (sub === 'list') {
+        const all = listEvals();
+        for (const t of all) console.log(`${t.id.padEnd(24)} ${String(t.role).padEnd(6)} ${String(t.difficulty || '').padEnd(7)} ${t.title}`);
+        console.log(`\n${all.length} tasks. conductor eval run   runs them all with your routing (uses your providers; one at a time)`);
+        return 0;
+      }
+      if (sub === 'check') {
+        const rows = await checkEvals({ ids });
+        for (const r of rows) console.log(`${r.problems.length ? '✗' : '✓'} ${r.id}${r.problems.length ? `\n    - ${r.problems.join('\n    - ')}` : ''}`);
+        console.log(`\n${rows.filter((r) => !r.problems.length).length}/${rows.length} tasks are fair (fail before, pass with the reference solution).`);
+        return rows.some((r) => r.problems.length) ? 1 : 0;
+      }
+      if (sub !== 'run') throw new UsageError('usage: conductor eval [list | check | run]');
+      const rep = await runEvals({
+        ids, provider: o.provider, chain: o.chain ? String(o.chain).split(',').map((x) => x.trim()).filter(Boolean) : undefined, keep: o.keep, label: o.label || '',
+        onEvent: o.json ? undefined : (e) => {
+          const m = { start: 'starting', try: `trying ${e.provider}…`, fail: `${e.provider} failed: ${e.reason}`, ok: `${e.provider} finished`, verify: 'running verify…', scored: `${e.pass ? 'PASS' : 'FAIL'} (conductor said: ${e.outcome})` }[e.type];
+          if (m) process.stderr.write(`eval [${e.task}]: ${m}\n`);
+        },
+      });
+      const prev = o.compare ? loadResult(o.compare, rep.file) : null;
+      console.log(o.json ? JSON.stringify(rep, null, 2) : formatEvals(rep, prev));
+      return 0;
+    }
+    case 'stats': {
+      if (!o.failures) throw new UsageError('usage: conductor stats --failures [--days 30]');
+      const st = failureStats({ root: findProjectRoot(), days: Number(o.days) || 30 });
+      console.log(o.json ? JSON.stringify(st, null, 2) : formatFailureStats(st));
+      return 0;
     }
     case 'route': {
       const cfg = loadConfig();

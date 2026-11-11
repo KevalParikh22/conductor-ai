@@ -288,6 +288,7 @@ AGENTS.md
   - A worker is stopped at 20 minutes, or 2× a task's `eta:`, or the `--timeout` you give. Everything it started is stopped too, and the next provider runs.
   - Free API routes give up after 90 seconds, since they sometimes hang.
 - **If every worker fails:** exit code 3. The controller does the task itself.
+- **Measure it: `conductor eval`.** A suite of fixed tasks (bug fixes, features, test-writing) with hidden tests the worker never sees. `conductor eval run` runs them with your routing (or `--provider` / `--chain`), scores each against the hidden tests, and compares conductor's verdict with reality: the key number is **"done" but wrong**. `--compare last` shows the change since the previous run. `conductor eval check` proves every task is fair without any LLM. `conductor stats --failures` lists why work failed, biggest cause first.
 - **Plans are checked before work starts:** `conductor plan check <plan>` (also run automatically, and the MCP tool `conductor_plan_check`). A write task needs `files:`, acceptance criteria a check can confirm, a verify command and at most 4 files besides tests; otherwise conductor refuses it and says what is missing. `--allow-weak-plan` overrides.
 - **Acceptance is answered, not assumed:** the task's criteria are repeated at the end of the worker's prompt, and the worker must answer each one with evidence in an `## Acceptance` section. A DONE that leaves any unanswered or unmet is **partial**.
 - **Checks before and after a task:**
