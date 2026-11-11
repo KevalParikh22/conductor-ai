@@ -1,0 +1,12 @@
+{
+  "title": "Write tests that catch real cart bugs",
+  "role": "test",
+  "difficulty": "medium",
+  "tags": [
+    "testing"
+  ],
+  "score": "mutants",
+  "protect": [
+    "src/cart.js"
+  ]
+}

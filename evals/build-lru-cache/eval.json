@@ -1,0 +1,8 @@
+{
+  "title": "Build an LRU cache",
+  "role": "build",
+  "difficulty": "medium",
+  "tags": [
+    "data-structures"
+  ]
+}

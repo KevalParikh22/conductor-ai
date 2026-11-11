@@ -1,0 +1,9 @@
+{
+  "title": "Build slugify with accents and word-boundary cut",
+  "role": "build",
+  "difficulty": "medium",
+  "tags": [
+    "strings",
+    "unicode"
+  ]
+}
