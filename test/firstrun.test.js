@@ -182,3 +182,30 @@ test('UI: picking a controller is a project action, not part of Save (Save to gl
   assert.doesNotMatch(html, /W\.controller = r\.value; markDirty\(\)/);
   assert.match(html, /Switch this project to/);
 });
+
+test('init --verify sets the Verify line; without any verify command init says results will be unverified', async () => {
+  const { initProject } = await import('../src/init.js');
+  const { dir, git } = makeRepo();
+  git('rm', '-q', 'package.json'); git('commit', '-qm', 'no scripts');
+  let r = initProject(dir, {});
+  assert.ok(r.notes.some((n) => /No verify command found[\s\S]*unverified[\s\S]*conductor init --verify/.test(n)));
+  r = initProject(dir, { verify: 'make check' });
+  assert.match(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), /^- \*\*Verify \(must pass before any task is "done"\):\*\* `make check`$/m);
+  assert.ok(r.lines.some((l) => /updated +AGENTS\.md \(Verify: make check\)/.test(l)));
+  assert.ok(!r.notes.some((n) => /No verify command/.test(n)));
+  r = initProject(dir, { verify: 'make check' });
+  assert.ok(r.lines.some((l) => /kept +AGENTS\.md \(Verify: make check\)/.test(l)), 'running it again changes nothing');
+  const fresh = makeRepo().dir;
+  initProject(fresh, { verify: 'npm run ci' });
+  assert.match(fs.readFileSync(path.join(fresh, 'AGENTS.md'), 'utf8'), /`npm run ci`/, 'beats the detected command');
+});
+
+test('runs list shows unverified work', async () => {
+  const { listRuns, formatRuns } = await import('../src/runs.js');
+  const { dir } = makeRepo();
+  const d = path.join(dir, '.conductor', 'runs', '20261111-000001-build'); fs.mkdirSync(d, { recursive: true });
+  fs.writeFileSync(path.join(d, 'summary.json'), JSON.stringify({ role: 'build', mode: 'write', attempts: [], winner: 'x', status: '## RESULT: DONE', verify: { status: 'SKIPPED' }, changed: [] }));
+  const rows = listRuns(dir);
+  assert.equal(rows[0].state, 'unverified');
+  assert.match(formatRuns(rows), /\? unverif/);
+});

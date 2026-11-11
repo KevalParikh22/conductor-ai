@@ -238,7 +238,7 @@ Every one has a setup guide: **[docs/providers](docs/providers/README.md)**. See
 | `conductor runs [show <run>]` · `conductor usage [--days 7]` | Run history; runs, tokens and cost per provider |
 | `conductor models [provider]` · `conductor cooldown [--clear]` · `conductor mcp` | Model lists, rate-limit state, MCP server |
 
-Exit codes: `0` ok · `2` usage or unsafe repo state · `3` every provider failed (the controller takes over).
+Exit codes: `0` ok · `2` usage or unsafe repo state · `3` every provider failed (the controller takes over) · `4` code written but not verified (no verify command; `--allow-unverified` accepts it).
 
 </details>
 

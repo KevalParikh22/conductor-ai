@@ -192,3 +192,40 @@ test('exit 0 with empty stdout fails over to the next provider, keeping the stde
   assert.match(s.attempts[0].reason, /^empty output: .*auto-denied/);
   assert.equal(s.winner, 'codex-cli');
 });
+
+test('no proof, no "done": code with no verify command ends unverified (exit 4) unless skipped or allowed', async () => {
+  clearCooldowns();
+  const noVerifyRepo = () => {
+    const r = makeRepo({ files: { 'docs/plan/p.md': PLAN, 'src/.keep': '' } });
+    r.git('rm', '-q', 'package.json'); r.git('commit', '-qm', 'no scripts');
+    return r.dir;
+  };
+  const { formatSummary, outcome } = await import('../src/core.js');
+  let dir = noVerifyRepo();
+  let s = await dispatch(cfgFor(dir), { role: 'build', planPath: 'docs/plan/p.md', taskId: 'T1', chain: ['codex-cli'] });
+  assert.equal(s.winner, 'codex-cli');
+  assert.equal(s.verify.status, 'SKIPPED');
+  assert.equal(s.outcome, 'unverified');
+  assert.equal(s.exitCode, 4);
+  assert.match(formatSummary(s), /outcome: +UNVERIFIED \(exit 4\)/);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dir, s.runDir, 'summary.json'), 'utf8')).outcome, 'unverified');
+
+  dir = noVerifyRepo();
+  s = await dispatch(cfgFor(dir), { role: 'build', planPath: 'docs/plan/p.md', taskId: 'T1', chain: ['codex-cli'], allowUnverified: true });
+  assert.equal(s.outcome, 'unverified', 'allowed, but still reported honestly');
+  assert.equal(s.exitCode, 0);
+
+  dir = noVerifyRepo();
+  s = await dispatch(cfgFor(dir), { role: 'build', planPath: 'docs/plan/p.md', taskId: 'T1', chain: ['codex-cli'], noVerify: true });
+  assert.deepEqual([s.outcome, s.exitCode, s.verify.chosen], ['unverified', 0, true]);
+  assert.match(formatSummary(s), /Verify was skipped/);
+
+  // with a verify command that passes, the same work is done
+  const ok = makeRepo({ files: { 'docs/plan/p.md': PLAN, 'src/.keep': '' } }).dir;
+  s = await dispatch(cfgFor(ok), { role: 'build', planPath: 'docs/plan/p.md', taskId: 'T1', chain: ['codex-cli'] });
+  assert.deepEqual([s.verify.status, s.outcome, s.exitCode], ['PASS', 'done', 0]);
+
+  // read roles never need verify; old summaries without `mode` use the role
+  assert.equal(outcome({ winner: 'x', role: 'review', status: '## VERDICT: APPROVE' }), 'done');
+  assert.equal(outcome({ winner: 'x', role: 'build', status: '## RESULT: DONE' }), 'unverified');
+});

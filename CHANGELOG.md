@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **No proof, no "done".**
+  - Code a worker writes counts as done only when the verify command ran and passed.
+  - Without a verify command, the outcome is the new **unverified**, and `conductor run` exits with **4**. A batch counts it separately (`?`) and exits 3.
+  - `--no-verify`, `--allow-unverified` (or the `allowUnverified` setting) accept it on purpose; the outcome still says unverified.
+  - `conductor init --verify "<cmd>"` sets the Verify line in AGENTS.md, and `init` warns when the project has no verify command.
+  - The Runs page, `conductor runs` and the MCP tools show it.
 - **Claude Code and Antigravity plugin.**
   - **What it brings:** in one install, the 9 `conduct-*` skills, conductor's MCP server and a startup check that says when the CLI is missing or the project isn't set up.
   - **Claude Code:** `/plugin install conductor-ai --marketplace KevalParikh22/conductor-ai`.

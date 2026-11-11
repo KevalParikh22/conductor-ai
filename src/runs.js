@@ -20,7 +20,7 @@ export function listRuns(root, { limit = 20 } = {}) {
     const known = s.attempts.filter((a) => a.cost != null);
     return {
       id,
-      state: s.outcome || outcome(s), // done | partial | verify-failed | failed
+      state: s.outcome || outcome(s), // done | partial | unverified | verify-failed | failed
       startedAt: s.startedAt || null,
       role: s.role, task: s.task, plan: s.plan,
       winner: s.winner, model: s.model,
@@ -55,7 +55,7 @@ export function formatRuns(rows) {
   for (const r of rows) {
     if (r.state === 'running') { L.push(`${r.id.padEnd(30)}running…`); continue; }
     const notes = [r.branch && `branch ${r.branch}`, r.warnings.length && `${r.warnings.length} warning(s)`, r.cost && `$${r.cost.toFixed(4)}`].filter(Boolean).join(' · ');
-    L.push(`${r.id.slice(0, 29).padEnd(30)}${({ done: '✓ done', partial: '⚠ partial', 'verify-failed': '✗ verify' }[r.state] || '✗ failed').padEnd(10)}${(r.winner || '-').padEnd(18)}${(r.verify || '-').padEnd(8)}${String(r.changed).padStart(6)}${`${r.seconds}s`.padStart(7)}  ${notes}`);
+    L.push(`${r.id.slice(0, 29).padEnd(30)}${({ done: '✓ done', partial: '⚠ partial', unverified: '? unverif', 'verify-failed': '✗ verify' }[r.state] || '✗ failed').padEnd(10)}${(r.winner || '-').padEnd(18)}${(r.verify || '-').padEnd(8)}${String(r.changed).padStart(6)}${`${r.seconds}s`.padStart(7)}  ${notes}`);
   }
   L.push('', 'Details: conductor runs show <run>');
   return L.join('\n');
