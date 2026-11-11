@@ -62,7 +62,7 @@ export function spreadChains(cfg, items, { provider } = {}) {
 }
 
 /** Run tasks with at most `concurrency` at once. Results come back in task order. */
-export async function runBatch(cfg, { planPath, tasks, role, provider, concurrency, noVerify, allowUnverified, replace, note, allowOpenQuestions, timeoutMs, onEvent }) {
+export async function runBatch(cfg, { planPath, tasks, role, provider, concurrency, noVerify, allowUnverified, allowScope, replace, note, allowOpenQuestions, timeoutMs, onEvent }) {
   const { items, warnings } = planBatch(cfg, { planPath, tasks, role, allowOpenQuestions });
   const work = spreadChains(cfg, items, { provider });
   const limit = Math.max(1, Math.min(Number(concurrency) || 4, work.length));
@@ -76,7 +76,7 @@ export async function runBatch(cfg, { planPath, tasks, role, provider, concurren
       emit({ type: 'start', provider: t.chain[0] });
       try {
         const s = await dispatch(cfg, {
-          role: t.role, planPath, taskId: t.id, chain: t.chain, note, noVerify, allowUnverified, timeoutMs,
+          role: t.role, planPath, taskId: t.id, chain: t.chain, note, noVerify, allowUnverified, allowScope, timeoutMs,
           worktree: true, worktreeId: t.id, replace, allowOpenQuestions, onEvent: emit,
         });
         results[i] = { task: t.id, role: t.role, summary: s };
@@ -91,9 +91,10 @@ export async function runBatch(cfg, { planPath, tasks, role, provider, concurren
   const ok = results.filter((r) => r.outcome === 'done').length;
   const partial = results.filter((r) => r.outcome === 'partial').length;
   const unverified = results.filter((r) => r.outcome === 'unverified').length;
+  const outOfScope = results.filter((r) => r.outcome === 'out-of-scope').length;
   // unverified work fails the batch too, unless the caller skipped or allowed it
   const accepted = ok + results.filter((r) => r.outcome === 'unverified' && !unverifiedBlocks(r.summary, { allowUnverified: allowUnverified || cfg.settings?.allowUnverified })).length;
-  return { plan: planPath, warnings, results, ok, partial, unverified, failed: results.length - ok - partial - unverified, exitCode: accepted === results.length ? 0 : 3 };
+  return { plan: planPath, warnings, results, ok, partial, unverified, outOfScope, failed: results.length - ok - partial - unverified - outOfScope, exitCode: accepted === results.length ? 0 : 3 };
 }
 
 export function formatBatch(b) {
@@ -105,12 +106,12 @@ export function formatBatch(b) {
     if (!s.winner) { L.push(`${r.task.padEnd(6)} ✗ every provider failed: ${s.attempts.map((a) => `${a.provider}${a.model ? `[${a.model}]` : ''}(${a.reason})`).join(' → ')}`); continue; }
     const v = s.verify ? `verify ${s.verify.status}` : 'not verified';
     const c = s.worktree.commit ? `${s.worktree.commit} on ${s.worktree.branch}` : 'no changes';
-    const mark = { done: '✓', partial: '⚠', unverified: '?', 'verify-failed': '✗' }[r.outcome] || '✓';
-    const why = r.outcome === 'partial' ? ` · ${(s.status || '').replace(/^#+\s*/, '')}` : '';
+    const mark = { done: '✓', partial: '⚠', 'out-of-scope': '⚠', unverified: '?', 'verify-failed': '✗' }[r.outcome] || '✓';
+    const why = r.outcome === 'partial' ? ` · ${(s.status || '').replace(/^#+\s*/, '')}` : r.outcome === 'out-of-scope' ? ` · outside its files: ${s.scope.outside.join(', ')}` : '';
     L.push(`${r.task.padEnd(6)} ${mark} ${s.winner} · ${v}${s.verify?.scope === 'task' ? ' (task)' : ''} · ${c} · ${s.changed.length} file(s)${why}`);
     for (const w of s.warnings) L.push(`         WARNING: ${w}`);
   }
-  L.push(`result:    ${b.ok} done, ${b.partial ? `${b.partial} partial, ` : ''}${b.unverified ? `${b.unverified} unverified, ` : ''}${b.failed} failed`);
+  L.push(`result:    ${b.ok} done, ${b.partial ? `${b.partial} partial, ` : ''}${b.outOfScope ? `${b.outOfScope} out of scope, ` : ''}${b.unverified ? `${b.unverified} unverified, ` : ''}${b.failed} failed`);
   if (b.results.some((r) => r.summary?.verify?.scope === 'task')) L.push('verify:    "(task)" = the task\'s own verify line from the plan; run `conductor verify` after merging');
   L.push('next:      for each ✓: review `conductor diff conductor/<id>`, then `git merge --no-ff conductor/<id>`; afterwards `conductor worktree rm <id>`.');
   if (b.unverified) L.push('           For each ?: no verify ran, so nothing proves it works. Set a verify command (conductor init --verify "<cmd>"), or check it yourself before merging.');

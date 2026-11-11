@@ -322,6 +322,8 @@ export const DEFAULT_SETTINGS = {
   requireCleanTree: true,
   verify: '',
   autoVerify: true,
+  checkBase: true, // run verify on the starting commit first (cached per commit), so old failures aren't blamed on a worker
+  scopeAllow: [], // files workers may change without the task listing them (globs), besides lockfiles and snapshots
   dailyBudgetUSD: 0, // 0 = no cap; counts API providers that have a `price` set
   cooldownMinutes: 30,
   maxDiffBytes: 100000,

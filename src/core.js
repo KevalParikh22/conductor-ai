@@ -6,6 +6,7 @@ import { providerReadiness, providerKind, readOnlyEnforced, PROJECT_DIRNAME } fr
 import { runProvider } from './providers.js';
 import * as git from './git.js';
 import { runVerify } from './verify.js';
+import { baseVerify, scopeCheck, newFailures } from './gates.js';
 import { autoModel, autoFallbacks } from './models.js';
 import { smartOrder, isFree as isFreeProvider } from './selector.js';
 import { taskProviders, matchRoute, describeRoute } from './routing.js';
@@ -162,13 +163,15 @@ export function chooseChain(cfg, role, { provider, chain, section = '', body = '
 }
 /**
  * How a finished run ended: 'done', 'partial' (the worker says it did only part: RESULT PARTIAL / BLOCKED /
- * FAILED), 'verify-failed' (it finished but the checks fail), 'unverified' (it wrote code but no verify ran, so
+ * FAILED), 'verify-failed' (it finished but the checks fail), 'out-of-scope' (it changed files the task doesn't
+ * list), 'unverified' (it wrote code but no verify ran, so
  * nothing proves it works) or 'failed' (no provider finished).
  */
 export function outcome(s) {
   if (!s?.winner) return 'failed';
   if (s.verify?.status === 'FAIL') return 'verify-failed';
   if (/RESULT:\s*\**\s*(PARTIAL|BLOCKED|FAILED|FAIL)\b/i.test(s.status || '')) return 'partial';
+  if (s.scope?.outside?.length && !s.scope.allowed) return 'out-of-scope';
   // no proof, no "done": code a worker wrote counts as done only when verify ran and passed
   if (isWriteRun(s) && s.verify?.status !== 'PASS') return 'unverified';
   return 'done';
@@ -421,6 +424,23 @@ export async function dispatch(cfg, opts) {
   if (picked.how === 'selector' && picked.note) summary.selector = picked.note;
   if (skillsAgent.names.length) summary.skills = skillsAgent.names;
   if (picked.how === 'plan' || picked.how === 'route') summary.route = picked.note;
+  // H4: verify the starting commit first (cached per commit), so failures that were already there aren't blamed on
+  // the worker. Before preDirty: anything the check itself leaves behind (build output) isn't credited to the worker.
+  const verifyOn = mode === 'write' && inRepo && settings.autoVerify !== false && !opts.noVerify;
+  const taskVerifyCmd = useWorktree ? (section.match(/\*\*verify:\*\*\s*`([^`]+)`/i) || [])[1]?.trim() : '';
+  const verifySettings = taskVerifyCmd && !taskVerifyCmd.includes('<') ? { ...settings, verify: taskVerifyCmd } : settings;
+  if (verifyOn && settings.checkBase !== false && !opts.continue) {
+    emit({ type: 'base' });
+    const b = await baseVerify(root, work, verifySettings, path.join(runDir, 'base-verify.log'));
+    if (b) {
+      summary.base = { status: b.status, cmd: b.cmd, head: b.head, cached: !!b.cached, log: b.log ? rel(root, b.log) : null, failures: (b.failures || []).slice(0, 50) };
+      if (b.status === 'FAIL') {
+        summary.warnings.push(`verify already fails on the starting commit ${b.head} (${b.cmd}), before any worker change. Those failures are not this worker's; see ${summary.base.log}`);
+        const note = `\n## Note: the project's checks already fail before your change\n\`${b.cmd}\` fails on the starting commit. Failing lines:\n\`\`\`\n${(b.failures || []).slice(0, 15).join('\n') || '(see the log)'}\n\`\`\`\nDon't fix failures unrelated to your task, and don't add new ones. In your report, say which failures were already there.\n`;
+        body += note; agentPrompt += note;
+      }
+    }
+  }
   // files already modified before the run (allowed with --allow-dirty): can't be credited to the worker
   const preDirty = mode === 'write' && inRepo ? new Set(git.changedFiles(work)) : new Set();
   let winnerText = '', lastPromptChars = 0;
@@ -559,13 +579,20 @@ export async function dispatch(cfg, opts) {
       summary.evidence = { claimed: ev.claimed, notChanged: ev.notChanged, notReported: ev.notReported };
       summary.warnings.push(...ev.warnings);
     }
+    // Q5: files the worker changed that the task doesn't list
+    const listed = taskFiles(section).flatMap(expandBraces);
+    const sc = scopeCheck(summary.changed.filter((f) => !preDirty.has(f)), listed, { allow: settings.scopeAllow || [] });
+    if (sc) summary.scope = { listed, outside: sc.outside, ...(sc.outside.length && (opts.allowScope || settings.allowScope) ? { allowed: true } : {}) };
     if (settings.autoVerify !== false && !opts.noVerify) {
       emit({ type: 'verify' });
-      // in a worktree, other parallel tasks' work is missing, so prefer the task's own verify line from the plan
-      const taskVerify = useWorktree ? (section.match(/\*\*verify:\*\*\s*`([^`]+)`/i) || [])[1]?.trim() : '';
-      const vs = taskVerify && !taskVerify.includes('<') ? { ...settings, verify: taskVerify } : settings;
-      summary.verify = await runVerify(work, vs, path.join(runDir, 'verify.log'));
-      if (vs !== settings) summary.verify.scope = 'task';
+      // in a worktree, other parallel tasks' work is missing, so the task's own verify line from the plan is preferred
+      summary.verify = await runVerify(work, verifySettings, path.join(runDir, 'verify.log'));
+      if (verifySettings !== settings) summary.verify.scope = 'task';
+      if (summary.verify.status === 'FAIL' && summary.base?.status === 'FAIL') {
+        summary.verify.baseFailed = true;
+        let after = ''; try { after = fs.readFileSync(summary.verify.log, 'utf8'); } catch { /* no log */ }
+        summary.verify.newFailures = newFailures(summary.base.failures, after).slice(0, 10);
+      }
       if (summary.verify.log) summary.verify.log = rel(root, summary.verify.log);
     } else {
       // skipped on purpose: the outcome is still "unverified", but it doesn't fail the run
@@ -685,13 +712,19 @@ export function formatSummary(s) {
   L.push(`status:    ${s.status || '(no RESULT/VERDICT line, so read the report)'}`);
   const out = outcome(s);
   if (out === 'partial') L.push('outcome:   PARTIAL. The worker says it did only part of the task: read the report, then finish it or retry the rest');
-  if (out === 'verify-failed') L.push('outcome:   NOT DONE. The worker finished but verify fails: fix it, or retry with --note "<what failed>"');
+  if (out === 'verify-failed') L.push(s.verify?.baseFailed
+    ? `outcome:   NOT PROVEN. Verify already failed before the worker started, so it can't prove this work. ${s.verify.newFailures?.length ? `${s.verify.newFailures.length} failure line(s) are new: check them first` : 'No new failure lines: the worker probably added no new failures'}`
+    : 'outcome:   NOT DONE. The worker finished but verify fails: fix it, or retry with --note "<what failed>"');
+  if (out === 'out-of-scope') L.push(`outcome:   OUT OF SCOPE. The worker changed files the task doesn't list: ${s.scope.outside.join(', ')}. Check them in the diff: if they're needed, accept the work (and list them next time); if not, revert them or retry with --note`);
   if (out === 'unverified') L.push(s.verify?.chosen
     ? 'outcome:   UNVERIFIED. Verify was skipped, so nothing proves this works: check it yourself before committing'
     : 'outcome:   UNVERIFIED (exit 4). No verify command, so nothing proves this works. Set one: conductor init --verify "<cmd>" (or the Verify line in AGENTS.md), then run conductor verify');
   if (s.applied.length) L.push(`applied:   ${s.applied.join(', ')}`);
   if (s.rejected.length) L.push(`rejected:  ${s.rejected.join(', ')}`);
   if (s.mode === 'write') L.push(`changed:   ${s.changed.join(', ') || '(nothing)'}`);
+  if (s.base) L.push(`base:      verify ${s.base.status} on the starting commit ${s.base.head}${s.base.cached ? ' (cached)' : ''}${s.base.status === 'FAIL' ? `, log: ${s.base.log}` : ''}`);
+  if (s.scope?.outside?.length) L.push(`scope:     outside the task's files: ${s.scope.outside.join(', ')}${s.scope.allowed ? ' (allowed)' : ''}`);
+  if (s.verify?.newFailures?.length) L.push(`new fails: ${s.verify.newFailures.slice(0, 5).join(' | ')}`);
   if (s.verify) L.push(`verify:    ${s.verify.status}${s.verify.scope === 'task' ? ' [task verify]' : ''}${s.verify.cmd ? ` (${s.verify.cmd})` : ''}${s.verify.status === 'FAIL' ? `, log: ${s.verify.log}` : ''}${s.verify.note ? `, ${s.verify.note}` : ''}`);
   if (s.saved) L.push(`saved:     ${s.saved}`);
   if (s.tokensSaved?.tokens) L.push(`context:   ~${s.tokensSaved.tokens.toLocaleString()} tokens kept out (estimate: ${Object.entries(s.tokensSaved).filter(([k]) => k !== 'tokens').map(([k, n]) => `${{ report: 'report trimmed', 'review-diff': 'compact review diff', 'free-model': 'free model chosen' }[k] || k} ~${n.toLocaleString()}`).join(', ')})`);

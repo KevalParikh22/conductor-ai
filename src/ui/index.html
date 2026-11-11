@@ -358,6 +358,7 @@ const views = {
       done: '<span class="pill ok">done</span>',
       partial: `<span class="pill warn" title="${esc(r.status || 'the worker did only part of the task')}">partial</span>`,
       'verify-failed': '<span class="pill bad" title="The worker finished, but verify fails">verify failed</span>',
+      'out-of-scope': `<span class="pill warn" title="${esc('Changed files the task does not list: ' + (r.outside || []).join(', '))}">out of scope</span>`,
       unverified: '<span class="pill warn" title="The worker wrote code, but no verify ran, so nothing proves it works. Set a verify command (conductor init --verify)">unverified</span>',
     }[r.state] || '<span class="pill bad">failed</span>');
     const verify = (v) => !v ? '–' : `<span class="pill ${v === 'PASS' ? 'ok' : v === 'FAIL' ? 'bad' : ''}">${esc(v)}</span>`;

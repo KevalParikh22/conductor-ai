@@ -38,6 +38,7 @@ const TOOLS = [
         save: { type: 'string', description: 'ask: also save the answer to this path' },
         no_verify: { type: 'boolean' },
         allow_unverified: { type: 'boolean', description: 'accept code that no verify command checked (otherwise the outcome is "unverified")' },
+        allow_scope: { type: 'boolean', description: 'accept changes to files the task does not list (otherwise the outcome is "out-of-scope")' },
         allow_open_questions: { type: 'boolean', description: 'run plan tasks even if the plan has unresolved Open questions' },
         allow_dirty: { type: 'boolean' },
         worktree: { type: 'boolean', description: 'Write roles: run in an isolated checkout on branch conductor/<task_id> and commit there, so several tasks can run at once. Merge the branch afterwards.' },
@@ -105,7 +106,7 @@ const TOOLS = [
   },
   {
     name: 'conductor_runs',
-    description: 'Recent runs in this project: who did each task, the outcome (done / partial / unverified / verify failed / failed), verify result and files. Give run to see one run in full.',
+    description: 'Recent runs in this project: who did each task, the outcome (done / partial / out of scope / unverified / verify failed / failed), verify result and files. Give run to see one run in full.',
     inputSchema: { type: 'object', properties: { run: { type: 'string', description: 'A run id (or unique prefix) to show in full' }, limit: { type: 'number', description: 'How many recent runs (default 15)' } } },
   },
   { name: 'conductor_skills', description: 'The skill library for this project: each skill, whether it is on here, and which tasks it goes to. Skills reach workers automatically when they match.', inputSchema: { type: 'object', properties: {} } },
@@ -184,7 +185,7 @@ async function callTool(name, args, startRoot) {
     try {
       const s = await dispatch(cfg, {
         role: args.role, task: args.task, planPath: args.plan, taskId: args.task_id, provider: args.provider, note: args.note,
-        files: args.files, base: args.base, focus: args.focus, save: args.save, noVerify: args.no_verify, allowUnverified: args.allow_unverified, allowDirty: args.allow_dirty, allowOpenQuestions: args.allow_open_questions,
+        files: args.files, base: args.base, focus: args.focus, save: args.save, noVerify: args.no_verify, allowUnverified: args.allow_unverified, allowScope: args.allow_scope, allowDirty: args.allow_dirty, allowOpenQuestions: args.allow_open_questions,
         worktree: args.worktree, worktreeId: args.task_id, replace: args.replace, continue: args.continue,
         timeoutMs: args.timeout ? parseDuration(args.timeout) || undefined : undefined,
         onEvent: (e) => process.stderr.write(`[conductor] ${e.type} ${e.provider || ''} ${e.reason || ''}\n`),
