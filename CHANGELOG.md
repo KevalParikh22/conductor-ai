@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Antigravity: refused actions are no longer missed.**
+  - In headless mode, agy exits 0 and reports `SUCCESS` even when it was refused an action it needed (for example a shell command without an allow rule). conductor now runs it with `--output-format json` and reads the `denied_actions` list (checked against agy 1.5.3).
+  - Refused with no answer: the attempt fails with `denied: command (add an allow rule …)` and the next provider runs. Refused but answered: the answer is kept, with a warning that it may have skipped steps such as running tests.
+  - A non-`SUCCESS` status fails the attempt. Older agy versions without JSON output still work as before.
+  - agy runs now record real token counts.
+- **Codex and OpenCode flags checked against their current versions** (Codex 0.166, OpenCode 2.0.32). No retired Codex flags are used. OpenCode 2 converts conductor's permission rules and MCP entry correctly; tests now lock the rule order that OpenCode 2's "last match wins" depends on.
 - **No proof, no "done".**
   - Code a worker writes counts as done only when the verify command ran and passed.
   - Without a verify command, the outcome is the new **unverified**, and `conductor run` exits with **4**. A batch counts it separately (`?`) and exits 3.

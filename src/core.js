@@ -478,6 +478,8 @@ export async function dispatch(cfg, opts) {
       const attempt = { provider: c.name, kind, ok: res.ok, reason: res.ok ? 'ok' : res.reason, seconds: Math.round((Date.now() - t0) / 100) / 10 };
       if (p.model) attempt.model = p.model;
       if (res.tokens) { attempt.tokens = res.tokens; attempt.cost = estimateCost(c.p, res.tokens); }
+      if (res.denied?.length) attempt.denied = res.denied;
+      if (res.ok && res.warnings?.length) summary.warnings.push(...res.warnings);
       recordUsage({ provider: c.name, model: res.model || p.model || null, kind: kind === 'agent' ? 'agent' : 'chat', role, project: path.basename(root),
         ok: res.ok, reason: attempt.reason, seconds: attempt.seconds, tokens: res.tokens || null, cost: attempt.cost ?? null });
       const changedDuringRead = mode === 'read' && inRepo && before !== git.stateHash(work);

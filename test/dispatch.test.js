@@ -229,3 +229,41 @@ test('no proof, no "done": code with no verify command ends unverified (exit 4) 
   assert.equal(outcome({ winner: 'x', role: 'review', status: '## VERDICT: APPROVE' }), 'done');
   assert.equal(outcome({ winner: 'x', role: 'build', status: '## RESULT: DONE' }), 'unverified');
 });
+
+test('agy JSON: refused actions are caught even though agy exits 0 with status SUCCESS', async () => {
+  const { parseAgyJson } = await import('../src/providers.js');
+  const { CLI_PRESETS } = await import('../src/presets.js');
+  for (const m of ['write', 'read']) assert.deepEqual(CLI_PRESETS.antigravity[m].slice(-4), ['--output-format', 'json', '-p', '{prompt}']);
+  // the shape agy 1.5.3 really prints
+  const real = '{"conversation_id":"x","status":"SUCCESS","response":"","duration_seconds":7.4,"num_turns":1,"usage":{"input_tokens":9508,"output_tokens":690,"thinking_tokens":638},"denied_actions":[{"action":"command","display_name":"RunCommand"}]}';
+  assert.deepEqual(parseAgyJson(real), { text: '', status: 'SUCCESS', denied: ['command'], tokens: { input: 9508, output: 1328 } });
+  assert.equal(parseAgyJson('plain text answer'), null, 'older agy without JSON: treated as text');
+
+  const say = (o) => `console.log(JSON.stringify(${JSON.stringify(o)}));`;
+  const report = '## RESULT: DONE\n## Files changed\n- none\n## Checks run\n- none\n## Notes\n- none\n';
+  fakeBins({
+    'agy-ok': say({ status: 'SUCCESS', response: report, usage: { input_tokens: 100, output_tokens: 20 } }),
+    'agy-denied': `${say({ status: 'SUCCESS', response: '', denied_actions: [{ action: 'command' }] })} console.error('jetski: no output produced, a tool required the "command" permission');`,
+    'agy-partly': say({ status: 'SUCCESS', response: report, denied_actions: [{ action: 'command' }, { action: 'command' }] }),
+    'agy-error': say({ status: 'ERROR', response: 'something broke' }),
+  });
+  clearCooldowns();
+  const { dir } = makeRepo();
+  const agy = (bin) => ({ type: 'cli', preset: 'antigravity', enabled: true, bin });
+  const cfg = cfgFor(dir, { 'g-ok': agy('agy-ok'), 'g-denied': agy('agy-denied'), 'g-partly': agy('agy-partly'), 'g-error': agy('agy-error') });
+
+  let s = await dispatch(cfg, { role: 'ask', task: 'q', chain: ['g-ok'] });
+  assert.equal(s.winner, 'g-ok');
+  assert.match(fs.readFileSync(path.join(dir, s.report), 'utf8'), /RESULT: DONE/, 'the answer, not the JSON wrapper');
+  assert.deepEqual(s.attempts[0].tokens, { input: 100, output: 20 }, 'real token counts from agy');
+
+  s = await dispatch(cfg, { role: 'ask', task: 'q', chain: ['g-denied', 'g-error', 'g-ok'] });
+  assert.match(s.attempts[0].reason, /^denied: command/);
+  assert.deepEqual(s.attempts[0].denied, ['command']);
+  assert.match(s.attempts[1].reason, /^agy status ERROR/);
+  assert.equal(s.winner, 'g-ok', 'falls back to the next provider');
+
+  s = await dispatch(cfg, { role: 'ask', task: 'q', chain: ['g-partly'] });
+  assert.equal(s.winner, 'g-partly', 'an answer despite refusals is kept…');
+  assert.ok(s.warnings.some((w) => /g-partly refused 2 action\(s\) it needed \(command\)/.test(w)), '…with a warning');
+});

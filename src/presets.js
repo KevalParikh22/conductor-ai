@@ -42,8 +42,11 @@ export const CLI_PRESETS = {
     // pointer to {promptFile} by runCli. {sessionSettings} is passed with --settings: it applies to this
     // run only and is never saved, so the user's own ~/.gemini/antigravity-cli/settings.json is untouched.
     // Not --mode plan for reads: plan mode saves its answer as a plan artifact and prints only a link.
-    write: ['{modelArgs}', '--mode', 'accept-edits', '--sandbox', '--settings', '{sessionSettings}', '--print-timeout', '{timeout}', '-p', '{prompt}'],
-    read: ['{modelArgs}', '--sandbox', '--settings', '{sessionSettings}', '--print-timeout', '{timeout}', '-p', '{prompt}'],
+    // --output-format json: agy exits 0 and says "SUCCESS" even when headless mode refused an action it needed;
+    // only the JSON's denied_actions shows it (checked against agy 1.5.3), so conductor reads that (output: 'agy-json')
+    write: ['{modelArgs}', '--mode', 'accept-edits', '--sandbox', '--settings', '{sessionSettings}', '--print-timeout', '{timeout}', '--output-format', 'json', '-p', '{prompt}'],
+    read: ['{modelArgs}', '--sandbox', '--settings', '{sessionSettings}', '--print-timeout', '{timeout}', '--output-format', 'json', '-p', '{prompt}'],
+    output: 'agy-json',
     sessionSettings: {
       // shell commands run in agy's terminal sandbox without asking: no network, home folder read-only
       write: {

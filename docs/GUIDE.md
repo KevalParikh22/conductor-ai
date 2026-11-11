@@ -377,6 +377,7 @@ Your settings, keys and skill library are kept in `~/.config/conductor`; delete 
 | `on protected branch "main"` | `git switch -c feat/<name>`. Workers never write on main |
 | Controller doesn't see conductor's tools | Section 6: approve it (Claude), or register it once (Antigravity, Codex) |
 | `/conduct-*` or `conduct-*` skills missing | Open the controller in the project folder, or run `conductor init` again |
+| Antigravity attempt `denied: command`, or the warning "refused N action(s)" | agy needed a shell command that has no allow rule; headless runs can't ask. Add it to `allowCommands` in Settings (the verify command and common build/test commands are allowed already) |
 | `conductor: command not found` inside the controller | Install globally so its shell finds it (`which conductor`) |
 | A worker always fails | Its log is `.conductor/runs/<run>/<provider>.log`: usually a login, or changed CLI flags |
 | A free route hangs | It gives up after 90 seconds and tries another model, then the next provider (section 10) |
