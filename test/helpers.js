@@ -48,8 +48,12 @@ export const PLAN = `# Plan: demo
 - **role:** build
 - **files:** \`src/add.js\`
 - **steps:** implement
+- **acceptance:**
+  - [ ] add(2, 3) returns 5
 
 ### T2: docs
 - **role:** docs
 - **files:** \`README.md\`
+- **acceptance:**
+  - [ ] README explains add(a, b)
 `;

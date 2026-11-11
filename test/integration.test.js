@@ -99,6 +99,7 @@ function mcpSession(cwd) {
 test('MCP server: handshake, tools/list, status and usage errors', async () => {
   const { dir } = makeRepo({ branch: null }); // on main: build must be refused
   const m = mcpSession(dir);
+  try {
   const init = await m.request('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 't', version: '1' } });
   assert.equal(init.result.protocolVersion, '2025-06-18');
   assert.equal(init.result.serverInfo.name, 'conductor-ai');
@@ -106,7 +107,7 @@ test('MCP server: handshake, tools/list, status and usage errors', async () => {
   const disc = await m.request('server/discover', {});
   assert.ok(disc.result.supportedVersions.includes('2026-07-28'));
   const list = await m.request('tools/list', {});
-  assert.deepEqual(list.result.tools.map((t) => t.name), ['conductor_run', 'conductor_batch', 'conductor_retry', 'conductor_diff', 'conductor_route', 'conductor_runs', 'conductor_skills', 'conductor_status', 'conductor_verify']);
+  assert.deepEqual(list.result.tools.map((t) => t.name), ['conductor_run', 'conductor_batch', 'conductor_retry', 'conductor_diff', 'conductor_plan_check', 'conductor_route', 'conductor_runs', 'conductor_skills', 'conductor_status', 'conductor_verify']);
   assert.ok(list.result.tools.every((t) => t.inputSchema.properties.project), 'every tool takes a project path');
   const st = await m.request('tools/call', { name: 'conductor_status', arguments: {} });
   assert.match(st.result.content[0].text, /roles \(fallback order/);
@@ -115,7 +116,13 @@ test('MCP server: handshake, tools/list, status and usage errors', async () => {
   assert.match(bad.result.content[0].text, /protected branch/);
   const unk = await m.request('nope/method', {});
   assert.equal(unk.error.code, -32601);
-  m.close();
+  // the plan check tool: a vague task is reported, with exactly what's missing
+  fs.mkdirSync(path.join(dir, 'docs/plan'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'docs/plan/v.md'), '# Plan\n\n## Tasks\n\n### T1: thing\n- **role:** build\n- **acceptance:**\n  - [ ] works\n');
+  const pc = await m.request('tools/call', { name: 'conductor_plan_check', arguments: { plan: 'docs/plan/v.md' } });
+  assert.equal(pc.result.isError, true);
+  assert.match(pc.result.content[0].text, /✗ T1: thing[\s\S]*no files[\s\S]*too vague to check: "works"/);
+  } finally { m.close(); } // a failed assertion must not leave the server running (the suite would hang)
 });
 
 test('MCP server: route, diff, runs, skills and retry tools; project path from another folder', async () => {

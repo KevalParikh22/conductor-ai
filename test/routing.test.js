@@ -37,6 +37,7 @@ function cfgWith(dir, routes = []) {
   cfg.providers['agent-y'] = { type: 'cli', enabled: true, bin: 'agent-y', write: ['x'], read: ['x'] };
   cfg.roles.build = ['agent-x', 'agent-y'];
   cfg.routes = routes;
+  cfg.settings = { ...cfg.settings, planGate: false }; // these plans test other things; the plan gate has its own tests
   return cfg;
 }
 const names = (r) => r.chain.map((c) => c.name);

@@ -93,6 +93,9 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | `requireCleanTree` | true | Write roles need a clean tree (enables stash-on-failure) |
 | `verify` | `""` | Verify command. Empty = `AGENTS.md` Verify line, then auto-detect |
 | `autoVerify` | true | Run verify after each write task |
+| `planGate` | true | Refuse plan tasks a worker can't do well: no `files:`, vague or missing acceptance, no verify command, too many files (`conductor plan check`; `--allow-weak-plan` overrides) |
+| `maxTaskFiles` | 4 | Most files (besides tests) one task may list |
+| `requireAcceptance` | true | A DONE task must answer every acceptance criterion with evidence; otherwise the outcome is `partial` |
 | `checkBase` | true | Run verify on the starting commit before a write task (cached per commit), so failures that were already there aren't blamed on the worker |
 | `scopeAllow` | [] | Globs workers may change without the task listing them (lockfiles and test snapshots are always allowed) |
 | `allowScope` | false | Accept changes outside a task's `files:`. Off: the outcome is `out-of-scope` |

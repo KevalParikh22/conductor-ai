@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **Plan check: vague tasks never reach a worker.**
+  - `conductor plan check <plan>` (and the MCP tool `conductor_plan_check`) lists each task as ready or not, with exactly what is missing. The same check runs before `run` and `batch` hand out a task.
+  - A write task needs: `files:`, acceptance criteria a check can confirm (not "works" or "done"), a verify command (the task's or the project's), and at most `maxTaskFiles` (4) files besides tests.
+  - `--allow-weak-plan` (MCP `allow_weak_plan`, setting `planGate: false`) overrides. The `conduct-plan` skill now runs the check and fixes the plan before offering to run it.
+- **Acceptance criteria are answered with evidence.**
+  - The task's criteria are repeated at the end of the worker's prompt, and the worker answers each in an `## Acceptance` section (`[x]` with evidence, or `[ ]` with why).
+  - A DONE that leaves any criterion unanswered or unmet is **partial**, and the summary lists which. `requireAcceptance: false` records the answers without affecting the outcome.
+- **Chat models no longer report PARTIAL just because they can't run checks.** conductor runs verify after applying their files, and their prompt now says so. Found in a real free-model run, where finished work with passing tests came back PARTIAL.
 - **The starting commit is checked before a worker is blamed.**
   - Before a write task, conductor runs verify on the commit the worker starts from (cached per commit and command, shared by parallel tasks; `checkBase: false` turns it off).
   - If it already fails, the worker is told which failures were already there, the summary shows a warning, and a failing verify afterwards reads **NOT PROVEN** with the failure lines that are new.
