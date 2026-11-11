@@ -158,6 +158,20 @@ export async function runCli(name, p, { mode, prompt, cwd, timeoutMs, idleTimeou
   return { ok: true, text, log, ...extra };
 }
 
+/**
+ * A readable log of a chat API call: the answer and the model's hidden reasoning in full (up to a cap), with their
+ * sizes. Not the raw JSON cut at a fixed length: that once hid that a model put all its code in `reasoning`.
+ */
+export function chatLog(url, model, r) {
+  const head = `POST ${url} model=${model}\n--- status ${r.status}${r.error ? ' ' + r.error : ''}`;
+  const c = r.json?.choices?.[0];
+  if (!c) return `${head}\n${(r.raw || '').slice(0, 4000)}`;
+  const content = c.message?.content || '', reasoning = c.message?.reasoning || c.message?.reasoning_content || '';
+  return `${head}\nmodel: ${r.json.model || '?'} · finish: ${c.finish_reason || '?'} · content ${content.length} chars · reasoning ${reasoning.length} chars · usage ${JSON.stringify(r.json.usage || {})}` +
+    `\n--- content\n${content.slice(0, 20000)}${content.length > 20000 ? '\n[… cut]' : ''}` +
+    (reasoning ? `\n--- reasoning\n${reasoning.slice(0, 4000)}${reasoning.length > 4000 ? '\n[… cut]' : ''}` : '');
+}
+
 async function httpJson(url, { headers, body, timeoutMs }) {
   const ctrl = new AbortController();
   const t = timeoutMs ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
@@ -182,13 +196,13 @@ function classifyHttp(r) {
 }
 
 /** Any OpenAI-compatible chat API: Gemini, OpenRouter, Kilo, OpenCode Zen, Groq, Ollama, LM Studio... */
-export async function runOpenAI(name, p, { system, prompt, timeoutMs }) {
+export async function runOpenAI(name, p, { system, prompt, timeoutMs, history = [] }) {
   const key = keyValue(p.apiKeyEnv);
   if (p.apiKeyEnv && !key && !p.apiKeyOptional) return { ok: false, text: '', reason: `${p.apiKeyEnv} not set`, log: '' };
   const headers = { ...(p.headers || {}) };
   if (key) headers.authorization = `Bearer ${key}`;
   if (p.baseUrl.includes('openrouter.ai')) headers['X-Title'] ||= 'conductor-ai'; // app name on OpenRouter dashboards
-  const body = { model: p.model, messages: [{ role: 'system', content: system }, { role: 'user', content: prompt }] };
+  const body = { model: p.model, messages: [{ role: 'system', content: system }, { role: 'user', content: prompt }, ...history] };
   if (p.maxTokens) body.max_tokens = p.maxTokens;
   if (p.temperature !== undefined) body.temperature = p.temperature;
   if (Array.isArray(p.fallbackModels) && p.fallbackModels.length && p.baseUrl.includes('openrouter.ai')) body.models = [...new Set([p.model, ...p.fallbackModels])]; // OpenRouter also falls back on its side
@@ -196,7 +210,7 @@ export async function runOpenAI(name, p, { system, prompt, timeoutMs }) {
   let r = await httpJson(url, { headers, body, timeoutMs });
   // free routers (Kilo auto, OpenRouter free) now and then answer 200 with no content: ask once more
   if (r.status === 200 && !r.json?.error && !r.json?.choices?.[0]?.message?.content?.trim()) r = await httpJson(url, { headers, body, timeoutMs });
-  const log = `POST ${url} model=${p.model}\n--- status ${r.status}${r.error ? ' ' + r.error : ''}\n${(r.raw || '').slice(0, 4000)}`;
+  const log = chatLog(url, p.model, r);
   const text = r.json?.choices?.[0]?.message?.content;
   const u = r.json?.usage;
   const tokens = u ? { input: u.prompt_tokens ?? u.input_tokens, output: u.completion_tokens ?? u.output_tokens } : undefined;
@@ -212,13 +226,13 @@ export async function runOpenAI(name, p, { system, prompt, timeoutMs }) {
 }
 
 /** Anthropic Messages API (Claude as a remote worker). */
-export async function runAnthropic(name, p, { system, prompt, timeoutMs }) {
+export async function runAnthropic(name, p, { system, prompt, timeoutMs, history = [] }) {
   const key = keyValue(p.apiKeyEnv || 'ANTHROPIC_API_KEY');
   if (!key) return { ok: false, text: '', reason: `${p.apiKeyEnv || 'ANTHROPIC_API_KEY'} not set`, log: '' };
   const url = (p.baseUrl || 'https://api.anthropic.com').replace(/\/+$/, '') + '/v1/messages';
   const r = await httpJson(url, {
     headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', ...(p.headers || {}) },
-    body: { model: p.model, max_tokens: p.maxTokens || 16000, system, messages: [{ role: 'user', content: prompt }] },
+    body: { model: p.model, max_tokens: p.maxTokens || 16000, system, messages: [{ role: 'user', content: prompt }, ...history] },
     timeoutMs,
   });
   const log = `POST ${url} model=${p.model}\n--- status ${r.status}${r.error ? ' ' + r.error : ''}\n${(r.raw || '').slice(0, 4000)}`;
