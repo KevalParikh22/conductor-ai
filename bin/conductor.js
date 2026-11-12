@@ -74,6 +74,7 @@ Work (normally called by the controller)
      --worktree [--replace]      run in its own checkout on branch conductor/<id> and commit there
      --continue                  keep working in the task's existing worktree (same worker by default; add --note)
      --timeout 45m               stop a worker after this and try the next (default: settings.timeoutSec, or 2× the task eta)
+     --samples N                 run N attempts on different providers in parallel and keep the best (by checks, not opinion)
      --no-verify --no-escalate --allow-no-repro --allow-unverified --allow-scope --allow-weak-plan --allow-dirty --allow-open-questions --json
                                  exit 4 = the worker wrote code but no verify command proved it (--allow-unverified accepts it)
   conductor batch --plan <file> --tasks T1,T2,T3 [--concurrency 4] [--role r] [--provider p] [--replace] [--json]
@@ -81,7 +82,7 @@ Work (normally called by the controller)
   conductor route "task" [--role r] [--files a,b] | --plan f --task T1   which providers would take a task, and why
   conductor route --rules | --templates | --add starter|<id,id> | --rm <n> [--global]   list, add or remove routing rules
   conductor plan check <file> [--task T1,T2]   is each task ready for a worker? (files, checkable acceptance, verify, size)
-  conductor eval [list] | check | run [--tasks a,b] [--provider p | --chain a,b] [--label x] [--compare last|<file>] [--keep]
+  conductor eval [list] | check | run [--tasks a,b] [--provider p | --chain a,b] [--samples N] [--label x] [--compare last|<file>] [--keep]
                                        measure conductor on fixed tasks with hidden tests (check = prove the tasks are fair, no LLM)
   conductor stats --failures [--days 30]   why work fails, biggest cause first
   conductor verify                     run the project's verify command
@@ -344,7 +345,7 @@ async function main() {
       }
       if (sub !== 'run') throw new UsageError('usage: conductor eval [list | check | run]');
       const rep = await runEvals({
-        ids, provider: o.provider, chain: o.chain ? String(o.chain).split(',').map((x) => x.trim()).filter(Boolean) : undefined, keep: o.keep, label: o.label || '',
+        ids, samples: o.samples ? Number(o.samples) : undefined, provider: o.provider, chain: o.chain ? String(o.chain).split(',').map((x) => x.trim()).filter(Boolean) : undefined, keep: o.keep, label: o.label || '',
         onEvent: o.json ? undefined : (e) => {
           const m = { start: 'starting', try: `trying ${e.provider}…`, fail: `${e.provider} failed: ${e.reason}`, ok: `${e.provider} finished`, verify: 'running verify…', escalate: `verify failed: handing ${e.from}'s work to ${e.provider}…`, repair: `${e.provider} sent no files: asking once more…`, scored: `${e.pass ? 'PASS' : 'FAIL'} (conductor said: ${e.outcome})` }[e.type];
           if (m) process.stderr.write(`eval [${e.task}]: ${m}\n`);
@@ -439,10 +440,10 @@ async function main() {
         role, task: o._.join(' ') || undefined, planPath: o.plan, taskId: o.task, provider: o.provider,
         chain: o.chain ? o.chain.split(',').map((x) => x.trim()).filter(Boolean) : undefined,
         note: o.note, files: o.files ? o.files.split(',').map((x) => x.trim()) : [], base: o.base, focus: o.focus,
-        save: o.save, noVerify: o['no-verify'], allowUnverified: o['allow-unverified'], allowScope: o['allow-scope'], allowWeakPlan: o['allow-weak-plan'], noEscalate: o['no-escalate'], allowNoRepro: o['allow-no-repro'], allowDirty: o['allow-dirty'], worktree: o.worktree, continue: o.continue, worktreeId: o.worktreeId, timeoutMs: timeoutOpt(o), replace: o.replace, allowOpenQuestions: o['allow-open-questions'],
+        save: o.save, noVerify: o['no-verify'], allowUnverified: o['allow-unverified'], allowScope: o['allow-scope'], allowWeakPlan: o['allow-weak-plan'], noEscalate: o['no-escalate'], allowNoRepro: o['allow-no-repro'], samples: o.samples ? Number(o.samples) : undefined, allowDirty: o['allow-dirty'], worktree: o.worktree, continue: o.continue, worktreeId: o.worktreeId, timeoutMs: timeoutOpt(o), replace: o.replace, allowOpenQuestions: o['allow-open-questions'],
         onEvent: o.json ? undefined : (e) => {
           const m = { worktree: `working in ${e.dir} (branch ${e.branch})`, try: `trying ${e.provider} (${e.kind})…`, skip: `skip ${e.provider}: ${e.reason}`, fail: `${e.provider} failed: ${e.reason}`, ok: `${e.provider} finished`, verify: 'running verify…', repro: 'running the repro…', base: 'checking the starting commit (verify, cached per commit)…', escalate: `verify failed: handing ${e.from}'s work to ${e.provider}…`, repair: `${e.provider} sent no files: asking once more…` }[e.type];
-          if (m) process.stderr.write(`conductor: ${m}\n`);
+          if (m) process.stderr.write(`conductor${e.sample ? ` [attempt ${e.sample}]` : ''}: ${m}\n`);
         },
       });
       console.log(o.json ? JSON.stringify(s, null, 2) : formatSummary(s));

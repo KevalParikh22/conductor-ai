@@ -11,6 +11,7 @@ import { checkTask, taskAcceptance, acceptancePrompt, readAcceptance } from './p
 import { detectVerify } from './verify.js';
 import { repoMap } from './context.js';
 import { runAcceptanceChecks, checksBrief } from './acceptcheck.js';
+import { runSamples } from './samples.js';
 import { autoModel, autoFallbacks } from './models.js';
 import { smartOrder, isFree as isFreeProvider } from './selector.js';
 import { taskProviders, matchRoute, describeRoute } from './routing.js';
@@ -322,6 +323,19 @@ const CHAT_REPAIR = 'Your reply had no <<<FILE blocks, so nothing was applied. Y
  * chain with the real error (H3), instead of the same model repairing itself. Every attempt stays in the summary.
  */
 export async function dispatch(cfg, opts) {
+  // H1: several attempts in parallel, the best one kept (write roles; --samples or settings.samples)
+  const n = Number(opts.samples ?? cfg.settings?.samples ?? 1);
+  if (n > 1 && ROLES[opts.role]?.mode === 'write' && !opts.continue) {
+    let section = '';
+    if (opts.planPath && opts.taskId) {
+      const abs = path.resolve(cfg.root, opts.planPath);
+      if (!fs.existsSync(abs)) throw new UsageError(`plan not found: ${opts.planPath}`);
+      section = extractTask(fs.readFileSync(abs, 'utf8'), opts.taskId);
+    }
+    const w = await runSamples(cfg, opts, n, { dispatchOnce, chooseChain, section, body: opts.task || '', files: [...(opts.files || []), ...taskFiles(section)], UsageError });
+    writeJSON(path.join(cfg.root, w.runDir, 'summary.json'), w);
+    return w;
+  }
   let s = await dispatchOnce(cfg, opts);
   const rounds = cfg.settings?.escalateRounds ?? 1;
   for (let round = 1; round <= rounds && shouldEscalate(s, opts, cfg.settings || {}); round++) {
@@ -906,6 +920,8 @@ export function formatSummary(s) {
   if (s.base) L.push(`base:      verify ${s.base.status} on the starting commit ${s.base.head}${s.base.cached ? ' (cached)' : ''}${s.base.status === 'FAIL' ? `, log: ${s.base.log}` : ''}`);
   if (s.scope?.outside?.length) L.push(`scope:     outside the task's files: ${s.scope.outside.join(', ')}${s.scope.allowed ? ' (allowed)' : ''}`);
   if (s.verify?.newFailures?.length) L.push(`new fails: ${s.verify.newFailures.slice(0, 5).join(' | ')}`);
+  if (s.samples?.length) L.push(`samples:   ${s.samples.length} attempts, best kept: ${s.samples.map((x) => `${x.provider} ${x.outcome}${x.checks ? ` checks ${x.checks}` : ''}${x.lines ? ` ${x.lines} lines` : ''}${x.chosen ? ' ← chosen' : ''}`).join(' · ')}`);
+  if (s.appliedFrom) L.push(`landed:    the chosen attempt's changes are in your working tree (from ${s.appliedFrom}, now removed)`);
   if (s.escalated?.length) L.push(`handed on: ${s.escalated.map((e) => `${e.from}'s work failed ${[e.verify === 'FAIL' && 'verify', e.checksFailed && 'acceptance checks'].filter(Boolean).join(' and ')}`).join(', then ')} → ${s.winner} took it over`);
   if (s.verify) L.push(`verify:    ${s.verify.status}${s.verify.scope === 'task' ? ' [task verify]' : ''}${s.verify.cmd ? ` (${s.verify.cmd})` : ''}${s.verify.status === 'FAIL' ? `, log: ${s.verify.log}` : ''}${s.verify.note ? `, ${s.verify.note}` : ''}`);
   if (rp) L.push(`repro:     ${rp.cmd ? `\`${rp.cmd}\` ${rp.before || '?'} before${rp.after ? `, ${rp.after} after` : ''}` : rp.tests ? `regression test ${rp.tests.join(', ')}: ${rp.proof === 'proved' ? 'fails on the original code (proves the bug)' : rp.proof === 'not-proved' ? 'also passes on the original code (proves nothing)' : `couldn't check: ${rp.why}`}` : rp.why}${rp.waived ? ' (not required)' : ''}`);

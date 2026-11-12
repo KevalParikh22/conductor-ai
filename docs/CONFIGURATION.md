@@ -100,6 +100,7 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | `contractCheck` | true | Reject it when a function or class the task names in a code span isn't defined anywhere afterwards |
 | `chatRepair` | true | Give a chat model's reply with no file blocks one repair turn |
 | `repoMapBytes` | 6000 | Size of the project map chat models get |
+| `samples` | 1 | Attempts per write task, run in parallel on different providers; the best by checks is kept (`--samples N`) |
 | `requireRepro` | true | A `fix` task without `repro:` must add a regression test that fails on the original code |
 | `runAcceptance` | true | Run acceptance lines written as `` `expr` returns `value` `` / `throws Error` as checks after a build or fix task (JavaScript) |
 | `escalate` | true | When a worker's code fails verify, hand it once to the next provider in the chain with a brief of what failed |
