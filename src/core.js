@@ -6,7 +6,7 @@ import { providerReadiness, providerKind, readOnlyEnforced, PROJECT_DIRNAME } fr
 import { runProvider } from './providers.js';
 import * as git from './git.js';
 import { runVerify } from './verify.js';
-import { baseVerify, scopeCheck, newFailures, syntaxErrors, missingContract, failureBrief } from './gates.js';
+import { baseVerify, scopeCheck, newFailures, syntaxErrors, missingContract, failureBrief, runRepro, proveRegression, TEST_FILE } from './gates.js';
 import { checkTask, taskAcceptance, acceptancePrompt, readAcceptance } from './plancheck.js';
 import { detectVerify } from './verify.js';
 import { repoMap } from './context.js';
@@ -177,6 +177,8 @@ export function outcome(s) {
   if (/RESULT:\s*\**\s*(PARTIAL|BLOCKED|FAILED|FAIL)\b/i.test(s.status || '')) return 'partial';
   // H11: an acceptance criterion that fails when conductor runs it, whatever the worker said
   if (s.checks?.failed?.length) return 'partial';
+  // Q4: a fix that doesn't make the repro pass, or a regression test that doesn't fail on the old code
+  if (s.repro?.ok === false && !s.repro.waived) return 'partial';
   // H5: DONE, but not every acceptance criterion answered with evidence
   const a = s.acceptance;
   if (a && !a.waived && (!a.answered || a.met < a.total)) return 'partial';
@@ -331,6 +333,7 @@ export async function dispatch(cfg, opts) {
     const next = await dispatchOnce(cfg, {
       ...opts, chain: rest, provider: undefined, note,
       inheritedBase: prev.base, // the starting commit's check, not the half-changed tree's
+      inheritedRepro: prev.repro?.before,
       ...(prev.worktree ? { continue: true, worktreeId: prev.worktree.id } : { allowDirty: true, inherited: true }),
     });
     next.attempts = [...prev.attempts, ...next.attempts];
@@ -350,6 +353,7 @@ function shouldEscalate(s, opts, settings) {
   if (s.mode !== 'write' || !s.winner || !s.fixBrief) return false;
   if (settings.escalate === false || opts.noEscalate) return false;
   if (s.checks?.failed?.length) return true; // the spec itself fails: always worth handing on
+  if (s.repro?.ok === false && !s.repro.waived) return true;
   if (s.verify?.status !== 'FAIL') return false;
   if (s.verify.baseFailed && !s.verify.newFailures?.length) return false;
   return true;
@@ -436,6 +440,12 @@ async function dispatchOnce(cfg, opts) {
   } else {
     throw new UsageError(role === 'ask' ? 'ask needs a question' : `${role} needs a task: --plan <file> --task <id>, or a task description`);
   }
+  // Q4: a fix starts from the bug. With a repro command, conductor runs it before and after; without one, the worker
+  // writes a test that fails on the original code, and conductor checks that it really does
+  const reproCmd = mode === 'write' ? ((section.match(/\*\*repro:\*\*\s*`([^`]+)`/i) || [])[1] || '').trim() : '';
+  const wantsRegression = role === 'fix' && !reproCmd && settings.requireRepro !== false;
+  if (reproCmd) body += `\n## Reproduce\nconductor runs \`${reproCmd}\`. It fails now (that is the bug) and must pass after your fix.\n`;
+  else if (wantsRegression) body += '\n## Regression test first\nWrite a test that fails because of this bug, then fix the code so it passes. conductor runs your new test against the ORIGINAL code: it must fail there, or it proves nothing.\n';
   if (opts.note) body += `\n## Orchestrator note (important)\n${opts.note}\n`;
   let continueNote = '';
 
@@ -481,12 +491,14 @@ async function dispatchOnce(cfg, opts) {
     report: null, status: null, changed: [], applied: [], rejected: [], warnings: [...preWarnings], verify: null, runDir: rel(root, runDir), exitCode: 3,
   };
   let ioDir = runDir; // where CLI workers get their prompt/output files
+  let wtBase = ''; // the commit a worktree started from
   let mainBefore = null;
   if (useWorktree) {
     let wt;
     try { wt = opts.continue ? openWorktree(root, wtId) : createWorktree(root, wtId || `${role}-${stamp}`, { replace: opts.replace }); } catch (e) { throw new UsageError(e.message); }
     if (!wt.continued) writeWorktreeMeta(root, wt.id, { role, plan: opts.planPath || null, task: opts.taskId || null });
     work = wt.dir;
+    wtBase = wt.base;
     // keep the prompt file out of the main repo: agents that see its path may start working there instead
     ioDir = path.join(path.dirname(wt.dir), '.io', `${wt.id}-${stamp}`);
     fs.mkdirSync(ioDir, { recursive: true });
@@ -524,6 +536,19 @@ async function dispatchOnce(cfg, opts) {
         summary.warnings.push(`verify already fails on the starting commit ${b.head} (${b.cmd}), before any worker change. Those failures are not this worker's; see ${summary.base.log}`);
         const note = `\n## Note: the project's checks already fail before your change\n\`${b.cmd}\` fails on the starting commit. Failing lines:\n\`\`\`\n${(b.failures || []).slice(0, 15).join('\n') || '(see the log)'}\n\`\`\`\nDon't fix failures unrelated to your task, and don't add new ones. In your report, say which failures were already there.\n`;
         body += note; agentPrompt += note;
+      }
+    }
+  }
+  // Q4: the repro must fail before any change, or the bug isn't reproduced and a worker can't prove a fix
+  if (reproCmd) {
+    if (opts.inheritedRepro) summary.repro = { cmd: reproCmd, before: opts.inheritedRepro };
+    else if (!opts.continue && !opts.inherited) {
+      emit({ type: 'repro' });
+      const b = await runRepro(work, reproCmd, path.join(runDir, 'repro-before.log'));
+      summary.repro = { cmd: reproCmd, before: b.status };
+      if (b.status === 'PASS' && !opts.allowNoRepro) {
+        if (useWorktree && !summary.worktree?.continued) { removeWorktree(root, summary.worktree.id, { force: true }); }
+        throw new UsageError(`the repro for ${opts.taskId} already passes before any change (\`${reproCmd}\`), so it doesn't reproduce the bug. Fix the repro command in ${opts.planPath}, or pass --allow-no-repro`);
       }
     }
   }
@@ -723,7 +748,24 @@ async function dispatchOnce(cfg, opts) {
         summary.checks = await runAcceptanceChecks(work, criteria, taskFiles(section).flatMap(expandBraces), { dir: runDir });
         if (summary.checks && !summary.checks.total) summary.checks = null;
       }
-      summary.fixBrief = [summary.verify.status === 'FAIL' ? summary.verify.brief : '', checksBrief(summary.checks)].filter(Boolean).join('\n\n');
+      let reproBrief = '';
+      if (reproCmd) {
+        emit({ type: 'repro' });
+        const a = await runRepro(work, reproCmd, path.join(runDir, 'repro-after.log'));
+        summary.repro = { ...(summary.repro || { cmd: reproCmd }), after: a.status, ok: a.status === 'PASS' };
+        if (a.status !== 'PASS') reproBrief = `The bug still reproduces: \`${reproCmd}\` still fails. Its output ends with:\n${a.tail}`;
+      } else if (wantsRegression) {
+        const tests = summary.changed.filter((f) => !preDirty.has(f) && TEST_FILE.test(f));
+        if (!tests.length) { summary.repro = { kind: 'test', ok: false, why: 'no regression test added' }; reproBrief = 'Add a regression test: one that fails on the original code because of this bug, and passes with your fix.'; }
+        else {
+          emit({ type: 'repro' });
+          const p = await proveRegression(root, work, useWorktree ? wtBase : headBefore, tests, verifySettings, path.join(runDir, 'repro-proof.log'));
+          summary.repro = { kind: 'test', tests, proof: p.status, ok: p.status === 'proved' ? true : p.status === 'not-proved' ? false : null, ...(p.why ? { why: p.why } : {}) };
+          if (p.status === 'not-proved') reproBrief = `Your new or changed tests (${tests.join(', ')}) also pass on the original, buggy code, so they don't prove the fix. Make a test fail without the fix and pass with it.`;
+        }
+      }
+      if (summary.repro && settings.requireRepro === false) summary.repro.waived = true;
+      summary.fixBrief = [summary.verify.status === 'FAIL' ? summary.verify.brief : '', checksBrief(summary.checks), reproBrief].filter(Boolean).join('\n\n');
     } else {
       // skipped on purpose: the outcome is still "unverified", but it doesn't fail the run
       summary.verify = { status: 'SKIPPED', cmd: '', chosen: true, note: opts.noVerify ? 'skipped with --no-verify' : 'autoVerify is off in settings' };
@@ -844,7 +886,9 @@ export function formatSummary(s) {
   const acc = s.acceptance;
   const accShort = acc && !acc.waived && (!acc.answered || acc.met < acc.total);
   const chFail = s.checks?.failed?.length;
-  if (out === 'partial' && chFail) L.push(`outcome:   PARTIAL. ${chFail} acceptance check(s) fail when conductor runs them: see "checks" below`);
+  const rp = s.repro;
+  if (out === 'partial' && !chFail && rp?.ok === false) L.push(`outcome:   PARTIAL. ${rp.cmd ? `The bug still reproduces: \`${rp.cmd}\` still fails` : rp.why === 'no regression test added' ? 'The fix has no regression test' : 'The new test also passes on the original code, so it doesn\'t prove the fix'}`);
+  else if (out === 'partial' && chFail) L.push(`outcome:   PARTIAL. ${chFail} acceptance check(s) fail when conductor runs them: see "checks" below`);
   else if (out === 'partial') L.push(accShort && !/RESULT:\s*\**\s*(PARTIAL|BLOCKED|FAILED|FAIL)\b/i.test(s.status || '')
     ? `outcome:   PARTIAL. ${acc.answered ? `Only ${acc.met} of ${acc.total} acceptance criteria are met with evidence` : 'The worker reports DONE but did not answer the acceptance criteria'}: check them, then finish or retry with --note`
     : 'outcome:   PARTIAL. The worker says it did only part of the task: read the report, then finish it or retry the rest');
@@ -864,6 +908,7 @@ export function formatSummary(s) {
   if (s.verify?.newFailures?.length) L.push(`new fails: ${s.verify.newFailures.slice(0, 5).join(' | ')}`);
   if (s.escalated?.length) L.push(`handed on: ${s.escalated.map((e) => `${e.from}'s work failed ${[e.verify === 'FAIL' && 'verify', e.checksFailed && 'acceptance checks'].filter(Boolean).join(' and ')}`).join(', then ')} → ${s.winner} took it over`);
   if (s.verify) L.push(`verify:    ${s.verify.status}${s.verify.scope === 'task' ? ' [task verify]' : ''}${s.verify.cmd ? ` (${s.verify.cmd})` : ''}${s.verify.status === 'FAIL' ? `, log: ${s.verify.log}` : ''}${s.verify.note ? `, ${s.verify.note}` : ''}`);
+  if (rp) L.push(`repro:     ${rp.cmd ? `\`${rp.cmd}\` ${rp.before || '?'} before${rp.after ? `, ${rp.after} after` : ''}` : rp.tests ? `regression test ${rp.tests.join(', ')}: ${rp.proof === 'proved' ? 'fails on the original code (proves the bug)' : rp.proof === 'not-proved' ? 'also passes on the original code (proves nothing)' : `couldn't check: ${rp.why}`}` : rp.why}${rp.waived ? ' (not required)' : ''}`);
   if (s.checks) {
     L.push(`checks:    ${s.checks.passed}/${s.checks.total} acceptance checks pass when run${s.checks.skipped?.length ? ` (${s.checks.skipped.length} skipped: ${s.checks.skipped.map((x) => x.why).join('; ')})` : ''}`);
     for (const f of s.checks.failed.slice(0, 5)) L.push(`           ✗ ${f.expr} → ${f.got} (expected ${f.kind === 'returns' ? f.expected : `${f.kind === 'rejects' ? 'rejection with' : ''} ${f.expected}`.trim()})`);

@@ -28,6 +28,7 @@
 - **acceptance:** (things a check can confirm: a return value, an HTTP status, a command that passes. Not "works". Code in backticks with exact names, e.g. `cartTotal([])` returns `0`: conductor checks those names exist. Workers answer each one with evidence)
   - [ ] ...
 - **verify:** `<command>`
+- **repro:** (fix tasks, optional) a command that fails now because of the bug and must pass after the fix, e.g. `npm test -- -t "empty cart"`. Without it, the worker must add a test that fails on the original code; conductor checks both
 
 ### T2: <title>
 - **role:** test
