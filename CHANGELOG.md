@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Independent review for risky work.**
+  - After a write task passes every check, a model from a **different family** than the worker's (OpenAI, Google, Anthropic, Qwen, DeepSeek…) reviews the diff against the task.
+  - It runs when the work is risky: over `reviewLines` (150) changed lines, security-related files (auth, tokens, payments, SQL, uploads…), or `- **review:** yes` in the plan.
+  - Findings that don't point at a changed line are dropped. The rest are shown with severity and `path:line`.
+  - **Advisory:** it never overrides passing checks; the controller triages.
+  - `--review` / `--no-review`, MCP `review`, settings `autoReview`, `reviewLines`, `reviewers`.
+- **Fix: acceptance checks failed for project functions named `check`, `show`, `inspect` or `out`.** Those names clashed with conductor's own helpers in the generated check script; its names are now prefixed.
 - **A wrong test no longer gets correct code broken.**
   - When verify fails but every acceptance check passes, conductor runs the project's original tests against only the worker's code changes, in a temporary checkout of the starting commit.
   - If they pass, the failures come only from tests the worker added or changed. The summary says "the code looks right, check those tests first", and the hand-off tells the next worker to fix the test, not the code.

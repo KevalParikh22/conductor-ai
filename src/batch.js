@@ -70,7 +70,7 @@ export function spreadChains(cfg, items, { provider } = {}) {
 }
 
 /** Run tasks with at most `concurrency` at once. Results come back in task order. */
-export async function runBatch(cfg, { planPath, tasks, role, provider, concurrency, noVerify, allowUnverified, allowScope, allowWeakPlan, noEscalate, allowNoRepro, replace, note, allowOpenQuestions, timeoutMs, onEvent }) {
+export async function runBatch(cfg, { planPath, tasks, role, provider, concurrency, noVerify, allowUnverified, allowScope, allowWeakPlan, noEscalate, allowNoRepro, review, noReview, replace, note, allowOpenQuestions, timeoutMs, onEvent }) {
   const { items, warnings } = planBatch(cfg, { planPath, tasks, role, allowOpenQuestions, allowWeakPlan });
   const work = spreadChains(cfg, items, { provider });
   const limit = Math.max(1, Math.min(Number(concurrency) || 4, work.length));
@@ -84,7 +84,7 @@ export async function runBatch(cfg, { planPath, tasks, role, provider, concurren
       emit({ type: 'start', provider: t.chain[0] });
       try {
         const s = await dispatch(cfg, {
-          role: t.role, planPath, taskId: t.id, chain: t.chain, note, noVerify, allowUnverified, allowScope, allowWeakPlan, noEscalate, allowNoRepro, timeoutMs,
+          role: t.role, planPath, taskId: t.id, chain: t.chain, note, noVerify, allowUnverified, allowScope, allowWeakPlan, noEscalate, allowNoRepro, review, noReview, timeoutMs,
           worktree: true, worktreeId: t.id, replace, allowOpenQuestions, onEvent: emit,
         });
         results[i] = { task: t.id, role: t.role, summary: s };

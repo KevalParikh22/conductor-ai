@@ -1,6 +1,7 @@
 // The routing engine: role -> provider chain -> attempt with fallback -> verify -> summary.
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { ROLES, CLI_PRESETS, BUILD_COMMANDS } from './presets.js';
 import { providerReadiness, providerKind, readOnlyEnforced, PROJECT_DIRNAME } from './config.js';
 import { runProvider } from './providers.js';
@@ -12,6 +13,7 @@ import { detectVerify } from './verify.js';
 import { repoMap } from './context.js';
 import { runAcceptanceChecks, checksBrief } from './acceptcheck.js';
 import { runSamples } from './samples.js';
+import { independentReview, riskReasons } from './review.js';
 import { autoModel, autoFallbacks } from './models.js';
 import { smartOrder, isFree as isFreeProvider } from './selector.js';
 import { taskProviders, matchRoute, describeRoute } from './routing.js';
@@ -804,6 +806,19 @@ async function dispatchOnce(cfg, opts) {
       // skipped on purpose: the outcome is still "unverified", but it doesn't fail the run
       summary.verify = { status: 'SKIPPED', cmd: '', chosen: true, note: opts.noVerify ? 'skipped with --no-verify' : 'autoVerify is off in settings' };
     }
+    // Q6: risky work that passed every check gets a second opinion from another model family (advisory)
+    if (settings.autoReview !== false && !opts.noReview && outcome(summary) === 'done') {
+      const base = useWorktree ? wtBase : headBefore;
+      let lines = 0;
+      try { lines = [...execFileSync('git', ['diff', '--numstat', base], { cwd: work }).toString().matchAll(/^(\d+)\t(\d+)\t/gm)].reduce((t, m) => t + Number(m[1]) + Number(m[2]), 0); } catch { /* none */ }
+      const reasons = riskReasons({ changed: summary.changed, lines, section, settings, forced: opts.review });
+      if (reasons.length) {
+        emit({ type: 'review' });
+        summary.review = await independentReview({ work, base, worker: summary.winner, workerModel: summary.model, section, reasons,
+          deps: { cfg, resolveChain, runProvider, loadPrompt, quotaRe, runDir, timeoutMs: (settings.reviewTimeoutSec || 600) * 1000 } });
+        if (summary.review?.report) summary.review.report = rel(root, summary.review.report);
+      }
+    }
     if (useWorktree) {
       const v = summary.verify ? `verify ${summary.verify.status}` : 'not verified';
       writeWorktreeMeta(root, summary.worktree.id, { winner: summary.winner, model: summary.model });
@@ -952,6 +967,12 @@ export function formatSummary(s) {
     if (s.verify?.status === 'FAIL' && !s.checks.failed.length && !s.verify.suspectTests) L.push('hint:      every acceptance check passes, so the failing test may itself be wrong');
   }
   if (s.verify?.status === 'FAIL' && s.verify.brief) L.push(`why:       ${s.verify.brief.split('\n').slice(1, -1).join('\n           ')}`);
+  const rv = s.review;
+  if (rv?.skipped) L.push(`review:    not done (${rv.skipped}); it was due: ${rv.reasons.join('; ')}`);
+  else if (rv) {
+    L.push(`review:    ${rv.reviewer} (${rv.family}, the worker is ${rv.workerFamily}) because ${rv.reasons.join('; ')}: ${rv.verdict || 'no verdict'}, ${rv.findings.length} finding(s) on changed lines${rv.dropped ? ` (${rv.dropped} dropped: not on a changed line)` : ''}. Advisory: triage before committing; report ${rv.report}`);
+    for (const f of rv.findings.slice(0, 6)) L.push(`           ${f.severity === 'high' || f.severity === 'critical' ? '!' : '·'} [${f.severity}${f.confidence === 'low' ? ', low confidence' : ''}] ${f.file}:${f.line} ${f.text.split('\n')[0].replace(/^`?[\w./@-]+:\d+`?:?\s*/, '').slice(0, 140)}`);
+  }
   if (s.saved) L.push(`saved:     ${s.saved}`);
   if (s.tokensSaved?.tokens) L.push(`context:   ~${s.tokensSaved.tokens.toLocaleString()} tokens kept out (estimate: ${Object.entries(s.tokensSaved).filter(([k]) => k !== 'tokens').map(([k, n]) => `${{ report: 'report trimmed', 'review-diff': 'compact review diff', 'free-model': 'free model chosen' }[k] || k} ~${n.toLocaleString()}`).join(', ')})`);
   if (s.worktree?.commit) L.push(`commit:    ${s.worktree.commit} on ${s.worktree.branch} (from ${s.worktree.base})`);

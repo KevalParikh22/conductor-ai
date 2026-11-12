@@ -95,25 +95,26 @@ export async function runAcceptanceChecks(work, criteria, taskFiles, { dir, time
   if (!runnable.length) return { total: failed.length, passed: 0, failed, skipped };
   const mods = [...new Set(runnable.flatMap((c) => freeNames(c.expr)).map((n) => where[n]).filter(Boolean))];
   const lines = [
-    "import { isDeepStrictEqual, inspect } from 'node:util';",
-    ...mods.map((f, i) => `import * as m${i} from ${JSON.stringify(pathToFileURL(path.join(fs.realpathSync(work), f)).href)};`),
-    ...Object.entries(where).map(([n, f]) => `const ${n} = m${mods.indexOf(f)}.${n} ?? m${mods.indexOf(f)}.default?.${n};`).filter((l) => !l.includes('m-1')),
-    'const out = [];',
-    'const show = (v) => inspect(v, { depth: 4, breakLength: Infinity }).slice(0, 300);',
-    'async function check(i, kind, fn, expected, errName) {',
+    // conductor's own names are prefixed, so a project function called check, show or inspect can't collide
+    "import * as __cdUtil from 'node:util';",
+    ...mods.map((f, i) => `import * as __cdM${i} from ${JSON.stringify(pathToFileURL(path.join(fs.realpathSync(work), f)).href)};`),
+    ...Object.entries(where).filter(([, f]) => mods.includes(f)).map(([n, f]) => `const ${n} = __cdM${mods.indexOf(f)}.${n} ?? __cdM${mods.indexOf(f)}.default?.${n};`),
+    'const __cdOut = [];',
+    'const __cdShow = (v) => __cdUtil.inspect(v, { depth: 4, breakLength: Infinity }).slice(0, 300);',
+    'async function __cdCheck(i, kind, fn, expected, errName) {',
     '  try {',
     '    let v = fn();',
-    "    if (kind === 'rejects') { if (!v || typeof v.then !== 'function') { out.push({ i, ok: false, got: `returned ${show(v)}, not a promise` }); return; } }",
+    "    if (kind === 'rejects') { if (!v || typeof v.then !== 'function') { __cdOut.push({ i, ok: false, got: `returned ${__cdShow(v)}, not a promise` }); return; } }",
     "    if (v && typeof v.then === 'function') v = await v;",
-    "    if (kind === 'returns') { const e = expected(); out.push({ i, ok: isDeepStrictEqual(v, e), got: `returned ${show(v)}` }); }",
-    '    else out.push({ i, ok: false, got: `returned ${show(v)} instead of failing` });',
+    "    if (kind === 'returns') { const e = expected(); __cdOut.push({ i, ok: __cdUtil.isDeepStrictEqual(v, e), got: `returned ${__cdShow(v)}` }); }",
+    '    else __cdOut.push({ i, ok: false, got: `returned ${__cdShow(v)} instead of failing` });',
     '  } catch (e) {',
-    "    if (kind === 'returns') out.push({ i, ok: false, got: `threw ${e?.name}: ${String(e?.message).slice(0, 200)}` });",
-    "    else out.push({ i, ok: e?.name === errName || (typeof globalThis[errName] === 'function' && e instanceof globalThis[errName]), got: `threw ${e?.name}: ${String(e?.message).slice(0, 200)}` });",
+    "    if (kind === 'returns') __cdOut.push({ i, ok: false, got: `threw ${e?.name}: ${String(e?.message).slice(0, 200)}` });",
+    "    else __cdOut.push({ i, ok: e?.name === errName || (typeof globalThis[errName] === 'function' && e instanceof globalThis[errName]), got: `threw ${e?.name}: ${String(e?.message).slice(0, 200)}` });",
     '  }',
     '}',
-    ...runnable.map((c, i) => `await check(${i}, ${JSON.stringify(c.kind)}, () => (${c.expr}), ${c.kind === 'returns' ? `() => (${c.expected})` : 'null'}, ${JSON.stringify(c.kind === 'returns' ? '' : c.expected)});`),
-    "console.log('__CONDUCTOR_CHECKS__' + JSON.stringify(out));",
+    ...runnable.map((c, i) => `await __cdCheck(${i}, ${JSON.stringify(c.kind)}, () => (${c.expr}), ${c.kind === 'returns' ? `() => (${c.expected})` : 'null'}, ${JSON.stringify(c.kind === 'returns' ? '' : c.expected)});`),
+    "console.log('__CONDUCTOR_CHECKS__' + JSON.stringify(__cdOut));",
   ];
   const file = path.join(dir || work, `acceptance-checks-${process.pid}-${Date.now()}.mjs`);
   fs.writeFileSync(file, lines.join('\n') + '\n');
