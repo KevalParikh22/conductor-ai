@@ -158,3 +158,41 @@ export function missingContract(work, section) {
   }
   return [...left];
 }
+
+// ---------------- fix brief (H3) ----------------
+const CODE_LOC = /(?:file:\/\/)?((?:\/|[A-Za-z]:\\|[\w.-]+\/)[^\s:()'"]*?\.(?:m?js|cjs|jsx|tsx?|py|php|go|rb|java|rs|kt|cs))[:(](\d+)/g;
+
+/**
+ * A failing verify run, condensed into what a worker needs to fix it: which tests failed, the error, and where
+ * (file:line). Written as instructions, not a log (the "error messages that tell the agent how to fix it" rule).
+ */
+export function failureBrief(text, work = '', cmd = '') {
+  const lines = String(text || '').replace(/\x1b\[[0-9;]*m/g, '').split('\n');
+  const names = [], errors = [], where = [];
+  const add = (arr, v, max) => { if (v && !arr.includes(v) && arr.length < max) arr.push(v); };
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    const m = l.match(/^\s*(?:✖|not ok \d+ -|FAILED|FAIL:?|×|✗|\d+\))\s+(.+?)(?:\s+\([\d.]+\s*m?s\))?\s*$/);
+    if (m && !/failing tests:?$/i.test(m[1]) && !/^\S+\.(m?js|ts|py|php)$/.test(m[1])) add(names, m[1].trim().slice(0, 120), 8);
+    const t = l.trim();
+    if (/^(AssertionError|TypeError|ReferenceError|SyntaxError|RangeError|Error|[\w.]*Exception)\b[^:]*:/.test(t) || /^E\s{2,}/.test(l) || /^Failed asserting/.test(t)) {
+      // the error line, plus a short follow-up such as "-1 !== 5" or "expected ... got ..."
+      const next = lines.slice(i + 1, i + 4).map((x) => x.trim()).find((x) => x && !/^at\s/.test(x) && x.length < 160);
+      add(errors, `${t.slice(0, 200)}${next && !/^[{}]/.test(next) ? ` → ${next}` : ''}`, 5);
+    }
+    for (const lm of l.matchAll(CODE_LOC)) {
+      let f = lm[1];
+      if (/node_modules|node:internal|^node:/.test(f)) continue;
+      if (work && f.startsWith(work)) f = f.slice(work.length).replace(/^[/\\]+/, '');
+      else if (path.isAbsolute(f)) { const i2 = f.lastIndexOf('/test/') >= 0 ? f.lastIndexOf('/test/') : f.lastIndexOf('/src/'); if (i2 >= 0) f = f.slice(i2 + 1); }
+      add(where, `${f}:${lm[2]}`, 6);
+    }
+  }
+  if (!names.length && !errors.length) for (const f of failureLines(text).slice(0, 6)) add(errors, f, 6);
+  const L = [`Verify failed${cmd ? ` (\`${cmd}\`)` : ''}.`];
+  if (names.length) L.push(`Failing: ${names.join('; ')}`);
+  if (errors.length) L.push(`Errors:\n${errors.map((e) => `- ${e}`).join('\n')}`);
+  if (where.length) L.push(`Where: ${where.join(', ')}`);
+  L.push('Fix the cause in the code. Change a test only if the test itself contradicts the task or its acceptance criteria.');
+  return L.join('\n');
+}

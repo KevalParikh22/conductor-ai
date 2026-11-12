@@ -100,6 +100,8 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | `contractCheck` | true | Reject it when a function or class the task names in a code span isn't defined anywhere afterwards |
 | `chatRepair` | true | Give a chat model's reply with no file blocks one repair turn |
 | `repoMapBytes` | 6000 | Size of the project map chat models get |
+| `escalate` | true | When a worker's code fails verify, hand it once to the next provider in the chain with a brief of what failed |
+| `escalateRounds` | 1 | How many such hand-offs per task |
 | `checkBase` | true | Run verify on the starting commit before a write task (cached per commit), so failures that were already there aren't blamed on the worker |
 | `scopeAllow` | [] | Globs workers may change without the task listing them (lockfiles and test snapshots are always allowed) |
 | `allowScope` | false | Accept changes outside a task's `files:`. Off: the outcome is `out-of-scope` |

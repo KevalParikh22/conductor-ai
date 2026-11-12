@@ -6,7 +6,7 @@ import { providerReadiness, providerKind, readOnlyEnforced, PROJECT_DIRNAME } fr
 import { runProvider } from './providers.js';
 import * as git from './git.js';
 import { runVerify } from './verify.js';
-import { baseVerify, scopeCheck, newFailures, syntaxErrors, missingContract } from './gates.js';
+import { baseVerify, scopeCheck, newFailures, syntaxErrors, missingContract, failureBrief } from './gates.js';
 import { checkTask, taskAcceptance, acceptancePrompt, readAcceptance } from './plancheck.js';
 import { detectVerify } from './verify.js';
 import { repoMap } from './context.js';
@@ -312,7 +312,45 @@ const CHAT_REPAIR = 'Your reply had no <<<FILE blocks, so nothing was applied. Y
  *       worktree (run in an isolated checkout on branch conductor/<id> and commit there), worktreeId, replace,
  *       continue (keep working in that task's existing worktree: a retry with a note, by the same worker by default)
  */
+/**
+ * Run a role with fallback, then (H2) when the winner's work fails verify, hand it once to the next provider in the
+ * chain with the real error (H3), instead of the same model repairing itself. Every attempt stays in the summary.
+ */
 export async function dispatch(cfg, opts) {
+  let s = await dispatchOnce(cfg, opts);
+  const rounds = cfg.settings?.escalateRounds ?? 1;
+  for (let round = 1; round <= rounds && shouldEscalate(s, opts, cfg.settings || {}); round++) {
+    const rest = (s.chain || []).slice((s.chain || []).indexOf(s.winner) + 1);
+    if (!rest.length) break;
+    const prev = s;
+    const note = `${opts.note ? `${opts.note}\n\n` : ''}A previous worker (${prev.winner}) did this task, and its changes are already in your working copy. They fail verify:\n${prev.verify.brief}\nKeep what is right, fix what fails, and stay inside the task.`;
+    (opts.onEvent || (() => {}))({ type: 'escalate', provider: rest[0], from: prev.winner });
+    const next = await dispatchOnce(cfg, {
+      ...opts, chain: rest, provider: undefined, note,
+      inheritedBase: prev.base, // the starting commit's check, not the half-changed tree's
+      ...(prev.worktree ? { continue: true, worktreeId: prev.worktree.id } : { allowDirty: true, inherited: true }),
+    });
+    next.attempts = [...prev.attempts, ...next.attempts];
+    next.escalated = [...(prev.escalated || []), { from: prev.winner, verify: prev.verify.status, run: prev.runDir }];
+    if (!next.winner) { // nobody could take it over: the earlier result stands, with the attempts made
+      prev.attempts = next.attempts; prev.escalated = next.escalated; prev.warnings.push(`handing the failed work to ${rest.join(', ')} did not work: ${next.attempts.slice(-rest.length).map((a) => `${a.provider}(${a.reason})`).join(', ')}`);
+      writeJSON(path.join(cfg.root, prev.runDir, 'summary.json'), prev);
+      s = prev; break;
+    }
+    s = next;
+  }
+  return s;
+}
+
+/** Verify failed on new failures (not only ones the starting commit already had), and handing off is allowed. */
+function shouldEscalate(s, opts, settings) {
+  if (s.mode !== 'write' || !s.winner || s.verify?.status !== 'FAIL' || !s.verify.brief) return false;
+  if (settings.escalate === false || opts.noEscalate) return false;
+  if (s.verify.baseFailed && !s.verify.newFailures?.length) return false;
+  return true;
+}
+
+async function dispatchOnce(cfg, opts) {
   const { root, settings } = cfg;
   const role = opts.role;
   const meta = ROLES[role];
@@ -462,6 +500,7 @@ export async function dispatch(cfg, opts) {
   const limitFor = (p, kind) => workerTimeout(p, kind, settings, { etaMs, timeoutMs: opts.timeoutMs });
   const picked = chooseChain(cfg, role, { provider: opts.provider, chain: opts.chain, section, body, files: [...(opts.files || []), ...taskFiles(section)], diffBytes });
   const chain = picked.chain;
+  summary.chain = chain.filter((c) => !c.skip).map((c) => c.name);
   if (picked.how === 'selector' && picked.note) summary.selector = picked.note;
   if (skillsAgent.names.length) summary.skills = skillsAgent.names;
   if (picked.how === 'plan' || picked.how === 'route') summary.route = picked.note;
@@ -470,7 +509,8 @@ export async function dispatch(cfg, opts) {
   const verifyOn = mode === 'write' && inRepo && settings.autoVerify !== false && !opts.noVerify;
   const taskVerifyCmd = useWorktree ? (section.match(/\*\*verify:\*\*\s*`([^`]+)`/i) || [])[1]?.trim() : '';
   const verifySettings = taskVerifyCmd && !taskVerifyCmd.includes('<') ? { ...settings, verify: taskVerifyCmd } : settings;
-  if (verifyOn && settings.checkBase !== false && !opts.continue) {
+  if (opts.inheritedBase) summary.base = opts.inheritedBase;
+  else if (verifyOn && settings.checkBase !== false && !opts.continue && !opts.inherited) {
     emit({ type: 'base' });
     const b = await baseVerify(root, work, verifySettings, path.join(runDir, 'base-verify.log'));
     if (b) {
@@ -483,7 +523,8 @@ export async function dispatch(cfg, opts) {
     }
   }
   // files already modified before the run (allowed with --allow-dirty): can't be credited to the worker
-  const preDirty = mode === 'write' && inRepo ? new Set(git.changedFiles(work)) : new Set();
+  // (a hand-off from a previous worker in this run inherits its changes: they count as this task's work)
+  const preDirty = mode === 'write' && inRepo && !opts.inherited ? new Set(git.changedFiles(work)) : new Set();
   let winnerText = '', lastPromptChars = 0;
   // hooks and .git/config can run programs: snapshot them so whatever a worker writes there is undone
   const control = inRepo ? git.snapshotControl(work) : null;
@@ -665,6 +706,11 @@ export async function dispatch(cfg, opts) {
         let after = ''; try { after = fs.readFileSync(summary.verify.log, 'utf8'); } catch { /* no log */ }
         summary.verify.newFailures = newFailures(summary.base.failures, after).slice(0, 10);
       }
+      if (summary.verify.status === 'FAIL') {
+        // H3: what failed and where, written for whoever fixes it (the next worker, or the controller's --note)
+        let log = ''; try { log = fs.readFileSync(summary.verify.log, 'utf8'); } catch { /* none */ }
+        summary.verify.brief = failureBrief(log, fs.realpathSync(work), summary.verify.cmd);
+      }
       if (summary.verify.log) summary.verify.log = rel(root, summary.verify.log);
     } else {
       // skipped on purpose: the outcome is still "unverified", but it doesn't fail the run
@@ -802,7 +848,9 @@ export function formatSummary(s) {
   if (s.base) L.push(`base:      verify ${s.base.status} on the starting commit ${s.base.head}${s.base.cached ? ' (cached)' : ''}${s.base.status === 'FAIL' ? `, log: ${s.base.log}` : ''}`);
   if (s.scope?.outside?.length) L.push(`scope:     outside the task's files: ${s.scope.outside.join(', ')}${s.scope.allowed ? ' (allowed)' : ''}`);
   if (s.verify?.newFailures?.length) L.push(`new fails: ${s.verify.newFailures.slice(0, 5).join(' | ')}`);
+  if (s.escalated?.length) L.push(`handed on: ${s.escalated.map((e) => `${e.from}'s work failed verify`).join(', then ')} → ${s.winner} took it over`);
   if (s.verify) L.push(`verify:    ${s.verify.status}${s.verify.scope === 'task' ? ' [task verify]' : ''}${s.verify.cmd ? ` (${s.verify.cmd})` : ''}${s.verify.status === 'FAIL' ? `, log: ${s.verify.log}` : ''}${s.verify.note ? `, ${s.verify.note}` : ''}`);
+  if (s.verify?.status === 'FAIL' && s.verify.brief) L.push(`why:       ${s.verify.brief.split('\n').slice(1, -1).join('\n           ')}`);
   if (s.saved) L.push(`saved:     ${s.saved}`);
   if (s.tokensSaved?.tokens) L.push(`context:   ~${s.tokensSaved.tokens.toLocaleString()} tokens kept out (estimate: ${Object.entries(s.tokensSaved).filter(([k]) => k !== 'tokens').map(([k, n]) => `${{ report: 'report trimmed', 'review-diff': 'compact review diff', 'free-model': 'free model chosen' }[k] || k} ~${n.toLocaleString()}`).join(', ')})`);
   if (s.worktree?.commit) L.push(`commit:    ${s.worktree.commit} on ${s.worktree.branch} (from ${s.worktree.base})`);
