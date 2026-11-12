@@ -13,6 +13,7 @@ import { checkPlan, formatPlanCheck } from '../src/plancheck.js';
 import { listEvals, checkEvals, runEvals, formatEvals, loadResult } from '../src/evals.js';
 import { failureStats, formatFailureStats } from '../src/stats.js';
 import { readLessons, addLesson, removeLesson, promoteLesson, GUIDANCE } from '../src/lessons.js';
+import { readRules, newRule, syncControllerFiles, checkControllerFiles, rulesDir } from '../src/controllers.js';
 import { initProject, setupGlobal } from '../src/init.js';
 import { startMcpServer } from '../src/mcp.js';
 import { testProvider } from '../src/providers.js';
@@ -87,6 +88,7 @@ Work (normally called by the controller)
   conductor eval [list] | check | run [--tasks a,b] [--provider p | --chain a,b] [--samples N] [--label x] [--compare last|<file>] [--keep]
                                        measure conductor on fixed tasks with hidden tests (check = prove the tasks are fair, no LLM)
   conductor stats --failures [--days 30]   why work fails, biggest cause first
+  conductor rules [list] | new <name> [--paths "src/api/**"] | sync   project rules, written in each controller's own format
   conductor lessons [list] | add "text" [--files a,b] [--role r] | rm <id> | promote <id>   what earlier work taught (in later prompts and routing)
   conductor verify                     run the project's verify command
   conductor skills [list] | new <name> | add <path> | on|off <name> | rm <name> | sync   one skill library for every controller and worker
@@ -320,6 +322,28 @@ async function main() {
       return 0;
     }
     case 'skills': case 'skill': return skillsCmd(o);
+    case 'rules': case 'rule': {
+      const cfg = loadConfig();
+      const root = cfg.root, controller = cfg.controller || 'claude-code';
+      const sub = o._[0] || 'list';
+      if (sub === 'list') {
+        const rs = readRules(root);
+        if (!rs.length) { console.log(`No project rules yet. Add one: conductor rules new <name> [--paths "src/api/**"]  (stored in ${path.relative(root, rulesDir(root))}/)`); return 0; }
+        for (const r of rs) console.log(`${r.name.padEnd(24)} ${(r.paths.join(', ') || 'all files').padEnd(30)} ${r.description}`);
+        console.log(`\n${rs.length} rule(s), written for ${CONTROLLERS[controller]?.label || controller} by: conductor rules sync. Workers get the ones matching their files.`);
+        return 0;
+      }
+      if (sub === 'new') {
+        const f = newRule(root, o._[1] || '', { description: o.description || '', paths: o.paths || '' });
+        console.log(`created ${path.relative(root, f)}: write the rule, then run conductor rules sync`); return 0;
+      }
+      if (sub === 'sync') {
+        const lines = syncControllerFiles(root, controller);
+        console.log(lines.length ? lines.map(([w, p]) => `  ${w.padEnd(8)} ${p}`).join('\n') : `  up to date for ${CONTROLLERS[controller]?.label || controller}`);
+        return 0;
+      }
+      throw new UsageError('usage: conductor rules [list] | new <name> [--paths "a/**, *.ts"] [--description "..."] | sync');
+    }
     case 'plan': {
       if (o._[0] !== 'check' || !o._[1]) throw new UsageError('usage: conductor plan check <plan-file> [--task T1,T2]');
       const cfg = loadConfig();
@@ -583,8 +607,9 @@ async function doctor(o) {
     }
   }
   const errs = validateConfig(cfg);
-  const problems = results.filter((r) => !r.ok).length + errs.length;
-  if (o.json) { console.log(JSON.stringify({ version: VERSION, node: process.version, project: cfg.root, notices: cfg.notices, providers: results, configErrors: errs, problems }, null, 2)); return problems ? 1 : 0; }
+  const ctrlIssues = checkControllerFiles(cfg.root, cfg.controller || 'claude-code');
+  const problems = results.filter((r) => !r.ok).length + errs.length + ctrlIssues.filter((c) => c.level === 'error').length;
+  if (o.json) { console.log(JSON.stringify({ version: VERSION, node: process.version, project: cfg.root, notices: cfg.notices, providers: results, configErrors: errs, controllerFiles: ctrlIssues, problems }, null, 2)); return problems ? 1 : 0; }
   console.log(`conductor ${VERSION} · node ${process.version} · ${os.platform()}`);
   console.log(`project: ${cfg.root}\n`);
   for (const n of cfg.notices || []) console.log(`! ${n}`);
@@ -599,6 +624,11 @@ async function doctor(o) {
     }
   }
   errs.forEach((e) => console.log(`✗ config: ${e}`));
+  // Q8: the files the controller reads (rules, skills, MCP configs, Codex trust)
+  if (ctrlIssues.length) {
+    console.log(`\ncontroller files (${CONTROLLERS[cfg.controller || 'claude-code']?.label || cfg.controller}):`);
+    for (const c of ctrlIssues) console.log(`${c.level === 'error' ? '✗' : '!'} ${c.file}: ${c.problem}\n    fix: ${c.fix}`);
+  }
   if (!o.details && results.some((r) => r.permissions)) console.log('\nWhat each agent may do: conductor doctor --details');
   const weak = results.filter((r) => r.permissions && !r.readOnlyEnforced).map((r) => r.name);
   if (weak.length) console.log(`⚠ read-only not enforced for: ${weak.join(', ')}`);

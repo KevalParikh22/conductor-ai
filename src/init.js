@@ -8,6 +8,7 @@ import { GLOBAL_CONFIG, GLOBAL_SECRETS, PROJECT_DIRNAME, projectConfigPath } fro
 import { readJSON, writeJSON } from './util.js';
 import { detectVerify } from './verify.js';
 import { syncSkills } from './skills.js';
+import { syncControllerFiles } from './controllers.js';
 import { BASE_ENTRIES, CREATED_FILES, readBlock, writeBlock, removeBlock, trackedEntries } from './localfiles.js';
 
 const TPL = new URL('../templates/', import.meta.url);
@@ -183,6 +184,9 @@ export function initProject(root, { controller = 'claude-code', mcp = true, vsco
     const tracked = trackedEntries(root, entries);
     if (tracked.length) notes.push(`Already committed, so .gitignore won't hide them: ${tracked.join(', ')}\n  To stop tracking them (the files stay on disk): git rm -r --cached ${tracked.map((t) => t.replace(/\/$/, '')).join(' ')}`);
   }
+
+  // 6b. Project rules (.conductor/rules) and the reviewer subagent, in the format this controller reads (Q8)
+  for (const [what, p] of syncControllerFiles(root, controller)) log(what, p);
 
   // 7. Your skill library (global + this project's) into the folders every controller reads
   const sk = syncSkills(root);
