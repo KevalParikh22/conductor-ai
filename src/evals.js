@@ -150,6 +150,11 @@ export async function runEvals({ ids, dir, chain, provider, keep = false, label 
       });
       const sc = await scoreEval(task, work);
       row.pass = sc.pass; row.detail = sc.detail;
+      // no model was reached at all (DNS, offline): the run says nothing about conductor, so it doesn't count
+      const tried = s.attempts.filter((a) => !a.skipped);
+      if (!s.winner && tried.length && tried.every((a) => /^network|ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET/i.test(a.reason || ''))) {
+        row.outcome = 'error'; row.detail = `no provider could be reached (${tried[0].reason}): not counted`;
+      }
     } catch (e) {
       row.outcome = 'error'; row.detail = e.message;
     } finally {
@@ -173,11 +178,12 @@ export function summarize(results) {
   return {
     tasks: n,
     passed: count((r) => r.pass),
-    passRate: n ? Math.round((count((r) => r.pass) / n) * 100) : 0,
+    // errors (no provider reachable, broken setup) say nothing about conductor: left out of the rate
+    passRate: n - count((r) => r.outcome === 'error') ? Math.round((count((r) => r.pass) / (n - count((r) => r.outcome === 'error'))) * 100) : 0,
     // conductor's verdict against the hidden truth
     rightDone: count((r) => done(r) && r.pass), // said done, really done
     falseDone: count((r) => done(r) && !r.pass), // said done, but broken: the case conductor exists to prevent
-    caught: count((r) => !done(r) && !r.pass), // said not done, and it wasn't
+    caught: count((r) => !done(r) && !r.pass && r.outcome !== 'error'), // said not done, and it wasn't
     falseAlarm: count((r) => !done(r) && r.pass && r.outcome !== 'error'), // said not done, but it was fine
     errors: count((r) => r.outcome === 'error'),
     seconds: results.reduce((t, r) => t + (r.seconds || 0), 0),
@@ -206,7 +212,7 @@ export function formatEvals(report, prev) {
     if (!r.pass && r.detail) L.push(`    ${r.detail.split('\n')[0].slice(0, 150)}`);
   }
   const delta = (k, unit = '') => (prev?.summary && prev.summary[k] != null ? ` (${s[k] - prev.summary[k] >= 0 ? '+' : ''}${s[k] - prev.summary[k]}${unit} vs ${prev.label || prev.startedAt.slice(0, 16)})` : '');
-  L.push('', `pass rate:   ${s.passed}/${s.tasks} = ${s.passRate}%${delta('passRate', ' pts')}`);
+  L.push('', `pass rate:   ${s.passed}/${s.tasks - s.errors} = ${s.passRate}%${s.errors ? ` (${s.errors} not counted: error)` : ''}${delta('passRate', ' pts')}`);
   L.push(`verdicts:    ${s.rightDone} done and right · ${s.falseDone} "done" but wrong${delta('falseDone')} · ${s.caught} caught · ${s.falseAlarm} false alarm${s.errors ? ` · ${s.errors} error` : ''}`);
   L.push(`cost:        ${s.seconds}s · ${s.tokens.toLocaleString()} tokens${s.cost ? ` · $${s.cost}` : ''}`);
   if (report.file) L.push(`saved:       ${report.file}`);

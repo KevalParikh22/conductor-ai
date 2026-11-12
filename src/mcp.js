@@ -41,6 +41,7 @@ const TOOLS = [
         allow_unverified: { type: 'boolean', description: 'accept code that no verify command checked (otherwise the outcome is "unverified")' },
         allow_scope: { type: 'boolean', description: 'accept changes to files the task does not list (otherwise the outcome is "out-of-scope")' },
         allow_weak_plan: { type: 'boolean', description: 'hand out a plan task even though conductor_plan_check finds problems (no files, vague acceptance, no verify, too big)' },
+        no_escalate: { type: 'boolean', description: 'when verify fails, stop instead of handing the work to the next provider' },
         allow_open_questions: { type: 'boolean', description: 'run plan tasks even if the plan has unresolved Open questions' },
         allow_dirty: { type: 'boolean' },
         worktree: { type: 'boolean', description: 'Write roles: run in an isolated checkout on branch conductor/<task_id> and commit there, so several tasks can run at once. Merge the branch afterwards.' },
@@ -199,7 +200,7 @@ async function callTool(name, args, startRoot) {
     try {
       const s = await dispatch(cfg, {
         role: args.role, task: args.task, planPath: args.plan, taskId: args.task_id, provider: args.provider, note: args.note,
-        files: args.files, base: args.base, focus: args.focus, save: args.save, noVerify: args.no_verify, allowUnverified: args.allow_unverified, allowScope: args.allow_scope, allowWeakPlan: args.allow_weak_plan, allowDirty: args.allow_dirty, allowOpenQuestions: args.allow_open_questions,
+        files: args.files, base: args.base, focus: args.focus, save: args.save, noVerify: args.no_verify, allowUnverified: args.allow_unverified, allowScope: args.allow_scope, allowWeakPlan: args.allow_weak_plan, noEscalate: args.no_escalate, allowDirty: args.allow_dirty, allowOpenQuestions: args.allow_open_questions,
         worktree: args.worktree, worktreeId: args.task_id, replace: args.replace, continue: args.continue,
         timeoutMs: args.timeout ? parseDuration(args.timeout) || undefined : undefined,
         onEvent: (e) => process.stderr.write(`[conductor] ${e.type} ${e.provider || ''} ${e.reason || ''}\n`),

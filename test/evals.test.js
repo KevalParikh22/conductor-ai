@@ -43,7 +43,7 @@ test('eval run scores against hidden tests and compares conductor\'s verdict wit
 
 test('summary counts the four verdicts', () => {
   const s = summarize([{ outcome: 'done', pass: true }, { outcome: 'done', pass: false }, { outcome: 'partial', pass: false }, { outcome: 'out-of-scope', pass: true }, { outcome: 'error', pass: false }]);
-  assert.deepEqual([s.rightDone, s.falseDone, s.caught, s.falseAlarm, s.errors, s.passRate], [1, 1, 2, 1, 1, 40]);
+  assert.deepEqual([s.rightDone, s.falseDone, s.caught, s.falseAlarm, s.errors, s.passRate], [1, 1, 1, 1, 1, 50], 'errors are left out of the rate and of caught');
 });
 
 test('failure stats group attempts and runs by cause, biggest first', () => {

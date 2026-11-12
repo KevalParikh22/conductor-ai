@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Eval: unreachable providers don't count.** A task where no model could be reached (DNS, offline) is an `error`, left out of the pass rate and the verdicts, instead of looking like a failure conductor caught.
+- **Failed verify comes with a fix brief.** A failing verify is condensed into what a worker needs: the failing tests, the error (e.g. `-1 !== 5`) and where (`test/add.test.js:2`). It is shown in the summary as `why:` and written to be pasted into `--note` (node:test, pytest, PHPUnit and similar output).
+- **Work that fails verify is handed on once.** Instead of stopping, conductor gives the work to the next provider in the chain with the brief. In a normal run that worker fixes it in the same checkout; in a worktree it continues on the task branch. Every attempt stays in the summary (`handed on: X's work failed verify → Y took it over`). There is no hand-off when the failures were already there before the worker started.
+  - `escalateRounds` (1) sets how many hand-offs; `escalate: false`, `--no-escalate` or MCP `no_escalate` turns it off.
 - **Chat models get instructions made for them** (found by the eval baseline).
   - API workers (no tools) now get their own prompt: everything inlined, a project map (files and the names each defines), no "read the files" steps, and "reply now with the file blocks". The shared agent prompt had told them to read files, so some answered "Let me check the project first" and changed nothing.
   - A reply with no file blocks gets **one repair turn** that shows the model what it said and asks for the files. Both turns' tokens are counted.
