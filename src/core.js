@@ -10,7 +10,7 @@ import { runVerify } from './verify.js';
 import { baseVerify, scopeCheck, newFailures, syntaxErrors, missingContract, failureBrief, runRepro, proveRegression, verifyOnBase, TEST_FILE } from './gates.js';
 import { checkTask, taskAcceptance, acceptancePrompt, readAcceptance } from './plancheck.js';
 import { detectVerify } from './verify.js';
-import { repoMap } from './context.js';
+import { repoMap, contextPack } from './context.js';
 import { runAcceptanceChecks, checksBrief } from './acceptcheck.js';
 import { runSamples } from './samples.js';
 import { independentReview, riskReasons } from './review.js';
@@ -506,6 +506,15 @@ async function dispatchOnce(cfg, opts) {
     ? `${loadPrompt('_chat_worker')}\n## Your job\n${CHAT_JOB[role] || CHAT_JOB.build}\n\n${loadPrompt('_chat_write')}\n\n${CHAT_REPORT}`
     : `${loadPrompt('_worker')}\n${loadPrompt(meta.prompt)}`;
   let work = root; // where the worker runs: the repo, or its own worktree
+  // Q2: facts gathered once per run (task files, callers, verify, architecture), in the form each kind of worker uses
+  const packs = {};
+  const packFor = (kind) => {
+    if (settings.contextPack === false) return '';
+    if (packs[kind] === undefined) {
+      packs[kind] = contextPack(work, { files: [...(opts.files || []), ...taskFiles(section)].flatMap(expandBraces), verifyCmd: detectVerify(work, verifySettings), kind, budget: settings.contextPackBytes || 4000 });
+    }
+    return packs[kind];
+  };
   const chatContext = () => {
     let ctx = '';
     const agents = path.join(work, 'AGENTS.md');
@@ -518,6 +527,7 @@ async function dispatchOnce(cfg, opts) {
     }
     const files = [...(opts.files || []), ...taskFiles(section)];
     if (files.length) ctx += `\n# Relevant files (current content)\n${readContextFiles(work, files, settings.maxContextBytes || 60000, settings.protectedPaths || [])}`;
+    if (mode === 'write') ctx += packFor('chat');
     return ctx;
   };
 
@@ -623,9 +633,11 @@ async function dispatchOnce(cfg, opts) {
     // chat APIs, and agents whose read mode has no tools (goose), get the project context inlined
     const inline = kind === 'chat' || (mode === 'read' && CLI_PRESETS[c.p.preset]?.readInlineContext);
     const chatBody = body.replace('(read its Design notes)', '(its Design notes are included above)');
+    // a per-provider addition (settings: providers.<name>.promptExtra), e.g. extra guidance a small model needs
+    const extra = c.p.promptExtra ? `\n## Note for this model\n${c.p.promptExtra}\n` : '';
     const userPrompt = inline
-      ? `${chatContext()}\n---\n# TASK (role: ${role})\n${chatBody}${skillsChat.text ? `\n${skillsChat.text}` : ''}${recite}${mode === 'write' ? CHAT_CLOSE : ''}`
-      : agentPrompt + recite;
+      ? `${chatContext()}\n---\n# TASK (role: ${role})\n${chatBody}${skillsChat.text ? `\n${skillsChat.text}` : ''}${extra}${recite}${mode === 'write' ? CHAT_CLOSE : ''}`
+      : agentPrompt + (mode === 'write' ? packFor('agent') : '') + extra + recite;
     // the provider's model, then its fallback models: a model that is rate-limited is skipped until its cooldown ends
     let { models, auto } = await modelsToTry(c.name, c.p, kind);
     let timeouts = 0;

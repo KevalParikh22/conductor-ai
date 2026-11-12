@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Workers start with the facts, not a blank page (context pack).**
+  - Before a write task, conductor gathers, with no model involved: the task's files (new or existing, size, the names each defines); **where that code is used elsewhere**, so callers keep working; the verify command; and the sections of `docs/architecture.md` that mention those files.
+  - Agents get it compact: callers grouped per file with line numbers, plus a project map of the task's area. Chat models get the actual calling code lines (imports left out, source before tests), since they can't open files.
+  - `contextPack: false` turns it off; `contextPackBytes` (4000) caps it.
+- **Per-provider prompt addition:** `providers.<name>.promptExtra` adds a note to that provider's prompts only, for guidance a small or free model needs. It goes before the recited acceptance criteria, which stay last.
 - **Each controller gets its files in its own format.**
   - **Project rules:** write a rule once in `.conductor/rules/<name>.md`, optionally for certain `paths`. conductor writes it where each controller reads it:
     - Claude Code: `.claude/rules/`, with `paths:`.
