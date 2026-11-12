@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **`--samples N`: best of several attempts.**
+  - Runs a write task on N different providers in parallel, each in its own worktree and through every gate (verify, scope, edit guard, acceptance checks, repro).
+  - conductor picks by results, not by a model's opinion: a `done` attempt first, then the most acceptance checks and criteria met, then the smallest diff. The chosen attempt's changes land in your working tree (or stay on its branch with `--worktree`); the others are removed.
+  - The summary lists every attempt. Also `settings.samples`, MCP `samples` and `conductor eval run --samples N`. Off by default (1).
 - **Fixes start from the bug.**
   - A `fix` task can name a `repro:` command. conductor runs it before the worker, and it must fail (otherwise the task is refused: the bug isn't reproduced). It runs it again after the fix, and it must pass.
   - Without `repro:`, the worker must add a regression test. conductor checks out the original commit in a temporary folder, adds only the worker's new tests, and runs verify there: the tests must **fail** on the old code, or they prove nothing.

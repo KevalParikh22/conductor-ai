@@ -134,7 +134,7 @@ export async function checkEvals({ ids, dir } = {}) {
  * Run conductor on each task the way a user would (plan → run → gates → verify), then score the result against the
  * hidden truth. Compares conductor's verdict (outcome) with reality (pass): a "done" that fails is the worst case.
  */
-export async function runEvals({ ids, dir, chain, provider, keep = false, label = '', onEvent = () => {} } = {}) {
+export async function runEvals({ ids, dir, chain, provider, samples, keep = false, label = '', onEvent = () => {} } = {}) {
   const tasks = pick(ids, dir);
   const startedAt = new Date().toISOString();
   const results = [];
@@ -146,12 +146,12 @@ export async function runEvals({ ids, dir, chain, provider, keep = false, label 
     try {
       prepareEval(task, work);
       const cfg = loadConfig(work);
-      const s = await dispatch(cfg, { role: task.role, planPath: 'docs/plan/eval.md', taskId: 'T1', chain, provider, onEvent: (e) => onEvent({ ...e, task: task.id }) });
+      const s = await dispatch(cfg, { role: task.role, planPath: 'docs/plan/eval.md', taskId: 'T1', chain, provider, samples, onEvent: (e) => onEvent({ ...e, task: task.id }) });
       Object.assign(row, {
         outcome: s.outcome || outcomeOf(s), winner: s.winner, model: s.model, verify: s.verify?.status || null,
         attempts: s.attempts.filter((a) => !a.skipped).map((a) => `${a.provider}(${a.reason})`),
-        tokens: s.attempts.reduce((t, a) => t + (a.tokens?.input || 0) + (a.tokens?.output || 0), 0),
-        cost: s.attempts.reduce((t, a) => t + (a.cost || 0), 0),
+        tokens: s.samplesCost?.tokens ?? s.attempts.reduce((t, a) => t + (a.tokens?.input || 0) + (a.tokens?.output || 0), 0), // every attempt with --samples
+        cost: s.samplesCost?.cost ?? s.attempts.reduce((t, a) => t + (a.cost || 0), 0),
         acceptance: s.acceptance ? `${s.acceptance.met}/${s.acceptance.total}` : null,
         outside: s.scope?.outside || [],
       });
@@ -171,7 +171,7 @@ export async function runEvals({ ids, dir, chain, provider, keep = false, label 
     results.push(row);
     onEvent({ type: 'scored', task: task.id, pass: row.pass, outcome: row.outcome });
   }
-  const report = { version: VERSION, startedAt, label, chain: chain || null, provider: provider || null, results, summary: summarize(results) };
+  const report = { version: VERSION, startedAt, label, chain: chain || null, provider: provider || null, samples: samples || 1, results, summary: summarize(results) };
   fs.mkdirSync(resultsDir(), { recursive: true });
   const file = path.join(resultsDir(), `${startedAt.replace(/[:.]/g, '-')}${label ? `-${label.replace(/[^\w.-]/g, '')}` : ''}.json`);
   writeJSON(file, report);
@@ -211,7 +211,7 @@ export function loadResult(which, exclude) {
 export function formatEvals(report, prev) {
   const s = report.summary;
   const L = ['', '====================== CONDUCTOR EVAL ======================'];
-  L.push(`conductor ${report.version}${report.label ? ` · ${report.label}` : ''}${report.provider ? ` · provider ${report.provider}` : report.chain ? ` · chain ${report.chain.join(',')}` : ' · your routing'}`);
+  L.push(`conductor ${report.version}${report.samples > 1 ? ` · ${report.samples} attempts per task` : ''}${report.label ? ` · ${report.label}` : ''}${report.provider ? ` · provider ${report.provider}` : report.chain ? ` · chain ${report.chain.join(',')}` : ' · your routing'}`);
   for (const r of report.results) {
     const mark = r.pass ? '✓' : '✗';
     const verdict = r.outcome === 'done' && !r.pass ? '  ← conductor said done, hidden tests fail' : r.outcome !== 'done' && r.pass && r.outcome !== 'error' ? '  ← work was fine, conductor flagged it' : '';
