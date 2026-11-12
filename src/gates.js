@@ -78,7 +78,7 @@ const stem = (f) => path.basename(f).replace(/(\.d)?\.[^.]+$/, '');
 /** Is `file` the test of `listed` (same name with .test/.spec/_test/test_/Test)? */
 function isTestOf(file, listed) {
   const s = stem(listed).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`^(${s}[._-](test|spec)|test_${s}|${s}_test|${s}Tests?)\\.[^/]+$`, 'i').test(path.basename(file));
+  return new RegExp(`^(${s}[._-]([\\w.-]*[._-])?(test|spec)|test_${s}(_\\w+)?|${s}(_\\w+)?_test|${s}\\w*Tests?)\\.[^/]+$`, 'i').test(path.basename(file));
 }
 
 /**
@@ -94,7 +94,8 @@ export function scopeCheck(changed, listed, { allow = [] } = {}) {
 }
 
 // ---------------- edit guard (H6) ----------------
-import { which } from './util.js';
+import { which, run } from './util.js';
+import os from 'node:os';
 
 /**
  * Syntax errors in changed files, checked without running them: node --check (JS), JSON.parse, php -l, Python's
@@ -224,4 +225,47 @@ export function failureBrief(text, work = '', cmd = '') {
   if (where.length) L.push(`Where: ${where.join(', ')}`);
   L.push('Fix the cause in the code. Change a test only if the test itself contradicts the task or its acceptance criteria.');
   return L.join('\n');
+}
+
+// ---------------- reproduce first (Q4) ----------------
+export const TEST_FILE = /(^|\/)(tests?|__tests__|spec)\/|[._-](test|spec)\.[a-z]+$|(^|\/)test_[^/]+\.py$|_test\.(go|py)$|Test\.(php|java|kt)$/i;
+
+/** Run a repro command in `dir`; → { status: PASS|FAIL, tail }. */
+export async function runRepro(dir, cmd, logFile, timeoutMs = 300_000) {
+  const env = { ...process.env }; delete env.NODE_TEST_CONTEXT;
+  const shell = process.platform === 'win32' ? ['cmd', ['/c', cmd]] : ['bash', ['-c', cmd]];
+  const r = await run(shell[0], shell[1], { cwd: dir, env, timeoutMs });
+  if (logFile) fs.writeFileSync(logFile, `$ ${cmd}\n--- exit ${r.code}\n${r.stdout}\n${r.stderr}`);
+  return { status: r.code === 0 ? 'PASS' : 'FAIL', tail: `${r.stdout}\n${r.stderr}`.trim().split('\n').slice(-15).join('\n') };
+}
+
+/**
+ * Do the worker's new or changed tests prove the bug? Check out the original commit in a temporary folder, copy in
+ * only those test files and run verify there: it must FAIL (the tests catch the old behaviour). A test that also
+ * passes on the old code proves nothing about the fix. → { status: 'proved' | 'not-proved' | 'error', log }
+ */
+export async function proveRegression(root, work, baseRef, testFiles, settings, logFile) {
+  const tmp = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'conductor-repro-')); // never next to the user's project
+  fs.rmSync(tmp, { recursive: true, force: true });
+  const gitc = (...a) => execFileSync('git', a, { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] }).toString();
+  try {
+    gitc('worktree', 'add', '-q', '--detach', tmp, baseRef);
+    for (const name of ['node_modules', 'vendor', '.venv', 'venv']) { // the same dependencies, without reinstalling
+      const src = path.join(work, name);
+      if (fs.existsSync(src) && !fs.existsSync(path.join(tmp, name))) fs.symlinkSync(fs.realpathSync(src), path.join(tmp, name), 'dir');
+    }
+    for (const f of testFiles) {
+      const src = path.join(work, f);
+      if (!fs.existsSync(src)) continue;
+      fs.mkdirSync(path.dirname(path.join(tmp, f)), { recursive: true });
+      fs.copyFileSync(src, path.join(tmp, f));
+    }
+    const r = await runVerify(tmp, settings, logFile);
+    if (r.status === 'SKIPPED') return { status: 'error', why: 'no verify command to run the tests with' };
+    return { status: r.status === 'FAIL' ? 'proved' : 'not-proved' };
+  } catch (e) {
+    return { status: 'error', why: String(e.stderr || e.message).trim().split('\n')[0].slice(0, 200) };
+  } finally {
+    try { gitc('worktree', 'remove', '--force', tmp); } catch { fs.rmSync(tmp, { recursive: true, force: true }); try { gitc('worktree', 'prune'); } catch { /* best effort */ } }
+  }
 }

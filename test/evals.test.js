@@ -19,11 +19,13 @@ test('every eval task is fair: fails on the starting project, passes with the re
 
 test('eval run scores against hidden tests and compares conductor\'s verdict with reality', async () => {
   const sol = fs.readFileSync(path.join(EVALS_DIR, 'fix-paginate/solution/src/paginate.js'), 'utf8');
+  // a real fix comes with a regression test that fails on the old code (Q4)
+  const REGRESSION = "import { test } from 'node:test'; import assert from 'node:assert/strict'; import { paginate } from '../src/paginate.js';\ntest('page 2', () => { assert.deepEqual(paginate([1, 2, 3, 4, 5], 2, 2), [3, 4]); });\n";
   const acc = '## Acceptance\\n- [x] 1. a — evidence: src/paginate.js:6\\n- [x] 2. b — evidence: x\\n- [x] 3. c — evidence: x\\n- [x] 4. d — evidence: x\\n';
   const report = (extra = '') => `'## RESULT: DONE\\n## Files changed\\n- src/paginate.js\\n## Checks run\\n- npm test → pass\\n${acc}${extra}'`;
   fakeBins({
     // fixes the bug for real
-    evgood: `let p='';process.stdin.on('data',d=>p+=d).on('end',()=>{const o=args[args.indexOf('-o')+1];fs.writeFileSync('src/paginate.js',${JSON.stringify(sol)});fs.writeFileSync(o,${report()});});`,
+    evgood: `let p='';process.stdin.on('data',d=>p+=d).on('end',()=>{const o=args[args.indexOf('-o')+1];fs.writeFileSync('src/paginate.js',${JSON.stringify(sol)});fs.writeFileSync('test/paginate.regression.test.js',${JSON.stringify(REGRESSION)});fs.writeFileSync(o,${report()});});`,
     // claims everything, changes a comment only: verify still passes, acceptance all ticked → conductor says done
     evliar: `let p='';process.stdin.on('data',d=>p+=d).on('end',()=>{const o=args[args.indexOf('-o')+1];fs.appendFileSync('src/paginate.js','// fixed\\n');fs.writeFileSync(o,${report()});});`,
   });
@@ -40,7 +42,7 @@ test('eval run scores against hidden tests and compares conductor\'s verdict wit
   assert.match(out, /✗ fix-paginate +partial/);
   assert.match(out, /pass rate: +0\/1 = 0% \(-100 pts vs good\)/);
   // with the checks off, the same lie gets through: what the eval exists to measure
-  fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ settings: { runAcceptance: false, escalate: false }, providers: {
+  fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ settings: { runAcceptance: false, escalate: false, requireRepro: false }, providers: {
     good: { type: 'cli', preset: 'codex', enabled: true, bin: 'evgood' }, liar: { type: 'cli', preset: 'codex', enabled: true, bin: 'evliar' } } }));
   const c = await runEvals({ ids: ['fix-paginate'], chain: ['liar'], label: 'liar-nochecks' });
   assert.deepEqual([c.results[0].outcome, c.summary.falseDone], ['done', 1]);

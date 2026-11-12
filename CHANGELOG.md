@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Fixes start from the bug.**
+  - A `fix` task can name a `repro:` command. conductor runs it before the worker, and it must fail (otherwise the task is refused: the bug isn't reproduced). It runs it again after the fix, and it must pass.
+  - Without `repro:`, the worker must add a regression test. conductor checks out the original commit in a temporary folder, adds only the worker's new tests, and runs verify there: the tests must **fail** on the old code, or they prove nothing.
+  - A fix that misses either is **partial**, and the work is handed on with what is missing. `--allow-no-repro` runs a task whose repro already passes; `requireRepro: false` turns the test check off.
+- **Scope:** test files named after a listed file (`paginate.regression.test.js` for `src/paginate.js`) are in scope.
 - **Acceptance criteria are run, not just answered.**
   - Lines like `` `slugify('alpha beta', { maxLength: 6 })` returns `'alpha'` ``, `` `f(x)` throws TypeError `` or `` `load(-1)` rejects with RangeError `` become a small test that conductor writes and runs itself after the worker. No model is involved, so a confident but wrong `[x]` can't pass.
   - A failing check makes the outcome **partial**. The summary shows each failure with what came back (`✗ add(2, 3) → returned -1 (expected 5)`), and the work is handed to the next provider with that brief.
