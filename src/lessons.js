@@ -120,7 +120,7 @@ export function lessonsFromRun(s, { files = [] } = {}) {
   const add = (provider, kind, text = '') => provider && out.push({ source: 'auto', provider, role: s.role, kind, files, text });
   for (const a of s.attempts || []) {
     if (a.guard?.syntax?.length) add(a.provider, 'syntax');
-    else if (a.guard?.missing?.length) add(a.provider, 'missing-name', a.guard.missing.join(', '));
+    else if (a.guard?.missing?.length || a.guard?.unexported?.length) add(a.provider, 'missing-name', [...(a.guard.missing || []), ...(a.guard.unexported || [])].join(', '));
     else if (/no file blocks/.test(a.reason || '')) add(a.provider, 'no-files');
   }
   const w = s.winner;

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **The edit guard checks exports.**
+  - For JavaScript and TypeScript `build` and `fix` tasks, a function or class the acceptance checks call (`slugify(…)`, `new LRUCache(…)`), or that the plan says to export ("exporting `toQuery(params)`"), must be exported **by that name**.
+  - An `export default` or an unexported function doesn't count, because `import { slugify }` would still fail.
+  - Such an attempt is rejected straight away (stashed, next provider) instead of failing later in verify. In the last eval this was the cause of 3 of 4 failures.
+  - Methods such as `keys()` are never required as exports. `contractCheck: false` turns it off with the other contract checks.
 - **Workers start with the facts, not a blank page (context pack).**
   - Before a write task, conductor gathers, with no model involved: the task's files (new or existing, size, the names each defines); **where that code is used elsewhere**, so callers keep working; the verify command; and the sections of `docs/architecture.md` that mention those files.
   - Agents get it compact: callers grouped per file with line numbers, plus a project map of the task's area. Chat models get the actual calling code lines (imports left out, source before tests), since they can't open files.
