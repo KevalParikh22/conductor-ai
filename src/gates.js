@@ -107,13 +107,34 @@ export function syntaxErrors(work, files) {
     let text; try { if (!fs.statSync(abs).isFile()) continue; text = fs.readFileSync(abs, 'utf8'); } catch { continue; } // deleted
     const fail = (error) => out.push({ file: f, error: String(error).trim().split('\n').filter(Boolean).slice(0, 3).join(' | ').slice(0, 300) });
     try {
-      if (/\.(m?js|cjs)$/.test(f)) execFileSync(process.execPath, ['--check', abs], { stdio: ['ignore', 'ignore', 'pipe'] });
+      if (/\.(m?js|cjs)$/.test(f)) checkJs(work, f, text);
       else if (/\.json$/.test(f) && !/(^|\/)(tsconfig|jsconfig)[^/]*\.json$/.test(f)) JSON.parse(text);
       else if (/\.php$/.test(f) && which('php')) execFileSync('php', ['-l', abs], { stdio: ['ignore', 'pipe', 'pipe'] });
       else if (/\.py$/.test(f) && which('python3')) execFileSync('python3', ['-c', 'import ast,sys; ast.parse(open(sys.argv[1], encoding="utf-8").read(), sys.argv[1])', abs], { stdio: ['ignore', 'ignore', 'pipe'] });
     } catch (e) { fail(e.stderr?.toString() || e.stdout?.toString() || e.message); }
   }
   return out;
+}
+
+/**
+ * Parse JS without running it. Not `node --check file`: on Node 20/22 that exits 0 for a broken .js that uses ESM
+ * syntax in a package without "type" (module detection swallows the error). Instead the source goes through stdin
+ * with an explicit type: .mjs module, .cjs CommonJS, .js the package's "type", or either when it has none.
+ */
+function checkJs(work, f, text) {
+  const parse = (type) => execFileSync(process.execPath, [`--input-type=${type}`, '--check'], { input: text, stdio: ['pipe', 'ignore', 'pipe'] });
+  let type = f.endsWith('.mjs') ? 'module' : f.endsWith('.cjs') ? 'commonjs' : packageType(work, f);
+  if (type) return parse(type);
+  try { parse('module'); } catch (e) { try { parse('commonjs'); } catch { throw e; } }
+}
+
+function packageType(work, f) {
+  for (let d = path.dirname(path.join(work, f)); d.startsWith(work); d = path.dirname(d)) {
+    let pkg = null; try { pkg = JSON.parse(fs.readFileSync(path.join(d, 'package.json'), 'utf8')); } catch { /* none here */ }
+    if (pkg) return pkg.type === 'module' || pkg.type === 'commonjs' ? pkg.type : null; // no "type": Node detects it
+    if (d === work || d === path.dirname(d)) break;
+  }
+  return null;
 }
 
 // names a task may mention that are never the project's own: language built-ins and test helpers
