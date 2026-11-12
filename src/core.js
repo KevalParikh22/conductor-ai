@@ -10,6 +10,7 @@ import { baseVerify, scopeCheck, newFailures, syntaxErrors, missingContract, fai
 import { checkTask, taskAcceptance, acceptancePrompt, readAcceptance } from './plancheck.js';
 import { detectVerify } from './verify.js';
 import { repoMap } from './context.js';
+import { runAcceptanceChecks, checksBrief } from './acceptcheck.js';
 import { autoModel, autoFallbacks } from './models.js';
 import { smartOrder, isFree as isFreeProvider } from './selector.js';
 import { taskProviders, matchRoute, describeRoute } from './routing.js';
@@ -174,6 +175,8 @@ export function outcome(s) {
   if (!s?.winner) return 'failed';
   if (s.verify?.status === 'FAIL') return 'verify-failed';
   if (/RESULT:\s*\**\s*(PARTIAL|BLOCKED|FAILED|FAIL)\b/i.test(s.status || '')) return 'partial';
+  // H11: an acceptance criterion that fails when conductor runs it, whatever the worker said
+  if (s.checks?.failed?.length) return 'partial';
   // H5: DONE, but not every acceptance criterion answered with evidence
   const a = s.acceptance;
   if (a && !a.waived && (!a.answered || a.met < a.total)) return 'partial';
@@ -323,7 +326,7 @@ export async function dispatch(cfg, opts) {
     const rest = (s.chain || []).slice((s.chain || []).indexOf(s.winner) + 1);
     if (!rest.length) break;
     const prev = s;
-    const note = `${opts.note ? `${opts.note}\n\n` : ''}A previous worker (${prev.winner}) did this task, and its changes are already in your working copy. They fail verify:\n${prev.verify.brief}\nKeep what is right, fix what fails, and stay inside the task.`;
+    const note = `${opts.note ? `${opts.note}\n\n` : ''}A previous worker (${prev.winner}) did this task, and its changes are already in your working copy. They fail these checks:\n${prev.fixBrief}\nKeep what is right, fix what fails, and stay inside the task.`;
     (opts.onEvent || (() => {}))({ type: 'escalate', provider: rest[0], from: prev.winner });
     const next = await dispatchOnce(cfg, {
       ...opts, chain: rest, provider: undefined, note,
@@ -331,7 +334,7 @@ export async function dispatch(cfg, opts) {
       ...(prev.worktree ? { continue: true, worktreeId: prev.worktree.id } : { allowDirty: true, inherited: true }),
     });
     next.attempts = [...prev.attempts, ...next.attempts];
-    next.escalated = [...(prev.escalated || []), { from: prev.winner, verify: prev.verify.status, run: prev.runDir }];
+    next.escalated = [...(prev.escalated || []), { from: prev.winner, verify: prev.verify.status, checksFailed: prev.checks?.failed?.length || 0, run: prev.runDir }];
     if (!next.winner) { // nobody could take it over: the earlier result stands, with the attempts made
       prev.attempts = next.attempts; prev.escalated = next.escalated; prev.warnings.push(`handing the failed work to ${rest.join(', ')} did not work: ${next.attempts.slice(-rest.length).map((a) => `${a.provider}(${a.reason})`).join(', ')}`);
       writeJSON(path.join(cfg.root, prev.runDir, 'summary.json'), prev);
@@ -344,8 +347,10 @@ export async function dispatch(cfg, opts) {
 
 /** Verify failed on new failures (not only ones the starting commit already had), and handing off is allowed. */
 function shouldEscalate(s, opts, settings) {
-  if (s.mode !== 'write' || !s.winner || s.verify?.status !== 'FAIL' || !s.verify.brief) return false;
+  if (s.mode !== 'write' || !s.winner || !s.fixBrief) return false;
   if (settings.escalate === false || opts.noEscalate) return false;
+  if (s.checks?.failed?.length) return true; // the spec itself fails: always worth handing on
+  if (s.verify?.status !== 'FAIL') return false;
   if (s.verify.baseFailed && !s.verify.newFailures?.length) return false;
   return true;
 }
@@ -712,6 +717,13 @@ async function dispatchOnce(cfg, opts) {
         summary.verify.brief = failureBrief(log, fs.realpathSync(work), summary.verify.cmd);
       }
       if (summary.verify.log) summary.verify.log = rel(root, summary.verify.log);
+      // H11: run the acceptance criteria themselves (`expr` returns `value`), JavaScript tasks for now
+      if (criteria.length && ['build', 'fix'].includes(role) && settings.runAcceptance !== false && taskFiles(section).some((f) => /\.(m?js|cjs)$/.test(f))) {
+        emit({ type: 'checks' });
+        summary.checks = await runAcceptanceChecks(work, criteria, taskFiles(section).flatMap(expandBraces), { dir: runDir });
+        if (summary.checks && !summary.checks.total) summary.checks = null;
+      }
+      summary.fixBrief = [summary.verify.status === 'FAIL' ? summary.verify.brief : '', checksBrief(summary.checks)].filter(Boolean).join('\n\n');
     } else {
       // skipped on purpose: the outcome is still "unverified", but it doesn't fail the run
       summary.verify = { status: 'SKIPPED', cmd: '', chosen: true, note: opts.noVerify ? 'skipped with --no-verify' : 'autoVerify is off in settings' };
@@ -831,7 +843,9 @@ export function formatSummary(s) {
   const out = outcome(s);
   const acc = s.acceptance;
   const accShort = acc && !acc.waived && (!acc.answered || acc.met < acc.total);
-  if (out === 'partial') L.push(accShort && !/RESULT:\s*\**\s*(PARTIAL|BLOCKED|FAILED|FAIL)\b/i.test(s.status || '')
+  const chFail = s.checks?.failed?.length;
+  if (out === 'partial' && chFail) L.push(`outcome:   PARTIAL. ${chFail} acceptance check(s) fail when conductor runs them: see "checks" below`);
+  else if (out === 'partial') L.push(accShort && !/RESULT:\s*\**\s*(PARTIAL|BLOCKED|FAILED|FAIL)\b/i.test(s.status || '')
     ? `outcome:   PARTIAL. ${acc.answered ? `Only ${acc.met} of ${acc.total} acceptance criteria are met with evidence` : 'The worker reports DONE but did not answer the acceptance criteria'}: check them, then finish or retry with --note`
     : 'outcome:   PARTIAL. The worker says it did only part of the task: read the report, then finish it or retry the rest');
   if (acc) L.push(`acceptance: ${acc.met}/${acc.total} met with evidence${acc.waived ? ' (not required)' : ''}${acc.unmet.length ? `; not met: ${acc.unmet.slice(0, 4).join(' | ')}` : ''}`);
@@ -848,8 +862,13 @@ export function formatSummary(s) {
   if (s.base) L.push(`base:      verify ${s.base.status} on the starting commit ${s.base.head}${s.base.cached ? ' (cached)' : ''}${s.base.status === 'FAIL' ? `, log: ${s.base.log}` : ''}`);
   if (s.scope?.outside?.length) L.push(`scope:     outside the task's files: ${s.scope.outside.join(', ')}${s.scope.allowed ? ' (allowed)' : ''}`);
   if (s.verify?.newFailures?.length) L.push(`new fails: ${s.verify.newFailures.slice(0, 5).join(' | ')}`);
-  if (s.escalated?.length) L.push(`handed on: ${s.escalated.map((e) => `${e.from}'s work failed verify`).join(', then ')} → ${s.winner} took it over`);
+  if (s.escalated?.length) L.push(`handed on: ${s.escalated.map((e) => `${e.from}'s work failed ${[e.verify === 'FAIL' && 'verify', e.checksFailed && 'acceptance checks'].filter(Boolean).join(' and ')}`).join(', then ')} → ${s.winner} took it over`);
   if (s.verify) L.push(`verify:    ${s.verify.status}${s.verify.scope === 'task' ? ' [task verify]' : ''}${s.verify.cmd ? ` (${s.verify.cmd})` : ''}${s.verify.status === 'FAIL' ? `, log: ${s.verify.log}` : ''}${s.verify.note ? `, ${s.verify.note}` : ''}`);
+  if (s.checks) {
+    L.push(`checks:    ${s.checks.passed}/${s.checks.total} acceptance checks pass when run${s.checks.skipped?.length ? ` (${s.checks.skipped.length} skipped: ${s.checks.skipped.map((x) => x.why).join('; ')})` : ''}`);
+    for (const f of s.checks.failed.slice(0, 5)) L.push(`           ✗ ${f.expr} → ${f.got} (expected ${f.kind === 'returns' ? f.expected : `${f.kind === 'rejects' ? 'rejection with' : ''} ${f.expected}`.trim()})`);
+    if (s.verify?.status === 'FAIL' && !s.checks.failed.length) L.push('hint:      every acceptance check passes, so the failing test may itself be wrong');
+  }
   if (s.verify?.status === 'FAIL' && s.verify.brief) L.push(`why:       ${s.verify.brief.split('\n').slice(1, -1).join('\n           ')}`);
   if (s.saved) L.push(`saved:     ${s.saved}`);
   if (s.tokensSaved?.tokens) L.push(`context:   ~${s.tokensSaved.tokens.toLocaleString()} tokens kept out (estimate: ${Object.entries(s.tokensSaved).filter(([k]) => k !== 'tokens').map(([k, n]) => `${{ report: 'report trimmed', 'review-diff': 'compact review diff', 'free-model': 'free model chosen' }[k] || k} ~${n.toLocaleString()}`).join(', ')})`);

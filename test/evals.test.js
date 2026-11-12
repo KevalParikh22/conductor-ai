@@ -33,12 +33,18 @@ test('eval run scores against hidden tests and compares conductor\'s verdict wit
   assert.deepEqual([a.results[0].outcome, a.results[0].pass], ['done', true]);
   assert.deepEqual([a.summary.passRate, a.summary.rightDone, a.summary.falseDone], [100, 1, 0]);
   assert.ok(fs.existsSync(a.file), 'saved');
+  // the liar ticks every criterion; conductor runs them itself (H11) and catches it: not "done"
   const b = await runEvals({ ids: ['fix-paginate'], chain: ['liar'], label: 'liar' });
-  assert.deepEqual([b.results[0].outcome, b.results[0].pass, b.summary.falseDone], ['done', false, 1]);
+  assert.deepEqual([b.results[0].outcome, b.results[0].pass, b.summary.falseDone, b.summary.caught], ['partial', false, 0, 1]);
   const out = formatEvals(b, loadResult('last', b.file));
-  assert.match(out, /✗ fix-paginate .*conductor said done, hidden tests fail/);
+  assert.match(out, /✗ fix-paginate +partial/);
   assert.match(out, /pass rate: +0\/1 = 0% \(-100 pts vs good\)/);
-  assert.match(out, /1 "done" but wrong \(\+1 vs good\)/);
+  // with the checks off, the same lie gets through: what the eval exists to measure
+  fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ settings: { runAcceptance: false, escalate: false }, providers: {
+    good: { type: 'cli', preset: 'codex', enabled: true, bin: 'evgood' }, liar: { type: 'cli', preset: 'codex', enabled: true, bin: 'evliar' } } }));
+  const c = await runEvals({ ids: ['fix-paginate'], chain: ['liar'], label: 'liar-nochecks' });
+  assert.deepEqual([c.results[0].outcome, c.summary.falseDone], ['done', 1]);
+  assert.match(formatEvals(c), /conductor said done, hidden tests fail/);
 });
 
 test('summary counts the four verdicts', () => {
