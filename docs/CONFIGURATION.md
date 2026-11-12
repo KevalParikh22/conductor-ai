@@ -100,6 +100,9 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | `contractCheck` | true | Reject it when a function or class the task names in a code span isn't defined anywhere afterwards |
 | `chatRepair` | true | Give a chat model's reply with no file blocks one repair turn |
 | `repoMapBytes` | 6000 | Size of the project map chat models get |
+| `autoReview` | true | Risky work that passes every check gets an advisory review from a different model family |
+| `reviewLines` | 150 | Changed lines above which work counts as risky (0 = size never triggers a review) |
+| `reviewers` | [] | Providers to ask for that review, in order (default: the review role's chain, then any ready provider) |
 | `suspectTests` | true | When verify fails but every acceptance check passes, check the code alone against the original tests; if it passes, blame the worker's own tests, not the code |
 | `samples` | 1 | Attempts per write task, run in parallel on different providers; the best by checks is kept (`--samples N`) |
 | `requireRepro` | true | A `fix` task without `repro:` must add a regression test that fails on the original code |

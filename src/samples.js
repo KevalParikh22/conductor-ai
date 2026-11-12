@@ -47,7 +47,7 @@ export async function runSamples(cfg, opts, n, { dispatchOnce, chooseChain, sect
   // each attempt starts on a different provider, with the others as its fallback (like batch spreads tasks)
   const chains = ids.map((_, i) => [...ready.slice(i), ...ready.slice(0, i)]);
   const settled = await Promise.allSettled(ids.map((id, i) => dispatchOnce(cfg, {
-    ...opts, samples: 1, provider: undefined, chain: chains[i], worktree: true, worktreeId: id, replace: true, noEscalate: true,
+    ...opts, samples: 1, provider: undefined, chain: chains[i], worktree: true, worktreeId: id, replace: true, noEscalate: true, noReview: true, // one review per task, not per attempt
     onEvent: opts.onEvent ? (e) => opts.onEvent({ ...e, sample: i + 1 }) : undefined,
   })));
   const ok = settled.filter((x) => x.status === 'fulfilled').map((x) => x.value);
