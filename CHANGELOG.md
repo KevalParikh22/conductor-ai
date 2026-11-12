@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Lessons: the team remembers.**
+  - conductor keeps what earlier work taught in this project. That covers every failure it diagnoses (failed acceptance check, function under the wrong name, wrong test, out-of-scope edits, missing regression test, syntax error, no files in a reply) and every `--note` the controller writes on a retry.
+  - Later work in the same folder and role gets up to 5 matching lessons in its prompt.
+  - A provider that failed the same kind of work there twice moves to the back of the chain. It isn't removed, and never when you give `--provider` or `--chain`.
+  - `conductor lessons` lists them; `add`, `rm`, and `promote <id>` (which makes one a rule in AGENTS.md for every controller and worker). There's also an MCP tool, `conductor_lessons`.
+  - Stored in the repository's git folder, so it never shows up as a change. `lessons: false` turns it off.
 - **Independent review for risky work.**
   - After a write task passes every check, a model from a **different family** than the worker's (OpenAI, Google, Anthropic, Qwen, DeepSeek…) reviews the diff against the task.
   - It runs when the work is risky: over `reviewLines` (150) changed lines, security-related files (auth, tokens, payments, SQL, uploads…), or `- **review:** yes` in the plan.

@@ -14,6 +14,7 @@ import { repoMap } from './context.js';
 import { runAcceptanceChecks, checksBrief } from './acceptcheck.js';
 import { runSamples } from './samples.js';
 import { independentReview, riskReasons } from './review.js';
+import { lessonsPrompt, demoteByLessons, lessonsFromRun, addLesson } from './lessons.js';
 import { autoModel, autoFallbacks } from './models.js';
 import { smartOrder, isFree as isFreeProvider } from './selector.js';
 import { taskProviders, matchRoute, describeRoute } from './routing.js';
@@ -338,7 +339,26 @@ export async function dispatch(cfg, opts) {
     writeJSON(path.join(cfg.root, w.runDir, 'summary.json'), w);
     return w;
   }
-  let s = await dispatchOnce(cfg, opts);
+  const s0 = await dispatchOnce(cfg, opts);
+  const s = await escalateIfNeeded(cfg, opts, s0);
+  recordLessons(cfg, opts, s);
+  return s;
+}
+
+/** Q7: keep what this run taught (diagnosed failures, the controller's --note) for later work in the same area. */
+function recordLessons(cfg, opts, s) {
+  if (cfg.settings?.lessons === false || !ROLES[opts.role] || ROLES[opts.role].mode !== 'write') return;
+  try {
+    let section = '';
+    if (opts.planPath && opts.taskId) section = extractTask(fs.readFileSync(path.resolve(cfg.root, opts.planPath), 'utf8'), opts.taskId);
+    const files = [...(opts.files || []), ...taskFiles(section)];
+    if (opts.note) addLesson(cfg.root, { source: 'note', role: opts.role, files, text: opts.note.replace(/\s+/g, ' ').trim().slice(0, 300) });
+    for (const l of lessonsFromRun(s, { files })) addLesson(cfg.root, l);
+  } catch { /* lessons are a help, never a reason for a run to fail */ }
+}
+
+async function escalateIfNeeded(cfg, opts, first) {
+  let s = first;
   const rounds = cfg.settings?.escalateRounds ?? 1;
   for (let round = 1; round <= rounds && shouldEscalate(s, opts, cfg.settings || {}); round++) {
     const rest = (s.chain || []).slice((s.chain || []).indexOf(s.winner) + 1);
@@ -466,6 +486,10 @@ async function dispatchOnce(cfg, opts) {
   let continueNote = '';
 
   // skills from the library that match this task: listed for agents (they open what they need), inlined for API models
+  // Q7: what earlier work in this area taught (the controller's notes, diagnosed failures)
+  const lessons = mode === 'write' && cfg.settings?.lessons !== false ? lessonsPrompt(root, { role, files: [...(opts.files || []), ...taskFiles(section)] }, { max: settings.lessonsInPrompt ?? 5 }) : { text: '', ids: [] };
+  if (lessons.text) body += lessons.text;
+  const lessonIds = lessons.ids;
   const skillTask = { role, files: [...(opts.files || []), ...taskFiles(section)], body };
   const skillsAgent = skillsForTask(root, skillTask), skillsChat = skillsForTask(root, skillTask, { inline: true });
   let agentPrompt = `${loadPrompt('_worker')}\n${loadPrompt(meta.prompt)}\n---\n# TASK (role: ${role})\n${body}${skillsAgent.text ? `\n${skillsAgent.text}` : ''}`;
@@ -532,8 +556,14 @@ async function dispatchOnce(cfg, opts) {
   const etaMs = parseDuration((section.match(/\*\*eta:\*\*\s*([^\n]+)/i) || [])[1]);
   const limitFor = (p, kind) => workerTimeout(p, kind, settings, { etaMs, timeoutMs: opts.timeoutMs });
   const picked = chooseChain(cfg, role, { provider: opts.provider, chain: opts.chain, section, body, files: [...(opts.files || []), ...taskFiles(section)], diffBytes });
+  // Q7: a provider that failed this kind of work here twice goes to the back (never when the chain was given explicitly)
+  if (mode === 'write' && !['chain', 'provider'].includes(picked.how) && cfg.settings?.lessons !== false) {
+    const d = demoteByLessons(root, picked.chain.map((c) => c.name), { role, files: [...(opts.files || []), ...taskFiles(section)], after: settings.demoteAfter ?? 2 });
+    if (d.demoted.length) { picked.chain = d.chain.map((n) => picked.chain.find((c) => c.name === n)); summary.lessonsDemoted = d.demoted; }
+  }
   const chain = picked.chain;
   summary.chain = chain.filter((c) => !c.skip).map((c) => c.name);
+  if (lessonIds.length) summary.lessons = lessonIds;
   if (picked.how === 'selector' && picked.note) summary.selector = picked.note;
   if (skillsAgent.names.length) summary.skills = skillsAgent.names;
   if (picked.how === 'plan' || picked.how === 'route') summary.route = picked.note;
@@ -914,6 +944,8 @@ export function formatSummary(s) {
   if (s.route) L.push(`route:     ${s.route}`);
   if (s.selector) L.push(`selector:  ${s.selector}`);
   if (s.skills?.length) L.push(`skills:    ${s.skills.join(', ')}`);
+  if (s.lessons?.length) L.push(`lessons:   ${s.lessons.length} from earlier work here were in the prompt (conductor lessons)`);
+  if (s.lessonsDemoted?.length) L.push(`order:     moved to the back: ${s.lessonsDemoted.join(', ')} (failed this kind of work here before)`);
   const multi = (n) => s.attempts.filter((a) => a.provider === n).length > 1; // show models only where a provider switched model
   L.push(`attempts:  ${s.attempts.map((a) => `${a.provider}${a.model && multi(a.provider) ? `[${a.model}]` : ''}(${a.reason}${a.stashed ? ', stashed' : ''})`).join(' → ') || '(none)'}`);
   if (!s.winner) {

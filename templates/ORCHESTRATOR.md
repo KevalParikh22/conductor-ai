@@ -73,6 +73,7 @@ Your context is the expensive part. conductor is built to keep it small:
 - **Delegate by default.** Write it yourself only when it is under ~10 lines or needs judgement the plan doesn't settle.
 - **Small tasks, files listed.** A task with a `files:` line and 1–2 files lets the smart selector send it to a free API model first; open-ended tasks go to agents. Don't pass `--chain` or `--provider` unless you have a reason, or the selector is skipped.
 - **Read little:** the summary, `report.md` (already cut to the worker's RESULT block) and `conductor diff` (compact). Not `report.full.md`, run logs or full files you don't need.
+- **Your notes become lessons:** every `--note` is kept and given to later workers in the same area, so write it as a rule ("export add exactly as named"), not as a one-off complaint. `conductor lessons promote <id>` makes one permanent in AGENTS.md.
 - **Retry with a note, don't rewrite:** `--note "<what was wrong>"` costs a sentence; redoing the task yourself costs the whole task. For a worktree task, `conductor retry <id> --note "…"` (MCP: `continue: true`) lets the same worker fix its own work in place instead of starting over.
 
 ## Exit codes

@@ -13,6 +13,7 @@ import { runBatch, formatBatch } from './batch.js';
 import { statusReport } from './status.js';
 import { runVerify, detectVerify } from './verify.js';
 import { checkPlan, formatPlanCheck } from './plancheck.js';
+import { readLessons, addLesson, GUIDANCE } from './lessons.js';
 import { ROLES } from './presets.js';
 import { VERSION } from './version.js';
 
@@ -103,6 +104,11 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: { plan: { type: 'string', description: 'Plan file, e.g. docs/plan/feature.md' }, task_ids: { type: 'array', items: { type: 'string' }, description: 'Only these tasks (default: all)' } }, required: ['plan'] },
   },
   {
+    name: 'conductor_lessons',
+    description: "What earlier work in this project taught: failures conductor diagnosed and the controller's notes. They go into later workers' prompts and move providers that keep failing a kind of work to the back. Give text to add one.",
+    inputSchema: { type: 'object', properties: { text: { type: 'string', description: 'Add this lesson (omit to list)' }, files: { type: 'array', items: { type: 'string' }, description: 'Files or folders it applies to' }, role: { type: 'string', enum: Object.keys(ROLES) } } },
+  },
+  {
     name: 'conductor_route',
     description: 'Preview which providers would take a task, in what order, and why (routing rule, plan line or smart selector). Nothing runs.',
     inputSchema: {
@@ -153,6 +159,11 @@ async function callTool(name, args, startRoot) {
     if (!args.plan || !fs.existsSync(abs)) return text(`conductor: plan not found: ${args.plan || '(none given)'}`, true);
     const rows = checkPlan(fs.readFileSync(abs, 'utf8'), { ids: args.task_ids, verifyCmd: detectVerify(root, cfg.settings), maxFiles: cfg.settings.maxTaskFiles || 4 });
     return text(rows.length ? formatPlanCheck(args.plan, rows) : `no tasks found in ${args.plan}`, !rows.length || rows.some((r) => r.problems.length));
+  }
+  if (name === 'conductor_lessons') {
+    if (args.text) { const l = addLesson(root, { source: 'manual', text: String(args.text).slice(0, 300), role: args.role || null, files: args.files || [] }); return text(`added ${l.id}: ${l.text}`); }
+    const all = readLessons(root);
+    return text(all.length ? all.slice(-30).reverse().map((l) => `${l.id} ${l.source === 'auto' ? l.kind : l.source} ${l.provider || '-'} ×${l.count || 1}${l.promoted ? ' [rule]' : ''}: ${l.text || GUIDANCE[l.kind] || ''}`).join('\n') : 'No lessons yet.');
   }
   if (name === 'conductor_route') {
     let section = '', role = args.role;

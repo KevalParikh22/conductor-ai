@@ -107,7 +107,7 @@ test('MCP server: handshake, tools/list, status and usage errors', async () => {
   const disc = await m.request('server/discover', {});
   assert.ok(disc.result.supportedVersions.includes('2026-07-28'));
   const list = await m.request('tools/list', {});
-  assert.deepEqual(list.result.tools.map((t) => t.name), ['conductor_run', 'conductor_batch', 'conductor_retry', 'conductor_diff', 'conductor_plan_check', 'conductor_route', 'conductor_runs', 'conductor_skills', 'conductor_status', 'conductor_verify']);
+  assert.deepEqual(list.result.tools.map((t) => t.name), ['conductor_run', 'conductor_batch', 'conductor_retry', 'conductor_diff', 'conductor_plan_check', 'conductor_lessons', 'conductor_route', 'conductor_runs', 'conductor_skills', 'conductor_status', 'conductor_verify']);
   assert.ok(list.result.tools.every((t) => t.inputSchema.properties.project), 'every tool takes a project path');
   const st = await m.request('tools/call', { name: 'conductor_status', arguments: {} });
   assert.match(st.result.content[0].text, /roles \(fallback order/);
