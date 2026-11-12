@@ -7,11 +7,11 @@ import { providerReadiness, providerKind, readOnlyEnforced, PROJECT_DIRNAME } fr
 import { runProvider } from './providers.js';
 import * as git from './git.js';
 import { runVerify } from './verify.js';
-import { baseVerify, scopeCheck, newFailures, syntaxErrors, missingContract, failureBrief, runRepro, proveRegression, verifyOnBase, TEST_FILE } from './gates.js';
+import { baseVerify, scopeCheck, newFailures, syntaxErrors, missingContract, failureBrief, runRepro, proveRegression, verifyOnBase, TEST_FILE, unexported } from './gates.js';
 import { checkTask, taskAcceptance, acceptancePrompt, readAcceptance } from './plancheck.js';
 import { detectVerify } from './verify.js';
 import { repoMap, contextPack } from './context.js';
-import { runAcceptanceChecks, checksBrief } from './acceptcheck.js';
+import { runAcceptanceChecks, checksBrief, parseChecks } from './acceptcheck.js';
 import { runSamples } from './samples.js';
 import { independentReview, riskReasons } from './review.js';
 import { lessonsPrompt, demoteByLessons, lessonsFromRun, addLesson } from './lessons.js';
@@ -688,10 +688,17 @@ async function dispatchOnce(cfg, opts) {
         const edited = git.changedFiles(work).filter((f) => !preDirty.has(f));
         const syntax = settings.syntaxCheck === false ? [] : syntaxErrors(work, edited);
         const missing = settings.contractCheck === false || !section ? [] : missingContract(work, section);
-        if (syntax.length || missing.length) {
-          guard = { syntax, missing };
-          res = { ...res, ok: false, reason: syntax.length ? `syntax error in ${syntax.map((x) => x.file).join(', ')}` : `missing from the code: ${missing.join(', ')} (the task names ${missing.length > 1 ? 'them' : 'it'})` };
-          summary.warnings.push(`${c.name}: ${syntax.length ? syntax.map((x) => `${x.file}: ${x.error}`).join('; ') : `the task names ${missing.join(', ')}, but the code doesn't define ${missing.length > 1 ? 'them' : 'it'}`}`);
+        // the export check: names the acceptance checks call, or the plan says to export, need a NAMED export (JS/TS)
+        const noExport = settings.contractCheck === false || !section || !['build', 'fix'].includes(role) ? []
+          : unexported(work, `${extractSection(planText, 'Design notes')}\n${section}`, taskFiles(section).flatMap(expandBraces), parseChecks(criteria).map((x) => x.expr)).filter((n) => !missing.includes(n));
+        if (syntax.length || missing.length || noExport.length) {
+          guard = { syntax, missing, unexported: noExport };
+          res = { ...res, ok: false, reason: syntax.length ? `syntax error in ${syntax.map((x) => x.file).join(', ')}`
+            : missing.length ? `missing from the code: ${missing.join(', ')} (the task names ${missing.length > 1 ? 'them' : 'it'})`
+              : `not exported by name: ${noExport.join(', ')} (the task needs \`export\` under exactly that name)` };
+          summary.warnings.push(`${c.name}: ${syntax.length ? syntax.map((x) => `${x.file}: ${x.error}`).join('; ')
+            : missing.length ? `the task names ${missing.join(', ')}, but the code doesn't define ${missing.length > 1 ? 'them' : 'it'}`
+              : `${noExport.join(', ')} ${noExport.length > 1 ? 'are' : 'is'} not exported under that name (an \`export default\` or an unexported function doesn't count)`}`);
         }
       }
       const attempt = { provider: c.name, kind, ok: res.ok, reason: res.ok ? 'ok' : res.reason, seconds: Math.round((Date.now() - t0) / 100) / 10 };

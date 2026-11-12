@@ -279,3 +279,39 @@ export async function verifyOnBase(root, work, baseRef, files, settings, logFile
     try { gitc('worktree', 'remove', '--force', tmp); } catch { fs.rmSync(tmp, { recursive: true, force: true }); try { gitc('worktree', 'prune'); } catch { /* best effort */ } }
   }
 }
+
+// ---------------- export check ----------------
+const JS_FILE = /\.(m?js|cjs|jsx|tsx?)$/;
+const NAMED_EXPORT = (n) => new RegExp(`export\\s+(?:declare\\s+)?(?:async\\s+)?(?:function\\*?|class|const|let|var|interface|type|enum)\\s+${esc(n)}\\b` +
+  `|export\\s*\\{[^}]*\\b(?:\\w+\\s+as\\s+)?${esc(n)}\\b[^}]*\\}|(?:module\\.)?exports\\.${esc(n)}\\s*=|module\\.exports\\s*=\\s*\\{[^}]*\\b${esc(n)}\\b`);
+
+/**
+ * Names the task needs as named exports: what its acceptance checks call directly (conductor imports them to run
+ * the check) and what it explicitly says to export ("exporting `toQuery(params)`"). Methods (`keys()`) aren't.
+ */
+export function exportNames(section, checkExprs = []) {
+  const out = new Set();
+  for (const e of checkExprs) { const m = e.match(/^(?:new\s+)?([A-Za-z_$][\w$]*)\s*\(/); if (m) out.add(m[1]); }
+  for (const m of String(section || '').matchAll(/export(?:s|ing|ed)?\s+(?:a\s+|an\s+|the\s+)?(?:(?:function|class|const)\s+)?`(?:new\s+|class\s+)?([A-Za-z_$][\w$]*)/gi)) out.add(m[1]);
+  return [...out].filter((n) => n.length >= 3 && !(n in globalThis));
+}
+
+/**
+ * Of those names, the ones no JavaScript/TypeScript file exports by name (an `export default` doesn't count:
+ * `import { slugify }` would still fail). Only for JS/TS tasks; other languages keep the "defined" check.
+ */
+export function unexported(work, section, taskFiles, checkExprs = []) {
+  if (!taskFiles.some((f) => JS_FILE.test(f))) return [];
+  const names = exportNames(section, checkExprs);
+  if (!names.length) return [];
+  let files = [];
+  try { files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard'], { cwd: work, stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 32 << 20 }).toString().split('\n').filter(Boolean); } catch { return []; }
+  const code = [...new Set([...taskFiles.filter((f) => JS_FILE.test(f)), ...files.filter((f) => JS_FILE.test(f) && !/(^|\/)(node_modules|dist|build|coverage)\//.test(f))])];
+  const left = new Set(names);
+  for (const f of code) {
+    if (!left.size) break;
+    let text; try { const st = fs.statSync(path.join(work, f)); if (st.size > 500_000) continue; text = fs.readFileSync(path.join(work, f), 'utf8'); } catch { continue; }
+    for (const n of [...left]) if (text.includes(n) && NAMED_EXPORT(n).test(text)) left.delete(n);
+  }
+  return [...left];
+}
