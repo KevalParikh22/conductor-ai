@@ -6,7 +6,7 @@ import { providerReadiness, providerKind, readOnlyEnforced, PROJECT_DIRNAME } fr
 import { runProvider } from './providers.js';
 import * as git from './git.js';
 import { runVerify } from './verify.js';
-import { baseVerify, scopeCheck, newFailures, syntaxErrors, missingContract, failureBrief, runRepro, proveRegression, TEST_FILE } from './gates.js';
+import { baseVerify, scopeCheck, newFailures, syntaxErrors, missingContract, failureBrief, runRepro, proveRegression, verifyOnBase, TEST_FILE } from './gates.js';
 import { checkTask, taskAcceptance, acceptancePrompt, readAcceptance } from './plancheck.js';
 import { detectVerify } from './verify.js';
 import { repoMap } from './context.js';
@@ -779,7 +779,27 @@ async function dispatchOnce(cfg, opts) {
         }
       }
       if (summary.repro && settings.requireRepro === false) summary.repro.waived = true;
-      summary.fixBrief = [summary.verify.status === 'FAIL' ? summary.verify.brief : '', checksBrief(summary.checks), reproBrief].filter(Boolean).join('\n\n');
+      // False alarms: correct code, but a test the worker wrote is wrong. When verify fails and every acceptance
+      // check passes, run the ORIGINAL tests against only the worker's code changes. If they pass, the failures come
+      // from the worker's own tests: say so, so the next worker fixes the test instead of breaking the code.
+      let verifyBrief = summary.verify.status === 'FAIL' ? summary.verify.brief : '';
+      // only with acceptance checks that all pass: without them, "the old tests pass" can be trivially true for wrong code
+      if (verifyBrief && settings.suspectTests !== false && summary.checks?.total > 0 && !summary.checks.failed.length && !(summary.verify.baseFailed && !summary.verify.newFailures?.length)) {
+        const mine = summary.changed.filter((f) => !preDirty.has(f));
+        const tests = mine.filter((f) => TEST_FILE.test(f)), code = mine.filter((f) => !TEST_FILE.test(f));
+        if (tests.length && code.length) {
+          emit({ type: 'isolate' });
+          const r = await verifyOnBase(root, work, useWorktree ? wtBase : headBefore, code, verifySettings, path.join(runDir, 'code-only-verify.log'));
+          if (r.status === 'PASS') {
+            summary.verify.suspectTests = tests;
+            const n = summary.checks?.total;
+            verifyBrief = `Your code changes pass every test that existed before and all ${n} acceptance checks. Only tests you added or changed fail (${tests.join(', ')}):\n` +
+              `${summary.verify.brief.split('\n').slice(1, -1).join('\n')}\n` +
+              'These tests are probably wrong: compare each expected value with the task, its acceptance criteria and the design notes, and fix the test. Change the code only if a failing test shows a real requirement the code misses.';
+          }
+        }
+      }
+      summary.fixBrief = [verifyBrief, checksBrief(summary.checks), reproBrief].filter(Boolean).join('\n\n');
     } else {
       // skipped on purpose: the outcome is still "unverified", but it doesn't fail the run
       summary.verify = { status: 'SKIPPED', cmd: '', chosen: true, note: opts.noVerify ? 'skipped with --no-verify' : 'autoVerify is off in settings' };
@@ -907,7 +927,8 @@ export function formatSummary(s) {
     ? `outcome:   PARTIAL. ${acc.answered ? `Only ${acc.met} of ${acc.total} acceptance criteria are met with evidence` : 'The worker reports DONE but did not answer the acceptance criteria'}: check them, then finish or retry with --note`
     : 'outcome:   PARTIAL. The worker says it did only part of the task: read the report, then finish it or retry the rest');
   if (acc) L.push(`acceptance: ${acc.met}/${acc.total} met with evidence${acc.waived ? ' (not required)' : ''}${acc.unmet.length ? `; not met: ${acc.unmet.slice(0, 4).join(' | ')}` : ''}`);
-  if (out === 'verify-failed') L.push(s.verify?.baseFailed
+  if (out === 'verify-failed' && s.verify?.suspectTests?.length) L.push(`outcome:   NOT DONE, but the code looks right: it passes every earlier test and every acceptance check. Only the worker's own tests fail (${s.verify.suspectTests.join(', ')}): check those tests first`);
+  else if (out === 'verify-failed') L.push(s.verify?.baseFailed
     ? `outcome:   NOT PROVEN. Verify already failed before the worker started, so it can't prove this work. ${s.verify.newFailures?.length ? `${s.verify.newFailures.length} failure line(s) are new: check them first` : 'No new failure lines: the worker probably added no new failures'}`
     : 'outcome:   NOT DONE. The worker finished but verify fails: fix it, or retry with --note "<what failed>"');
   if (out === 'out-of-scope') L.push(`outcome:   OUT OF SCOPE. The worker changed files the task doesn't list: ${s.scope.outside.join(', ')}. Check them in the diff: if they're needed, accept the work (and list them next time); if not, revert them or retry with --note`);
@@ -928,7 +949,7 @@ export function formatSummary(s) {
   if (s.checks) {
     L.push(`checks:    ${s.checks.passed}/${s.checks.total} acceptance checks pass when run${s.checks.skipped?.length ? ` (${s.checks.skipped.length} skipped: ${s.checks.skipped.map((x) => x.why).join('; ')})` : ''}`);
     for (const f of s.checks.failed.slice(0, 5)) L.push(`           ✗ ${f.expr} → ${f.got} (expected ${f.kind === 'returns' ? f.expected : `${f.kind === 'rejects' ? 'rejection with' : ''} ${f.expected}`.trim()})`);
-    if (s.verify?.status === 'FAIL' && !s.checks.failed.length) L.push('hint:      every acceptance check passes, so the failing test may itself be wrong');
+    if (s.verify?.status === 'FAIL' && !s.checks.failed.length && !s.verify.suspectTests) L.push('hint:      every acceptance check passes, so the failing test may itself be wrong');
   }
   if (s.verify?.status === 'FAIL' && s.verify.brief) L.push(`why:       ${s.verify.brief.split('\n').slice(1, -1).join('\n           ')}`);
   if (s.saved) L.push(`saved:     ${s.saved}`);

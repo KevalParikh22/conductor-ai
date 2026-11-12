@@ -245,6 +245,16 @@ export async function runRepro(dir, cmd, logFile, timeoutMs = 300_000) {
  * passes on the old code proves nothing about the fix. → { status: 'proved' | 'not-proved' | 'error', log }
  */
 export async function proveRegression(root, work, baseRef, testFiles, settings, logFile) {
+  const r = await verifyOnBase(root, work, baseRef, testFiles, settings, logFile);
+  if (r.status === 'error') return r;
+  return { status: r.status === 'FAIL' ? 'proved' : 'not-proved' };
+}
+
+/**
+ * Verify on the original commit with some of the worker's files copied over it (a deleted file is deleted), in a
+ * temporary checkout that is always removed. → { status: PASS | FAIL | error, why? }
+ */
+export async function verifyOnBase(root, work, baseRef, files, settings, logFile) {
   const tmp = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'conductor-repro-')); // never next to the user's project
   fs.rmSync(tmp, { recursive: true, force: true });
   const gitc = (...a) => execFileSync('git', a, { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] }).toString();
@@ -254,15 +264,15 @@ export async function proveRegression(root, work, baseRef, testFiles, settings, 
       const src = path.join(work, name);
       if (fs.existsSync(src) && !fs.existsSync(path.join(tmp, name))) fs.symlinkSync(fs.realpathSync(src), path.join(tmp, name), 'dir');
     }
-    for (const f of testFiles) {
+    for (const f of files) {
       const src = path.join(work, f);
-      if (!fs.existsSync(src)) continue;
+      if (!fs.existsSync(src)) { fs.rmSync(path.join(tmp, f), { force: true }); continue; }
       fs.mkdirSync(path.dirname(path.join(tmp, f)), { recursive: true });
       fs.copyFileSync(src, path.join(tmp, f));
     }
     const r = await runVerify(tmp, settings, logFile);
-    if (r.status === 'SKIPPED') return { status: 'error', why: 'no verify command to run the tests with' };
-    return { status: r.status === 'FAIL' ? 'proved' : 'not-proved' };
+    if (r.status === 'SKIPPED') return { status: 'error', why: 'no verify command' };
+    return { status: r.status };
   } catch (e) {
     return { status: 'error', why: String(e.stderr || e.message).trim().split('\n')[0].slice(0, 200) };
   } finally {

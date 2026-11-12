@@ -154,6 +154,8 @@ export async function runEvals({ ids, dir, chain, provider, samples, keep = fals
         cost: s.samplesCost?.cost ?? s.attempts.reduce((t, a) => t + (a.cost || 0), 0),
         acceptance: s.acceptance ? `${s.acceptance.met}/${s.acceptance.total}` : null,
         outside: s.scope?.outside || [],
+        suspectTests: s.verify?.suspectTests || null, // conductor judged the code right and the worker's tests wrong
+        handedOn: (s.escalated || []).length,
       });
       const sc = await scoreEval(task, work);
       row.pass = sc.pass; row.detail = sc.detail;
@@ -214,8 +216,9 @@ export function formatEvals(report, prev) {
   L.push(`conductor ${report.version}${report.samples > 1 ? ` · ${report.samples} attempts per task` : ''}${report.label ? ` · ${report.label}` : ''}${report.provider ? ` · provider ${report.provider}` : report.chain ? ` · chain ${report.chain.join(',')}` : ' · your routing'}`);
   for (const r of report.results) {
     const mark = r.pass ? '✓' : '✗';
+    const tags = `${r.suspectTests ? '  [said: code looks right, tests wrong]' : ''}${r.handedOn ? `  [handed on ×${r.handedOn}]` : ''}`;
     const verdict = r.outcome === 'done' && !r.pass ? '  ← conductor said done, hidden tests fail' : r.outcome !== 'done' && r.pass && r.outcome !== 'error' ? '  ← work was fine, conductor flagged it' : '';
-    L.push(`${mark} ${r.id.padEnd(22)} ${String(r.outcome || '-').padEnd(13)} ${(r.winner || '-').padEnd(16)} ${String(r.seconds).padStart(4)}s${r.acceptance ? `  acc ${r.acceptance}` : ''}${verdict}`);
+    L.push(`${mark} ${r.id.padEnd(22)} ${String(r.outcome || '-').padEnd(13)} ${(r.winner || '-').padEnd(16)} ${String(r.seconds).padStart(4)}s${r.acceptance ? `  acc ${r.acceptance}` : ''}${tags}${verdict}`);
     if (!r.pass && r.detail) L.push(`    ${r.detail.split('\n')[0].slice(0, 150)}`);
   }
   const delta = (k, unit = '') => (prev?.summary && prev.summary[k] != null ? ` (${s[k] - prev.summary[k] >= 0 ? '+' : ''}${s[k] - prev.summary[k]}${unit} vs ${prev.label || prev.startedAt.slice(0, 16)})` : '');

@@ -3,12 +3,14 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { isolateHome, makeRepo, fakeBins } from './helpers.js';
 
 isolateHome();
 // Fake agents: read the prompt file, write src/<task>.js, take ~1s so parallelism is measurable.
 const agent = (who) => `if (process.env.PWD !== process.cwd()) { console.error('PWD mismatch'); process.exit(1); } const p=fs.readFileSync(args[0],'utf8'); const id=(p.match(/Your task id: (\\w+)/)||[])[1]||'free';
-  setTimeout(()=>{ fs.mkdirSync('src',{recursive:true}); fs.writeFileSync('src/'+id+'.js','// by ${who}\\n');
+  const t0=Date.now();
+  setTimeout(()=>{ if (process.env.FAKE_SPANS) fs.writeFileSync(require('path').join(process.env.FAKE_SPANS, id), t0+','+Date.now()); fs.mkdirSync('src',{recursive:true}); fs.writeFileSync('src/'+id+'.js','// by ${who}\\n');
   console.log('## RESULT: DONE\\n## Files changed\\n- src/'+id+'.js\\n## Notes\\n- ${who} '+(p.includes('Design notes')?'saw design notes':'no notes')); }, Number(process.env.FAKE_DELAY_MS) || 1000);`;
 fakeBins({
   'agent-a': agent('a'),
@@ -107,14 +109,17 @@ test('--worktree is refused for read-only roles', async () => {
 test('batch runs independent tasks in parallel on different providers', async () => {
   clearCooldowns();
   const { dir, git } = makeRepo({ files: { 'docs/plan/p.md': PLAN } });
-  // 3s tasks: one after another takes 6s+, so finishing under 5s shows they ran at the same time, with room for a slow runner
-  process.env.FAKE_DELAY_MS = '3000';
-  const t0 = Date.now();
+  // parallel means the two workers were running at the same moment: compare their own start/end times, not the
+  // batch's wall clock (which grows with every check conductor adds and with a slow CI machine)
+  process.env.FAKE_DELAY_MS = '1500';
+  process.env.FAKE_SPANS = fs.mkdtempSync(path.join(os.tmpdir(), 'spans-'));
   const b = await runBatch(cfgFor(dir), { planPath: 'docs/plan/p.md', tasks: ['T1', 'T2'] }).finally(() => { delete process.env.FAKE_DELAY_MS; });
-  const secs = (Date.now() - t0) / 1000;
+  const [s1, e1] = fs.readFileSync(path.join(process.env.FAKE_SPANS, 'T1'), 'utf8').split(',').map(Number);
+  const [s2, e2] = fs.readFileSync(path.join(process.env.FAKE_SPANS, 'T2'), 'utf8').split(',').map(Number);
+  delete process.env.FAKE_SPANS;
   assert.equal(b.exitCode, 0);
   assert.deepEqual(b.results.map((r) => r.summary.winner), ['agent-a', 'agent-b'], 'spread across providers');
-  assert.ok(secs < 5, `ran in parallel (took ${secs}s for two 3s tasks)`);
+  assert.ok(s2 < e1 && s1 < e2, `ran in parallel (T1 ${s1}-${e1}, T2 ${s2}-${e2})`);
   assert.equal(git('show', 'conductor/T1:src/T1.js'), '// by a\n');
   assert.equal(git('show', 'conductor/T2:src/T2.js'), '// by b\n');
   assert.ok(!fs.existsSync(path.join(dir, 'src')), 'main checkout untouched');
