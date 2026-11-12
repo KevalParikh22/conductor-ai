@@ -100,6 +100,9 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | `contractCheck` | true | Reject it when a function or class the task names in a code span isn't defined anywhere afterwards |
 | `chatRepair` | true | Give a chat model's reply with no file blocks one repair turn |
 | `repoMapBytes` | 6000 | Size of the project map chat models get |
+| `lessons` | true | Keep what earlier work taught (diagnosed failures, your `--note`s) for later prompts and provider order (`conductor lessons`) |
+| `lessonsInPrompt` | 5 | Most lessons added to one worker's prompt |
+| `demoteAfter` | 2 | Failures on the same kind of work in the same area before a provider moves to the back |
 | `autoReview` | true | Risky work that passes every check gets an advisory review from a different model family |
 | `reviewLines` | 150 | Changed lines above which work counts as risky (0 = size never triggers a review) |
 | `reviewers` | [] | Providers to ask for that review, in order (default: the review role's chain, then any ready provider) |

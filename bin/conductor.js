@@ -12,6 +12,7 @@ import { runVerify, detectVerify } from '../src/verify.js';
 import { checkPlan, formatPlanCheck } from '../src/plancheck.js';
 import { listEvals, checkEvals, runEvals, formatEvals, loadResult } from '../src/evals.js';
 import { failureStats, formatFailureStats } from '../src/stats.js';
+import { readLessons, addLesson, removeLesson, promoteLesson, GUIDANCE } from '../src/lessons.js';
 import { initProject, setupGlobal } from '../src/init.js';
 import { startMcpServer } from '../src/mcp.js';
 import { testProvider } from '../src/providers.js';
@@ -86,6 +87,7 @@ Work (normally called by the controller)
   conductor eval [list] | check | run [--tasks a,b] [--provider p | --chain a,b] [--samples N] [--label x] [--compare last|<file>] [--keep]
                                        measure conductor on fixed tasks with hidden tests (check = prove the tasks are fair, no LLM)
   conductor stats --failures [--days 30]   why work fails, biggest cause first
+  conductor lessons [list] | add "text" [--files a,b] [--role r] | rm <id> | promote <id>   what earlier work taught (in later prompts and routing)
   conductor verify                     run the project's verify command
   conductor skills [list] | new <name> | add <path> | on|off <name> | rm <name> | sync   one skill library for every controller and worker
   conductor retry <task> --note "…" [--provider p]   the task's worker continues in its worktree with your note
@@ -355,6 +357,26 @@ async function main() {
       const prev = o.compare ? loadResult(o.compare, rep.file) : null;
       console.log(o.json ? JSON.stringify(rep, null, 2) : formatEvals(rep, prev));
       return 0;
+    }
+    case 'lessons': case 'lesson': {
+      const root = findProjectRoot();
+      const sub = o._[0] || 'list';
+      if (sub === 'list') {
+        const all = readLessons(root);
+        if (!all.length) { console.log('No lessons yet. conductor records them from failed checks and from your --note on retries; add one with: conductor lessons add "<text>"'); return 0; }
+        for (const l of all.slice().reverse()) console.log(`${l.id}  ${(l.source === 'auto' ? l.kind : l.source).padEnd(16)} ${String(l.provider || '-').padEnd(16)} ×${String(l.count || 1).padEnd(3)} ${l.promoted ? '[rule] ' : ''}${l.dirs?.length ? `[${l.dirs.join(',')}] ` : ''}${l.text || GUIDANCE[l.kind] || ''}`.slice(0, 220));
+        console.log(`\n${all.length} lesson(s). Matching ones go into later prompts; a provider with 2+ failures on the same kind of work moves to the back. promote <id> makes one a rule in AGENTS.md.`);
+        return 0;
+      }
+      if (sub === 'add') {
+        const text = o._.slice(1).join(' ').trim();
+        if (!text) throw new UsageError('usage: conductor lessons add "<text>" [--files a,b] [--role build]');
+        const l = addLesson(root, { source: 'manual', text, role: o.role || null, files: o.files ? String(o.files).split(',').map((x) => x.trim()) : [] });
+        console.log(`added ${l.id}: ${l.text}`); return 0;
+      }
+      if (sub === 'rm' || sub === 'remove') { const g = removeLesson(root, o._[1] || ''); if (!g) throw new UsageError(`no lesson "${o._[1] || ''}" (see conductor lessons)`); console.log(`removed ${g.id}`); return 0; }
+      if (sub === 'promote') { const r = promoteLesson(root, o._[1] || ''); if (!r) throw new UsageError(`no lesson "${o._[1] || ''}" (see conductor lessons)`); console.log(`added to AGENTS.md: ${r.bullet}`); return 0; }
+      throw new UsageError('usage: conductor lessons [list] | add "<text>" | rm <id> | promote <id>');
     }
     case 'stats': {
       if (!o.failures) throw new UsageError('usage: conductor stats --failures [--days 30]');
