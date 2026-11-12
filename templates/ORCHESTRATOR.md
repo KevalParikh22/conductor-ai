@@ -58,6 +58,8 @@ Read the `outcome:` line first. **OUT OF SCOPE:** check the listed files in the 
 - **Second failure or exit 3:** do it yourself.
 
 ### 4. Review
+To check one task's work without spending your own context, ask the **conductor-reviewer** subagent ("review T3's diff against the plan"): it reads `conductor diff` and the task in a fresh context and returns findings with `path:line` and a verdict.
+
 `conductor run review --plan docs/plan/<slug>.md`. Triage every finding yourself (reviewers produce false positives). Fix the real ones.
 
 ### 5. Handoff

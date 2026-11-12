@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- **Each controller gets its files in its own format.**
+  - **Project rules:** write a rule once in `.conductor/rules/<name>.md`, optionally for certain `paths`. conductor writes it where each controller reads it:
+    - Claude Code: `.claude/rules/`, with `paths:`.
+    - Antigravity: `.agents/rules/`, with `trigger: glob` or `always_on`, since agy silently drops a rule with the wrong frontmatter.
+    - Codex and OpenCode: a block in AGENTS.md.
+    - Workers get the rules matching their files in their prompt.
+  - **`conductor-reviewer` subagent:** reviews a worker's diff against its plan task in a fresh context, so the controller saves its own. Formats: `.claude/agents/`, `.agents/agents/`, `.codex/agents/*.toml`, `.opencode/agents/` (OpenCode 2 permissions: edits and shell denied except `conductor diff` and git reads). Checked with the real CLIs: agy lists it, OpenCode runs it, and Codex reads the rules.
+  - **`conductor doctor`** now checks the files controllers read:
+    - Antigravity rule frontmatter (a bad `trigger` is silently ignored by agy);
+    - skill descriptions;
+    - AGENTS.md size limits (Codex reads 32 KiB);
+    - JSON configs;
+    - whether Codex trusts the project, without which it ignores `.codex/`.
+  - **Commands:** `conductor rules [list] | new <name> [--paths] | sync`. `init` writes the rules and the reviewer for its controller, and keeps them out of git.
 - **Lessons: the team remembers.**
   - conductor keeps what earlier work taught in this project. That covers every failure it diagnoses (failed acceptance check, function under the wrong name, wrong test, out-of-scope edits, missing regression test, syntax error, no files in a reply) and every `--note` the controller writes on a retry.
   - Later work in the same folder and role gets up to 5 matching lessons in its prompt.

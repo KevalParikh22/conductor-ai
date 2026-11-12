@@ -9,7 +9,9 @@ export const BLOCK_START = '# >>> conductor: local files, not committed (conduct
 export const BLOCK_END = '# <<< conductor';
 
 // always ignored when conductor manages a project; created files are added on top of these
-export const BASE_ENTRIES = ['.conductor/', 'docs/plan/', '.claude/commands/conduct-*', '.agents/skills/conduct-*/'];
+export const BASE_ENTRIES = ['.conductor/', 'docs/plan/', '.claude/commands/conduct-*', '.agents/skills/conduct-*/',
+  // per-controller files conductor generates from .conductor/rules and its reviewer subagent (Q8)
+  '.claude/rules/conductor-*', '.agents/rules/conductor-*', '.claude/agents/conductor-*', '.agents/agents/conductor-*', '.codex/agents/conductor-*', '.opencode/agents/conductor-*'];
 // files conductor writes for a controller: ignored only when conductor created them (never your own existing file)
 export const CREATED_FILES = ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md', 'HANDOFF.md', 'docs/architecture.md', '.mcp.json', 'opencode.json', '.agents/mcp_config.json', '.vscode/mcp.json'];
 // not copied into worktrees: conductor's own state, plans (inlined into the prompt) and MCP configs

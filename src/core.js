@@ -15,6 +15,7 @@ import { runAcceptanceChecks, checksBrief } from './acceptcheck.js';
 import { runSamples } from './samples.js';
 import { independentReview, riskReasons } from './review.js';
 import { lessonsPrompt, demoteByLessons, lessonsFromRun, addLesson } from './lessons.js';
+import { rulesPrompt } from './controllers.js';
 import { autoModel, autoFallbacks } from './models.js';
 import { smartOrder, isFree as isFreeProvider } from './selector.js';
 import { taskProviders, matchRoute, describeRoute } from './routing.js';
@@ -489,6 +490,9 @@ async function dispatchOnce(cfg, opts) {
   // Q7: what earlier work in this area taught (the controller's notes, diagnosed failures)
   const lessons = mode === 'write' && cfg.settings?.lessons !== false ? lessonsPrompt(root, { role, files: [...(opts.files || []), ...taskFiles(section)] }, { max: settings.lessonsInPrompt ?? 5 }) : { text: '', ids: [] };
   if (lessons.text) body += lessons.text;
+  // Q8: the project's rules (.conductor/rules) that apply to this task's files
+  const rules = mode === 'write' ? rulesPrompt(root, [...(opts.files || []), ...taskFiles(section)]) : '';
+  if (rules) body += rules;
   const lessonIds = lessons.ids;
   const skillTask = { role, files: [...(opts.files || []), ...taskFiles(section)], body };
   const skillsAgent = skillsForTask(root, skillTask), skillsChat = skillsForTask(root, skillTask, { inline: true });
