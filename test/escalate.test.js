@@ -75,7 +75,7 @@ test('work that fails verify goes to the next provider once, with the brief; it 
   const prompt = fs.readFileSync(process.env.FIXER_LOG, 'utf8');
   assert.match(prompt, /A previous worker \(wrong\) did this task[\s\S]*Failing: adds two numbers[\s\S]*-1 !== 5/);
   assert.deepEqual(s.changed, ['src/add.js'], 'the inherited change counts as this task\'s work');
-  assert.match(formatSummary(s), /handed on: wrong's work failed verify → fixer took it over/);
+  assert.match(formatSummary(s), /handed on: wrong's work failed verify and acceptance checks → fixer took it over[\s\S]*checks: +1\/1 acceptance checks pass when run/);
 });
 
 test('in a worktree the next provider continues on the task branch', async () => {

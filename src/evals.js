@@ -19,8 +19,9 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { run, GLOBAL_DIR, readJSON, writeJSON } from './util.js';
 import { loadConfig } from './config.js';
-import { dispatch, outcome as outcomeOf } from './core.js';
-import { checkPlan } from './plancheck.js';
+import { dispatch, outcome as outcomeOf, extractTask, taskFiles } from './core.js';
+import { checkPlan, taskAcceptance } from './plancheck.js';
+import { runAcceptanceChecks } from './acceptcheck.js';
 import { VERSION } from './version.js';
 
 export const EVALS_DIR = fileURLToPath(new URL('../evals/', import.meta.url));
@@ -117,6 +118,12 @@ export async function checkEvals({ ids, dir } = {}) {
       if (own.code !== 0) problems.push(`the reference solution fails the project's own tests:\n${tail(own)}`);
       const s = await scoreEval(task, work);
       if (!s.pass) problems.push(`the reference solution fails the score: ${s.detail}`);
+      // the plan's own acceptance lines, run as checks (H11), must hold for the reference solution too
+      if (['build', 'fix'].includes(task.role)) {
+        const section = extractTask(plan, 'T1');
+        const ch = await runAcceptanceChecks(work, taskAcceptance(section), taskFiles(section));
+        for (const f of ch?.failed || []) problems.push(`acceptance check fails on the reference solution: ${f.expr} → ${f.got}`);
+      }
     } catch (e) { problems.push(e.message); } finally { fs.rmSync(work, { recursive: true, force: true }); }
     rows.push({ id: task.id, problems });
   }

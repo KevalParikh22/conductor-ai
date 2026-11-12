@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Acceptance criteria are run, not just answered.**
+  - Lines like `` `slugify('alpha beta', { maxLength: 6 })` returns `'alpha'` ``, `` `f(x)` throws TypeError `` or `` `load(-1)` rejects with RangeError `` become a small test that conductor writes and runs itself after the worker. No model is involved, so a confident but wrong `[x]` can't pass.
+  - A failing check makes the outcome **partial**. The summary shows each failure with what came back (`✗ add(2, 3) → returned -1 (expected 5)`), and the work is handed to the next provider with that brief.
+  - A function the plan calls that no file exports is a failed check. Lines that use helpers the plan never defines are skipped, never guessed.
+  - When every check passes but verify fails, the summary hints that the failing test may itself be wrong.
+  - Applies to `build` and `fix` tasks on JavaScript files for now. `runAcceptance: false` turns it off. `conductor eval check` also runs each task's checks against its reference solution.
 - **Eval: unreachable providers don't count.** A task where no model could be reached (DNS, offline) is an `error`, left out of the pass rate and the verdicts, instead of looking like a failure conductor caught.
 - **Failed verify comes with a fix brief.** A failing verify is condensed into what a worker needs: the failing tests, the error (e.g. `-1 !== 5`) and where (`test/add.test.js:2`). It is shown in the summary as `why:` and written to be pasted into `--note` (node:test, pytest, PHPUnit and similar output).
 - **Work that fails verify is handed on once.** Instead of stopping, conductor gives the work to the next provider in the chain with the brief. In a normal run that worker fixes it in the same checkout; in a worktree it continues on the task branch. Every attempt stays in the summary (`handed on: X's work failed verify → Y took it over`). There is no hand-off when the failures were already there before the worker started.
