@@ -20,10 +20,11 @@ test('sync throws count too, and attempt numbers are passed', async () => {
 });
 test('no delay after the last attempt', async () => {
   const t0 = Date.now();
-  await assert.rejects(retry(failing(99), { attempts: 2, delayMs: 60 }));
+  // wide margins for slow CI machines: correct ≈ 200ms, waiting after the last attempt too ≈ 400ms
+  await assert.rejects(retry(failing(99), { attempts: 2, delayMs: 200 }));
   const ms = Date.now() - t0;
-  assert.ok(ms >= 50, `waited between attempts (${ms}ms)`);
-  assert.ok(ms < 115, `no wait after the last (${ms}ms)`);
+  assert.ok(ms >= 180, `waited between attempts (${ms}ms)`);
+  assert.ok(ms < 350, `no wait after the last (${ms}ms)`);
 });
 test('attempts validated', async () => {
   await assert.rejects(retry(() => 1, { attempts: 0 }), RangeError);
