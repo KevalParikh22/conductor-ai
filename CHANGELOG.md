@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **A wrong test no longer gets correct code broken.**
+  - When verify fails but every acceptance check passes, conductor runs the project's original tests against only the worker's code changes, in a temporary checkout of the starting commit.
+  - If they pass, the failures come only from tests the worker added or changed. The summary says "the code looks right, check those tests first", and the hand-off tells the next worker to fix the test, not the code.
+  - Only with at least one acceptance check, since without one conductor doesn't guess. `suspectTests: false` turns it off.
+- **Test:** the batch parallelism test compares the workers' own start and end times instead of the batch's wall clock, so a slow CI machine can't fail it.
 - **`--samples N`: best of several attempts.**
   - Runs a write task on N different providers in parallel, each in its own worktree and through every gate (verify, scope, edit guard, acceptance checks, repro).
   - conductor picks by results, not by a model's opinion: a `done` attempt first, then the most acceptance checks and criteria met, then the smallest diff. The chosen attempt's changes land in your working tree (or stay on its branch with `--worktree`); the others are removed.
