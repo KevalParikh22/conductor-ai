@@ -29,6 +29,9 @@ test('a failing verify becomes a short brief: what failed, the error, where', ()
   const b = failureBrief(NODE_FAIL, '/work/proj', 'npm test');
   assert.match(b, /^Verify failed \(`npm test`\)\.\nFailing: adds two numbers\nErrors:\n- AssertionError \[ERR_ASSERTION\]: Expected values to be strictly equal: → -1 !== 5\nWhere: test\/add\.test\.js:2/);
   assert.ok(!b.includes('node:async_hooks'));
+  // Node 20 prints TAP when piped: same brief
+  const tap = "not ok 1 - adds two numbers\n  ---\n  location: '/work/proj/test/add.test.js:2:1'\n  error: |-\n    Expected values to be strictly equal:\n    \n    -1 !== 5\n    \n  code: 'ERR_ASSERTION'\n  name: 'AssertionError'\n  expected: 5\n  actual: -1\n  stack: |-\n    TestContext.<anonymous> (file:///work/proj/test/add.test.js:2:41)\n    Test.runInAsyncScope (node:async_hooks:206:9)\n  ...\n";
+  assert.match(failureBrief(tap, '/work/proj', 'npm test'), /Failing: adds two numbers\nErrors:\n- AssertionError: Expected values to be strictly equal: → -1 !== 5\nWhere: test\/add\.test\.js:2/);
   assert.match(failureBrief('FAILED tests/test_x.py::test_add - assert 1 == 5\nE       assert 1 == 5\ntests/test_x.py:4: AssertionError'), /Failing: tests\/test_x\.py::test_add[\s\S]*Where: tests\/test_x\.py:4/);
 });
 

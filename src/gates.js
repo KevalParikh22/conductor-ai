@@ -196,6 +196,14 @@ export function failureBrief(text, work = '', cmd = '') {
     const m = l.match(/^\s*(?:✖|not ok \d+ -|FAILED|FAIL:?|×|✗|\d+\))\s+(.+?)(?:\s+\([\d.]+\s*m?s\))?\s*$/);
     if (m && !/failing tests:?$/i.test(m[1]) && !/^\S+\.(m?js|ts|py|php)$/.test(m[1])) add(names, m[1].trim().slice(0, 120), 8);
     const t = l.trim();
+    // TAP (node --test on Node 20 when piped): the message is in a YAML block under "error: |-", or on the same line
+    const tap = t.match(/^error:\s*(\|-?)?\s*['"]?(.*?)['"]?$/);
+    if (tap && /^\s{2,}error:/.test(l)) {
+      const msg = tap[1] ? lines.slice(i + 1, i + 6).map((x) => x.trim()).filter(Boolean).filter((x) => !/^(code|name|expected|actual|operator|stack):/.test(x)).slice(0, 2).join(' → ') : tap[2];
+      const name = (lines.slice(i + 1, i + 12).find((x) => /^\s{2,}name:/.test(x)) || '').replace(/^\s*name:\s*['"]?|['"]$/g, '');
+      if (msg) add(errors, `${name ? `${name}: ` : ''}${msg.slice(0, 200)}`, 5);
+      continue;
+    }
     if (/^(AssertionError|TypeError|ReferenceError|SyntaxError|RangeError|Error|[\w.]*Exception)\b[^:]*:/.test(t) || /^E\s{2,}/.test(l) || /^Failed asserting/.test(t)) {
       // the error line, plus a short follow-up such as "-1 !== 5" or "expected ... got ..."
       const next = lines.slice(i + 1, i + 4).map((x) => x.trim()).find((x) => x && !/^at\s/.test(x) && x.length < 160);
