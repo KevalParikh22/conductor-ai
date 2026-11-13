@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **One feature set in the CLI, MCP and UI (V3).**
+  - **One registry** (`src/surfaces.js`) lists every action and where it lives. An action left out of a surface says why (secrets never pass through a model; a controller can't switch off its own guard; long evals run in the terminal). A test checks it against the real CLI commands, MCP tools and UI routes, so a new feature can't land in one surface and be forgotten in the others. [docs/SURFACES.md](docs/SURFACES.md) is generated from it.
+  - **MCP gained** `conductor_stats` (quality, failure causes, usage), `conductor_doctor` (with `live`), `conductor_rules`, and remove/promote in `conductor_lessons`.
+  - **The UI gained** a **Lessons & rules** page (add, remove, promote; lessons seen 3+ times are highlighted), and on Overview the first-try accept rate with the alpha gate, and the commit guard with an on/off switch.
+  - **Shared code:** doctor's checks moved to `src/doctor.js` and guard switching to `switchGuards`, so the CLI, MCP and UI do exactly the same thing.
 - **Lessons you can check (V1).**
   - **Resolved, not held against forever:** when a provider passes a kind of work in an area where it failed before, its earlier failures there are marked resolved and stop moving it to the back of the chain. The guidance stays in prompts, because it is still true for the project.
   - **Offered as rules:** a lesson seen 3 times shows a `promote?:` line in the run summary and `[promote?]` in `conductor lessons`, with the command. Promoting stays the user's call.
