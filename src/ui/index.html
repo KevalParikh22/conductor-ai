@@ -179,7 +179,7 @@ body { overflow-x: hidden; }
 <script>
 const TOKEN = new URLSearchParams(location.hash.slice(1)).get('t') || '';
 // the open page lives in the address (#t=…&p=roles), so a reload or a shared link opens the same page
-function pageFromHash() { const p = new URLSearchParams(location.hash.slice(1)).get('p'); return ['overview', 'runs', 'roles', 'providers', 'skills', 'keys', 'settings', 'setup'].includes(p) ? p : 'overview'; }
+function pageFromHash() { const p = new URLSearchParams(location.hash.slice(1)).get('p'); return ['overview', 'runs', 'roles', 'providers', 'skills', 'lessons', 'keys', 'settings', 'setup'].includes(p) ? p : 'overview'; }
 function go(page) {
   if (page === tab && !runOpen) return render();
   tab = page;
@@ -202,10 +202,11 @@ const ICONS = {
   up: 'M12 19V5M5 12l7-7 7 7', down: 'M12 5v14M19 12l-7 7-7-7', agent: 'M4 17l6-6-6-6M12 19h8', cloud: 'M18 10h-1.3A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z',
   chip: 'M5 5h14v14H5zM9 9h6v6H9zM9 1v4M15 1v4M9 19v4M15 19v4M1 9h4M1 15h4M19 9h4M19 15h4',
   sun: 'M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10zM12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4',
+  lessons: 'M2 4h7a3 3 0 0 1 3 3v14a2 2 0 0 0-2-2H2zM22 4h-7a3 3 0 0 0-3 3v14a2 2 0 0 1 2-2h8z',
   moon: 'M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z', skills: 'M13 2L3 14h9l-1 8 10-12h-9l1-8z', copy: 'M9 9h11v11H9zM5 15H4V4h11v1',
 };
 const icon = (n, t = '') => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true"${t ? ` title="${t}"` : ''}><path d="${ICONS[n]}"/></svg>`;
-const TABS = [['overview', 'Overview'], ['runs', 'Runs'], ['roles', 'Roles'], ['providers', 'Providers'], ['skills', 'Skills'], ['keys', 'API keys'], ['settings', 'Settings'], ['setup', 'Setup']];
+const TABS = [['overview', 'Overview'], ['runs', 'Runs'], ['roles', 'Roles'], ['providers', 'Providers'], ['skills', 'Skills'], ['lessons', 'Lessons & rules'], ['keys', 'API keys'], ['settings', 'Settings'], ['setup', 'Setup']];
 let S = null, W = null, tab = pageFromHash(), dirty = false, freeModels = null, runsData = null, gOpen = null, gFilter = { q: '', cat: 'all' };
 let rPreview = null; // routing preview result
 let runOpen = new URLSearchParams(location.hash.slice(1)).get('run'), runDet = null; // the run page (#p=runs&run=<id>)
@@ -267,6 +268,9 @@ function cmd(text) { return `<pre class="cmd">${esc(text)}${copyBtn(text)}</pre>
 function bindCopy() { document.querySelectorAll('[data-copy]').forEach((b) => b.onclick = () => { navigator.clipboard?.writeText(b.dataset.copy).then(() => toast('Copied'), () => toast('Copy failed')); }); }
 
 let skillsData = null, skillEdit = null, skillNew = false; // skills page: library, the skill open in the editor, new-skill form
+let lessonsData = null, rulesData = null, statsData = null, guardData = null; // V3: same actions as the CLI and MCP
+function loadLessons() { Promise.all([api('GET', '/api/lessons'), api('GET', '/api/rules')]).then(([l, r]) => { lessonsData = l; rulesData = r; if (tab === 'lessons') render(); }, (e) => toast(e.message)); }
+function loadOverviewExtras() { Promise.all([api('GET', '/api/stats'), api('GET', '/api/guard')]).then(([st, g]) => { statsData = st; guardData = g; if (tab === 'overview') render(); }, () => { statsData = statsData || {}; guardData = guardData || {}; }); }
 function loadSkills() { api('GET', '/api/skills').then((d) => { skillsData = d; if (tab === 'skills') render(); }, (e) => toast(e.message)); }
 function loadRuns() { api('GET', '/api/runs').then((d) => { runsData = d; if (tab === 'runs') render(); }, (e) => toast(e.message)); }
 // keep the Runs page current while it is open (runs started from the terminal show up on their own)
@@ -283,6 +287,13 @@ function fetchRun(id) {
   runFetching = id;
   api('GET', `/api/run?id=${encodeURIComponent(id)}`).then((d) => { runFetching = null; if (runOpen === id) { runDet = d; if (tab === 'runs') render(); } },
     (e) => { runFetching = null; toast(e.message); runOpen = null; render(); });
+}
+function overviewExtras() {
+  if (!statsData || !guardData) { loadOverviewExtras(); return ''; }
+  const q = statsData.quality, g = guardData;
+  const quality = q ? `<div class="card stat"><div class="l" title="Done with one worker, no hand-off or retry (conductor stats)">Accepted first try (${q.days} days)</div><div class="n">${q.writeTasks ? `${q.firstTryRate}%` : '–'}</div><div class="note">${q.writeTasks ? `${q.firstTry} of ${q.writeTasks} write tasks · alpha gate: ${esc(q.gate)}` : 'no write tasks yet'}</div></div>` : '';
+  const guard = g.controller ? `<div class="card stat"><div class="l" title="conductor guard">Commit guard</div><div class="n" style="font-size:16px">${!g.supported ? 'not available' : g.on ? 'on' : 'off'}</div><div class="note">${g.supported ? `blocks the controller's commit while the last verify failed · last verify: ${g.lastVerify ? esc(g.lastVerify.status) : 'none'}` : 'only Claude Code and Antigravity'}</div>${g.supported ? `<button class="btn small" id="guard-toggle" style="margin-top:6px">${g.on ? 'Turn off' : 'Turn on'}</button>` : ''}</div>` : '';
+  return quality || guard ? `<div class="grid">${quality}${guard}</div>` : '';
 }
 const GATE_PILL = { pass: 'ok', fail: 'bad', missing: 'bad', waived: 'warn', off: 'warn', skipped: '', unknown: 'warn' };
 function runPage() {
@@ -386,6 +397,21 @@ const views = {
           : `<p class="note" style="margin-top:8px">No skills yet. Create one above, or put a folder with a SKILL.md in <span class="mono">${esc(dirs.global)}</span> (all projects) or <span class="mono">${esc(dirs.project)}</span> (this project).</p>`}
         <p class="note" style="margin-top:10px">Library folders: all projects <span class="mono">${esc(dirs.global)}</span> · this project <span class="mono">${esc(dirs.project)}</span>. Terminal: <span class="mono">conductor skills</span>.</p></div>`;
   },
+  lessons() {
+    if (!lessonsData || !rulesData) { loadLessons(); return '<div class="head"><h1>Lessons &amp; rules</h1><p class="sub">Loading…</p></div>'; }
+    const ls = lessonsData.lessons;
+    const kind = (l) => l.source === 'auto' ? l.kind : l.source;
+    return `<div class="head"><h1>Lessons &amp; rules</h1><p class="sub">What earlier work here taught (failures conductor diagnosed, your notes), and the project's rules. Same as <span class="mono">conductor lessons</span> and <span class="mono">conductor rules</span>.</p></div>
+    <div class="card"><h2>Add a lesson</h2><div class="row"><input id="ls-text" placeholder="e.g. Use the existing date helpers in src/lib" style="flex:1"><input id="ls-files" placeholder="files or folders (optional)" style="width:220px"><button class="btn primary" id="ls-add">${icon('plus')} Add</button></div>
+      <p class="note">Matching lessons go into later workers' prompts. A provider with 2+ unresolved failures on one kind of work moves to the back until it passes that work here again.</p></div>
+    <div class="card"><h2>Lessons</h2>${ls.length ? `<table><tr><th>Lesson</th><th>Kind</th><th>Provider</th><th>Seen</th><th></th></tr>${ls.map((l) => `<tr>
+        <td>${esc(l.text)}${l.dirs?.length && l.dirs[0] !== '.' ? `<div class="note mono">${l.dirs.map(esc).join(', ')}</div>` : ''}</td>
+        <td><span class="pill">${esc(kind(l))}</span>${l.promoted ? ' <span class="pill ok">rule</span>' : ''}${l.resolvedAt ? ' <span class="pill" title="The provider passed this kind of work here later">resolved</span>' : ''}</td>
+        <td>${esc(l.provider || '–')}</td><td>×${l.count || 1}</td>
+        <td class="row" style="gap:4px">${!l.promoted ? `<button class="btn small ${l.promote ? 'primary' : ''}" data-lspromote="${esc(l.id)}" title="Add it to AGENTS.md as a rule for every controller and worker">${l.promote ? 'Promote (seen 3+×)' : 'Promote'}</button>` : ''}<button class="btn small ghost" data-lsrm="${esc(l.id)}">Remove</button></td></tr>`).join('')}</table>` : '<p class="note">No lessons yet. conductor records them from failed checks and from your notes on retries.</p>'}</div>
+    <div class="card"><h2>Rules</h2>${rulesData.rules.length ? `<table><tr><th>Rule</th><th>Covers</th><th>Files</th></tr>${rulesData.rules.map((r) => `<tr><td><b>${esc(r.name)}</b></td><td>${esc(r.description)}</td><td class="mono">${r.paths.length ? r.paths.map(esc).join(', ') : 'all files'}</td></tr>`).join('')}</table>` : '<p class="note">No project rules yet.</p>'}
+      <p class="note">Rules live in <span class="mono">${esc(rulesData.dir)}</span>. New rule: ${cmd('conductor rules new <name>')} Every controller gets them in its own format (<span class="mono">conductor rules sync</span>).</p></div>`;
+  },
   runs() {
     if (runOpen) return runPage();
     if (!runsData) { loadRuns(); return '<div class="head"><h1>Runs</h1><p class="sub">Loading…</p></div>'; }
@@ -430,6 +456,7 @@ const views = {
       <div class="card stat"><div class="l">Repo</div><div class="n" style="font-size:16px">${st.repo ? esc(st.repo.branch) : 'not a git repo'}</div><div class="note">${st.repo ? (st.repo.dirty ? 'uncommitted changes' : 'clean') + (st.repo.failedStashes ? ` · ${st.repo.failedStashes} failed-attempt stash(es)` : '') : 'write roles need git'}</div></div>
       <div class="card stat"><div class="l">Verify command</div><div class="mono" style="margin-top:6px">${esc(st.verify || 'none detected')}</div></div>
     </div>
+    ${overviewExtras()}
     <div class="card"><h2>Who does what</h2>
       <table><tr><th>Role</th><th>Fallback chain</th></tr>
       ${Object.entries(W.roles).map(([r, chain]) => `<tr><td><b>${esc(S.roles[r]?.label || r)}</b> ${S.roles[r]?.mode === 'read' ? '<span class="pill">read-only</span>' : ''}</td><td><div class="chainline">${chain.map((n, i) => `${i ? '<span class="arrow">→</span>' : ''}<span class="pill"><span class="dot ${provStatus(n).ready && W.providers[n]?.enabled ? 'ok' : provStatus(n).optional ? 'opt' : ''}" title="${esc(provStatus(n).reason || '')}"></span>${esc(n)}</span>`).join('')}</div></td></tr>`).join('')}
@@ -603,6 +630,10 @@ function render() {
 }
 
 function bind() {
+  const la = $('#ls-add'); if (la) la.onclick = async () => { try { lessonsData = await api('POST', '/api/lessons/add', { text: $('#ls-text').value.trim(), files: $('#ls-files').value.split(',').map((x) => x.trim()).filter(Boolean) }); render(); toast('Lesson added'); } catch (e) { toast(e.message); } };
+  document.querySelectorAll('[data-lsrm]').forEach((b) => b.onclick = async () => { try { lessonsData = await api('POST', '/api/lessons/remove', { id: b.dataset.lsrm }); render(); toast('Removed'); } catch (e) { toast(e.message); } });
+  document.querySelectorAll('[data-lspromote]').forEach((b) => b.onclick = async () => { try { const r = await api('POST', '/api/lessons/promote', { id: b.dataset.lspromote }); lessonsData = r; render(); toast(`Added to AGENTS.md: ${r.bullet}`); } catch (e) { toast(e.message); } });
+  const gt = $('#guard-toggle'); if (gt) gt.onclick = async () => { try { guardData = await api('POST', '/api/guard', { on: !guardData.on }); render(); toast(`Commit guard ${guardData.on ? 'on' : 'off'}`); } catch (e) { toast(e.message); } };
   document.querySelectorAll('[data-run]').forEach((a) => a.onclick = (e) => { e.preventDefault(); openRun(a.dataset.run); });
   const rb = $('#run-back'); if (rb) rb.onclick = () => { openRun(null); loadRuns(); };
   const skr = async (p, body, msg) => { try { skillsData = await api('POST', p, body); render(); if (msg) toast(msg); return true; } catch (e) { toast(e.message); return false; } };

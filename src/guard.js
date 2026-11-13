@@ -14,6 +14,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { conductorGitDir } from './lessons.js';
 import { listWorktrees } from './worktree.js';
+import { readBlock, writeBlock } from './localfiles.js';
 
 const head = (root) => { try { return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { return ''; } };
 const stateFile = (root) => path.join(conductorGitDir(root), 'verify-state.json');
@@ -114,4 +115,13 @@ export function guardsOn(root, controller) {
   const d = readJson(path.join(root, rel));
   if (!d) return false;
   return controller === 'claude-code' ? JSON.stringify(d.hooks || {}).includes('conductor hook') : !!d['conductor-guard'];
+}
+
+/** guard on/off as the CLI and UI do it: the hook file is kept out of git like conductor's other local files. */
+export function switchGuards(root, controller, on) {
+  const r = setGuards(root, controller, on);
+  if (r.unsupported) return r;
+  const block = readBlock(root);
+  if (on && block.length && !block.includes(r.file)) writeBlock(root, [...block, r.file]);
+  return r;
 }

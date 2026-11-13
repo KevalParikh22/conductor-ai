@@ -107,13 +107,26 @@ test('MCP server: handshake, tools/list, status and usage errors', async () => {
   const disc = await m.request('server/discover', {});
   assert.ok(disc.result.supportedVersions.includes('2026-07-28'));
   const list = await m.request('tools/list', {});
-  assert.deepEqual(list.result.tools.map((t) => t.name), ['conductor_run', 'conductor_batch', 'conductor_retry', 'conductor_diff', 'conductor_plan_check', 'conductor_lessons', 'conductor_route', 'conductor_runs', 'conductor_skills', 'conductor_status', 'conductor_verify']);
+  assert.deepEqual(list.result.tools.map((t) => t.name), ['conductor_run', 'conductor_batch', 'conductor_retry', 'conductor_diff', 'conductor_plan_check', 'conductor_lessons', 'conductor_stats', 'conductor_doctor', 'conductor_rules', 'conductor_route', 'conductor_runs', 'conductor_skills', 'conductor_status', 'conductor_verify']);
   assert.ok(list.result.tools.every((t) => t.inputSchema.properties.project), 'every tool takes a project path');
   const st = await m.request('tools/call', { name: 'conductor_status', arguments: {} });
   assert.match(st.result.content[0].text, /roles \(fallback order/);
   const bad = await m.request('tools/call', { name: 'conductor_run', arguments: { role: 'build', task: 'x' } });
   assert.equal(bad.result.isError, true);
   assert.match(bad.result.content[0].text, /protected branch/);
+  // V3: the same actions as the CLI
+  const sts = await m.request('tools/call', { name: 'conductor_stats', arguments: {} });
+  assert.match(sts.result.content[0].text, /write tasks[\s\S]*Failures in the last 30 days/);
+  const doc = await m.request('tools/call', { name: 'conductor_doctor', arguments: {} });
+  assert.match(doc.result.content[0].text, /problem|look good/);
+  const rules = await m.request('tools/call', { name: 'conductor_rules', arguments: {} });
+  assert.match(rules.result.content[0].text, /No project rules yet/);
+  const added = await m.request('tools/call', { name: 'conductor_lessons', arguments: { text: 'Keep dates in UTC' } });
+  const lid = added.result.content[0].text.match(/^added (\w+)/)[1];
+  const pro = await m.request('tools/call', { name: 'conductor_lessons', arguments: { promote: lid } });
+  assert.match(pro.result.content[0].text, /added to AGENTS\.md: - Keep dates in UTC/);
+  const rm = await m.request('tools/call', { name: 'conductor_lessons', arguments: { remove: lid } });
+  assert.match(rm.result.content[0].text, new RegExp(`removed ${lid}`));
   const unk = await m.request('nope/method', {});
   assert.equal(unk.error.code, -32601);
   // the plan check tool: a vague task is reported, with exactly what's missing

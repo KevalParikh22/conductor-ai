@@ -13,7 +13,11 @@ import { runBatch, formatBatch } from './batch.js';
 import { statusReport } from './status.js';
 import { runVerify, detectVerify } from './verify.js';
 import { checkPlan, formatPlanCheck } from './plancheck.js';
-import { readLessons, addLesson, GUIDANCE } from './lessons.js';
+import { readLessons, addLesson, removeLesson, promoteLesson, GUIDANCE, PROMOTE_AT } from './lessons.js';
+import { qualityStats, formatQualityStats, failureStats, formatFailureStats } from './stats.js';
+import { usageReport, formatUsage } from './usage.js';
+import { doctorData } from './doctor.js';
+import { readRules } from './controllers.js';
 import { recordVerify } from './guard.js';
 import { ROLES } from './presets.js';
 import { VERSION } from './version.js';
@@ -106,9 +110,12 @@ const TOOLS = [
   },
   {
     name: 'conductor_lessons',
-    description: "What earlier work in this project taught: failures conductor diagnosed and the controller's notes. They go into later workers' prompts and move providers that keep failing a kind of work to the back. Give text to add one.",
-    inputSchema: { type: 'object', properties: { text: { type: 'string', description: 'Add this lesson (omit to list)' }, files: { type: 'array', items: { type: 'string' }, description: 'Files or folders it applies to' }, role: { type: 'string', enum: Object.keys(ROLES) } } },
+    description: "What earlier work in this project taught: failures conductor diagnosed and the controller's notes. They go into later workers' prompts and move providers that keep failing a kind of work to the back. Give text to add one; remove or promote (to a rule in AGENTS.md) take a lesson id: promote only when the user agrees.",
+    inputSchema: { type: 'object', properties: { text: { type: 'string', description: 'Add this lesson (omit to list)' }, files: { type: 'array', items: { type: 'string' }, description: 'Files or folders it applies to' }, role: { type: 'string', enum: Object.keys(ROLES) }, remove: { type: 'string', description: 'A lesson id to remove' }, promote: { type: 'string', description: 'A lesson id to make a rule in AGENTS.md' } } },
   },
+  { name: 'conductor_stats', description: 'Quality numbers for this project: first-try accept rate, done rate, the alpha gate, why tasks failed, and runs, tokens, cost and time per provider.', inputSchema: { type: 'object', properties: { days: { type: 'number', description: 'Look back this many days (default 30)' } } } },
+  { name: 'conductor_doctor', description: 'Check every enabled provider: installed, key set, config errors, controller files. live: true also sends each a one-word prompt and checks agents can run build commands (slow: up to minutes per agent).', inputSchema: { type: 'object', properties: { live: { type: 'boolean' } } } },
+  { name: 'conductor_rules', description: "This project's rules (.conductor/rules): what each covers and the files it applies to. Every controller and worker gets the matching ones.", inputSchema: { type: 'object', properties: {} } },
   {
     name: 'conductor_route',
     description: 'Preview which providers would take a task, in what order, and why (routing rule, plan line or smart selector). Nothing runs.',
@@ -162,9 +169,27 @@ async function callTool(name, args, startRoot) {
     return text(rows.length ? formatPlanCheck(args.plan, rows) : `no tasks found in ${args.plan}`, !rows.length || rows.some((r) => r.problems.length));
   }
   if (name === 'conductor_lessons') {
+    if (args.remove) { const g = removeLesson(root, String(args.remove)); return g ? text(`removed ${g.id}`) : text(`conductor: no lesson "${args.remove}"`, true); }
+    if (args.promote) { const r = promoteLesson(root, String(args.promote)); return r ? text(`added to AGENTS.md: ${r.bullet}`) : text(`conductor: no lesson "${args.promote}"`, true); }
     if (args.text) { const l = addLesson(root, { source: 'manual', text: String(args.text).slice(0, 300), role: args.role || null, files: args.files || [] }); return text(`added ${l.id}: ${l.text}`); }
     const all = readLessons(root);
-    return text(all.length ? all.slice(-30).reverse().map((l) => `${l.id} ${l.source === 'auto' ? l.kind : l.source} ${l.provider || '-'} ×${l.count || 1}${l.promoted ? ' [rule]' : ''}: ${l.text || GUIDANCE[l.kind] || ''}`).join('\n') : 'No lessons yet.');
+    return text(all.length ? all.slice(-30).reverse().map((l) => `${l.id} ${l.source === 'auto' ? l.kind : l.source} ${l.provider || '-'} ×${l.count || 1}${l.promoted ? ' [rule]' : (l.count || 1) >= PROMOTE_AT ? ' [promote?]' : ''}${l.resolvedAt ? ' [resolved]' : ''}: ${l.text || GUIDANCE[l.kind] || ''}`).join('\n') : 'No lessons yet.');
+  }
+  if (name === 'conductor_stats') {
+    const days = Number(args.days) || 30;
+    return text(`${formatQualityStats(qualityStats({ root, days }))}\n\n${formatFailureStats(failureStats({ root, days }))}\n\n${formatUsage(usageReport(Math.min(days, 30)), cfg.settings)}`);
+  }
+  if (name === 'conductor_doctor') {
+    const d = await doctorData(cfg, { live: !!args.live });
+    const L = d.results.map((r) => `${r.optional ? '○' : r.ok ? '✓' : '✗'} ${r.name}: ${r.status}${r.next ? `\n    next: ${r.next}` : ''}`);
+    for (const e of d.errs) L.push(`✗ config: ${e}`);
+    for (const c of d.ctrlIssues) L.push(`${c.level === 'error' ? '✗' : '!'} ${c.file}: ${c.problem} (fix: ${c.fix})`);
+    L.push(d.problems ? `${d.problems} problem(s)` : 'All enabled providers look good.');
+    return text(L.join('\n'), d.problems > 0);
+  }
+  if (name === 'conductor_rules') {
+    const rules = readRules(root);
+    return text(rules.length ? rules.map((r) => `${r.name}: ${r.description}${r.paths.length ? ` (files: ${r.paths.join(', ')})` : ' (all files)'}`).join('\n') : 'No project rules yet (conductor rules new <name>).');
   }
   if (name === 'conductor_route') {
     let section = '', role = args.role;

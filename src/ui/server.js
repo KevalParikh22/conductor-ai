@@ -9,6 +9,10 @@ import { loadConfig, findProjectRoot, readScope, writeScope, validateConfig, GLO
 import { DEFAULT_CONFIG, CLI_PRESETS, ROLES, CONTROLLERS, controllerWorker } from '../presets.js';
 import { statusData } from '../status.js';
 import { listRuns, runDetail } from '../runs.js';
+import { qualityStats, failureStats } from '../stats.js';
+import { readLessons, addLesson, removeLesson, promoteLesson, promotable, GUIDANCE } from '../lessons.js';
+import { readRules, rulesDir } from '../controllers.js';
+import { readVerifyState, switchGuards, guardsOn, GUARD_SUPPORTED } from '../guard.js';
 import { catalogStatus, addProviderAuto } from '../setup.js';
 import { detectLocal } from '../local.js';
 import { listSkills, setSkillOn, newSkill, removeSkill, saveSkill, syncSkills, globalSkillsDir, projectSkillsDir } from '../skills.js';
@@ -74,6 +78,16 @@ function openBrowser(url) {
   try { spawn(cmd, args, { detached: true, stdio: 'ignore' }).unref(); } catch { /* print URL instead */ }
 }
 
+function lessonsState(root) {
+  const all = readLessons(root);
+  const promo = new Set(promotable(all).map((l) => l.id));
+  return { lessons: all.slice().reverse().map((l) => ({ ...l, text: l.text || GUIDANCE[l.kind] || l.kind, promote: promo.has(l.id) })) };
+}
+function guardState(root) {
+  const controller = loadConfig(root).controller || 'claude-code';
+  return { controller, supported: !!GUARD_SUPPORTED[controller], on: GUARD_SUPPORTED[controller] ? guardsOn(root, controller) : false, file: GUARD_SUPPORTED[controller] || null, lastVerify: readVerifyState(root) };
+}
+
 export function createUiServer({ cwd = process.cwd(), token = crypto.randomBytes(16).toString('hex') } = {}) {
   const root = findProjectRoot(cwd);
   const html = fs.readFileSync(new URL('./index.html', import.meta.url), 'utf8');
@@ -124,6 +138,25 @@ export function createUiServer({ cwd = process.cwd(), token = crypto.randomBytes
           const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'conductor-test-'));
           try { return send(200, await testProvider(body.name, { ...p, enabled: true }, root, dir)); }
           finally { fs.rmSync(dir, { recursive: true, force: true }); }
+        }
+        // V3: the same actions as the CLI and MCP (src/surfaces.js)
+        case 'GET /api/stats': return send(200, { quality: qualityStats({ root }), failures: failureStats({ root }) });
+        case 'GET /api/lessons': return send(200, lessonsState(root));
+        case 'POST /api/lessons/add': {
+          const text = String(body.text || '').trim();
+          if (!text) return send(400, { error: 'a lesson needs text' });
+          addLesson(root, { source: 'manual', text: text.slice(0, 300), role: body.role || null, files: Array.isArray(body.files) ? body.files.map(String) : [] });
+          return send(200, lessonsState(root));
+        }
+        case 'POST /api/lessons/remove': return removeLesson(root, String(body.id || '')) ? send(200, lessonsState(root)) : send(404, { error: 'no such lesson' });
+        case 'POST /api/lessons/promote': { const r = promoteLesson(root, String(body.id || '')); return r ? send(200, { ...lessonsState(root), bullet: r.bullet }) : send(404, { error: 'no such lesson' }); }
+        case 'GET /api/rules': return send(200, { rules: readRules(root), dir: path.relative(root, rulesDir(root)) });
+        case 'GET /api/guard': return send(200, guardState(root));
+        case 'POST /api/guard': {
+          const controller = loadConfig(root).controller || 'claude-code';
+          const r = switchGuards(root, controller, !!body.on);
+          if (r.unsupported) return send(400, { error: 'guards are only available for Claude Code and Antigravity' });
+          return send(200, guardState(root));
         }
         case 'GET /api/run': {
           const d = runDetail(root, String(url.searchParams.get('id') || ''));
