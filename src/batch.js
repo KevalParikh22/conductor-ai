@@ -5,7 +5,7 @@ import path from 'node:path';
 import { ROLES } from './presets.js';
 import { checkTask } from './plancheck.js';
 import { detectVerify } from './verify.js';
-import { speedStats } from './selector.js';
+import { speedStats, expectedSeconds } from './selector.js';
 import { dispatch, extractTask, taskFiles, resolveChain, chooseChain, openQuestions, UsageError, outcome, unverifiedBlocks } from './core.js';
 
 const field = (section, name) => (section.match(new RegExp(`\\*\\*${name}:\\*\\*\\s*(.+)`, 'i')) || [])[1]?.trim() || '';
@@ -68,11 +68,11 @@ export function spreadChains(cfg, items, { provider } = {}) {
     const ready = ordered.filter((c) => !c.skip).map((c) => c.name);
     if (!ready.length) return { ...t, chain: names };
     // the provider expected to finish this task soonest: its measured median time, plus half of it again for every
-    // task it already has (they share its quota and machine); unknown providers count as equal, so they spread evenly
+    // task it already has (they share its quota and machine). A provider with no history counts as average (so a new
+    // or newly working one gets tasks and gets measured); a measured, unreliable one goes last
     const cap = cfg.settings?.maxParallelPerProvider ?? 2;
-    const speed = speedStats(ready, t.role);
-    const median = (n) => (speed[n] && speed[n].okRate >= 0.6 && speed[n].median != null ? speed[n].median : 100);
-    const eta = (n) => median(n) * (1 + 0.5 * (seen[n] || 0));
+    const secs = expectedSeconds(speedStats(ready, t.role), ready);
+    const eta = (n) => secs(n) * (1 + 0.5 * (seen[n] || 0));
     const open = ready.filter((n) => (seen[n] || 0) < cap);
     const pool = open.length ? open : ready;
     const first = pool.reduce((a, b) => (eta(b) < eta(a) ? b : a));

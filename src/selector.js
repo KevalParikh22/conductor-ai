@@ -53,6 +53,22 @@ export function speedStats(names, role, { days = 14, min = 3, now = Date.now() }
 }
 
 /**
+ * A provider's expected seconds for ranking: its measured median when it is reliable (≥ 60% ok), Infinity when it is
+ * measured and unreliable, and, with no history yet, the median of the measured ones: a new or newly working provider
+ * (a fresh account) counts as average, so it gets tried and its real speed gets measured, instead of always going last.
+ */
+export function expectedSeconds(stats, names, fallback = 100) {
+  const known = names.map((n) => stats[n]).filter((s) => s && s.okRate >= 0.6 && s.median != null).map((s) => s.median).sort((a, b) => a - b);
+  const neutral = known.length ? known[Math.floor((known.length - 1) / 2)] + (known.length % 2 ? 0 : (known[known.length / 2] - known[(known.length - 1) >> 1]) / 2) : fallback;
+  return (n) => {
+    const s = stats[n];
+    if (!s) return neutral;
+    if (s.okRate < 0.6) return Infinity;
+    return s.median ?? neutral;
+  };
+}
+
+/**
  * Reorder resolved chain entries ({ name, p, skip }) for this task. Skipped entries keep their place at the end.
  * Returns { chain, note } where note is '' when nothing moved.
  */
@@ -70,7 +86,8 @@ export function smartOrder(entries, task) {
   // small tasks: within a group, the provider that is fast AND reliable on this role goes first (measured, not
   // assumed); big tasks keep your order, so the strongest agent you chose stays first for real work
   const speed = cheapFirst ? speedStats(live.map((e) => e.name), task.role) : {};
-  const fast = (e) => { const s = speed[e.name]; return s && s.okRate >= 0.6 && s.median != null ? s.median : Infinity; };
+  const secs = expectedSeconds(speed, live.map((e) => e.name));
+  const fast = (e) => (cheapFirst && Object.keys(speed).length ? secs(e.name) : Infinity);
   const ranked = live.map((e, i) => ({ e, i, k: [bad.has(e.name) ? 1 : 0, group(e), fast(e), i] }))
     .sort((a, b) => a.k[0] - b.k[0] || a.k[1] - b.k[1] || a.k[2] - b.k[2] || a.k[3] - b.k[3]).map((x) => x.e);
   const chain = [...ranked, ...entries.filter((e) => e.skip)];
@@ -78,7 +95,7 @@ export function smartOrder(entries, task) {
   if (!moved) return { chain: entries, note: '' };
   const parts = [`${size} task (${why}): ${cheapFirst ? 'free API models first' : 'agents first'}`];
   const sped = ranked.filter((e) => fast(e) !== Infinity);
-  if (sped.length && ranked[0] && fast(ranked[0]) !== Infinity) parts.push(`fastest reliable first: ${sped.slice(0, 3).map((e) => `${e.name} ~${Math.round(speed[e.name].median)}s`).join(', ')}`);
+  if (sped.length && ranked[0] && fast(ranked[0]) !== Infinity) parts.push(`fastest reliable first: ${sped.slice(0, 3).map((e) => (speed[e.name] ? `${e.name} ~${Math.round(speed[e.name].median)}s` : `${e.name} (new: no history yet)`)).join(', ')}`);
   if (bad.size) parts.push(`moved last: ${[...bad.keys()].join(', ')} (failed 3 times in a row)`);
   return { chain, note: parts.join('; ') };
 }
