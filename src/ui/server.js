@@ -11,7 +11,7 @@ import { statusData } from '../status.js';
 import { listRuns, runDetail } from '../runs.js';
 import { qualityStats, failureStats } from '../stats.js';
 import { readLessons, addLesson, removeLesson, promoteLesson, promotable, GUIDANCE } from '../lessons.js';
-import { readRules, rulesDir } from '../controllers.js';
+import { readRules, rulesDir, allControllers } from '../controllers.js';
 import { readVerifyState, switchGuards, guardsOn, GUARD_SUPPORTED } from '../guard.js';
 import { catalogStatus, addProviderAuto } from '../setup.js';
 import { detectLocal } from '../local.js';
@@ -68,7 +68,7 @@ function stateFor(root) {
     status: statusData(cfg), secrets: secretsState(cfg), cooldowns: getCooldowns(), errors: validateConfig(cfg),
     controllerPreset: cfg.providers[controllerWorker(cfg.controller)]?.preset || null, // the controller's own CLI: never suggested as a worker
     presets: Object.fromEntries(Object.entries(CLI_PRESETS).map(([k, v]) => [k, { label: v.label, bin: v.bin, install: v.install, login: v.login, docs: v.docs, permissions: v.permissions || null, takesModel: !!v.modelArgs?.length, installed: !!which(v.bin) }])),
-    roles: ROLES, controllers: CONTROLLERS, catalog: catalogStatus(cfg),
+    roles: ROLES, controllers: allControllers(root), catalog: catalogStatus(cfg),
     env: { node: process.version, platform: os.platform(), conductorOnPath: !!which('conductor'), git: !!which('git') },
   };
 }

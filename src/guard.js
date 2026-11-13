@@ -15,6 +15,8 @@ import { execFileSync } from 'node:child_process';
 import { conductorGitDir } from './lessons.js';
 import { listWorktrees } from './worktree.js';
 import { readBlock, writeBlock } from './localfiles.js';
+import { CONTROLLERS } from './presets.js';
+import { controllerDef } from './controllers.js';
 
 const head = (root) => { try { return execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { return ''; } };
 const stateFile = (root) => path.join(conductorGitDir(root), 'verify-state.json');
@@ -76,18 +78,21 @@ export function runHook(kind, input, root) {
 const OURS = (h) => /\bconductor\s+hook\b/.test(h?.command || '');
 const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; } };
 
-export const GUARD_SUPPORTED = { 'claude-code': '.claude/settings.local.json', antigravity: '.agents/hooks.json' };
+// V6: from the controller registry: the controllers with a tested hook format (src/presets.js CONTROLLERS[…].hooks)
+export const GUARD_SUPPORTED = Object.fromEntries(Object.entries(CONTROLLERS).filter(([, c]) => c.hooks).map(([n, c]) => [n, c.hooks.file]));
+const hooksOf = (controller, root) => controllerDef(controller, root)?.hooks || null;
 
 /** Turn the guards on or off for a controller. → { file, changed, unsupported? } */
 export function setGuards(root, controller, on) {
-  const rel = GUARD_SUPPORTED[controller];
-  if (!rel) return { unsupported: true };
+  const h = hooksOf(controller, root);
+  if (!h) return { unsupported: true };
+  const rel = h.file;
   const file = path.join(root, rel);
   const cur = readJson(file);
   if (fs.existsSync(file) && cur === null) throw new Error(`${rel} is not valid JSON: fix it first, conductor won't overwrite it`);
   const data = cur || {};
   const before = JSON.stringify(data);
-  if (controller === 'claude-code') {
+  if (h.format === 'claude-settings') {
     data.hooks ||= {};
     for (const ev of ['PreToolUse', 'Stop']) {
       data.hooks[ev] = (data.hooks[ev] || []).map((g) => ({ ...g, hooks: (g.hooks || []).filter((h) => !OURS(h)) })).filter((g) => g.hooks.length);
@@ -110,11 +115,11 @@ export function setGuards(root, controller, on) {
 }
 
 export function guardsOn(root, controller) {
-  const rel = GUARD_SUPPORTED[controller];
-  if (!rel) return false;
-  const d = readJson(path.join(root, rel));
+  const h = hooksOf(controller, root);
+  if (!h) return false;
+  const d = readJson(path.join(root, h.file));
   if (!d) return false;
-  return controller === 'claude-code' ? JSON.stringify(d.hooks || {}).includes('conductor hook') : !!d['conductor-guard'];
+  return h.format === 'claude-settings' ? JSON.stringify(d.hooks || {}).includes('conductor hook') : !!d['conductor-guard'];
 }
 
 /** guard on/off as the CLI and UI do it: the hook file is kept out of git like conductor's other local files. */

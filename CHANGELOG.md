@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Controllers as data (V6).**
+  - **One entry per controller** (`CONTROLLERS` in `src/presets.js`) says where it reads its instructions, commands, skills, rules and reviewer subagent, how it registers MCP, and its hook file. Each format names one writer in `src/controllers.js` or `src/guard.js`. `init`, `rules sync`, the commit guard, skill sync and the doctor checks now all read the entries instead of checking controller names.
+  - **No behaviour change:** for all four controllers, the 98 files `init`, `rules sync` and `guard on` write are byte-for-byte the same as before.
+  - **Add your own:** `conductor controller add <name> --like <existing>` copies the formats of a controller that reads the same files (most read AGENTS.md and `.agents/skills`). It is stored under `controllers` in your config; `conductor controller list | check`, and `doctor` reports an entry that names a format conductor can't write. A tool with a new format still needs its writer and a real test.
+  - **[docs/CONTROLLERS.md](docs/CONTROLLERS.md)** is generated from the entries; a test keeps it in step, and another checks every generated file is kept out of git.
 - **One feature set in the CLI, MCP and UI (V3).**
   - **One registry** (`src/surfaces.js`) lists every action and where it lives. An action left out of a surface says why (secrets never pass through a model; a controller can't switch off its own guard; long evals run in the terminal). A test checks it against the real CLI commands, MCP tools and UI routes, so a new feature can't land in one surface and be forgotten in the others. [docs/SURFACES.md](docs/SURFACES.md) is generated from it.
   - **MCP gained** `conductor_stats` (quality, failure causes, usage), `conductor_doctor` (with `live`), `conductor_rules`, and remove/promote in `conductor_lessons`.

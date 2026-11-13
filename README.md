@@ -18,7 +18,7 @@
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-22c55e)](CONTRIBUTING.md)
 [![Stars](https://img.shields.io/github/stars/KevalParikh22/conductor-ai?style=flat&color=f59e0b)](https://github.com/KevalParikh22/conductor-ai/stargazers)
 
-[Quick start](#-quick-start) &middot; [How it works](#-how-it-works) &middot; [Routing](docs/ROUTING.md) &middot; [Security](SECURITY.md) &middot; [Providers](docs/providers/README.md) &middot; [**Guide**](docs/GUIDE.md) &middot; [Every feature in CLI, MCP and UI](docs/SURFACES.md) &middot; [Changelog](CHANGELOG.md)
+[Quick start](#-quick-start) &middot; [How it works](#-how-it-works) &middot; [Routing](docs/ROUTING.md) &middot; [Security](SECURITY.md) &middot; [Providers](docs/providers/README.md) &middot; [**Guide**](docs/GUIDE.md) &middot; [Every feature in CLI, MCP and UI](docs/SURFACES.md) &middot; [Controllers](docs/CONTROLLERS.md) &middot; [Changelog](CHANGELOG.md)
 
 </div>
 

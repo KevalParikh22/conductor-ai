@@ -309,11 +309,52 @@ export const DEFAULT_ROLES = {
 };
 
 /** Who plans, reviews and commits. `conductor init` writes the matching instruction files. */
+/**
+ * V6: every controller as data: where it reads instructions, commands, skills, rules and its reviewer subagent, how it
+ * registers MCP servers, and its hook file (the commit guard). Each `format` names a writer in src/controllers.js
+ * (or src/guard.js for hooks), so a new controller that reads the same formats is a data entry: add one with
+ * `conductor controller add <name> --like <one of these>`. A new format still needs its writer and a real test.
+ * Checked against each tool (2026-11): Claude Code 2.1, Antigravity CLI 1.5, Codex CLI 0.16x, OpenCode 2.0.
+ */
 export const CONTROLLERS = {
-  'claude-code': { label: 'Claude Code', file: 'CLAUDE.md', worker: 'claude-cli' },
-  'antigravity': { label: 'Antigravity CLI', file: 'GEMINI.md', worker: 'antigravity-cli' },
-  'codex-cli': { label: 'Codex CLI', file: 'AGENTS.md', worker: 'codex-cli' },
-  'opencode': { label: 'OpenCode', file: 'AGENTS.md', worker: 'opencode' },
+  'claude-code': {
+    label: 'Claude Code', file: 'CLAUDE.md', import: '@AGENTS.md', worker: 'claude-cli',
+    commands: { dir: '.claude/commands', as: 'commands' }, skills: '.claude/skills',
+    rules: { dir: '.claude/rules', format: 'claude' },
+    reviewer: { file: '.claude/agents/conductor-reviewer.md', format: 'claude' },
+    mcp: { file: '.mcp.json', format: 'mcpServers' },
+    hooks: { file: '.claude/settings.local.json', format: 'claude-settings' },
+    limits: {}, docs: 'https://code.claude.com/docs/en/settings',
+  },
+  'antigravity': {
+    label: 'Antigravity CLI', file: 'GEMINI.md', import: '@./AGENTS.md', worker: 'antigravity-cli',
+    commands: { dir: '.agents/skills', as: 'skills' }, skills: '.agents/skills',
+    rules: { dir: '.agents/rules', format: 'agy' },
+    reviewer: { file: '.agents/agents/conductor-reviewer.md', format: 'agy' },
+    // agy CLI reads MCP servers only from its own config: the project file is for the IDE; the note says how
+    mcp: { file: '.agents/mcp_config.json', format: 'mcpServers', register: 'agy' },
+    hooks: { file: '.agents/hooks.json', format: 'agy-hooks' },
+    limits: { agentsMdBytes: 24_000, ruleBytes: 24_000 }, docs: 'https://antigravity.google/docs',
+  },
+  'codex-cli': {
+    label: 'Codex CLI', file: 'AGENTS.md', import: '', worker: 'codex-cli',
+    commands: { dir: '.agents/skills', as: 'skills' }, skills: '.agents/skills',
+    rules: { block: 'AGENTS.md' },
+    reviewer: { file: '.codex/agents/conductor-reviewer.toml', format: 'codex-toml' },
+    // Codex reads MCP servers only from ~/.codex/config.toml, and a project's .codex/ only once it is trusted
+    mcp: { register: 'codex' },
+    hooks: null, // project hooks need a trusted project and /hooks approval: not set up by conductor yet
+    limits: { agentsMdBytes: 32 * 1024 }, docs: 'https://developers.openai.com/codex',
+  },
+  'opencode': {
+    label: 'OpenCode', file: 'AGENTS.md', import: '', worker: 'opencode',
+    commands: { dir: '.agents/skills', as: 'skills' }, skills: '.agents/skills',
+    rules: { block: 'AGENTS.md' },
+    reviewer: { file: '.opencode/agents/conductor-reviewer.md', format: 'opencode' },
+    mcp: { file: 'opencode.json', format: 'opencode' },
+    hooks: null,
+    limits: {}, docs: 'https://opencode.ai/docs',
+  },
 };
 
 /**
