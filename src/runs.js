@@ -5,6 +5,7 @@ import path from 'node:path';
 import { PROJECT_DIRNAME } from './config.js';
 import { readJSON } from './util.js';
 import { outcome } from './core.js';
+import { fixLines } from './nextsteps.js';
 
 export const runsDir = (root) => path.join(root, PROJECT_DIRNAME, 'runs');
 
@@ -28,11 +29,12 @@ export function listRuns(root, { limit = 20 } = {}) {
       verify: s.verify?.status || null,
       changed: s.changed?.length || 0,
       warnings: s.warnings || [],
+      fixes: fixLines(s.attempts || [], { won: !!s.winner }),
       outside: s.scope?.outside || [],
       base: s.base?.status || null,
       acceptance: s.acceptance ? { met: s.acceptance.met, total: s.acceptance.total, answered: s.acceptance.answered } : null,
       baseFailed: !!s.verify?.baseFailed,
-      attempts: tried.map((a) => ({ provider: a.provider, model: a.model, ok: a.ok, reason: a.reason, seconds: a.seconds })),
+      attempts: tried.map((a) => ({ provider: a.provider, model: a.model, ok: a.ok, reason: a.reason, next: a.next, seconds: a.seconds })),
       seconds: Math.round(tried.reduce((t, a) => t + (a.seconds || 0), 0)),
       cost: known.length ? known.reduce((t, a) => t + a.cost, 0) : null,
       branch: s.worktree?.commit ? s.worktree.branch : null,
@@ -64,6 +66,7 @@ export function formatRuns(rows) {
     if (r.state === 'running') { L.push(`${r.id.padEnd(30)}running…`); continue; }
     const notes = [r.branch && `branch ${r.branch}`, r.warnings.length && `${r.warnings.length} warning(s)`, r.cost && `$${r.cost.toFixed(4)}`].filter(Boolean).join(' · ');
     L.push(`${r.id.slice(0, 29).padEnd(30)}${({ done: '✓ done', partial: '⚠ partial', unverified: '? unverif', 'out-of-scope': '⚠ scope', 'verify-failed': '✗ verify' }[r.state] || '✗ failed').padEnd(10)}${(r.winner || '-').padEnd(18)}${(r.verify || '-').padEnd(8)}${String(r.changed).padStart(6)}${`${r.seconds}s`.padStart(7)}  ${notes}`);
+    for (const f of r.fixes || []) L.push(`${''.padEnd(30)}fix: ${f}`);
   }
   L.push('', 'Details: conductor runs show <run>');
   return L.join('\n');
