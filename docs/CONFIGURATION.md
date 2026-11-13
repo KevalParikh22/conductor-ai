@@ -68,8 +68,9 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | `apiKeyEnv` | api | Name of the env var holding the key; empty for local servers |
 | `apiKeyOptional` | api | `true` = send the key if set, but run without one too (e.g. `kilo-free`) |
 | `headers`, `maxTokens`, `temperature` | api | Optional request tuning |
-| `fallbackModels` | api, cli | Models to try on this provider, in order, when `model` is rate-limited (APIs also switch when a model stalls or answers nothing). The limited model cools down alone; the provider is skipped only when every model is. Agents need a preset that takes a model (OpenCode, Codex, Claude, Kimi, Aider…). Free and auto-picked API providers find fallbacks from their live model list when this is unset |
-| `autoFallback` | api | `false` = don't look up fallback models automatically |
+| `fallbackModels` | api, cli | Models to try on this provider, in order, when `model` is rate-limited (APIs also switch when a model stalls or answers nothing). The limited model cools down alone; the provider is skipped only when every model is. Agents need a preset that takes a model (OpenCode, Codex, Claude, Kimi, Aider…). Free and auto-picked API providers find fallbacks from their live model list when this is unset; so does Antigravity (from `agy models`, another model family first, since agy's families have separate quotas) |
+| `autoFallback` | api, agy | `false` = don't look up fallback models automatically |
+| `maxParallel` | api, cli | Most calls to this provider at once, from one conductor process; the rest wait their turn. Antigravity defaults to 1 (its quota belongs to the account). Batch also starts at most this many tasks on it |
 | `timeoutMin` | all | Time limit for this provider, in minutes, instead of `timeoutSec` (or `apiTimeoutSec` for APIs) |
 | `idleTimeoutMin` | cli | Stop this agent when it prints nothing for this long |
 | `price` | api | `{ "input": 0.3, "output": 2.5 }`: dollars per 1M tokens, used for cost and budgets. Without it, cost is shown as unknown |
@@ -100,7 +101,7 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | `contractCheck` | true | Reject it when a function or class the task names in a code span isn't defined anywhere afterwards |
 | `chatRepair` | true | Give a chat model's reply with no file blocks one repair turn |
 | `repoMapBytes` | 6000 | Size of the project map chat models get |
-| `maxParallelPerProvider` | 2 | Most tasks of one batch wave started on the same provider |
+| `maxParallelPerProvider` | 2 | Most tasks of one batch wave started on the same provider (a provider's own `maxParallel` wins) |
 | `hangCooldownMin` | 15 | A free route that times out twice in one run cools down this long (0 = off) |
 | `contextPack` | true | Give workers the task files, where their code is used elsewhere, the verify command and the matching architecture notes before they start |
 | `contextPackBytes` | 4000 | Most characters of that pack |

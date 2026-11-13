@@ -18,6 +18,7 @@ const RULES = [
     return `set the key: \`conductor keys set ${m[1]}\`${url ? ` (get one at ${url})` : ''}`;
   }],
   [/^cooling down until ([^(]+)/, ({ name }, m) => `it waits until ${m[1].trim()}; to try it now: \`conductor cooldown --clear ${name}\``],
+  [/^every model is cooling down/, ({ name }) => `all of ${name}'s models hit their limits; \`conductor cooldown\` shows when each resets (\`conductor cooldown --clear ${name}\` to try now)`],
   [/daily budget reached/, () => `the paid daily budget is used up: wait until tomorrow, or raise dailyBudgetUSD in ${cfgFile}`],
   [/^quota/, ({ name }) => `${name} hit a rate limit or its quota and cools down; conductor moved on. See \`conductor cooldown\`. More free routes: \`conductor providers --free\``],
   [/^denied: (.+?) \(/, (_, m) => `the worker was refused \`${m[1]}\` (headless runs can't ask): add it to settings.allowCommands in ${cfgFile}`],

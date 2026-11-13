@@ -143,3 +143,10 @@ const PLACEHOLDER_KEY = /^(your[_-]|<.*>$|sk-x{3,}$|x{4,}$|changeme$|todo$|place
 export const isPlaceholderKey = (v) => !v || !String(v).trim() || PLACEHOLDER_KEY.test(String(v).trim());
 /** An env var's value when it holds a real-looking key, else ''. */
 export const keyValue = (name) => (name && !isPlaceholderKey(process.env[name]) ? process.env[name] : '');
+
+/** "14:05:00" for a time today, "Wed 18 Nov 14:05" for a later day (a weekly quota can reset days away). */
+export function untilText(ts) {
+  const d = new Date(ts);
+  if (d.toDateString() === new Date().toDateString()) return d.toLocaleTimeString();
+  return d.toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}

@@ -23,6 +23,7 @@ const REASONS = {
   'GROQ_API_KEY not set (placeholder value)': /conductor keys set GROQ_API_KEY/,
   'cooling down until 10:42:00 (rate limited)': /until 10:42:00.*conductor cooldown --clear x/,
   'daily budget reached ($1.00 of $1)': /dailyBudgetUSD/,
+  'every model is cooling down': /conductor cooldown --clear x/,
   'quota (cooldown 30m)': /rate limit or its quota/,
   'denied: command (add an allow rule, e.g. settings.allowCommands)': /refused `command`.*allowCommands/,
   'agy status ERROR': /Antigravity reported an error: read run\/x\.log/,

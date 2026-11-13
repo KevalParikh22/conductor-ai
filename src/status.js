@@ -3,6 +3,7 @@ import { CLI_PRESETS, CONTROLLERS } from './presets.js';
 import { getCooldowns } from './core.js';
 import * as git from './git.js';
 import { detectVerify } from './verify.js';
+import { untilText } from './util.js';
 
 /** Structured status, used by the CLI, the MCP server and the UI. */
 export function statusData(cfg) {
@@ -14,7 +15,7 @@ export function statusData(cfg) {
     return {
       optional, // on by default, no key yet: not broken
       name, type: p.type, preset: p.preset, model: p.model || '', enabled: !!p.enabled,
-      location: providerLocation(p), kind: providerKind(p), ready: r.ready && !c, reason: c ? `cooling down until ${new Date(c.until).toLocaleTimeString()}` : optional ? `optional: add ${p.apiKeyEnv} to use it` : r.reason,
+      location: providerLocation(p), kind: providerKind(p), ready: r.ready && !c, reason: c ? `cooling down until ${untilText(c.until)}` : optional ? `optional: add ${p.apiKeyEnv} to use it` : r.reason,
       label: p.type === 'cli' ? (CLI_PRESETS[p.preset]?.label || p.bin) : name, notes: p.notes || '',
     };
   });

@@ -47,6 +47,11 @@ export const CLI_PRESETS = {
     write: ['{modelArgs}', '--mode', 'accept-edits', '--sandbox', '--settings', '{sessionSettings}', '--print-timeout', '{timeout}', '--output-format', 'json', '-p', '{prompt}'],
     read: ['{modelArgs}', '--sandbox', '--settings', '{sessionSettings}', '--print-timeout', '{timeout}', '--output-format', 'json', '-p', '{prompt}'],
     output: 'agy-json',
+    // V8: agy's models have separate quotas per family (Gemini, Claude, GPT-OSS), so a quota hit tries another
+    // family before giving up; one agy task at a time, because the quota belongs to the account.
+    listModels: ['models'],
+    defaultFamily: 'gemini',
+    maxParallel: 1,
     sessionSettings: {
       // shell commands run in agy's terminal sandbox without asking: no network, home folder read-only
       write: {
