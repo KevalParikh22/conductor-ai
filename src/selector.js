@@ -37,6 +37,22 @@ export function unhealthy(names, now = Date.now()) {
 }
 
 /**
+ * Measured speed per provider for a role: { name: { n, okRate, median } } from successful and failed attempts in the
+ * last `days` days (only providers with at least `min` attempts). The median is over successful attempts.
+ */
+export function speedStats(names, role, { days = 14, min = 3, now = Date.now() } = {}) {
+  const recent = readUsage(now - days * 86_400_000).filter((e) => e.kind !== 'saving' && (!role || e.role === role));
+  const out = {};
+  for (const n of names) {
+    const all = recent.filter((e) => e.provider === n && e.reason !== 'quota' && !/cooldown|rate/i.test(e.reason || ''));
+    if (all.length < min) continue;
+    const secs = all.filter((e) => e.ok && e.seconds != null).map((e) => e.seconds).sort((a, b) => a - b);
+    out[n] = { n: all.length, okRate: all.filter((e) => e.ok).length / all.length, median: secs.length ? secs[Math.floor(secs.length / 2)] : null };
+  }
+  return out;
+}
+
+/**
  * Reorder resolved chain entries ({ name, p, skip }) for this task. Skipped entries keep their place at the end.
  * Returns { chain, note } where note is '' when nothing moved.
  */
@@ -51,12 +67,18 @@ export function smartOrder(entries, task) {
     if (!chat) return cheapFirst ? 1 : 0;
     return 2; // paid or unknown-price API
   };
-  const ranked = live.map((e, i) => ({ e, i, k: [bad.has(e.name) ? 1 : 0, group(e), i] }))
-    .sort((a, b) => a.k[0] - b.k[0] || a.k[1] - b.k[1] || a.k[2] - b.k[2]).map((x) => x.e);
+  // small tasks: within a group, the provider that is fast AND reliable on this role goes first (measured, not
+  // assumed); big tasks keep your order, so the strongest agent you chose stays first for real work
+  const speed = cheapFirst ? speedStats(live.map((e) => e.name), task.role) : {};
+  const fast = (e) => { const s = speed[e.name]; return s && s.okRate >= 0.6 && s.median != null ? s.median : Infinity; };
+  const ranked = live.map((e, i) => ({ e, i, k: [bad.has(e.name) ? 1 : 0, group(e), fast(e), i] }))
+    .sort((a, b) => a.k[0] - b.k[0] || a.k[1] - b.k[1] || a.k[2] - b.k[2] || a.k[3] - b.k[3]).map((x) => x.e);
   const chain = [...ranked, ...entries.filter((e) => e.skip)];
   const moved = ranked.some((e, i) => e !== live[i]);
   if (!moved) return { chain: entries, note: '' };
   const parts = [`${size} task (${why}): ${cheapFirst ? 'free API models first' : 'agents first'}`];
+  const sped = ranked.filter((e) => fast(e) !== Infinity);
+  if (sped.length && ranked[0] && fast(ranked[0]) !== Infinity) parts.push(`fastest reliable first: ${sped.slice(0, 3).map((e) => `${e.name} ~${Math.round(speed[e.name].median)}s`).join(', ')}`);
   if (bad.size) parts.push(`moved last: ${[...bad.keys()].join(', ')} (failed 3 times in a row)`);
   return { chain, note: parts.join('; ') };
 }

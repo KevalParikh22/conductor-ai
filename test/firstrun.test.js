@@ -74,7 +74,7 @@ test('doctor: a default provider with no key is optional (○), one you turned o
 });
 
 test('a hanging free route: one more model after a timeout, then the chain moves on; an old model list is reused', async () => {
-  const { dispatch, clearCooldowns } = await import('../src/core.js');
+  const { dispatch, clearCooldowns, getCooldowns } = await import('../src/core.js');
   const { GLOBAL_DIR } = await import('../src/util.js');
   let listing = true;
   const calls = [];
@@ -93,6 +93,9 @@ test('a hanging free route: one more model after a timeout, then the chain moves
   const r = await dispatch(cfg, { role: 'ask', task: 'hi', chain: ['hang'] });
   assert.deepEqual(r.attempts.map((x) => x.model), ['a:free', 'b:free'], 'stops after the second timeout');
   assert.ok(Date.now() - t0 < 30_000, `took ${Date.now() - t0}ms`); // seconds, not the 5 minutes it used to wait (slow CI runners need room)
+  // hung twice: cooled down, so the next call (a later task, a review) doesn't wait on it again
+  assert.match(getCooldowns().hang?.reason || '', /timed out twice/);
+  clearCooldowns();
   // the provider can't list its models now: the expired list from before is used
   const cacheFile = path.join(GLOBAL_DIR, 'models-cache.json');
   const cache = JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
