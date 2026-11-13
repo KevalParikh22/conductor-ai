@@ -63,3 +63,14 @@ test('an attempt that only default-exports the function is rejected at once; the
   assert.ok(readLessons(dir).some((l) => l.provider === 'dflt' && l.kind === 'missing-name' && l.text === 'slugify'), 'and it becomes a lesson');
   assert.match(fs.readFileSync(`${dir}/src/slugify.js`, 'utf8'), /^export function slugify/);
 });
+
+test('a task is held only to its own exports, not to every module the Design notes describe (the pilot bug)', async () => {
+  const { notesForFiles, extractSection, extractTask, taskFiles } = await import('../src/core.js');
+  const { parseChecks } = await import('../src/acceptcheck.js');
+  const { taskAcceptance } = await import('../src/plancheck.js');
+  const plan = fs.readFileSync(new URL('../bench/pilot/plan.md', import.meta.url), 'utf8');
+  const notes = extractSection(plan, 'Design notes');
+  const need = (t) => { const sec = extractTask(plan, t); return exportNames(`${notesForFiles(notes, taskFiles(sec))}\n${sec}`, parseChecks(taskAcceptance(sec)).map((c) => c.expr)); };
+  assert.deepEqual(need('T4'), ['paginate', 'pageCount'], 'not slugify, parseDuration, LRUCache, slugPath');
+  assert.deepEqual(need('T6'), ['formatDuration', 'parseDuration'], 'the file it shares with T2 keeps T2\'s export');
+});

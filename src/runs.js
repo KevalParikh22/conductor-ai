@@ -38,6 +38,10 @@ export function listRuns(root, { limit = 20 } = {}) {
       branch: s.worktree?.commit ? s.worktree.branch : null,
       why: s.route || s.selector || null, // why this worker went first
       tokensSaved: s.tokensSaved?.tokens || 0,
+      mode: s.mode || null,
+      handedOn: (s.escalated || []).length,
+      continued: !!s.worktree?.continued,
+      tokens: s.attempts.reduce((t, a) => t + (a.tokens?.input || 0) + (a.tokens?.output || 0), 0),
       report: s.report,
     };
   });

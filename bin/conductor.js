@@ -11,7 +11,7 @@ import { statusReport, statusData } from '../src/status.js';
 import { runVerify, detectVerify } from '../src/verify.js';
 import { checkPlan, formatPlanCheck } from '../src/plancheck.js';
 import { listEvals, checkEvals, runEvals, formatEvals, loadResult } from '../src/evals.js';
-import { failureStats, formatFailureStats } from '../src/stats.js';
+import { failureStats, formatFailureStats, qualityStats, formatQualityStats } from '../src/stats.js';
 import { readLessons, addLesson, removeLesson, promoteLesson, GUIDANCE } from '../src/lessons.js';
 import { readRules, newRule, syncControllerFiles, checkControllerFiles, rulesDir } from '../src/controllers.js';
 import { runHook, recordVerify, setGuards, guardsOn, allowCommit, readVerifyState, GUARD_SUPPORTED } from '../src/guard.js';
@@ -89,7 +89,7 @@ Work (normally called by the controller)
   conductor plan check <file> [--task T1,T2]   is each task ready for a worker? (files, checkable acceptance, verify, size)
   conductor eval [list] | check | run [--tasks a,b] [--provider p | --chain a,b] [--samples N] [--label x] [--compare last|<file>] [--keep]
                                        measure conductor on fixed tasks with hidden tests (check = prove the tasks are fair, no LLM)
-  conductor stats --failures [--days 30]   why work fails, biggest cause first
+  conductor stats [--failures] [--days 30]   first-try accept rate and the alpha gate; --failures: why work fails, biggest cause first
   conductor rules [list] | new <name> [--paths "src/api/**"] | sync   project rules, written in each controller's own format
   conductor guard [status] | on | off | allow   block the controller's git commit while the last verify failed (Claude Code, Antigravity)
   conductor lessons [list] | add "text" [--files a,b] [--role r] | rm <id> | promote <id>   what earlier work taught (in later prompts and routing)
@@ -438,7 +438,11 @@ async function main() {
       throw new UsageError('usage: conductor lessons [list] | add "<text>" | rm <id> | promote <id>');
     }
     case 'stats': {
-      if (!o.failures) throw new UsageError('usage: conductor stats --failures [--days 30]');
+      if (!o.failures) {
+        const q = qualityStats({ root: findProjectRoot(), days: Number(o.days) || 30 });
+        console.log(o.json ? JSON.stringify(q, null, 2) : formatQualityStats(q));
+        return 0;
+      }
       const st = failureStats({ root: findProjectRoot(), days: Number(o.days) || 30 });
       console.log(o.json ? JSON.stringify(st, null, 2) : formatFailureStats(st));
       return 0;
