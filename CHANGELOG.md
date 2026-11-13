@@ -15,6 +15,7 @@
 - **Lessons you can check (V1).**
   - **Resolved, not held against forever:** when a provider passes a kind of work in an area where it failed before, its earlier failures there are marked resolved and stop moving it to the back of the chain. The guidance stays in prompts, because it is still true for the project.
   - **Offered as rules:** a lesson seen 3 times shows a `promote?:` line in the run summary and `[promote?]` in `conductor lessons`, with the command. Promoting stays the user's call.
+  - **Cleaner lessons (found by the first A/B):** a module that fails to load made every acceptance check fail with the same error, and that was saved as a wrong-value lesson; it is now one `load` lesson with the error. A worker whose work was handed on now gets the concrete failed check as its lesson, not the empty "its acceptance checks failed".
   - **A/B in the eval:** `conductor eval run --lessons <file>` carries lessons from one run to the next, task by task (each eval task is a fresh repo, so they were lost before); `--no-lessons` is the control. The report shows which tasks had lessons in their prompt and how the same tasks did in the compared run.
 - **Antigravity (agy) under pressure (V8).** Checked against agy 1.5.8 with a real quota.
   - **Real reset times:** a rate limit now cools a provider down until the time it reports ("Resets in 118h3m13s", "try again in 30s", "retry after 120 seconds"), capped at a week, instead of 30 minutes every time. Cooldowns that end on another day show the date.

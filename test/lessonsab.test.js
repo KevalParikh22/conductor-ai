@@ -81,3 +81,24 @@ test('eval: a lesson store carries lessons from one run to the next, task by tas
   assert.deepEqual(fs.readFileSync(process.env.V1_PROMPTS, 'utf8').trim().split('\n'), ['-', 'L', '-'], 'what the worker saw each time');
   assert.match(formatEvals(r2, r3), /lessons: +1 task\(s\) had lessons in their prompt: 0\/1 passed; the same tasks in without \(lessons off\): 0\/1/);
 });
+
+test('lesson quality (found by the first A/B): a module that would not load is a "load" lesson, and a hand-off names the failed check', () => {
+  const f = { expr: "parseDuration('1h30m')", kind: 'returns', expected: '5400000' };
+  const base = { mode: 'write', role: 'build', winner: 'w', attempts: [{ provider: 'w', ok: true }] };
+  // the module didn't load, so every check "failed" with the same error: one load lesson, not a wrong-value lesson
+  let ls = L.lessonsFromRun({ ...base, checks: { failed: [{ ...f, got: 'ReferenceError: Cannot determine intended module format', load: true }] } });
+  assert.deepEqual(ls.map((l) => [l.kind, l.text]), [['load', 'ReferenceError: Cannot determine intended module format']]);
+  ls = L.lessonsFromRun({ ...base, checks: { failed: [{ ...f, got: 'returned 90' }] } });
+  assert.deepEqual(ls.map((l) => l.kind), ['acceptance-check']);
+  assert.match(ls[0].text, /should return `5400000` \(a worker's version returned 90\)/);
+  // handed on: the concrete check, never the empty "its acceptance checks failed"
+  ls = L.lessonsFromRun({ ...base, escalated: [{ from: 'kilo', checksFailed: 1, check: { ...f, got: 'returned 90' } }] });
+  assert.deepEqual(ls.map((l) => [l.provider, l.kind]), [['kilo', 'acceptance-check']]);
+  assert.ok(!ls.some((l) => /its acceptance checks failed/.test(l.text)));
+  ls = L.lessonsFromRun({ ...base, escalated: [{ from: 'kilo', checksFailed: 2 }] });
+  assert.deepEqual(ls.map((l) => [l.kind, l.text]), [['verify', '']], 'an old record without the check: only the generic lesson');
+
+  const { dir } = makeRepo();
+  L.addLesson(dir, { source: 'auto', provider: 'kilo', role: 'build', kind: 'load', files: ['src/a.js'], text: 'SyntaxError: Cannot use import statement outside a module' });
+  assert.match(L.lessonsPrompt(dir, { role: 'build', files: ['src/a.js'] }).text, /loads in this project's module system[^\n]*\(SyntaxError: Cannot use import statement outside a module\)/);
+});
