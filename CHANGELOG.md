@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Worker token counts for Codex and OpenCode.** Both used to show 0, so `conductor usage`, `conductor stats` and the benchmark only knew agy's share.
+  - **Codex** now runs with `--json`; the tokens come from its `turn.completed` events, summed over turns (reasoning counts as output). The answer still comes from `-o`.
+  - **OpenCode** now runs with `--format json`, which gives the answer and the session id but no tokens. conductor then reads them with `opencode session export --standalone <id>` (about 0.6 s; cache reads and writes count as input).
+  - **Failed attempts keep their token counts too** (timeouts, exit codes, empty output).
+  - Older CLIs that print plain text still work: the output is used as before, without token counts.
+
 - **Faster plans: routing by measured speed.**
   - **Speed-aware order:** for small tasks, the selector orders workers of the same kind by their measured median time on that role, among those that succeed at least 60% of the time. Big tasks keep your order.
   - **Batch spreads a wave** by expected finish time, with at most `maxParallelPerProvider` (2) tasks per provider.

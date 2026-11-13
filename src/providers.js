@@ -98,6 +98,48 @@ export function parseAgyJson(stdout) {
   };
 }
 
+const jsonLines = (stdout) => String(stdout || '').split('\n').flatMap((l) => {
+  if (!l.trim().startsWith('{')) return [];
+  try { const j = JSON.parse(l); return j && typeof j === 'object' && typeof j.type === 'string' ? [j] : []; } catch { return []; }
+});
+
+/**
+ * `codex exec --json` events → { text, tokens, errors }, or null when stdout has no events (an older Codex, or
+ * custom args without the flag). Usage is summed over turns; cached input is part of input_tokens.
+ */
+export function parseCodexJson(stdout) {
+  const ev = jsonLines(stdout);
+  if (!ev.length) return null;
+  let input = 0, output = 0, seen = false;
+  const texts = [], errors = [];
+  for (const e of ev) {
+    if (e.type === 'turn.completed' && e.usage) { seen = true; input += e.usage.input_tokens || 0; output += (e.usage.output_tokens || 0) + (e.usage.reasoning_output_tokens || 0); }
+    if (e.type === 'item.completed' && e.item?.type === 'agent_message' && e.item.text) texts.push(e.item.text);
+    if (e.type === 'error' || e.type === 'turn.failed') errors.push(e.message || e.error?.message || 'error');
+  }
+  return { text: texts.join('\n\n'), tokens: seen ? { input, output } : undefined, errors };
+}
+
+/** `opencode run --format json` events → { text, sessionID, errors }, or null when stdout has no events. */
+export function parseOpencodeJson(stdout) {
+  const ev = jsonLines(stdout);
+  if (!ev.length) return null;
+  return {
+    text: ev.filter((e) => e.type === 'text' && e.part?.text).map((e) => e.part.text).join('\n'),
+    sessionID: ev.find((e) => e.sessionID)?.sessionID || '',
+    errors: ev.filter((e) => e.type === 'error').map((e) => e.error?.message || 'error'),
+  };
+}
+
+/** Token counts of an OpenCode session (from `session export`), or undefined. Cache reads/writes count as input. */
+export function opencodeSessionTokens(exported) {
+  const s = String(exported || '');
+  let j; try { j = JSON.parse(s.slice(s.indexOf('{'))); } catch { return undefined; }
+  const t = j?.info?.tokens;
+  if (!t || t.input == null) return undefined;
+  return { input: (t.input || 0) + (t.cache?.read || 0) + (t.cache?.write || 0), output: (t.output || 0) + (t.reasoning || 0) };
+}
+
 /** Run a CLI agent (antigravity, codex, opencode, kimi, claude, or a custom one). */
 export async function runCli(name, p, { mode, prompt, cwd, timeoutMs, idleTimeoutMs = 0, runDir, quotaRe, allowCommands = [] }) {
   const preset = { ...(CLI_PRESETS[p.preset] || {}), ...p };
@@ -140,19 +182,30 @@ export async function runCli(name, p, { mode, prompt, cwd, timeoutMs, idleTimeou
     if (agy.denied.length) extra.warnings = [`${name} ${refused}, so it may have skipped steps such as running tests. Check its report and the verify result`];
     text = agy.text;
   }
-  if (!text.trim() && !agy) text = r.stdout; // agy's JSON wrapper is not the answer
+  // Codex and OpenCode print JSON events: the answer and the token counts come from them, not raw stdout.
+  const events = preset.output === 'codex-json' ? parseCodexJson(r.stdout) : preset.output === 'opencode-json' ? parseOpencodeJson(r.stdout) : null;
+  if (events) {
+    if (events.tokens) extra.tokens = events.tokens;
+    if (events.sessionID) {
+      const ex = await run(preset.bin, ['session', 'export', '--standalone', events.sessionID], { cwd, timeoutMs: 30_000, env });
+      const tokens = ex.code === 0 ? opencodeSessionTokens(ex.stdout) : undefined;
+      if (tokens) extra.tokens = tokens;
+    }
+    if (!text.trim()) text = events.text || events.errors.join('\n');
+  }
+  if (!text.trim() && !agy && !events) text = r.stdout; // agy's JSON wrapper is not the answer
   // exit 0 with nothing on stdout is a failure (e.g. agy auto-denying a tool in headless mode); stderr says why
   if (!text.trim() && r.code === 0 && !r.timedOut && !r.error) {
-    return { ok: false, text: r.stderr, reason: `empty output${r.stderr.trim() ? ': ' + r.stderr.trim().split('\n').pop().slice(0, 160) : ''}`, log };
+    return { ok: false, text: r.stderr, reason: `empty output${r.stderr.trim() ? ': ' + r.stderr.trim().split('\n').pop().slice(0, 160) : ''}`, log, ...extra };
   }
   if (!text.trim()) text = r.stderr;
 
-  if (r.timedOut) return { ok: false, text, reason: r.idle ? `idle (no output for ${fmtMin(idleTimeoutMs)})` : `timeout (${fmtMin(timeoutMs)})`, log };
+  if (r.timedOut) return { ok: false, text, reason: r.idle ? `idle (no output for ${fmtMin(idleTimeoutMs)})` : `timeout (${fmtMin(timeoutMs)})`, log, ...extra };
   if (r.error) return { ok: false, text, reason: 'spawn error', log };
   if (r.code !== 0) {
-    return { ok: false, text, reason: quotaRe.test(r.stdout + r.stderr) ? 'quota' : `exit ${r.code}`, log };
+    return { ok: false, text, reason: quotaRe.test(r.stdout + r.stderr) ? 'quota' : `exit ${r.code}`, log, ...extra };
   }
-  if (text.trim().length < 20) return { ok: false, text, reason: 'empty output', log };
+  if (text.trim().length < 20) return { ok: false, text, reason: 'empty output', log, ...extra };
   // Some CLIs exit 0 but only print a rate-limit message.
   if (text.length < 2000 && !/RESULT:|VERDICT:/.test(text) && quotaRe.test(text)) return { ok: false, text, reason: 'quota', log, ...extra };
   return { ok: true, text, log, ...extra };

@@ -50,7 +50,7 @@ The first C run spent its time in two places: **agy took up to 299 s on a small 
 - **The speed gain held either way:** 137–151 s against 623 s.
 - **The Claude saving held at 53–56%,** with 6/6 every time.
 - **On tasks this small, Claude alone is still about 1.4× faster.**
-- **Not measured yet:** Codex and OpenCode don't report their token counts to conductor, so the workers' share is known only for agy.
+- **Not measured in these runs:** Codex and OpenCode token counts weren't captured yet, so the workers' share is known only for agy. conductor now reads them (Codex `--json` events, OpenCode `session export`), so the next run will include them.
 
 ## What it means
 
