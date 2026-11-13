@@ -75,9 +75,11 @@ export const CLI_PRESETS = {
     bin: 'codex',
     stdin: true, // "-" = read prompt from stdin
     // codex exec never prompts; its OS sandbox decides. workspace-write keeps .git read-only and has no network.
-    write: ['exec', '--skip-git-repo-check', '--sandbox', 'workspace-write', '-c', 'approval_policy="never"',
+    // --json: events on stdout with token usage (turn.completed); -o still writes the final answer.
+    write: ['exec', '--skip-git-repo-check', '--json', '--sandbox', 'workspace-write', '-c', 'approval_policy="never"',
       '-c', 'sandbox_workspace_write.network_access=false', '{modelArgs}', '-o', '{outFile}', '-'],
-    read: ['exec', '--skip-git-repo-check', '--sandbox', 'read-only', '-c', 'approval_policy="never"', '{modelArgs}', '-o', '{outFile}', '-'],
+    read: ['exec', '--skip-git-repo-check', '--json', '--sandbox', 'read-only', '-c', 'approval_policy="never"', '{modelArgs}', '-o', '{outFile}', '-'],
+    output: 'codex-json',
     modelArgs: ['-m', '{model}'],
     passEnv: ['OPENAI_API_KEY'],
     permissions: {
@@ -96,8 +98,11 @@ export const CLI_PRESETS = {
     // --standalone is required: otherwise OpenCode 2 hands the run to its background service, which uses
     // its own config and ignores this environment. --auto approves whatever is not explicitly denied;
     // without it, anything that would ask is rejected.
-    write: ['run', '--standalone', '--auto', '{modelArgs}', '-f', '{promptFile}', 'Follow the instructions in the attached file exactly.'],
-    read: ['run', '--standalone', '{modelArgs}', '-f', '{promptFile}', 'Follow the instructions in the attached file exactly. Do not modify any files.'],
+    // --format json: text parts and the session id; token counts come from `session export` afterwards (the JSON
+    // stream has none, checked against OpenCode 2.0.32).
+    write: ['run', '--standalone', '--auto', '--format', 'json', '{modelArgs}', '-f', '{promptFile}', 'Follow the instructions in the attached file exactly.'],
+    read: ['run', '--standalone', '--format', 'json', '{modelArgs}', '-f', '{promptFile}', 'Follow the instructions in the attached file exactly. Do not modify any files.'],
+    output: 'opencode-json',
     modeEnv: {
       write: { OPENCODE_CONFIG_CONTENT: { permission: {
         external_directory: 'deny',
