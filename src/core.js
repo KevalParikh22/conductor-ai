@@ -407,7 +407,7 @@ async function escalateIfNeeded(cfg, opts, first) {
       ...(prev.worktree ? { continue: true, worktreeId: prev.worktree.id } : { allowDirty: true, inherited: true }),
     });
     next.attempts = [...prev.attempts, ...next.attempts];
-    next.escalated = [...(prev.escalated || []), { from: prev.winner, verify: prev.verify.status, checksFailed: prev.checks?.failed?.length || 0, run: prev.runDir }];
+    next.escalated = [...(prev.escalated || []), { from: prev.winner, verify: prev.verify.status, checksFailed: prev.checks?.failed?.length || 0, check: prev.checks?.failed?.[0] || null, run: prev.runDir }];
     if (!next.winner) { // nobody could take it over: the earlier result stands, with the attempts made
       prev.attempts = next.attempts; prev.escalated = next.escalated; prev.warnings.push(`handing the failed work to ${rest.join(', ')} did not work: ${next.attempts.slice(-rest.length).map((a) => `${a.provider}(${a.reason})`).join(', ')}`);
       writeJSON(path.join(cfg.root, prev.runDir, 'summary.json'), prev);

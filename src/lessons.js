@@ -34,6 +34,7 @@ export const GUIDANCE = {
   syntax: 'Make sure every file you write parses; a worker here returned a file with a syntax error',
   'no-files': 'Reply with the complete <<<FILE blocks; a worker here answered without any',
   verify: "Run the project's checks before reporting DONE; a worker here finished with failing tests",
+  load: "Make sure each file you write loads in this project's module system (import and export the way the other files do); a worker's file here failed to load",
 };
 
 export function readLessons(root) {
@@ -93,6 +94,7 @@ export function lessonsPrompt(root, task, { max = 5 } = {}) {
   for (const l of hits.filter((x) => x.source === 'auto').sort(byRecent)) {
     if (lines.length >= max) break;
     if (l.kind === 'acceptance-check') { lines.push(`- ${GUIDANCE['acceptance-check']}: ${l.text}`); ids.push(l.id); continue; }
+    if (l.kind === 'load' && !kinds.has('load')) { kinds.add('load'); lines.push(`- ${GUIDANCE.load}${l.text ? ` (${l.text})` : ''}.`); ids.push(l.id); continue; }
     if (kinds.has(l.kind) || !GUIDANCE[l.kind]) continue;
     kinds.add(l.kind); lines.push(`- ${GUIDANCE[l.kind]}.`); ids.push(l.id);
   }
@@ -116,6 +118,15 @@ export function demoteByLessons(root, chainNames, { role, files = [], after = 2,
   return { chain: [...chainNames.filter((n) => !demoted.includes(n)), ...demoted], demoted: demoted.map((n) => `${n} (${fails[n]} failures)`) };
 }
 
+/**
+ * V1: one failed acceptance check as a lesson. When the module didn't load at all, every check fails with the same
+ * error: that teaches "make it load", not a wrong value (the first A/B showed those as misleading value lessons).
+ */
+function checkLesson(f) {
+  if (f.load) return { kind: 'load', text: String(f.got || '').replace(/\s+/g, ' ').slice(0, 160) };
+  return { kind: 'acceptance-check', text: `\`${f.expr}\` should ${f.kind === 'returns' ? `return \`${f.expected}\`` : `throw ${f.expected}`} (a worker's version ${f.got})` };
+}
+
 /** What a finished run teaches: one auto lesson per diagnosed failure, attributed to the provider that made it. */
 export function lessonsFromRun(s, { files = [] } = {}) {
   const out = [];
@@ -127,12 +138,16 @@ export function lessonsFromRun(s, { files = [] } = {}) {
   }
   const w = s.winner;
   if (!w || s.mode !== 'write') return out;
-  if (s.checks?.failed?.length) { const f = s.checks.failed[0]; add(w, 'acceptance-check', `\`${f.expr}\` should ${f.kind === 'returns' ? `return \`${f.expected}\`` : `throw ${f.expected}`} (a worker's version ${f.got})`); }
+  if (s.checks?.failed?.length) { const l = checkLesson(s.checks.failed[0]); add(w, l.kind, l.text); }
   if (s.verify?.suspectTests?.length) add(w, 'wrong-test');
   else if (s.verify?.status === 'FAIL' && !(s.verify.baseFailed && !s.verify.newFailures?.length)) add(w, 'verify');
   if (s.scope?.outside?.length && !s.scope.allowed) add(w, 'scope', s.scope.outside.join(', '));
   if (s.repro?.ok === false && !s.repro.waived) add(w, 'regression-test');
-  for (const e of s.escalated || []) if (e.from && !out.some((x) => x.provider === e.from)) add(e.from, e.checksFailed ? 'acceptance-check' : 'verify', e.checksFailed ? 'its acceptance checks failed' : '');
+  // a worker whose work was handed on: what exactly failed (an old record without the check teaches only "verify")
+  for (const e of s.escalated || []) {
+    if (!e.from || out.some((x) => x.provider === e.from)) continue;
+    if (e.check) { const l = checkLesson(e.check); add(e.from, l.kind, l.text); } else add(e.from, 'verify', '');
+  }
   return out;
 }
 

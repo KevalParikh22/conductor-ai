@@ -126,7 +126,7 @@ export async function runAcceptanceChecks(work, criteria, taskFiles, { dir, time
   if (!results) {
     // the script itself failed: a file that won't load, or a check that hangs
     const why = r.timedOut ? `the checks did not finish in ${Math.round(timeoutMs / 1000)}s` : (r.stderr.split('\n').find((l) => /Error/.test(l)) || r.stderr.trim().split('\n')[0] || `exit ${r.code}`).slice(0, 300);
-    for (const c of runnable) failed.push({ n: c.n, expr: c.expr, kind: c.kind, expected: c.expected, got: why });
+    for (const c of runnable) failed.push({ n: c.n, expr: c.expr, kind: c.kind, expected: c.expected, got: why, load: true }); // nothing ran: not a wrong value
     return { total: failed.length, passed: 0, failed, skipped };
   }
   for (const x of results) if (!x.ok) { const c = runnable[x.i]; failed.push({ n: c.n, expr: c.expr, kind: c.kind, expected: c.expected, got: x.got }); }
