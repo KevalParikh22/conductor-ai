@@ -14,7 +14,7 @@ import { repoMap, contextPack } from './context.js';
 import { runAcceptanceChecks, checksBrief, parseChecks } from './acceptcheck.js';
 import { runSamples } from './samples.js';
 import { independentReview, riskReasons } from './review.js';
-import { lessonsPrompt, demoteByLessons, lessonsFromRun, addLesson } from './lessons.js';
+import { lessonsPrompt, demoteByLessons, lessonsFromRun, addLesson, resolveLessons, promotable, readLessons, lessonMatches, GUIDANCE } from './lessons.js';
 import { rulesPrompt } from './controllers.js';
 import { recordVerify } from './guard.js';
 import { autoModel, autoFallbacks, cliFallbacks, modelFamily } from './models.js';
@@ -383,6 +383,11 @@ function recordLessons(cfg, opts, s) {
     const files = [...(opts.files || []), ...taskFiles(section)];
     if (opts.note) addLesson(cfg.root, { source: 'note', role: opts.role, files, text: opts.note.replace(/\s+/g, ' ').trim().slice(0, 300) });
     for (const l of lessonsFromRun(s, { files })) addLesson(cfg.root, l);
+    // V1: the winner did this kind of work right here: its earlier failures in this area stop demoting it
+    if (s.winner && outcome(s) === 'done') { const n = resolveLessons(cfg.root, { provider: s.winner, role: opts.role, files }); if (n) s.lessonsResolved = n; }
+    // V1: a lesson that keeps coming back is worth a permanent rule (the user decides)
+    const promo = promotable(readLessons(cfg.root)).filter((l) => lessonMatches(l, { role: opts.role, files }));
+    if (promo.length) s.promotable = promo.slice(0, 3).map((l) => ({ id: l.id, count: l.count, text: l.text || GUIDANCE[l.kind] || l.kind }));
   } catch { /* lessons are a help, never a reason for a run to fail */ }
 }
 
@@ -1012,6 +1017,8 @@ export function formatSummary(s) {
   if (s.selector) L.push(`selector:  ${s.selector}`);
   if (s.skills?.length) L.push(`skills:    ${s.skills.join(', ')}`);
   if (s.lessons?.length) L.push(`lessons:   ${s.lessons.length} from earlier work here were in the prompt (conductor lessons)`);
+  if (s.lessonsResolved) L.push(`lessons:   ${s.winner} passed this kind of work here, so ${s.lessonsResolved} earlier failure(s) of its no longer move it back`);
+  for (const l of s.promotable || []) L.push(`promote?:  seen ${l.count}×: "${String(l.text).slice(0, 100)}" → make it a rule: conductor lessons promote ${l.id}`);
   if (s.lessonsDemoted?.length) L.push(`order:     moved to the back: ${s.lessonsDemoted.join(', ')} (failed this kind of work here before)`);
   const multi = (n) => s.attempts.filter((a) => a.provider === n).length > 1; // show models only where a provider switched model
   L.push(`attempts:  ${s.attempts.map((a) => `${a.provider}${a.model && multi(a.provider) ? `[${a.model}]` : ''}(${a.reason}${a.stashed ? ', stashed' : ''})`).join(' → ') || '(none)'}`);

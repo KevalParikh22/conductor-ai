@@ -107,6 +107,7 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | `contextPackBytes` | 4000 | Most characters of that pack |
 | `lessons` | true | Keep what earlier work taught (diagnosed failures, your `--note`s) for later prompts and provider order (`conductor lessons`) |
 | `lessonsInPrompt` | 5 | Most lessons added to one worker's prompt |
+| `demoteAfter` | 2 | Unresolved failures of one provider on one kind of work (same role and folder, last 30 days) before it moves to the back |
 | `demoteAfter` | 2 | Failures on the same kind of work in the same area before a provider moves to the back |
 | `autoReview` | true | Risky work that passes every check gets an advisory review from a different model family |
 | `reviewLines` | 150 | Changed lines above which work counts as risky (0 = size never triggers a review) |

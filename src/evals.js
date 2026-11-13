@@ -20,6 +20,7 @@ import { execFileSync } from 'node:child_process';
 import { run, GLOBAL_DIR, readJSON, writeJSON } from './util.js';
 import { loadConfig } from './config.js';
 import { dispatch, outcome as outcomeOf, extractTask, taskFiles } from './core.js';
+import { lessonsFile, readLessons } from './lessons.js';
 import { checkPlan, taskAcceptance } from './plancheck.js';
 import { runAcceptanceChecks } from './acceptcheck.js';
 import { VERSION } from './version.js';
@@ -134,7 +135,30 @@ export async function checkEvals({ ids, dir } = {}) {
  * Run conductor on each task the way a user would (plan → run → gates → verify), then score the result against the
  * hidden truth. Compares conductor's verdict (outcome) with reality (pass): a "done" that fails is the worst case.
  */
-export async function runEvals({ ids, dir, chain, provider, samples, keep = false, label = '', onEvent = () => {} } = {}) {
+/**
+ * V1: lessons across eval runs. Each eval task is a fresh repo, so its lessons would be lost; with a store file they
+ * carry over, task by task: run 1 learns from its failures, run 2 gets them in its prompts. lessons: 'off' turns them
+ * off (the control). → the store's lessons for one task, and a writer for after the run.
+ */
+function lessonStore(file) {
+  const all = () => { try { return fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)); } catch { return []; } };
+  return {
+    seed(taskId, work) {
+      const mine = all().filter((l) => l.evalTask === taskId).map(({ evalTask, ...l }) => l);
+      if (mine.length) { fs.mkdirSync(path.dirname(lessonsFile(work)), { recursive: true }); fs.writeFileSync(lessonsFile(work), mine.map((l) => JSON.stringify(l)).join('\n') + '\n'); }
+      return mine.length;
+    },
+    save(taskId, work) {
+      const keep = all().filter((l) => l.evalTask !== taskId);
+      const mine = readLessons(work).map((l) => ({ ...l, evalTask: taskId }));
+      fs.mkdirSync(path.dirname(path.resolve(file)), { recursive: true });
+      fs.writeFileSync(file, [...keep, ...mine].map((l) => JSON.stringify(l)).join('\n') + ([...keep, ...mine].length ? '\n' : ''));
+    },
+  };
+}
+
+export async function runEvals({ ids, dir, chain, provider, samples, keep = false, label = '', lessons, onEvent = () => {} } = {}) {
+  const store = lessons && lessons !== 'off' ? lessonStore(lessons) : null;
   const tasks = pick(ids, dir);
   const startedAt = new Date().toISOString();
   const results = [];
@@ -145,7 +169,9 @@ export async function runEvals({ ids, dir, chain, provider, samples, keep = fals
     const row = { id: task.id, role: task.role, difficulty: task.difficulty, pass: false };
     try {
       prepareEval(task, work);
+      if (store) row.lessonsSeeded = store.seed(task.id, work);
       const cfg = loadConfig(work);
+      if (lessons === 'off') cfg.settings = { ...cfg.settings, lessons: false };
       const s = await dispatch(cfg, { role: task.role, planPath: 'docs/plan/eval.md', taskId: 'T1', chain, provider, samples, onEvent: (e) => onEvent({ ...e, task: task.id }) });
       Object.assign(row, {
         outcome: s.outcome || outcomeOf(s), winner: s.winner, model: s.model, verify: s.verify?.status || null,
@@ -156,6 +182,7 @@ export async function runEvals({ ids, dir, chain, provider, samples, keep = fals
         outside: s.scope?.outside || [],
         suspectTests: s.verify?.suspectTests || null, // conductor judged the code right and the worker's tests wrong
         handedOn: (s.escalated || []).length,
+        lessonsInPrompt: (s.lessons || []).length,
       });
       const sc = await scoreEval(task, work);
       row.pass = sc.pass; row.detail = sc.detail;
@@ -167,13 +194,14 @@ export async function runEvals({ ids, dir, chain, provider, samples, keep = fals
     } catch (e) {
       row.outcome = 'error'; row.detail = e.message;
     } finally {
+      if (store) try { store.save(task.id, work); } catch { /* the store is a help */ }
       row.seconds = Math.round((Date.now() - t0) / 1000);
       if (keep) row.dir = work; else fs.rmSync(work, { recursive: true, force: true });
     }
     results.push(row);
     onEvent({ type: 'scored', task: task.id, pass: row.pass, outcome: row.outcome });
   }
-  const report = { version: VERSION, startedAt, label, chain: chain || null, provider: provider || null, samples: samples || 1, results, summary: summarize(results) };
+  const report = { version: VERSION, startedAt, label, chain: chain || null, provider: provider || null, samples: samples || 1, lessons: lessons === 'off' ? 'off' : store ? 'store' : 'per-task', results, summary: summarize(results) };
   fs.mkdirSync(resultsDir(), { recursive: true });
   const file = path.join(resultsDir(), `${startedAt.replace(/[:.]/g, '-')}${label ? `-${label.replace(/[^\w.-]/g, '')}` : ''}.json`);
   writeJSON(file, report);
@@ -218,12 +246,19 @@ export function formatEvals(report, prev) {
     const mark = r.pass ? '✓' : '✗';
     const tags = `${r.suspectTests ? '  [said: code looks right, tests wrong]' : ''}${r.handedOn ? `  [handed on ×${r.handedOn}]` : ''}`;
     const verdict = r.outcome === 'done' && !r.pass ? '  ← conductor said done, hidden tests fail' : r.outcome !== 'done' && r.pass && r.outcome !== 'error' ? '  ← work was fine, conductor flagged it' : '';
-    L.push(`${mark} ${r.id.padEnd(22)} ${String(r.outcome || '-').padEnd(13)} ${(r.winner || '-').padEnd(16)} ${String(r.seconds).padStart(4)}s${r.acceptance ? `  acc ${r.acceptance}` : ''}${tags}${verdict}`);
+    L.push(`${mark} ${r.id.padEnd(22)} ${String(r.outcome || '-').padEnd(13)} ${(r.winner || '-').padEnd(16)} ${String(r.seconds).padStart(4)}s${r.acceptance ? `  acc ${r.acceptance}` : ''}${r.lessonsInPrompt ? `  [${r.lessonsInPrompt} lesson(s) in prompt]` : ''}${tags}${verdict}`);
     if (!r.pass && r.detail) L.push(`    ${r.detail.split('\n')[0].slice(0, 150)}`);
   }
   const delta = (k, unit = '') => (prev?.summary && prev.summary[k] != null ? ` (${s[k] - prev.summary[k] >= 0 ? '+' : ''}${s[k] - prev.summary[k]}${unit} vs ${prev.label || prev.startedAt.slice(0, 16)})` : '');
   L.push('', `pass rate:   ${s.passed}/${s.tasks - s.errors} = ${s.passRate}%${s.errors ? ` (${s.errors} not counted: error)` : ''}${delta('passRate', ' pts')}`);
   L.push(`verdicts:    ${s.rightDone} done and right · ${s.falseDone} "done" but wrong${delta('falseDone')} · ${s.caught} caught · ${s.falseAlarm} false alarm${s.errors ? ` · ${s.errors} error` : ''}`);
+  // V1: the tasks that had lessons in their prompt, against the same tasks in the compared run
+  const withL = report.results.filter((r) => r.lessonsInPrompt);
+  if (withL.length || report.lessons === 'off') {
+    const same = (rs) => rs.filter((r) => withL.some((w) => w.id === r.id));
+    const rate = (rs) => `${rs.filter((r) => r.pass).length}/${rs.length}`;
+    L.push(`lessons:     ${report.lessons === 'off' ? 'off' : `${withL.length} task(s) had lessons in their prompt: ${rate(withL)} passed`}${prev?.results && withL.length ? `; the same tasks in ${prev.label || 'the compared run'} (lessons ${prev.lessons || 'per-task'}): ${rate(same(prev.results))}` : ''}`);
+  }
   L.push(`cost:        ${s.seconds}s · ${s.tokens.toLocaleString()} tokens${s.cost ? ` · $${s.cost}` : ''}`);
   if (report.file) L.push(`saved:       ${report.file}`);
   return L.join('\n');

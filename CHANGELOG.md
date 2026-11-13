@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Lessons you can check (V1).**
+  - **Resolved, not held against forever:** when a provider passes a kind of work in an area where it failed before, its earlier failures there are marked resolved and stop moving it to the back of the chain. The guidance stays in prompts, because it is still true for the project.
+  - **Offered as rules:** a lesson seen 3 times shows a `promote?:` line in the run summary and `[promote?]` in `conductor lessons`, with the command. Promoting stays the user's call.
+  - **A/B in the eval:** `conductor eval run --lessons <file>` carries lessons from one run to the next, task by task (each eval task is a fresh repo, so they were lost before); `--no-lessons` is the control. The report shows which tasks had lessons in their prompt and how the same tasks did in the compared run.
 - **Antigravity (agy) under pressure (V8).** Checked against agy 1.5.8 with a real quota.
   - **Real reset times:** a rate limit now cools a provider down until the time it reports ("Resets in 118h3m13s", "try again in 30s", "retry after 120 seconds"), capped at a week, instead of 30 minutes every time. Cooldowns that end on another day show the date.
   - **Another model family on quota:** agy's model families have separate quotas, so when its Gemini quota is used up conductor tries its Claude or GPT-OSS models (from `agy models`, cached for a day) before giving up. Live: Gemini out of quota for 46 h → `claude-sonnet-4-6` did the task. When two models report the same reset time, the quota is the account's: conductor stops trying models and cools agy down until then.
