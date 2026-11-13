@@ -247,14 +247,21 @@ export function chatLog(url, model, r) {
 async function httpJson(url, { headers, body, timeoutMs }) {
   const ctrl = new AbortController();
   const t = timeoutMs ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
-  try {
+  const call = (async () => {
     const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body), signal: ctrl.signal });
     const raw = await res.text();
     let json; try { json = JSON.parse(raw); } catch { /* non-JSON error page */ }
     return { status: res.status, headers: res.headers, json, raw };
+  })();
+  // a hard deadline on top of the abort: a stalled TLS connection once held a free route for hours after its abort
+  // fired (eval, 2026-11-13). The call is abandoned; its socket is closed by the abort or when the process ends.
+  let hard;
+  const deadline = timeoutMs ? new Promise((resolve) => { hard = setTimeout(() => resolve({ status: 0, error: 'timeout' }), timeoutMs + 5000); }) : null;
+  try {
+    return await (deadline ? Promise.race([call, deadline]) : call);
   } catch (e) {
     return { status: 0, error: e.name === 'AbortError' ? 'timeout' : String(e.cause?.code || e.message || e) };
-  } finally { clearTimeout(t); }
+  } finally { clearTimeout(t); clearTimeout(hard); call.catch(() => {}); }
 }
 
 function classifyHttp(r) {

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **A free API call can no longer hang a task.** In an eval, one call to a free route stayed open for 1 h 40 min after its abort fired (a stalled TLS connection). Every API call and model-list request now has a hard deadline (its time limit + 5 s) and returns `timeout`, so conductor moves on even if `fetch` never settles.
 - **Controllers as data (V6).**
   - **One entry per controller** (`CONTROLLERS` in `src/presets.js`) says where it reads its instructions, commands, skills, rules and reviewer subagent, how it registers MCP, and its hook file. Each format names one writer in `src/controllers.js` or `src/guard.js`. `init`, `rules sync`, the commit guard, skill sync and the doctor checks now all read the entries instead of checking controller names.
   - **No behaviour change:** for all four controllers, the 98 files `init`, `rules sync` and `guard on` write are byte-for-byte the same as before.

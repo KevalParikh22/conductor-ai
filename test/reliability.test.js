@@ -102,3 +102,16 @@ test('report paths: code words with a dot are not files (the pilot\'s Math.ceil 
   const r = claimedFiles('## Files changed\n- src/paginate.js — Math.floor → Math.ceil\n- `Math.ceil` used\n- `user.name` read\n- `config.yml` updated\n- README.md\n- `App.vue`');
   assert.deepEqual(r, ['src/paginate.js', 'config.yml', 'README.md', 'App.vue']);
 });
+
+test('an API call returns "timeout" even when fetch ignores its abort (a stalled TLS connection once hung a free route for hours)', async () => {
+  const { runOpenAI } = await import('../src/providers.js');
+  const real = globalThis.fetch;
+  globalThis.fetch = () => new Promise(() => {}); // never settles, ignores the signal
+  try {
+    const t0 = Date.now();
+    const r = await runOpenAI('stall', { baseUrl: 'https://x.example/v1', model: 'm' }, { system: 's', prompt: 'p', timeoutMs: 200 });
+    assert.equal(r.ok, false);
+    assert.equal(r.reason, 'timeout');
+    assert.ok(Date.now() - t0 < 12_000, `gave up after ${Date.now() - t0} ms`);
+  } finally { globalThis.fetch = real; }
+});
