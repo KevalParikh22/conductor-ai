@@ -13,14 +13,16 @@ const MAX = 500;
 // Inside the repository's git folder: git never tracks it (so it can't make the tree look changed, even when
 // conductor's folder is shared with init --share), and each clone keeps its own. promote shares one via AGENTS.md.
 const gitDirs = new Map();
-export function lessonsFile(root) {
+/** conductor's private folder inside the repository's git folder (never tracked; per clone). */
+export function conductorGitDir(root) {
   if (!gitDirs.has(root)) {
     let d = null;
     try { d = execFileSync('git', ['rev-parse', '--git-common-dir'], { cwd: root, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { /* not a repo */ }
     gitDirs.set(root, d ? path.join(path.isAbsolute(d) ? d : path.join(root, d), 'conductor') : path.join(root, PROJECT_DIRNAME));
   }
-  return path.join(gitDirs.get(root), 'lessons.jsonl');
+  return gitDirs.get(root);
 }
+export const lessonsFile = (root) => path.join(conductorGitDir(root), 'lessons.jsonl');
 
 // what each kind of failure teaches the next worker (provider-neutral)
 export const GUIDANCE = {

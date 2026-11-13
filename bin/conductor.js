@@ -14,6 +14,8 @@ import { listEvals, checkEvals, runEvals, formatEvals, loadResult } from '../src
 import { failureStats, formatFailureStats } from '../src/stats.js';
 import { readLessons, addLesson, removeLesson, promoteLesson, GUIDANCE } from '../src/lessons.js';
 import { readRules, newRule, syncControllerFiles, checkControllerFiles, rulesDir } from '../src/controllers.js';
+import { runHook, recordVerify, setGuards, guardsOn, allowCommit, readVerifyState, GUARD_SUPPORTED } from '../src/guard.js';
+import { readBlock, writeBlock } from '../src/localfiles.js';
 import { initProject, setupGlobal } from '../src/init.js';
 import { startMcpServer } from '../src/mcp.js';
 import { testProvider } from '../src/providers.js';
@@ -58,7 +60,7 @@ Setup
   conductor add <provider> [--model m] [--yes] [--project]   add one: key, model, test, role chains
   conductor keys [set NAME | rm NAME]  list, set (hidden input or stdin) or remove API keys
   conductor local [--enable]           find local model servers (Ollama, LM Studio, llama.cpp…) and turn them on
-  conductor init [--controller <c>] [--verify "<cmd>"] [--vscode] [--no-mcp] [--share]   add conductor to the current project (its files go in .gitignore unless --share)
+  conductor init [--controller <c>] [--verify "<cmd>"] [--guards] [--vscode] [--no-mcp] [--share]   add conductor to the current project (its files go in .gitignore unless --share)
                                        controllers: ${Object.keys(CONTROLLERS).join(', ')}
   conductor ui [--port 4545] [--no-open]   settings page
   conductor doctor [--live] [--details] [--json]   check installs and keys (--live sends a test prompt)
@@ -89,6 +91,7 @@ Work (normally called by the controller)
                                        measure conductor on fixed tasks with hidden tests (check = prove the tasks are fair, no LLM)
   conductor stats --failures [--days 30]   why work fails, biggest cause first
   conductor rules [list] | new <name> [--paths "src/api/**"] | sync   project rules, written in each controller's own format
+  conductor guard [status] | on | off | allow   block the controller's git commit while the last verify failed (Claude Code, Antigravity)
   conductor lessons [list] | add "text" [--files a,b] [--role r] | rm <id> | promote <id>   what earlier work taught (in later prompts and routing)
   conductor verify                     run the project's verify command
   conductor skills [list] | new <name> | add <path> | on|off <name> | rm <name> | sync   one skill library for every controller and worker
@@ -251,7 +254,7 @@ function timeoutOpt(o) {
 
 function parseArgs(argv) {
   const opts = { _: [] };
-  const flags = new Set(['no-verify', 'allow-dirty', 'json', 'live', 'no-open', 'no-mcp', 'all', 'clear', 'global', 'help', 'version', 'worktree', 'replace', 'force', 'allow-open-questions', 'vscode', 'yes', 'free', 'project', 'details', 'enable', 'rules', 'templates', 'continue', 'share', 'allow-unverified', 'allow-scope', 'allow-weak-plan', 'keep', 'failures', 'no-escalate', 'allow-no-repro', 'review', 'no-review']);
+  const flags = new Set(['no-verify', 'allow-dirty', 'json', 'live', 'no-open', 'no-mcp', 'all', 'clear', 'global', 'help', 'version', 'worktree', 'replace', 'force', 'allow-open-questions', 'vscode', 'yes', 'free', 'project', 'details', 'enable', 'rules', 'templates', 'continue', 'share', 'allow-unverified', 'allow-scope', 'allow-weak-plan', 'keep', 'failures', 'no-escalate', 'allow-no-repro', 'review', 'no-review', 'guards']);
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '-h') { opts.help = true; continue; }
@@ -322,6 +325,38 @@ async function main() {
       return 0;
     }
     case 'skills': case 'skill': return skillsCmd(o);
+    case 'hook': {
+      // called by a controller's hook config with JSON on stdin; never fails loudly: a broken guard must not block work
+      let raw = '';
+      try { raw = fs.readFileSync(0, 'utf8'); } catch { /* no stdin */ }
+      const kind = o._[0] || '';
+      let r;
+      try { r = runHook(kind, raw.trim() ? JSON.parse(raw) : {}, findProjectRoot(process.env.CLAUDE_PROJECT_DIR || process.cwd())); }
+      catch { r = kind === 'agy-pretool' ? { stdout: JSON.stringify({ decision: 'ask' }), stderr: '', code: 0 } : { stdout: '', stderr: '', code: 0 }; }
+      if (r.stdout) process.stdout.write(r.stdout + '\n');
+      if (r.stderr) process.stderr.write(r.stderr + '\n');
+      return r.code;
+    }
+    case 'guard': case 'guards': {
+      const cfg = loadConfig();
+      const root = cfg.root, controller = cfg.controller || 'claude-code';
+      const sub = o._[0] || 'status';
+      if (sub === 'allow') { allowCommit(root); console.log('commits on the current HEAD are allowed once, even though the last verify failed'); return 0; }
+      if (sub === 'status') {
+        const st = readVerifyState(root);
+        console.log(`guards for ${CONTROLLERS[controller]?.label || controller}: ${GUARD_SUPPORTED[controller] ? (guardsOn(root, controller) ? `on (${GUARD_SUPPORTED[controller]})` : 'off (conductor guard on)') : 'not available for this controller yet'}`);
+        console.log(`last verify: ${st ? `${st.status}${st.cmd ? ` (${st.cmd})` : ''} at ${st.at}` : 'none recorded (conductor verify)'}`);
+        return 0;
+      }
+      if (sub !== 'on' && sub !== 'off') throw new UsageError('usage: conductor guard [status] | on | off | allow');
+      const r = setGuards(root, controller, sub === 'on');
+      if (r.unsupported) { console.log(`Guards are not available for ${CONTROLLERS[controller]?.label || controller} yet: only Claude Code and Antigravity, whose hooks were tested. (Codex runs project hooks only in trusted projects after you approve them in /hooks.)`); return 1; }
+      // keep the hook file out of git, like conductor's other local files (unless the project shares them)
+      const block = readBlock(root);
+      if (sub === 'on' && block.length && !block.includes(r.file)) writeBlock(root, [...block, r.file]);
+      console.log(r.changed ? `guards ${sub} (${r.file})${sub === 'on' ? ': a `git commit` by the controller is blocked while the last conductor verify failed' : ''}` : `guards already ${sub}`);
+      return 0;
+    }
     case 'rules': case 'rule': {
       const cfg = loadConfig();
       const root = cfg.root, controller = cfg.controller || 'claude-code';
@@ -443,6 +478,7 @@ async function main() {
       setupGlobal();
       if (o.verify === true || (o.verify !== undefined && !String(o.verify).trim())) throw new UsageError('usage: conductor init --verify "<command>" (e.g. --verify "npm test")');
       const { lines, notes } = initProject(root, { controller, mcp: !o['no-mcp'], vscode: o.vscode || undefined, share: !!o.share, verify: o.verify ? String(o.verify).trim() : undefined });
+      if (o.guards) { const g = setGuards(root, controller, true); lines.push(g.unsupported ? `  skipped  guards (not available for ${controller} yet)` : `  ${g.changed ? 'added' : 'kept'}    ${g.file} (guards: commit blocked while verify fails)`); if (!g.unsupported && !o.share) { const b = readBlock(root); if (b.length && !b.includes(g.file)) writeBlock(root, [...b, g.file]); } }
       console.log(`conductor init → ${root}  (controller: ${CONTROLLERS[controller].label})`);
       lines.forEach((l) => console.log(l));
       notes.forEach((n) => console.log('\n' + n));
@@ -473,6 +509,7 @@ async function main() {
     case 'verify': {
       const cfg = loadConfig();
       const v = await runVerify(cfg.root, cfg.settings);
+      recordVerify(cfg.root, v); // the commit guard (conductor guard) reads this
       console.log(`verify: ${v.status}${v.cmd ? ` (${v.cmd})` : ''}${v.note ? `, ${v.note}` : ''}`);
       if (v.tail) console.log(v.tail);
       return v.status === 'FAIL' ? 1 : 0;

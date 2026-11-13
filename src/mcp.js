@@ -14,6 +14,7 @@ import { statusReport } from './status.js';
 import { runVerify, detectVerify } from './verify.js';
 import { checkPlan, formatPlanCheck } from './plancheck.js';
 import { readLessons, addLesson, GUIDANCE } from './lessons.js';
+import { recordVerify } from './guard.js';
 import { ROLES } from './presets.js';
 import { VERSION } from './version.js';
 
@@ -196,6 +197,7 @@ async function callTool(name, args, startRoot) {
   if (name === 'conductor_status') return text(statusReport(cfg));
   if (name === 'conductor_verify') {
     const v = await runVerify(cfg.root, cfg.settings);
+    recordVerify(cfg.root, v);
     return text(`verify: ${v.status}${v.cmd ? ` (${v.cmd})` : ''}\n${v.tail || v.note || ''}`, v.status === 'FAIL');
   }
   if (name === 'conductor_batch') {

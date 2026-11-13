@@ -62,6 +62,9 @@ To check one task's work without spending your own context, ask the **conductor-
 
 `conductor run review --plan docs/plan/<slug>.md`. Triage every finding yourself (reviewers produce false positives). Fix the real ones.
 
+### 4b. Guards
+If `git commit` is refused with "conductor: the last verify failed", don't work around it: fix the failures and run `conductor verify` (a pass unblocks it). Use `conductor guard allow` only when the user agrees to commit failing work.
+
 ### 5. Handoff
 Keep `HANDOFF.md` current, especially when any tool is close to its limit.
 

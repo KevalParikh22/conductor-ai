@@ -15,7 +15,7 @@ export const BASE_ENTRIES = ['.conductor/', 'docs/plan/', '.claude/commands/cond
 // files conductor writes for a controller: ignored only when conductor created them (never your own existing file)
 export const CREATED_FILES = ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md', 'HANDOFF.md', 'docs/architecture.md', '.mcp.json', 'opencode.json', '.agents/mcp_config.json', '.vscode/mcp.json'];
 // not copied into worktrees: conductor's own state, plans (inlined into the prompt) and MCP configs
-const NOT_IN_WORKTREES = ['.conductor/', 'docs/plan/', '.mcp.json', 'opencode.json', '.agents/mcp_config.json', '.vscode/mcp.json'];
+const NOT_IN_WORKTREES = ['.conductor/', 'docs/plan/', '.mcp.json', 'opencode.json', '.agents/mcp_config.json', '.vscode/mcp.json', '.agents/hooks.json', '.claude/settings.local.json'];
 
 /** Entries in the conductor block of .gitignore ([] when there is none). */
 export function readBlock(root) {
