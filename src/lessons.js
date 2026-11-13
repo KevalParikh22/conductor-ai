@@ -108,7 +108,7 @@ export function demoteByLessons(root, chainNames, { role, files = [], after = 2,
   const since = Date.now() - days * 86_400_000;
   const fails = {};
   for (const l of readLessons(root)) {
-    if (l.source !== 'auto' || !l.provider || Date.parse(l.ts) < since || !lessonMatches(l, { role, files })) continue;
+    if (l.source !== 'auto' || !l.provider || l.resolvedAt || Date.parse(l.ts) < since || !lessonMatches(l, { role, files })) continue;
     fails[l.provider] = (fails[l.provider] || 0) + (l.count || 1);
   }
   const demoted = chainNames.filter((n) => (fails[n] || 0) >= after);
@@ -135,6 +135,27 @@ export function lessonsFromRun(s, { files = [] } = {}) {
   for (const e of s.escalated || []) if (e.from && !out.some((x) => x.provider === e.from)) add(e.from, e.checksFailed ? 'acceptance-check' : 'verify', e.checksFailed ? 'its acceptance checks failed' : '');
   return out;
 }
+
+/**
+ * V1: a provider that later passes this kind of work here (same role, same area) has its earlier failures marked
+ * resolved: they stop counting against it in the chain order, so one bad day doesn't demote it for 30 days. The
+ * guidance stays in prompts (it is still true for the project). → number of lessons resolved
+ */
+export function resolveLessons(root, { provider, role, files = [] }) {
+  if (!provider) return 0;
+  const list = readLessons(root);
+  let n = 0;
+  for (const l of list) {
+    if (l.source !== 'auto' || l.provider !== provider || l.resolvedAt || !lessonMatches(l, { role, files })) continue;
+    l.resolvedAt = new Date().toISOString(); n++;
+  }
+  if (n) writeLessons(root, list);
+  return n;
+}
+
+/** V1: lessons seen this many times and not yet a rule are worth making a rule in AGENTS.md (still the user's call). */
+export const PROMOTE_AT = 3;
+export const promotable = (list) => list.filter((l) => !l.promoted && (l.count || 1) >= PROMOTE_AT);
 
 /** Make a lesson a permanent rule: a bullet in AGENTS.md (read by every controller and worker), marked promoted. */
 export function promoteLesson(root, id) {

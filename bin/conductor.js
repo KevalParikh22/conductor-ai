@@ -12,7 +12,7 @@ import { runVerify, detectVerify } from '../src/verify.js';
 import { checkPlan, formatPlanCheck } from '../src/plancheck.js';
 import { listEvals, checkEvals, runEvals, formatEvals, loadResult } from '../src/evals.js';
 import { failureStats, formatFailureStats, qualityStats, formatQualityStats } from '../src/stats.js';
-import { readLessons, addLesson, removeLesson, promoteLesson, GUIDANCE } from '../src/lessons.js';
+import { readLessons, addLesson, removeLesson, promoteLesson, GUIDANCE, promotable, PROMOTE_AT } from '../src/lessons.js';
 import { readRules, newRule, syncControllerFiles, checkControllerFiles, rulesDir } from '../src/controllers.js';
 import { runHook, recordVerify, setGuards, guardsOn, allowCommit, readVerifyState, GUARD_SUPPORTED } from '../src/guard.js';
 import { readBlock, writeBlock } from '../src/localfiles.js';
@@ -87,7 +87,7 @@ Work (normally called by the controller)
   conductor route "task" [--role r] [--files a,b] | --plan f --task T1   which providers would take a task, and why
   conductor route --rules | --templates | --add starter|<id,id> | --rm <n> [--global]   list, add or remove routing rules
   conductor plan check <file> [--task T1,T2]   is each task ready for a worker? (files, checkable acceptance, verify, size)
-  conductor eval [list] | check | run [--tasks a,b] [--provider p | --chain a,b] [--samples N] [--label x] [--compare last|<file>] [--keep]
+  conductor eval [list] | check | run [--tasks a,b] [--provider p | --chain a,b] [--samples N] [--label x] [--compare last|<file>] [--keep] [--lessons <file> | --no-lessons]
                                        measure conductor on fixed tasks with hidden tests (check = prove the tasks are fair, no LLM)
   conductor stats [--failures] [--days 30]   first-try accept rate and the alpha gate; --failures: why work fails, biggest cause first
   conductor rules [list] | new <name> [--paths "src/api/**"] | sync   project rules, written in each controller's own format
@@ -254,7 +254,7 @@ function timeoutOpt(o) {
 
 function parseArgs(argv) {
   const opts = { _: [] };
-  const flags = new Set(['no-verify', 'allow-dirty', 'json', 'live', 'no-open', 'no-mcp', 'all', 'clear', 'global', 'help', 'version', 'worktree', 'replace', 'force', 'allow-open-questions', 'vscode', 'yes', 'free', 'project', 'details', 'enable', 'rules', 'templates', 'continue', 'share', 'allow-unverified', 'allow-scope', 'allow-weak-plan', 'keep', 'failures', 'no-escalate', 'allow-no-repro', 'review', 'no-review', 'guards']);
+  const flags = new Set(['no-verify', 'allow-dirty', 'json', 'live', 'no-open', 'no-mcp', 'all', 'clear', 'global', 'help', 'version', 'worktree', 'replace', 'force', 'allow-open-questions', 'vscode', 'yes', 'free', 'project', 'details', 'enable', 'rules', 'templates', 'continue', 'share', 'allow-unverified', 'allow-scope', 'allow-weak-plan', 'keep', 'failures', 'no-escalate', 'allow-no-repro', 'review', 'no-review', 'guards', 'no-lessons']);
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '-h') { opts.help = true; continue; }
@@ -407,7 +407,7 @@ async function main() {
       }
       if (sub !== 'run') throw new UsageError('usage: conductor eval [list | check | run]');
       const rep = await runEvals({
-        ids, samples: o.samples ? Number(o.samples) : undefined, provider: o.provider, chain: o.chain ? String(o.chain).split(',').map((x) => x.trim()).filter(Boolean) : undefined, keep: o.keep, label: o.label || '',
+        ids, samples: o.samples ? Number(o.samples) : undefined, provider: o.provider, chain: o.chain ? String(o.chain).split(',').map((x) => x.trim()).filter(Boolean) : undefined, keep: o.keep, label: o.label || '', lessons: o['no-lessons'] ? 'off' : o.lessons || undefined,
         onEvent: o.json ? undefined : (e) => {
           const m = { start: 'starting', wait: `waiting for ${e.provider} (one task at a time on it)…`, try: `trying ${e.provider}…`, fail: `${e.provider} failed: ${e.reason}`, ok: `${e.provider} finished`, verify: 'running verify…', isolate: 'checking the code alone against the original tests…', escalate: `verify failed: handing ${e.from}'s work to ${e.provider}…`, repair: `${e.provider} sent no files: asking once more…`, scored: `${e.pass ? 'PASS' : 'FAIL'} (conductor said: ${e.outcome})` }[e.type];
           if (m) process.stderr.write(`eval [${e.task}]: ${m}\n`);
@@ -423,8 +423,10 @@ async function main() {
       if (sub === 'list') {
         const all = readLessons(root);
         if (!all.length) { console.log('No lessons yet. conductor records them from failed checks and from your --note on retries; add one with: conductor lessons add "<text>"'); return 0; }
-        for (const l of all.slice().reverse()) console.log(`${l.id}  ${(l.source === 'auto' ? l.kind : l.source).padEnd(16)} ${String(l.provider || '-').padEnd(16)} ×${String(l.count || 1).padEnd(3)} ${l.promoted ? '[rule] ' : ''}${l.dirs?.length ? `[${l.dirs.join(',')}] ` : ''}${l.text || GUIDANCE[l.kind] || ''}`.slice(0, 220));
-        console.log(`\n${all.length} lesson(s). Matching ones go into later prompts; a provider with 2+ failures on the same kind of work moves to the back. promote <id> makes one a rule in AGENTS.md.`);
+        for (const l of all.slice().reverse()) console.log(`${l.id}  ${(l.source === 'auto' ? l.kind : l.source).padEnd(16)} ${String(l.provider || '-').padEnd(16)} ×${String(l.count || 1).padEnd(3)} ${l.promoted ? '[rule] ' : (l.count || 1) >= PROMOTE_AT ? '[promote?] ' : ''}${l.resolvedAt ? '[resolved] ' : ''}${l.dirs?.length ? `[${l.dirs.join(',')}] ` : ''}${l.text || GUIDANCE[l.kind] || ''}`.slice(0, 220));
+        console.log(`\n${all.length} lesson(s). Matching ones go into later prompts; a provider with 2+ failures on the same kind of work moves to the back, until it passes that work here again ([resolved]). promote <id> makes one a rule in AGENTS.md.`);
+        const pr = promotable(all);
+        if (pr.length) console.log(`Seen ${PROMOTE_AT}+ times, worth a rule: ${pr.map((l) => `conductor lessons promote ${l.id}`).join(' · ')}`);
         return 0;
       }
       if (sub === 'add') {
