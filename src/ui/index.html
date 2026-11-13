@@ -372,9 +372,9 @@ const views = {
       ${runs.map((r) => `<tr><td class="mono">${esc(r.startedAt ? new Date(r.startedAt).toLocaleString() : r.id)}</td>
         <td><b>${esc(r.role)}</b>${r.task ? ` · ${esc(r.task)}` : ''}${r.branch ? `<div class="note mono">${esc(r.branch)}</div>` : ''}</td>
         <td>${result(r)}</td>
-        <td>${esc(r.winner || '–')}${r.why ? `<div class="note">${esc(r.why)}</div>` : ''}${r.attempts?.length > 1 ? `<div class="note">${r.attempts.map((a) => `${esc(a.provider)} ${a.ok ? '✓' : '✗'}`).join(' → ')}</div>` : ''}</td>
+        <td>${esc(r.winner || '–')}${r.why ? `<div class="note">${esc(r.why)}</div>` : ''}${r.attempts?.length > 1 ? `<div class="note">${r.attempts.map((a) => a.ok ? `${esc(a.provider)} ✓` : `<span title="${esc(a.reason + (a.next ? ' — next: ' + a.next : ''))}">${esc(a.provider)} ✗</span>`).join(' → ')}</div>` : ''}</td>
         <td>${verify(r.verify)}</td><td>${r.changed ?? '–'}</td><td>${r.seconds != null ? `${r.seconds}s` : ''}</td></tr>
-        ${r.warnings?.length ? `<tr><td></td><td colspan="6">${r.warnings.map((w) => `<div class="note">⚠ ${esc(w)}</div>`).join('')}</td></tr>` : ''}`).join('')}
+        ${r.warnings?.length || r.fixes?.length ? `<tr><td></td><td colspan="6">${(r.warnings || []).map((w) => `<div class="note">⚠ ${esc(w)}</div>`).join('')}${(r.fixes || []).map((f) => `<div class="note"><b>Fix:</b> ${esc(f)}</div>`).join('')}</td></tr>` : ''}`).join('')}
       </table>` : '<p class="note">No runs yet. They appear here when your controller hands out work (<span class="mono">conductor run …</span>).</p>'}</div>
     <div class="card"><h2>Usage by provider</h2><p class="note">Last ${usage.days} days, all projects. CLI agents run on your subscriptions, so they show runs and time; API providers also show tokens and, when a price is set, cost.</p>
       ${usage.rows.length ? `<table><tr><th>Provider</th><th>Runs</th><th>Succeeded</th><th>Tokens in / out</th><th>Cost</th><th>Time</th></tr>

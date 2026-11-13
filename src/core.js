@@ -26,6 +26,7 @@ import { skillsForTask } from './skills.js';
 import { createWorktree, openWorktree, commitWorktree, removeWorktree, readWorktreeMeta, writeWorktreeMeta } from './worktree.js';
 import { GLOBAL_DIR, readJSON, writeJSON, timestamp, rel } from './util.js';
 import { budgetBlock, estimateCost, recordUsage, recordSaving } from './usage.js';
+import { nextStep, fixLines } from './nextsteps.js';
 
 const PROMPTS = new URL('./prompts/', import.meta.url);
 const loadPrompt = (n) => fs.readFileSync(new URL(`${n}.md`, PROMPTS), 'utf8');
@@ -637,7 +638,7 @@ async function dispatchOnce(cfg, opts) {
   const protectedExtra = [...(settings.protectedPaths || []), ...(hooksRel ? [`^${hooksRel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/`] : [])];
 
   providers: for (const c of chain) {
-    if (c.skip) { summary.attempts.push({ provider: c.name, ok: false, reason: c.skip, skipped: true }); emit({ type: 'skip', provider: c.name, reason: c.skip }); continue; }
+    if (c.skip) { summary.attempts.push({ provider: c.name, ok: false, reason: c.skip, skipped: true, next: nextStep(c.skip, { name: c.name, p: c.p }) }); emit({ type: 'skip', provider: c.name, reason: c.skip }); continue; }
     const kind = providerKind(c.p);
     if (mode === 'read' && kind === 'agent' && !readOnlyEnforced(c.p)) {
       summary.warnings.push(`${c.name} cannot be held to read-only (only the prompt asks it not to edit). Check git status after this run`);
@@ -750,6 +751,7 @@ async function dispatchOnce(cfg, opts) {
         if (!tryNext) setCooldown(c.name, mins, 'rate limited');
         attempt.reason += ` (cooldown ${mins}m)`;
       }
+      attempt.next = nextStep(attempt.reason, { name: c.name, p: c.p, log: path.relative(root, path.join(runDir, `${c.name}${mi ? `.${mi + 1}` : ''}.log`)) });
       if (mode === 'write' && (useWorktree || !opts.allowDirty) && git.isDirty(work)) {
         if (git.stashPush(work, `conductor: failed attempt by ${c.name} ${opts.taskId || role} ${timestamp()}`)) attempt.stashed = true;
       }
@@ -993,7 +995,8 @@ export function formatSummary(s) {
   if (!s.winner) {
     L.push('worker:    NONE. Every provider failed or was skipped (exit 3).');
     if (s.worktree?.continued) L.push(`kept:      the earlier work is still on ${s.worktree.branch}; failed attempts were stashed there`);
-    L.push('next:      orchestrator does this task itself, or fix providers (conductor doctor)');
+    for (const f of fixLines(s.attempts)) L.push(`fix:       ${f}`);
+    L.push('next:      orchestrator does this task itself, or fixes a provider above and runs it again');
     return L.join('\n');
   }
   L.push(`worker:    ${s.winner} (${s.model})`);
@@ -1051,6 +1054,7 @@ export function formatSummary(s) {
   if (s.tokensSaved?.tokens) L.push(`context:   ~${s.tokensSaved.tokens.toLocaleString()} tokens kept out (estimate: ${Object.entries(s.tokensSaved).filter(([k]) => k !== 'tokens').map(([k, n]) => `${{ report: 'report trimmed', 'review-diff': 'compact review diff', 'free-model': 'free model chosen' }[k] || k} ~${n.toLocaleString()}`).join(', ')})`);
   if (s.worktree?.commit) L.push(`commit:    ${s.worktree.commit} on ${s.worktree.branch} (from ${s.worktree.base})`);
   for (const w of s.warnings) L.push(`WARNING:   ${w}`);
+  for (const f of fixLines(s.attempts, { won: true })) L.push(`fix:       ${f}`);
   if (s.worktree) {
     L.push(s.worktree.commit
       ? `next:      orchestrator reviews \`conductor diff ${s.worktree.branch}\`, then \`git merge --no-ff ${s.worktree.branch}\` and \`conductor worktree rm ${s.worktree.id}\` (or rm --force to reject)`

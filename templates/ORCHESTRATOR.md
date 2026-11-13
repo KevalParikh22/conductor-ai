@@ -55,7 +55,7 @@ Read the `outcome:` line first. **OUT OF SCOPE:** check the listed files in the 
 - **Verify PASS, diff in scope, matches the plan:** `git add -A && git commit -m "<slug>: T3 <title>"`, then mark the task done.
 - **Small issue (<10 lines):** fix it yourself, run `conductor verify`, commit.
 - **Bigger issue:** `git stash push -u -m "conductor: rejected T3"`, then retry once with `--provider <other> --note "<what was wrong, what to do>"`.
-- **Second failure or exit 3:** do it yourself.
+- **Second failure or exit 3:** do it yourself. The summary's `fix:` lines say what would make each provider work next time (install, key, cooldown, allow rule); pass them on to the user rather than guessing.
 
 ### 4. Review
 To check one task's work without spending your own context, ask the **conductor-reviewer** subagent ("review T3's diff against the plan"): it reads `conductor diff` and the task in a fresh context and returns findings with `path:line` and a verdict.

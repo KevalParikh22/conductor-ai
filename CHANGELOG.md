@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Every failure says what to do next (V2).** Each failed or skipped worker now carries a `next` step written for its exact reason: the install and sign-in command for a missing CLI, `conductor keys set NAME` (with where to get the key) for a missing key, `conductor cooldown --clear NAME` for a cooldown, the `settings.allowCommands` fix for a refused command, the worker log to read for an error exit, and so on.
+  - **Where it shows:** `fix:` lines in the run summary (so MCP replies too), in `conductor runs`, and on the UI's Runs page. A failed attempt's tooltip shows its reason and step.
+  - **When nothing won,** every provider gets its line. **When another worker won,** only problems that stay until someone acts (install, key, auth, refused command, disabled, wrong model) are shown.
+  - **New table:** `src/nextsteps.js`. A test scans `src/` for reason strings and fails if one has no step.
 - **Worker token counts for Codex and OpenCode.** Both used to show 0, so `conductor usage`, `conductor stats` and the benchmark only knew agy's share.
   - **Codex** now runs with `--json`; the tokens come from its `turn.completed` events, summed over turns (reasoning counts as output). The answer still comes from `-o`.
   - **OpenCode** now runs with `--format json`, which gives the answer and the session id but no tokens. conductor then reads them with `opencode session export --standalone <id>` (about 0.6 s; cache reads and writes count as input).
