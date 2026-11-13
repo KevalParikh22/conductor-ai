@@ -13,7 +13,7 @@ import { checkPlan, formatPlanCheck } from '../src/plancheck.js';
 import { listEvals, checkEvals, runEvals, formatEvals, loadResult } from '../src/evals.js';
 import { failureStats, formatFailureStats, qualityStats, formatQualityStats } from '../src/stats.js';
 import { readLessons, addLesson, removeLesson, promoteLesson, GUIDANCE, promotable, PROMOTE_AT } from '../src/lessons.js';
-import { readRules, newRule, syncControllerFiles, checkControllerFiles, rulesDir } from '../src/controllers.js';
+import { readRules, newRule, syncControllerFiles, checkControllerFiles, rulesDir, allControllers, controllerErrors } from '../src/controllers.js';
 import { runHook, recordVerify, setGuards, switchGuards, guardsOn, allowCommit, readVerifyState, GUARD_SUPPORTED } from '../src/guard.js';
 import { readBlock, writeBlock } from '../src/localfiles.js';
 import { initProject, setupGlobal } from '../src/init.js';
@@ -62,7 +62,7 @@ Setup
   conductor keys [set NAME | rm NAME]  list, set (hidden input or stdin) or remove API keys
   conductor local [--enable]           find local model servers (Ollama, LM Studio, llama.cpp…) and turn them on
   conductor init [--controller <c>] [--verify "<cmd>"] [--guards] [--vscode] [--no-mcp] [--share]   add conductor to the current project (its files go in .gitignore unless --share)
-                                       controllers: ${Object.keys(CONTROLLERS).join(', ')}
+                                       controllers: ${Object.keys(CONTROLLERS).join(', ')} (or your own: conductor controller add)
   conductor ui [--port 4545] [--no-open]   settings page
   conductor doctor [--live] [--details] [--json]   check installs and keys (--live sends a test prompt)
 
@@ -92,6 +92,7 @@ Work (normally called by the controller)
                                        measure conductor on fixed tasks with hidden tests (check = prove the tasks are fair, no LLM)
   conductor stats [--failures] [--days 30]   first-try accept rate and the alpha gate; --failures: why work fails, biggest cause first
   conductor rules [list] | new <name> [--paths "src/api/**"] | sync   project rules, written in each controller's own format
+  conductor controller [list] | add <name> --like <existing> | check   controllers as data: add one that reads the same formats
   conductor guard [status] | on | off | allow   block the controller's git commit while the last verify failed (Claude Code, Antigravity)
   conductor lessons [list] | add "text" [--files a,b] [--role r] | rm <id> | promote <id>   what earlier work taught (in later prompts and routing)
   conductor verify                     run the project's verify command
@@ -211,7 +212,10 @@ function routeRules(cfg, o) {
   return 0;
 }
 
-const COMMANDS = ['skills', 'setup', 'providers', 'add', 'keys', 'local', 'route', 'diff', 'init', 'ui', 'mcp', 'status', 'doctor', 'verify', 'run', 'models', 'batch', 'worktree', 'runs', 'usage', 'cooldown', 'config', 'retry', 'help'];
+/** A controller entry, built-in or your own (V6). */
+const ctrl = (n) => allControllers(findProjectRoot())[n] || {};
+
+const COMMANDS = ['controller', 'skills', 'setup', 'providers', 'add', 'keys', 'local', 'route', 'diff', 'init', 'ui', 'mcp', 'status', 'doctor', 'verify', 'run', 'models', 'batch', 'worktree', 'runs', 'usage', 'cooldown', 'config', 'retry', 'help'];
 /** The command closest to a typo (edit distance ≤ 2), or null. */
 function closest(word, options) {
   const d = (a, b) => {
@@ -345,15 +349,51 @@ async function main() {
       if (sub === 'allow') { allowCommit(root); console.log('commits on the current HEAD are allowed once, even though the last verify failed'); return 0; }
       if (sub === 'status') {
         const st = readVerifyState(root);
-        console.log(`guards for ${CONTROLLERS[controller]?.label || controller}: ${GUARD_SUPPORTED[controller] ? (guardsOn(root, controller) ? `on (${GUARD_SUPPORTED[controller]})` : 'off (conductor guard on)') : 'not available for this controller yet'}`);
+        console.log(`guards for ${ctrl(controller)?.label || controller}: ${ctrl(controller).hooks ? (guardsOn(root, controller) ? `on (${ctrl(controller).hooks.file})` : 'off (conductor guard on)') : 'not available for this controller yet'}`);
         console.log(`last verify: ${st ? `${st.status}${st.cmd ? ` (${st.cmd})` : ''} at ${st.at}` : 'none recorded (conductor verify)'}`);
         return 0;
       }
       if (sub !== 'on' && sub !== 'off') throw new UsageError('usage: conductor guard [status] | on | off | allow');
       const r = switchGuards(root, controller, sub === 'on');
-      if (r.unsupported) { console.log(`Guards are not available for ${CONTROLLERS[controller]?.label || controller} yet: only Claude Code and Antigravity, whose hooks were tested. (Codex runs project hooks only in trusted projects after you approve them in /hooks.)`); return 1; }
+      if (r.unsupported) { console.log(`Guards are not available for ${ctrl(controller)?.label || controller} yet: only Claude Code and Antigravity, whose hooks were tested. (Codex runs project hooks only in trusted projects after you approve them in /hooks.)`); return 1; }
       console.log(r.changed ? `guards ${sub} (${r.file})${sub === 'on' ? ': a `git commit` by the controller is blocked while the last conductor verify failed' : ''}` : `guards already ${sub}`);
       return 0;
+    }
+    case 'controller': case 'controllers': {
+      // V6: controllers are data (src/presets.js CONTROLLERS); your own go in config.controllers
+      const root = findProjectRoot();
+      const sub = o._[0] || 'list';
+      const all = allControllers(root);
+      const what = (c) => [c.commands && `${c.commands.as} in ${c.commands.dir}`, c.rules && (c.rules.dir ? `rules in ${c.rules.dir} (${c.rules.format})` : `rules in ${c.rules.block}`),
+        c.reviewer && `reviewer ${c.reviewer.file}`, c.mcp && (c.mcp.file ? `MCP ${c.mcp.file}` : `MCP: register with ${c.mcp.register}`), c.hooks ? `guard ${c.hooks.file}` : 'no guard'].filter(Boolean).join(' · ');
+      if (sub === 'list') {
+        for (const [n, c] of Object.entries(all)) console.log(`${n.padEnd(14)} ${String(c.label).padEnd(18)} reads ${c.file} · ${what(c)}${CONTROLLERS[n] ? '' : '  [yours]'}`);
+        console.log('\nAdd one that reads the same formats as an existing one: conductor controller add <name> --like <existing> [--label "Name"] [--file AGENTS.md] [--project]');
+        return 0;
+      }
+      if (sub === 'add') {
+        const name = o._[1], like = o.like;
+        if (!name || !like) throw new UsageError('usage: conductor controller add <name> --like <existing> [--label "Name"] [--file AGENTS.md] [--project]');
+        if (all[name]) throw new UsageError(`"${name}" already exists (conductor controller list)`);
+        if (!all[like]) throw new UsageError(`no controller "${like}" to copy (conductor controller list)`);
+        const { worker, docs, ...formats } = all[like];
+        const entry = { ...JSON.parse(JSON.stringify(formats)), label: o.label || name, ...(o.file ? { file: o.file } : {}) };
+        const errs = controllerErrors(name, entry);
+        if (errs.length) throw new UsageError(`not added: ${errs.join('; ')}`);
+        const scope = o.project ? 'project' : 'global';
+        const cur = readScope(scope, root);
+        writeScope(scope, root, { version: 1, ...cur, controllers: { ...(cur.controllers || {}), [name]: entry } });
+        console.log(`added controller "${name}" (${scope} config), reading the same formats as ${like}: ${what(entry)}`);
+        console.log(`Edit its entry under "controllers" in ${scope === 'global' ? GLOBAL_CONFIG : projectConfigPath(root)} if its folders differ, then: conductor controller check && conductor init --controller ${name}`);
+        console.log('A tool that reads a format conductor has no writer for still needs code and a real test (see docs/CONTROLLERS.md).');
+        return 0;
+      }
+      if (sub === 'check') {
+        let bad = 0;
+        for (const [n, c] of Object.entries(all)) { const e = controllerErrors(n, c); if (e.length) bad++; console.log(`${e.length ? '✗' : '✓'} ${n}${e.length ? `\n    - ${e.join('\n    - ')}` : ''}`); }
+        return bad ? 1 : 0;
+      }
+      throw new UsageError('usage: conductor controller [list] | add <name> --like <existing> | check');
     }
     case 'rules': case 'rule': {
       const cfg = loadConfig();
@@ -363,7 +403,7 @@ async function main() {
         const rs = readRules(root);
         if (!rs.length) { console.log(`No project rules yet. Add one: conductor rules new <name> [--paths "src/api/**"]  (stored in ${path.relative(root, rulesDir(root))}/)`); return 0; }
         for (const r of rs) console.log(`${r.name.padEnd(24)} ${(r.paths.join(', ') || 'all files').padEnd(30)} ${r.description}`);
-        console.log(`\n${rs.length} rule(s), written for ${CONTROLLERS[controller]?.label || controller} by: conductor rules sync. Workers get the ones matching their files.`);
+        console.log(`\n${rs.length} rule(s), written for ${ctrl(controller)?.label || controller} by: conductor rules sync. Workers get the ones matching their files.`);
         return 0;
       }
       if (sub === 'new') {
@@ -372,7 +412,7 @@ async function main() {
       }
       if (sub === 'sync') {
         const lines = syncControllerFiles(root, controller);
-        console.log(lines.length ? lines.map(([w, p]) => `  ${w.padEnd(8)} ${p}`).join('\n') : `  up to date for ${CONTROLLERS[controller]?.label || controller}`);
+        console.log(lines.length ? lines.map(([w, p]) => `  ${w.padEnd(8)} ${p}`).join('\n') : `  up to date for ${ctrl(controller)?.label || controller}`);
         return 0;
       }
       throw new UsageError('usage: conductor rules [list] | new <name> [--paths "a/**, *.ts"] [--description "..."] | sync');
@@ -483,7 +523,7 @@ async function main() {
       if (o.verify === true || (o.verify !== undefined && !String(o.verify).trim())) throw new UsageError('usage: conductor init --verify "<command>" (e.g. --verify "npm test")');
       const { lines, notes } = initProject(root, { controller, mcp: !o['no-mcp'], vscode: o.vscode || undefined, share: !!o.share, verify: o.verify ? String(o.verify).trim() : undefined });
       if (o.guards) { const g = setGuards(root, controller, true); lines.push(g.unsupported ? `  skipped  guards (not available for ${controller} yet)` : `  ${g.changed ? 'added' : 'kept'}    ${g.file} (guards: commit blocked while verify fails)`); if (!g.unsupported && !o.share) { const b = readBlock(root); if (b.length && !b.includes(g.file)) writeBlock(root, [...b, g.file]); } }
-      console.log(`conductor init → ${root}  (controller: ${CONTROLLERS[controller].label})`);
+      console.log(`conductor init → ${root}  (controller: ${ctrl(controller).label})`);
       lines.forEach((l) => console.log(l));
       notes.forEach((n) => console.log('\n' + n));
       console.log(`\nNext:
@@ -492,7 +532,7 @@ async function main() {
   3. conductor doctor     check every provider is ready
   4. ${controller === 'claude-code'
     ? 'In Claude Code: /conduct-status, then /conduct-plan <feature> (approve the "conductor" MCP server when Claude asks)'
-    : `In ${CONTROLLERS[controller].label}: use the conduct-* skills (in .agents/skills), e.g. ask it to run conduct-status, then conduct-plan <feature>`}`);
+    : `In ${ctrl(controller).label}: use the conduct-* skills (in .agents/skills), e.g. ask it to run conduct-status, then conduct-plan <feature>`}`);
       if (!which('conductor')) console.log('\nNOTE: "conductor" is not on your PATH. Install globally so controllers can call it: npm install -g .');
       return 0;
     }
@@ -643,7 +683,7 @@ async function doctor(o) {
   errs.forEach((e) => console.log(`✗ config: ${e}`));
   // Q8: the files the controller reads (rules, skills, MCP configs, Codex trust)
   if (ctrlIssues.length) {
-    console.log(`\ncontroller files (${CONTROLLERS[cfg.controller || 'claude-code']?.label || cfg.controller}):`);
+    console.log(`\ncontroller files (${ctrl(cfg.controller || 'claude-code')?.label || cfg.controller}):`);
     for (const c of ctrlIssues) console.log(`${c.level === 'error' ? '✗' : '!'} ${c.file}: ${c.problem}\n    fix: ${c.fix}`);
   }
   if (!o.details && results.some((r) => r.permissions)) console.log('\nWhat each agent may do: conductor doctor --details');

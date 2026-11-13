@@ -30,6 +30,7 @@ export const ACTIONS = [
   { id: 'local', title: 'Find local model servers', cli: 'conductor local', mcp: { na: 'part of setup, not of a task' }, ui: 'GET /api/local' },
   { id: 'cooldown', title: 'See and clear rate-limit cooldowns', cli: 'conductor cooldown [--clear]', mcp: { na: 'conductor_status shows them; clearing is your call' }, ui: 'POST /api/cooldowns/clear' },
   { id: 'config', title: 'Roles, routing and settings', cli: 'conductor config path · conductor ui', mcp: { na: 'changing routing is your call, not a model\'s' }, ui: 'PUT /api/config' },
+  { id: 'controller', title: 'Controllers as data: list, add one like an existing one, check', cli: 'conductor controller [add|check]', mcp: { na: 'adding a controller is setup, not a task' }, ui: 'GET /api/state' },
   { id: 'init', title: 'Set up a project for a controller', cli: 'conductor init', mcp: { na: 'runs once, before the controller can use MCP' }, ui: 'POST /api/init' },
   { id: 'setup', title: 'First-time setup', cli: 'conductor setup', mcp: { na: 'runs before any controller is connected' }, ui: 'GET /api/state' },
   { id: 'worktree', title: 'List or remove task worktrees', cli: 'conductor worktree [rm]', mcp: { na: 'merging and removing branches is your call: the run page shows the commands' }, ui: { na: 'shown as commands on the run page' } },

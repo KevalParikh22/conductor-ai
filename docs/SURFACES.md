@@ -27,6 +27,7 @@ A dash means the action is left out of that surface on purpose, with the reason.
 | Find local model servers | `conductor local` | — *part of setup, not of a task* | `GET /api/local` |
 | See and clear rate-limit cooldowns | `conductor cooldown [--clear]` | — *conductor_status shows them; clearing is your call* | `POST /api/cooldowns/clear` |
 | Roles, routing and settings | `conductor config path · conductor ui` | — *changing routing is your call, not a model's* | `PUT /api/config` |
+| Controllers as data: list, add one like an existing one, check | `conductor controller [add\|check]` | — *adding a controller is setup, not a task* | `GET /api/state` |
 | Set up a project for a controller | `conductor init` | — *runs once, before the controller can use MCP* | `POST /api/init` |
 | First-time setup | `conductor setup` | — *runs before any controller is connected* | `GET /api/state` |
 | List or remove task worktrees | `conductor worktree [rm]` | — *merging and removing branches is your call: the run page shows the commands* | — *shown as commands on the run page* |

@@ -4,6 +4,7 @@ import { getCooldowns } from './core.js';
 import * as git from './git.js';
 import { detectVerify } from './verify.js';
 import { untilText } from './util.js';
+import { allControllers } from './controllers.js';
 
 /** Structured status, used by the CLI, the MCP server and the UI. */
 export function statusData(cfg) {
@@ -21,7 +22,7 @@ export function statusData(cfg) {
   });
   const inRepo = git.isRepo(cfg.root);
   return {
-    root: cfg.root, controller: cfg.controller, controllerLabel: CONTROLLERS[cfg.controller]?.label || cfg.controller,
+    root: cfg.root, controller: cfg.controller, controllerLabel: allControllers(cfg.root)[cfg.controller]?.label || cfg.controller,
     sources: cfg.sources, roles: cfg.roles, providers,
     repo: inRepo ? { branch: git.branch(cfg.root), dirty: git.isDirty(cfg.root), failedStashes: git.failedStashCount(cfg.root) } : null,
     verify: detectVerify(cfg.root, cfg.settings),

@@ -4,9 +4,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { validateConfig, providerPermissions, readOnlyEnforced, optionalNoKey } from './config.js';
-import { CLI_PRESETS } from './presets.js';
+import { CLI_PRESETS, CONTROLLERS } from './presets.js';
 import { testProvider, testPermissions } from './providers.js';
-import { checkControllerFiles } from './controllers.js';
+import { checkControllerFiles, allControllers, controllerErrors } from './controllers.js';
 import { which, keyValue } from './util.js';
 
 /** → { results: [{ name, kind, ok, status, next, permissions, readOnlyEnforced, ... }], errs, ctrlIssues, problems } */
@@ -45,6 +45,12 @@ export async function doctorData(cfg, { live = false } = {}) {
   }
   const errs = validateConfig(cfg);
   const ctrlIssues = checkControllerFiles(cfg.root, cfg.controller || 'claude-code');
+  // V6: your own controller entries must name formats conductor can write
+  for (const [n, c] of Object.entries(allControllers(cfg.root))) {
+    if (CONTROLLERS[n]) continue;
+    for (const e of controllerErrors(n, c)) ctrlIssues.push({ level: 'error', file: `controllers.${n}`, problem: e, fix: 'conductor controller check, then fix the entry in your config' });
+  }
+  if (!allControllers(cfg.root)[cfg.controller || 'claude-code']) ctrlIssues.push({ level: 'error', file: 'controller', problem: `unknown controller "${cfg.controller}"`, fix: 'conductor controller list, then conductor init --controller <name>' });
   const problems = results.filter((r) => !r.ok).length + errs.length + ctrlIssues.filter((c) => c.level === 'error').length;
   return { results, errs, ctrlIssues, problems };
 }

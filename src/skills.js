@@ -22,11 +22,12 @@ import { PROJECT_DIRNAME, readScope, writeScope } from './config.js';
 import { globToRegex } from './routing.js';
 import { execFileSync } from 'node:child_process';
 import { readBlock, writeBlock } from './localfiles.js';
+import { CONTROLLERS } from './presets.js';
 
 export const globalSkillsDir = () => path.join(GLOBAL_DIR, 'skills');
 export const projectSkillsDir = (root) => path.join(root, PROJECT_DIRNAME, 'skills');
 // where controllers load skills from; Antigravity, Codex, OpenCode and Copilot read .agents/skills
-export const TARGETS = ['.claude/skills', '.agents/skills'];
+export const TARGETS = [...new Set(Object.values(CONTROLLERS).map((c) => c.skills).filter(Boolean))]; // from the controller registry (V6)
 const MARK = '.conductor-skill'; // marks a synced copy, so conductor only ever removes its own
 const NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const INLINE_MAX = 6000; // characters of skill text inlined for API workers, which can't open files

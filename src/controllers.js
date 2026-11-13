@@ -11,7 +11,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { PROJECT_DIRNAME } from './config.js';
+import { PROJECT_DIRNAME, readScope } from './config.js';
+import { CONTROLLERS } from './presets.js';
 import { globToRegex } from './routing.js';
 
 export const rulesDir = (root) => path.join(root, PROJECT_DIRNAME, 'rules');
@@ -89,34 +90,69 @@ function mergeBlock(file, block, log, label) {
   log(block ? 'merged' : 'removed', label);
 }
 
+// V6: one writer per format; a controller entry (src/presets.js CONTROLLERS) names the formats it reads
+const yamlList = (a) => `[${a.map((x) => JSON.stringify(x)).join(', ')}]`;
+export const RULE_FORMATS = {
+  claude: (r) => `---\ndescription: ${JSON.stringify(r.description || r.name)}\n${r.paths.length ? `paths: ${yamlList(r.paths)}\n` : ''}---\n\n${r.body}\n`,
+  // agy: trigger must be always_on | model_decision | glob | manual, and glob needs globs; anything else is dropped silently
+  agy: (r) => `---\ntrigger: ${r.paths.length ? 'glob' : 'always_on'}\ndescription: ${r.description || r.name}\n${r.paths.length ? `globs: ${r.paths.join(', ')}\n` : ''}---\n\n${r.body}\n`,
+};
+// OpenCode 2: ordered permissions, last match wins, so the catch-all deny comes first
+const OC_PERMS = [['edit', '*', 'deny'], ['shell', '*', 'deny'], ['shell', 'conductor diff*', 'allow'], ['shell', 'git diff*', 'allow'], ['shell', 'git log*', 'allow'], ['shell', 'git show*', 'allow']];
+export const REVIEWER_FORMATS = {
+  claude: () => `---\nname: conductor-reviewer\ndescription: ${JSON.stringify(REVIEWER_DESC)}\ntools: Read, Grep, Glob, Bash\nmodel: inherit\n---\n\n${REVIEWER_BODY}\n`,
+  agy: () => `---\nname: conductor-reviewer\ndescription: ${REVIEWER_DESC}\nmodel: inherit\n---\n\n${REVIEWER_BODY}\n`,
+  'codex-toml': () => `name = "conductor-reviewer"\ndescription = ${JSON.stringify(REVIEWER_DESC)}\ndeveloper_instructions = \'\'\'\n${REVIEWER_BODY}\n\'\'\'\n`,
+  opencode: () => `---\ndescription: ${JSON.stringify(REVIEWER_DESC)}\nmode: subagent\npermissions:\n${OC_PERMS.map(([a, r, e]) => `  - action: ${a}\n    resource: ${JSON.stringify(r)}\n    effect: ${e}`).join('\n')}\n---\n\n${REVIEWER_BODY}\n`,
+};
+export const MCP_FORMATS = ['mcpServers', 'opencode'];
+export const HOOK_FORMATS = ['claude-settings', 'agy-hooks'];
+export const COMMAND_KINDS = ['commands', 'skills'];
+
+/** Built-in controllers plus any you added (global or project config, `controllers`). */
+export function allControllers(root) {
+  const extra = {};
+  for (const scope of ['global', 'project']) {
+    try { Object.assign(extra, readScope(scope, root).controllers || {}); } catch { /* no config yet */ }
+  }
+  return { ...CONTROLLERS, ...Object.fromEntries(Object.entries(extra).filter(([n]) => !CONTROLLERS[n])) };
+}
+export const controllerDef = (name, root) => allControllers(root)[name] || null;
+
+/** What is wrong with a controller entry. → ['problem', ...] */
+export function controllerErrors(name, d) {
+  const e = [];
+  const rel = (p) => typeof p === 'string' && p && !path.isAbsolute(p) && !p.split(/[\\/]/).includes('..');
+  if (!/^[a-z0-9][a-z0-9-]{1,40}$/.test(name)) e.push('name: lowercase letters, digits and dashes');
+  if (!d || typeof d !== 'object') return [...e, 'not an object'];
+  if (!d.label) e.push('label is missing');
+  if (!rel(d.file)) e.push('file: the instructions file it reads (e.g. AGENTS.md)');
+  if (d.commands && (!rel(d.commands.dir) || !COMMAND_KINDS.includes(d.commands.as))) e.push(`commands: { dir, as: ${COMMAND_KINDS.join(' | ')} }`);
+  if (d.skills && !rel(d.skills)) e.push('skills: a folder in the project');
+  if (d.rules && !(d.rules.block === 'AGENTS.md' || (rel(d.rules.dir) && RULE_FORMATS[d.rules.format]))) e.push(`rules: { dir, format: ${Object.keys(RULE_FORMATS).join(' | ')} } or { block: "AGENTS.md" }`);
+  if (d.reviewer && !(rel(d.reviewer.file) && REVIEWER_FORMATS[d.reviewer.format])) e.push(`reviewer: { file, format: ${Object.keys(REVIEWER_FORMATS).join(' | ')} }`);
+  if (d.mcp && !(d.mcp.register || (rel(d.mcp.file) && MCP_FORMATS.includes(d.mcp.format)))) e.push(`mcp: { file, format: ${MCP_FORMATS.join(' | ')} }`);
+  if (d.hooks && !(rel(d.hooks.file) && HOOK_FORMATS.includes(d.hooks.format))) e.push(`hooks: { file, format: ${HOOK_FORMATS.join(' | ')} } or null`);
+  return e;
+}
+
 /**
  * Write the rules and the reviewer subagent in the format `controller` reads. → [[what, path]] for the init log.
  */
 export function syncControllerFiles(root, controller) {
   const out = [];
   const log = (what, p) => out.push([what, p]);
+  const d = controllerDef(controller, root);
+  if (!d) return out;
   const rules = readRules(root);
-  const yamlList = (a) => `[${a.map((x) => JSON.stringify(x)).join(', ')}]`;
-  if (controller === 'claude-code') {
-    for (const r of rules) writeIfChanged(path.join(root, '.claude/rules', `conductor-${r.name}.md`), `---\ndescription: ${JSON.stringify(r.description || r.name)}\n${r.paths.length ? `paths: ${yamlList(r.paths)}\n` : ''}---\n\n${r.body}\n`, log, `.claude/rules/conductor-${r.name}.md`);
-    removeStale(path.join(root, '.claude/rules'), rules.map((r) => `conductor-${r.name}.md`), log, '.claude/rules');
-    writeIfChanged(path.join(root, '.claude/agents/conductor-reviewer.md'), `---\nname: conductor-reviewer\ndescription: ${JSON.stringify(REVIEWER_DESC)}\ntools: Read, Grep, Glob, Bash\nmodel: inherit\n---\n\n${REVIEWER_BODY}\n`, log, '.claude/agents/conductor-reviewer.md');
-  } else if (controller === 'antigravity') {
-    // agy: trigger must be always_on | model_decision | glob | manual, and glob needs globs; anything else is dropped silently
-    for (const r of rules) writeIfChanged(path.join(root, '.agents/rules', `conductor-${r.name}.md`), `---\ntrigger: ${r.paths.length ? 'glob' : 'always_on'}\ndescription: ${r.description || r.name}\n${r.paths.length ? `globs: ${r.paths.join(', ')}\n` : ''}---\n\n${r.body}\n`, log, `.agents/rules/conductor-${r.name}.md`);
-    removeStale(path.join(root, '.agents/rules'), rules.map((r) => `conductor-${r.name}.md`), log, '.agents/rules');
-    writeIfChanged(path.join(root, '.agents/agents/conductor-reviewer.md'), `---\nname: conductor-reviewer\ndescription: ${REVIEWER_DESC}\nmodel: inherit\n---\n\n${REVIEWER_BODY}\n`, log, '.agents/agents/conductor-reviewer.md');
-  } else if (controller === 'codex-cli' || controller === 'opencode') {
+  if (d.rules?.dir) {
+    for (const r of rules) writeIfChanged(path.join(root, d.rules.dir, `conductor-${r.name}.md`), RULE_FORMATS[d.rules.format](r), log, `${d.rules.dir}/conductor-${r.name}.md`);
+    removeStale(path.join(root, d.rules.dir), rules.map((r) => `conductor-${r.name}.md`), log, d.rules.dir);
+  } else if (d.rules?.block) {
     const block = rules.length ? `## Project rules\n${rules.map((r) => `### ${r.name}${r.paths.length ? ` (applies to ${r.paths.join(', ')})` : ''}\n${r.body}`).join('\n\n')}` : '';
-    mergeBlock(path.join(root, 'AGENTS.md'), block, log, 'AGENTS.md (project rules)');
-    if (controller === 'codex-cli') {
-      writeIfChanged(path.join(root, '.codex/agents/conductor-reviewer.toml'), `name = "conductor-reviewer"\ndescription = ${JSON.stringify(REVIEWER_DESC)}\ndeveloper_instructions = '''\n${REVIEWER_BODY}\n'''\n`, log, '.codex/agents/conductor-reviewer.toml');
-    } else {
-      // OpenCode 2: ordered permissions, last match wins, so the catch-all deny comes first
-      const perms = [['edit', '*', 'deny'], ['shell', '*', 'deny'], ['shell', 'conductor diff*', 'allow'], ['shell', 'git diff*', 'allow'], ['shell', 'git log*', 'allow'], ['shell', 'git show*', 'allow']];
-      writeIfChanged(path.join(root, '.opencode/agents/conductor-reviewer.md'), `---\ndescription: ${JSON.stringify(REVIEWER_DESC)}\nmode: subagent\npermissions:\n${perms.map(([a, r, e]) => `  - action: ${a}\n    resource: ${JSON.stringify(r)}\n    effect: ${e}`).join('\n')}\n---\n\n${REVIEWER_BODY}\n`, log, '.opencode/agents/conductor-reviewer.md');
-    }
+    mergeBlock(path.join(root, d.rules.block), block, log, `${d.rules.block} (project rules)`);
   }
+  if (d.reviewer) writeIfChanged(path.join(root, d.reviewer.file), REVIEWER_FORMATS[d.reviewer.format](), log, d.reviewer.file);
   return out;
 }
 
@@ -129,9 +165,12 @@ export function checkControllerFiles(root, controller) {
   const add = (level, file, problem, fix) => out.push({ level, file, problem, fix });
   const read = (rel) => { try { return fs.readFileSync(path.join(root, rel), 'utf8'); } catch { return null; } };
   const ls = (rel) => { try { return fs.readdirSync(path.join(root, rel)); } catch { return []; } };
+  const all = Object.values(allControllers(root));
+  const dirsOf = (fmt) => [...new Set(all.filter((c) => c.rules?.format === fmt).map((c) => c.rules.dir))];
+  const me = controllerDef(controller, root) || {};
   // Antigravity drops rules with bad frontmatter without a word
-  for (const n of ls('.agents/rules').filter((x) => x.endsWith('.md'))) {
-    const rel = `.agents/rules/${n}`, text = read(rel);
+  for (const dir of dirsOf('agy')) for (const n of ls(dir).filter((x) => x.endsWith('.md'))) {
+    const rel = `${dir}/${n}`, text = read(rel);
     const { meta } = parseFront(text);
     if (!/^---\r?\n/.test(text)) add('error', rel, 'no frontmatter, so Antigravity ignores this rule', 'start it with ---\\ntrigger: always_on\\n---');
     else if (!AGY_TRIGGERS.has(meta.trigger)) add('error', rel, `trigger "${meta.trigger || ''}" is not one Antigravity knows, so it ignores this rule`, 'use trigger: always_on, model_decision, glob or manual (lowercase, with underscores)');
@@ -139,11 +178,11 @@ export function checkControllerFiles(root, controller) {
     else if (meta.trigger === 'model_decision' && !meta.description) add('error', rel, 'trigger: model_decision needs a description', 'add description: when to use it');
     if (Buffer.byteLength(text) > 24_000) add('warn', rel, `${Buffer.byteLength(text)} bytes: Antigravity reads at most 24,000 per rule file`, 'split it');
   }
-  for (const n of ls('.claude/rules').filter((x) => x.endsWith('.md'))) {
-    const rel = `.claude/rules/${n}`, { meta } = parseFront(read(rel));
+  for (const dir of dirsOf('claude')) for (const n of ls(dir).filter((x) => x.endsWith('.md'))) {
+    const rel = `${dir}/${n}`, { meta } = parseFront(read(rel));
     if (meta.paths && !/^\[.*\]$/.test(meta.paths) && !/^["']?[^\s]+/.test(meta.paths)) add('warn', rel, 'paths should be a list, e.g. ["src/api/**/*.ts"]', 'fix the paths line');
   }
-  for (const t of ['.claude/skills', '.agents/skills']) {
+  for (const t of [...new Set(all.map((c) => c.skills).filter(Boolean))]) {
     for (const n of ls(t)) {
       const rel = `${t}/${n}/SKILL.md`, text = read(rel);
       if (text === null) continue;
@@ -153,9 +192,9 @@ export function checkControllerFiles(root, controller) {
     }
   }
   const agents = read('AGENTS.md');
-  if (agents !== null && controller === 'codex-cli' && Buffer.byteLength(agents) > 32 * 1024) add('warn', 'AGENTS.md', `${Buffer.byteLength(agents)} bytes: Codex reads at most 32 KiB of AGENTS.md in total`, 'move topics into .conductor/rules or skills');
-  if (agents !== null && controller === 'antigravity' && Buffer.byteLength(agents) > 24_000) add('warn', 'AGENTS.md', `${Buffer.byteLength(agents)} bytes: Antigravity reads at most 24,000 per file`, 'move topics into .conductor/rules or skills');
-  for (const rel of ['.mcp.json', 'opencode.json', '.agents/mcp_config.json', '.vscode/mcp.json']) {
+  const cap = me.limits?.agentsMdBytes;
+  if (agents !== null && cap && Buffer.byteLength(agents) > cap) add('warn', 'AGENTS.md', `${Buffer.byteLength(agents)} bytes: ${me.label} reads at most ${cap.toLocaleString('en-US')} bytes of it`, 'move topics into .conductor/rules or skills');
+  for (const rel of [...new Set([...all.map((c) => c.mcp?.file).filter(Boolean), '.vscode/mcp.json'])]) {
     const text = read(rel);
     if (text === null) continue;
     try { JSON.parse(text); } catch (e) { add('error', rel, `not valid JSON (${e.message.split('\n')[0]}): the controller ignores it`, 'fix the JSON'); }
@@ -169,4 +208,27 @@ export function checkControllerFiles(root, controller) {
     if (!trusted) add('warn', '.codex/', "Codex ignores this project's .codex/ folder (the reviewer agent, hooks) until you trust the project", 'open codex in the project once and choose to trust it');
   }
   return out;
+}
+
+/** docs/CONTROLLERS.md, generated from the registry (node scripts/gen-controller-docs.mjs). */
+export function controllersMarkdown() {
+  const c = (v) => (v ? `\`${v}\`` : '—');
+  const L = ['# Controllers', '', 'Generated from `CONTROLLERS` in `src/presets.js` by `node scripts/gen-controller-docs.mjs`; a test keeps it in step.', '',
+    'The controller is the tool you talk to (it plans and reviews); conductor writes its files in the format each one reads.', '',
+    '| Controller | Instructions | Commands | Skills | Rules | Reviewer subagent | MCP | Commit guard |', '|---|---|---|---|---|---|---|---|'];
+  for (const [n, d] of Object.entries(CONTROLLERS)) {
+    L.push(`| **${d.label}** (\`${n}\`) | ${c(d.file)}${d.import ? ` imports ${c(d.import)}` : ''} | ${d.commands ? `${d.commands.as} in ${c(d.commands.dir)}` : '—'} | ${c(d.skills)} | ${d.rules?.dir ? `${c(d.rules.dir)} (${d.rules.format})` : d.rules?.block ? `a block in ${c(d.rules.block)}` : '—'} | ${d.reviewer ? `${c(d.reviewer.file)}` : '—'} | ${d.mcp?.file ? c(d.mcp.file) : d.mcp?.register ? `register once with \`${d.mcp.register} mcp add …\`` : '—'} | ${d.hooks ? c(d.hooks.file) : 'not yet'} |`);
+  }
+  L.push('', '## Adding a controller', '',
+    'Most coding agents read the same files as one of these (AGENTS.md, `.agents/skills`, an `mcpServers` JSON file). Then a new controller is a data entry, no code:', '',
+    '```bash', 'conductor controller add copilot --like codex-cli --label "Copilot CLI"', 'conductor controller check', 'conductor init --controller copilot', '```', '',
+    'It is stored under `controllers` in your config (`--project` for this project only). Edit the entry when its folders differ. `conductor doctor` reports an entry that names a format conductor cannot write.', '',
+    '**Formats conductor can write:**', '',
+    `- rules: ${Object.keys(RULE_FORMATS).map((x) => `\`${x}\``).join(', ')}, or \`{ "block": "AGENTS.md" }\``,
+    `- reviewer: ${Object.keys(REVIEWER_FORMATS).map((x) => `\`${x}\``).join(', ')}`,
+    `- mcp: ${MCP_FORMATS.map((x) => `\`${x}\``).join(', ')}, or a \`register\` note for tools that keep MCP servers in their own config`,
+    `- hooks (the commit guard): ${HOOK_FORMATS.map((x) => `\`${x}\``).join(', ')}`,
+    `- commands: as ${COMMAND_KINDS.map((x) => `\`${x}\``).join(' or ')}`, '',
+    'A tool that reads a format not listed here needs its writer in `src/controllers.js` (or `src/guard.js` for hooks), and a test against the real tool before conductor claims it works: hook and permission formats are where tools differ most.', '');
+  return L.join('\n');
 }
