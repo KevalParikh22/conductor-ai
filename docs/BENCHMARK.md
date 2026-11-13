@@ -37,18 +37,25 @@ The first C run spent its time in two places: **agy took up to 299 s on a small 
 3. **`/conduct-run` skips the extra end-of-plan review** when every task passed its checks the first time (risky work is still reviewed per task).
 4. **A free route that times out twice cools down,** so the next call doesn't wait on it again.
 
-| C: Claude + conductor | First run | **After the fixes** | A: Claude alone |
-|---|---|---|---|
-| Wall-clock | 623 s | **137 s (−78%)** | 107 s |
-| Claude cost | $0.272 | $0.276 | $0.625 |
-| Hidden tests | 6/6 | **6/6** | 6/6 |
+| C: Claude + conductor | First run | After the fixes | **Codex back** | A: Claude alone |
+|---|---|---|---|---|
+| Wall-clock | 623 s | 137 s | **151 s** | 107 s |
+| Claude cost | $0.272 | $0.276 | **$0.293** | $0.625 |
+| Hidden tests | 6/6 | 6/6 | **6/6** | 6/6 |
+| Workers | agy ×3, OpenCode ×3 (+ agy quota hit) | OpenCode ×6 | **OpenCode ×3, Codex ×3** (agy quota hit, Codex took over) | — |
 
-**Read with care:** in this run agy and Codex were both out of quota, so OpenCode did all six tasks. The speed ranking had already put it first for the five `build` tasks; the `fix` task reached it because the others were out of quota. On tasks this small, Claude alone is still somewhat faster (107 s vs 137 s). The Claude saving (56%) and the quality (6/6) held.
+**Read with care:**
+- **"After the fixes"** ran with agy and Codex both out of quota, so OpenCode did everything.
+- **"Codex back"** ran after the cold-start fix, with Codex on a fresh account. Codex had no history yet, so it counted as average, got real work (three tasks in 26–47 s), and the wave was split between two fast providers.
+- **The speed gain held either way:** 137–151 s against 623 s.
+- **The Claude saving held at 53–56%,** with 6/6 every time.
+- **On tasks this small, Claude alone is still about 1.4× faster.**
+- **Not measured yet:** Codex and OpenCode don't report their token counts to conductor, so the workers' share is known only for agy.
 
 ## What it means
 
 - **Claude quota: the claim holds on this pilot.** Claude spent 56% less (72% fewer tokens), and the result was equally correct. Most of the saving is Claude Code's fixed overhead: each call reads about 150–235k tokens of its own context, and A made six calls where C made one.
-- **Time: close, after the speed fixes.** The first run was 5.8× slower than Claude alone; after routing small tasks to the fastest reliable worker and skipping dead reviewers, it was 1.3× slower (137 s vs 107 s). On small tasks, expect conductor to save quota, not minutes.
+- **Time: close, after the speed fixes.** The first run was 5.8× slower than Claude alone. After routing small tasks to the fastest reliable worker and skipping dead reviewers, it was 1.3–1.4× slower (137–151 s vs 107 s) in two runs with different workers available. On small tasks, expect conductor to save quota, not minutes.
 - **Quality held,** and the work was checked rather than assumed: every task passed verify, and conductor proved each regression test against the original code.
 
 ## Not yet shown
