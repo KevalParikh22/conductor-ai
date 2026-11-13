@@ -446,7 +446,7 @@ async function dispatchOnce(cfg, opts) {
   }
 
   // ---- task body
-  let body = '', planText = '', section = '';
+  let body = '', planText = '', section = '', planGate = null;
   let diffBytes = 0, reviewSaved = 0; // full review diff size (for the selector) and what compacting it saved
   if (opts.planPath) {
     const planAbs = path.resolve(root, opts.planPath);
@@ -476,6 +476,7 @@ async function dispatchOnce(cfg, opts) {
         'Answer them in the plan (mark "- [x] question → answer") before handing out tasks, or pass --allow-open-questions');
     }
     // Q1: a task a worker can't do well (no files, nothing checkable, no verify, too big) goes back to the controller
+    if (mode === 'write') planGate = settings.planGate === false ? { status: 'off' } : opts.allowWeakPlan ? { status: 'waived' } : { status: 'pass' };
     if (mode === 'write' && settings.planGate !== false && !opts.allowWeakPlan) {
       const problems = checkTask(section, { verifyCmd: detectVerify(root, settings), maxFiles: settings.maxTaskFiles || 4 });
       if (problems.length) throw new UsageError(`${opts.taskId} isn't ready to hand to a worker:\n  - ${problems.join('\n  - ')}\nFix the task in ${opts.planPath} (conductor plan check ${opts.planPath}), or pass --allow-weak-plan`);
@@ -556,6 +557,7 @@ async function dispatchOnce(cfg, opts) {
   const summary = {
     role, mode, startedAt: new Date().toISOString(), task: opts.taskId || null, plan: opts.planPath || null, attempts: [], winner: null, model: null,
     report: null, status: null, changed: [], applied: [], rejected: [], warnings: [...preWarnings], verify: null, runDir: rel(root, runDir), exitCode: 3,
+    ...(planGate ? { planGate } : {}),
   };
   let ioDir = runDir; // where CLI workers get their prompt/output files
   let wtBase = ''; // the commit a worktree started from

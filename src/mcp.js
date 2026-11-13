@@ -6,7 +6,7 @@ import path from 'node:path';
 import { loadConfig, findProjectRoot } from './config.js';
 import { dispatch, formatSummary, UsageError, parseDuration, chooseChain, extractTask, taskFiles } from './core.js';
 import { compactDiff } from './diffview.js';
-import { listRuns, readRun, formatRuns } from './runs.js';
+import { listRuns, readRun, formatRuns, runGates, formatGates } from './runs.js';
 import { readWorktreeMeta } from './worktree.js';
 import { listSkills } from './skills.js';
 import { runBatch, formatBatch } from './batch.js';
@@ -185,7 +185,7 @@ async function callTool(name, args, startRoot) {
       const r = readRun(root, args.run);
       if (!r) return text(`conductor: no run "${args.run}" (or the prefix matches several)`, true);
       let report = ''; try { report = r.summary.report ? fs.readFileSync(path.join(root, r.summary.report), 'utf8') : ''; } catch { /* gone */ }
-      return text(`${formatSummary(r.summary)}${report ? `\n\n---- report ----\n${report.slice(-20000)}` : ''}`);
+      return text(`${formatSummary(r.summary)}\n\n${formatGates(runGates(r.summary))}${report ? `\n\n---- report ----\n${report.slice(-20000)}` : ''}`);
     }
     return text(formatRuns(listRuns(root, { limit: Number(args.limit) || 15 })));
   }

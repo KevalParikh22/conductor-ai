@@ -8,7 +8,7 @@ import { spawn } from 'node:child_process';
 import { loadConfig, findProjectRoot, readScope, writeScope, validateConfig, GLOBAL_CONFIG, GLOBAL_SECRETS, GLOBAL_SECRETS as SECRETS, projectConfigPath, loadSecrets, writeSecrets } from '../config.js';
 import { DEFAULT_CONFIG, CLI_PRESETS, ROLES, CONTROLLERS, controllerWorker } from '../presets.js';
 import { statusData } from '../status.js';
-import { listRuns } from '../runs.js';
+import { listRuns, runDetail } from '../runs.js';
 import { catalogStatus, addProviderAuto } from '../setup.js';
 import { detectLocal } from '../local.js';
 import { listSkills, setSkillOn, newSkill, removeSkill, saveSkill, syncSkills, globalSkillsDir, projectSkillsDir } from '../skills.js';
@@ -124,6 +124,10 @@ export function createUiServer({ cwd = process.cwd(), token = crypto.randomBytes
           const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'conductor-test-'));
           try { return send(200, await testProvider(body.name, { ...p, enabled: true }, root, dir)); }
           finally { fs.rmSync(dir, { recursive: true, force: true }); }
+        }
+        case 'GET /api/run': {
+          const d = runDetail(root, String(url.searchParams.get('id') || ''));
+          return d ? send(200, d) : send(404, { error: 'no such run' });
         }
         case 'GET /api/runs': return send(200, { runs: listRuns(root, { limit: 50 }), usage: usageReport(7), budget: loadConfig(root).settings.dailyBudgetUSD || 0 });
         case 'GET /api/models': return send(200, { models: await listFreeModels() });

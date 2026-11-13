@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **"Done" means validated, and every run has its own page (V4).**
+  - **A checklist per run** (`src/rungates.js`): plan gate, worker, code guard, acceptance answered, acceptance checks, verify, scope and repro, each with pass / fail / waived / skipped / missing and its evidence (command, numbers, files, log path). The starting-commit verify and the independent review are shown as information.
+  - **The rule:** a run is `done` only when every required check passed or was waived on purpose. A test runs over 4,000 combinations of results to prove the outcome and the checklist always agree, so the UI can't show done for a run whose verify didn't run.
+  - **The plan gate result is now saved** on each run (`planGate`), so the checklist can show it.
+  - **Where it shows:** `conductor runs show <run>` (and `--json` for the full page data), the MCP `conductor_runs` tool with a run id, and a new **run page** in the UI: open any run from the Runs list to see the checklist, attempts with tokens and next steps, the changed files, the report, logs, the diff of a kept branch, and the commands to merge or discard it. Its link (`#p=runs&run=<id>`) opens it directly.
+  - **Safe by design:** the new `/api/run` reads only the project's own run files; a path outside the project is never read.
 - **Every failure says what to do next (V2).** Each failed or skipped worker now carries a `next` step written for its exact reason: the install and sign-in command for a missing CLI, `conductor keys set NAME` (with where to get the key) for a missing key, `conductor cooldown --clear NAME` for a cooldown, the `settings.allowCommands` fix for a refused command, the worker log to read for an error exit, and so on.
   - **Where it shows:** `fix:` lines in the run summary (so MCP replies too), in `conductor runs`, and on the UI's Runs page. A failed attempt's tooltip shows its reason and step.
   - **When nothing won,** every provider gets its line. **When another worker won,** only problems that stay until someone acts (install, key, auth, refused command, disabled, wrong model) are shown.
