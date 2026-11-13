@@ -8,7 +8,7 @@ import { isolateHome, makeRepo, fakeBins, PLAN } from './helpers.js';
 isolateHome();
 fakeBins({
   // Antigravity CLI: records its argv, then fails on quota after leaving partial work behind
-  agy: `fs.writeFileSync(process.env.AGY_ARGS_LOG, JSON.stringify(args)); fs.writeFileSync('src/partial.js','half'); console.error('Error: RESOURCE_EXHAUSTED quota exceeded'); process.exit(1);`,
+  agy: `if (args[0] === 'models') process.exit(1); fs.writeFileSync(process.env.AGY_ARGS_LOG, JSON.stringify(args)); fs.writeFileSync('src/partial.js','half'); console.error('Error: RESOURCE_EXHAUSTED quota exceeded'); process.exit(1);`,
   // succeeds: reads prompt from stdin, writes -o file
   codex: `let p='';process.stdin.on('data',d=>p+=d).on('end',()=>{const o=args[args.indexOf('-o')+1];
     if(p.includes('code review')){fs.writeFileSync(o,'## Findings\\nnone\\n## VERDICT: APPROVE\\n');return;}

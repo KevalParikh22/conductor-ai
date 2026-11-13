@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { keyValue, GLOBAL_DIR, readJSON, writeJSON } from './util.js';
 /** Free models on OpenRouter (pricing "0"). The free list changes often, so query it live. */
 export async function listFreeModels({ all = false, timeoutMs = 20000 } = {}) {
@@ -93,4 +94,28 @@ export async function autoFallbacks(name, p, { freeOnly = false, except = '', ma
     else if (same) list = hit.models; // the provider can't list its models right now: an older list beats none
   }
   return list.filter((m) => m !== except).slice(0, max);
+}
+
+/** "gemini-3.8-flash-high" → "gemini". Models of one family often share a quota; another family may not. */
+export const modelFamily = (id) => (String(id || '').toLowerCase().match(/^[a-z]+/) || [''])[0];
+
+/**
+ * Other models an agent CLI offers (agy: `agy models`, lines "id<TAB>label"), for a quota fallback: other model
+ * families first (they may have their own quota), one per family, then the rest. Cached for a day.
+ */
+export async function cliFallbacks(name, preset, { except = '', defaultFamily = '', max = 3, run } = {}) {
+  if (!preset?.listModels) return [];
+  const cache = readJSON(AUTO_CACHE(), {});
+  const key = `${name}#cli-models`;
+  let list = cache[key] && Date.now() - cache[key].at < AUTO_TTL ? cache[key].models : null;
+  if (!list) {
+    const r = await run(preset.bin, preset.listModels, { timeoutMs: 30_000, cwd: os.tmpdir() }); // never inside a project
+    list = r.code === 0 ? r.stdout.split('\n').map((l) => (l.match(/^([\w.:-]+)\t/) || [])[1]).filter(Boolean) : [];
+    if (list.length) { cache[key] = { models: list, at: Date.now() }; try { writeJSON(AUTO_CACHE(), cache); } catch { /* optional */ } }
+  }
+  const tried = modelFamily(except) || defaultFamily;
+  const others = list.filter((m) => m !== except);
+  const seen = new Set([tried]), first = [];
+  for (const m of others) if (!seen.has(modelFamily(m))) { seen.add(modelFamily(m)); first.push(m); }
+  return [...first, ...others.filter((m) => !first.includes(m))].slice(0, max);
 }

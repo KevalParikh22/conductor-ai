@@ -18,11 +18,11 @@ import { runHook, recordVerify, setGuards, guardsOn, allowCommit, readVerifyStat
 import { readBlock, writeBlock } from '../src/localfiles.js';
 import { initProject, setupGlobal } from '../src/init.js';
 import { startMcpServer } from '../src/mcp.js';
-import { testProvider } from '../src/providers.js';
+import { testProvider, testPermissions } from '../src/providers.js';
 import { listFreeModels, listProviderModels } from '../src/models.js';
 import { CLI_PRESETS, ROLES, CONTROLLERS, controllerWorker } from '../src/presets.js';
 import { VERSION } from '../src/version.js';
-import { which, keyValue } from '../src/util.js';
+import { which, keyValue, untilText } from '../src/util.js';
 import { usageReport, formatUsage, recordSaving } from '../src/usage.js';
 import { listRuns, readRun, formatRuns, runDetail, runGates, formatGates } from '../src/runs.js';
 import { CATALOG, CATEGORIES, urlFields } from '../src/catalog.js';
@@ -409,7 +409,7 @@ async function main() {
       const rep = await runEvals({
         ids, samples: o.samples ? Number(o.samples) : undefined, provider: o.provider, chain: o.chain ? String(o.chain).split(',').map((x) => x.trim()).filter(Boolean) : undefined, keep: o.keep, label: o.label || '',
         onEvent: o.json ? undefined : (e) => {
-          const m = { start: 'starting', try: `trying ${e.provider}…`, fail: `${e.provider} failed: ${e.reason}`, ok: `${e.provider} finished`, verify: 'running verify…', isolate: 'checking the code alone against the original tests…', escalate: `verify failed: handing ${e.from}'s work to ${e.provider}…`, repair: `${e.provider} sent no files: asking once more…`, scored: `${e.pass ? 'PASS' : 'FAIL'} (conductor said: ${e.outcome})` }[e.type];
+          const m = { start: 'starting', wait: `waiting for ${e.provider} (one task at a time on it)…`, try: `trying ${e.provider}…`, fail: `${e.provider} failed: ${e.reason}`, ok: `${e.provider} finished`, verify: 'running verify…', isolate: 'checking the code alone against the original tests…', escalate: `verify failed: handing ${e.from}'s work to ${e.provider}…`, repair: `${e.provider} sent no files: asking once more…`, scored: `${e.pass ? 'PASS' : 'FAIL'} (conductor said: ${e.outcome})` }[e.type];
           if (m) process.stderr.write(`eval [${e.task}]: ${m}\n`);
         },
       });
@@ -530,7 +530,7 @@ async function main() {
         note: o.note, files: o.files ? o.files.split(',').map((x) => x.trim()) : [], base: o.base, focus: o.focus,
         save: o.save, noVerify: o['no-verify'], allowUnverified: o['allow-unverified'], allowScope: o['allow-scope'], allowWeakPlan: o['allow-weak-plan'], noEscalate: o['no-escalate'], allowNoRepro: o['allow-no-repro'], samples: o.samples ? Number(o.samples) : undefined, review: o.review, noReview: o['no-review'], allowDirty: o['allow-dirty'], worktree: o.worktree, continue: o.continue, worktreeId: o.worktreeId, timeoutMs: timeoutOpt(o), replace: o.replace, allowOpenQuestions: o['allow-open-questions'],
         onEvent: o.json ? undefined : (e) => {
-          const m = { worktree: `working in ${e.dir} (branch ${e.branch})`, try: `trying ${e.provider} (${e.kind})…`, skip: `skip ${e.provider}: ${e.reason}`, fail: `${e.provider} failed: ${e.reason}`, ok: `${e.provider} finished`, verify: 'running verify…', repro: 'running the repro…', review: 'independent review by another model family…', isolate: 'verify failed: checking the code alone against the original tests…', base: 'checking the starting commit (verify, cached per commit)…', escalate: `verify failed: handing ${e.from}'s work to ${e.provider}…`, repair: `${e.provider} sent no files: asking once more…` }[e.type];
+          const m = { worktree: `working in ${e.dir} (branch ${e.branch})`, wait: `waiting for ${e.provider} (one task at a time on it)…`, try: `trying ${e.provider} (${e.kind})…`, skip: `skip ${e.provider}: ${e.reason}`, fail: `${e.provider} failed: ${e.reason}`, ok: `${e.provider} finished`, verify: 'running verify…', repro: 'running the repro…', review: 'independent review by another model family…', isolate: 'verify failed: checking the code alone against the original tests…', base: 'checking the starting commit (verify, cached per commit)…', escalate: `verify failed: handing ${e.from}'s work to ${e.provider}…`, repair: `${e.provider} sent no files: asking once more…` }[e.type];
           if (m) process.stderr.write(`conductor${e.sample ? ` [attempt ${e.sample}]` : ''}: ${m}\n`);
         },
       });
@@ -563,7 +563,7 @@ async function main() {
       const b = await runBatch(cfg, {
         planPath: o.plan, tasks, role: o.role, provider: o.provider, concurrency: o.concurrency, noVerify: o['no-verify'], allowUnverified: o['allow-unverified'], allowScope: o['allow-scope'], allowWeakPlan: o['allow-weak-plan'], noEscalate: o['no-escalate'], allowNoRepro: o['allow-no-repro'], review: o.review, noReview: o['no-review'], timeoutMs: timeoutOpt(o), replace: o.replace, note: o.note, allowOpenQuestions: o['allow-open-questions'],
         onEvent: o.json ? undefined : (e) => {
-          const m = { start: `starting (first choice: ${e.provider})`, try: `trying ${e.provider}…`, fail: `${e.provider} failed: ${e.reason}`, ok: `${e.provider} finished`, verify: 'running verify…', base: 'checking the starting commit…', escalate: `verify failed: handing ${e.from}'s work to ${e.provider}…`, repair: `${e.provider} sent no files: asking once more…`, done: 'done' }[e.type];
+          const m = { start: `starting (first choice: ${e.provider})`, wait: `waiting for ${e.provider} (one task at a time on it)…`, try: `trying ${e.provider}…`, fail: `${e.provider} failed: ${e.reason}`, ok: `${e.provider} finished`, verify: 'running verify…', base: 'checking the starting commit…', escalate: `verify failed: handing ${e.from}'s work to ${e.provider}…`, repair: `${e.provider} sent no files: asking once more…`, done: 'done' }[e.type];
           if (m) process.stderr.write(`conductor [${e.task}]: ${m}\n`);
         },
       });
@@ -608,7 +608,7 @@ async function main() {
       if (o.clear) { clearCooldowns(o._[0] || (typeof o.clear === 'string' ? o.clear : undefined)); console.log('cooldowns cleared'); return 0; }
       const c = getCooldowns();
       if (!Object.keys(c).length) console.log('no providers cooling down');
-      for (const [n, v] of Object.entries(c)) console.log(`${n.padEnd(18)} until ${new Date(v.until).toLocaleTimeString()}  (${v.reason})`);
+      for (const [n, v] of Object.entries(c)) console.log(`${n.padEnd(18)} until ${untilText(v.until)}  (${v.reason})`);
       return 0;
     }
     case 'config': {
@@ -645,6 +645,16 @@ async function doctor(o) {
       fs.rmSync(dir, { recursive: true, force: true });
       Object.assign(r, { ok: t.ok, status: t.reason, sample: t.ok ? undefined : t.sample.replace(/\s+/g, ' ').slice(0, 120),
         next: t.ok ? null : p.catalog ? `see docs/providers/${p.catalog}.md → Troubleshooting` : null });
+      // V8: an agent that answers may still be refused the commands workers need (headless mode can't ask)
+      if (t.ok && p.type === 'cli') {
+        const pd = fs.mkdtempSync(path.join(os.tmpdir(), 'conductor-doctor-'));
+        const pt = await testPermissions(name, p, pd, { allowCommands: cfg.settings.allowCommands || [] });
+        fs.rmSync(pd, { recursive: true, force: true });
+        r.permissionCheck = { ok: pt.ok, reason: pt.reason, denied: pt.denied };
+        if (!pt.ok) Object.assign(r, { ok: false, status: `answers, but can't run build commands: ${pt.reason}`,
+          next: pt.denied.length ? `add the refused command(s) to settings.allowCommands (conductor ui → Settings, or the file from conductor config path), then conductor doctor --live` : `read what it said and check its permission settings (conductor doctor --details): ${pt.sample.replace(/\s+/g, ' ').slice(0, 100)}` });
+        else r.status = `${t.reason}; ${pt.reason}`;
+      }
     }
   }
   const errs = validateConfig(cfg);

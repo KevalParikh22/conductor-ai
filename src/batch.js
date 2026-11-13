@@ -2,7 +2,7 @@
 // spreading them across different providers so no single quota takes all the load.
 import fs from 'node:fs';
 import path from 'node:path';
-import { ROLES } from './presets.js';
+import { ROLES, CLI_PRESETS } from './presets.js';
 import { checkTask } from './plancheck.js';
 import { detectVerify } from './verify.js';
 import { speedStats, expectedSeconds } from './selector.js';
@@ -73,7 +73,9 @@ export function spreadChains(cfg, items, { provider } = {}) {
     const cap = cfg.settings?.maxParallelPerProvider ?? 2;
     const secs = expectedSeconds(speedStats(ready, t.role), ready);
     const eta = (n) => secs(n) * (1 + 0.5 * (seen[n] || 0));
-    const open = ready.filter((n) => (seen[n] || 0) < cap);
+    // a provider's own limit wins (agy: 1, its quota belongs to the account); the setting is the default
+    const capOf = (n) => cfg.providers?.[n]?.maxParallel ?? CLI_PRESETS[cfg.providers?.[n]?.preset]?.maxParallel ?? cap;
+    const open = ready.filter((n) => (seen[n] || 0) < capOf(n));
     const pool = open.length ? open : ready;
     const first = pool.reduce((a, b) => (eta(b) < eta(a) ? b : a));
     seen[first] = (seen[first] || 0) + 1;

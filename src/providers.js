@@ -140,8 +140,27 @@ export function opencodeSessionTokens(exported) {
   return { input: (t.input || 0) + (t.cache?.read || 0) + (t.cache?.write || 0), output: (t.output || 0) + (t.reasoning || 0) };
 }
 
+/**
+ * Seconds until a rate limit resets, read from a provider's message, or 0. agy says "Resets in 118h3m13s"; others
+ * say "try again in 30s", "retry after 120 seconds" or "resets in 5 minutes". Capped at 7 days.
+ */
+export function resetSeconds(text) {
+  const t = String(text || '');
+  const m = t.match(/(?:resets?|try again|retry)(?: after| in)\s+((?:\d+(?:\.\d+)?\s*(?:h(?:ours?|rs?)?|m(?:in(?:ute)?s?)?|s(?:ec(?:ond)?s?)?)(?![a-z])\s*)+)/i);
+  if (!m) return 0;
+  let sec = 0;
+  for (const [, n, u] of m[1].matchAll(/(\d+(?:\.\d+)?)\s*([hms])/gi)) sec += Number(n) * { h: 3600, m: 60, s: 1 }[u.toLowerCase()];
+  return Math.min(Math.round(sec), 7 * 86_400);
+}
+
 /** Run a CLI agent (antigravity, codex, opencode, kimi, claude, or a custom one). */
-export async function runCli(name, p, { mode, prompt, cwd, timeoutMs, idleTimeoutMs = 0, runDir, quotaRe, allowCommands = [] }) {
+export async function runCli(name, p, opts) {
+  const res = await runCliOnce(name, p, opts);
+  if (res.reason === 'quota' && !res.retryAfterSec) { const s = resetSeconds(`${res.text}\n${res.log}`); if (s) res.retryAfterSec = s; }
+  return res;
+}
+
+async function runCliOnce(name, p, { mode, prompt, cwd, timeoutMs, idleTimeoutMs = 0, runDir, quotaRe, allowCommands = [] }) {
   const preset = { ...(CLI_PRESETS[p.preset] || {}), ...p };
   if (!which(preset.bin)) return { ok: false, text: '', reason: 'not installed', log: '' };
   const promptFile = path.join(runDir, `${name}.prompt.md`);
@@ -303,6 +322,24 @@ export function runProvider(name, p, opts) {
 }
 
 /** Cheap connectivity test used by `conductor doctor --live` and the UI "Test" button. */
+/**
+ * V8 permission preflight for an agent: in a throwaway repo, ask it to run `npm test` (a command workers need) and
+ * report the line it prints. Catches headless permission refusals (agy denied_actions) before real work does.
+ */
+export async function testPermissions(name, p, runDir, { allowCommands = [] } = {}) {
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'conductor-perm-'));
+  try {
+    fs.writeFileSync(path.join(repo, 'package.json'), JSON.stringify({ name: 'perm-check', private: true, scripts: { test: 'node -e "console.log(\'PERM\'+\'OK-\'+(40+2))"' } }));
+    const res = await runProvider(name, { ...p }, {
+      mode: 'write', cwd: repo, runDir, timeoutMs: 300_000, quotaRe: /quota|rate.?limit|429/i, allowCommands: ['npm test', ...allowCommands],
+      prompt: 'This is a permission check. Run the command `npm test` in this folder, then reply with the line it printed (it starts with PERMOK). Do not change any files.',
+    });
+    const ok = /PERMOK-42/.test(res.text || '');
+    const denied = res.denied?.length ? [...new Set(res.denied)] : [];
+    return { ok, denied, reason: ok ? 'can run build commands' : denied.length ? `refused: ${denied.join(', ')}` : (res.reason || 'did not run the command'), sample: (res.text || '').slice(0, 200) };
+  } finally { fs.rmSync(repo, { recursive: true, force: true }); }
+}
+
 export async function testProvider(name, p, cwd, runDir) {
   const prompt = 'Reply with exactly the word: PONG';
   const res = await runProvider(name, { ...p }, {

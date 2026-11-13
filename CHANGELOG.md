@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Antigravity (agy) under pressure (V8).** Checked against agy 1.5.8 with a real quota.
+  - **Real reset times:** a rate limit now cools a provider down until the time it reports ("Resets in 118h3m13s", "try again in 30s", "retry after 120 seconds"), capped at a week, instead of 30 minutes every time. Cooldowns that end on another day show the date.
+  - **Another model family on quota:** agy's model families have separate quotas, so when its Gemini quota is used up conductor tries its Claude or GPT-OSS models (from `agy models`, cached for a day) before giving up. Live: Gemini out of quota for 46 h → `claude-sonnet-4-6` did the task. When two models report the same reset time, the quota is the account's: conductor stops trying models and cools agy down until then.
+  - **One agy task at a time** by default (`maxParallel: 1`, any provider can set its own): batch spreads past it, and calls from parallel tasks wait their turn.
+  - **Permission check in `doctor --live`:** each agent that answers is asked to run `npm test` in a throwaway repo. A refusal is reported with the exact fix (`settings.allowCommands`).
 - **"Done" means validated, and every run has its own page (V4).**
   - **A checklist per run** (`src/rungates.js`): plan gate, worker, code guard, acceptance answered, acceptance checks, verify, scope and repro, each with pass / fail / waived / skipped / missing and its evidence (command, numbers, files, log path). The starting-commit verify and the independent review are shown as information.
   - **The rule:** a run is `done` only when every required check passed or was waived on purpose. A test runs over 4,000 combinations of results to prove the outcome and the checklist always agree, so the UI can't show done for a run whose verify didn't run.

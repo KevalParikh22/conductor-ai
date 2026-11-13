@@ -17,14 +17,14 @@ import { independentReview, riskReasons } from './review.js';
 import { lessonsPrompt, demoteByLessons, lessonsFromRun, addLesson } from './lessons.js';
 import { rulesPrompt } from './controllers.js';
 import { recordVerify } from './guard.js';
-import { autoModel, autoFallbacks } from './models.js';
+import { autoModel, autoFallbacks, cliFallbacks, modelFamily } from './models.js';
 import { smartOrder, isFree as isFreeProvider } from './selector.js';
 import { taskProviders, matchRoute, describeRoute } from './routing.js';
 import { compactDiff } from './diffview.js';
 import { snapshot as snapshotLocal } from './localfiles.js';
 import { skillsForTask } from './skills.js';
 import { createWorktree, openWorktree, commitWorktree, removeWorktree, readWorktreeMeta, writeWorktreeMeta } from './worktree.js';
-import { GLOBAL_DIR, readJSON, writeJSON, timestamp, rel } from './util.js';
+import { GLOBAL_DIR, readJSON, writeJSON, timestamp, rel, untilText, run as runCmd } from './util.js';
 import { budgetBlock, estimateCost, recordUsage, recordSaving } from './usage.js';
 import { nextStep, fixLines } from './nextsteps.js';
 
@@ -212,6 +212,16 @@ export function buildCommands(settings) {
 
 const modelKey = (name, model) => `${name}@${model || '(default)'}`;
 
+// V8: a provider with maxParallel (agy: 1) runs that many calls at once in this process; the rest wait their turn
+const slots = new Map();
+export async function withSlot(name, limit, fn, onWait) {
+  if (!(limit > 0)) return fn();
+  const s = slots.get(name) || { busy: 0, queue: [] };
+  slots.set(name, s);
+  if (s.busy >= limit) { onWait?.(); await new Promise((resolve) => s.queue.push(resolve)); } else s.busy++;
+  try { return await fn(); } finally { const nextUp = s.queue.shift(); if (nextUp) nextUp(); else s.busy--; }
+}
+
 /**
  * Models to try on one provider, in order: its model (or the best from its live list when blank), then
  * fallbackModels. Free and auto-picked API providers get fallbacks from their live list when none are set.
@@ -226,9 +236,14 @@ export async function modelsToTry(name, p, kind) {
   const cooling = getCooldowns();
   const left = all.filter((m) => !cooling[modelKey(name, m)]);
   // with no fallbacks of its own, a free or auto-picked API provider looks some up, but only once one is needed
+  const preset = CLI_PRESETS[p.preset] || {};
   const auto = kind === 'chat' && !rest.length && p.autoFallback !== false && (!p.model || p.free)
     ? async () => (await autoFallbacks(name, p, { freeOnly: !!p.free, except: first })).filter((m) => !cooling[modelKey(name, m)] && !all.includes(m))
-    : null;
+    // V8: an agent CLI that lists its models (agy) tries another model family after a quota hit
+    : kind === 'agent' && !rest.length && p.autoFallback !== false && (p.listModels || preset.listModels)
+      ? async () => (await cliFallbacks(name, { ...preset, ...p }, { except: first, defaultFamily: p.defaultFamily ?? preset.defaultFamily, run: runCmd }))
+        .filter((m) => !cooling[modelKey(name, m)] && !all.includes(m))
+      : null;
   return { models: all.length > 1 || auto ? left : all, auto };
 }
 
@@ -272,7 +287,7 @@ export function resolveChain(cfg, role, { provider, chain } = {}) {
     const r = providerReadiness(name, p);
     if (!r.ready) return { name, p, skip: r.reason };
     const c = cooldowns[name];
-    if (c) return { name, p, skip: `cooling down until ${new Date(c.until).toLocaleTimeString()} (${c.reason})` };
+    if (c) return { name, p, skip: `cooling down until ${untilText(c.until)} (${c.reason})` };
     const over = budgetBlock(name, p, cfg.settings);
     if (over) return { name, p, skip: over };
     return { name, p };
@@ -656,6 +671,9 @@ async function dispatchOnce(cfg, opts) {
     // the provider's model, then its fallback models: a model that is rate-limited is skipped until its cooldown ends
     let { models, auto } = await modelsToTry(c.name, c.p, kind);
     let timeouts = 0;
+    const resets = []; // V8: quota reset times seen on this provider's models in this run
+    // its own model is cooling down, but it can list others (agy: another model family may still have quota)
+    if (!models.length && auto && !getCooldowns()[c.name]) { models = await auto(); auto = null; }
     if (!models.length) {
       const reason = 'every model is cooling down';
       summary.attempts.push({ provider: c.name, ok: false, reason, skipped: true }); emit({ type: 'skip', provider: c.name, reason });
@@ -670,8 +688,8 @@ async function dispatchOnce(cfg, opts) {
       const p = model === (c.p.model || '') ? c.p : { ...c.p, model };
       let res = kind === 'chat' && !p.model
         ? { ok: false, text: '', reason: 'no model set, and its model list could not be fetched', log: '' }
-        : await runProvider(c.name, p, { mode, prompt: userPrompt, system: chatSystem, cwd: work, runDir: ioDir, quotaRe,
-          allowCommands: buildCommands(settings), ...limitFor(c.p, kind) });
+        : await withSlot(c.name, c.p.maxParallel ?? CLI_PRESETS[c.p.preset]?.maxParallel, () => runProvider(c.name, p, { mode, prompt: userPrompt, system: chatSystem, cwd: work, runDir: ioDir, quotaRe,
+          allowCommands: buildCommands(settings), ...limitFor(c.p, kind) }), () => emit({ type: 'wait', provider: c.name }));
       if (p !== c.p && p.model && !res.model) res.model = p.model;
       const tampered = control ? git.restoreControl(control) : [];
       const putBack = restoreLocal();
@@ -742,7 +760,10 @@ async function dispatchOnce(cfg, opts) {
       // a free route that hung twice is cooled down, so the next call (the next task, a review) doesn't wait on it again
       if (timedOut && timeouts === 2 && kind === 'chat' && settings.hangCooldownMin !== 0) setCooldown(c.name, settings.hangCooldownMin ?? 15, 'timed out twice');
       // one more model after a timeout; a second timeout means the provider itself is hanging, so move on
-      const modelProblem = quota || (kind === 'chat' && /^(timeout|empty output|server 5)/.test(res.reason || '') && timeouts < 2);
+      // V8: two models whose quotas reset at the same moment share one quota (the account's): stop trying models
+      const accountWide = quota && res.retryAfterSec > 0 && resets.some((r) => Math.abs(r - res.retryAfterSec) <= 120);
+      if (quota && res.retryAfterSec > 0) resets.push(res.retryAfterSec);
+      const modelProblem = !accountWide && (quota || (kind === 'chat' && /^(timeout|empty output|server 5)/.test(res.reason || '') && timeouts < 2));
       if (modelProblem && mi === models.length - 1 && auto) { models = [...models, ...(await auto())]; auto = null; }
       const nextModel = models[mi + 1];
       const tryNext = nextModel !== undefined && modelProblem;
@@ -750,7 +771,7 @@ async function dispatchOnce(cfg, opts) {
         const mins = res.retryAfterSec ? Math.max(1, Math.ceil(res.retryAfterSec / 60)) : (settings.cooldownMinutes || 30);
         if (models.length > 1 || mi) setCooldown(modelKey(c.name, p.model), mins, 'rate limited');
         // the provider itself cools down only when it has no other model left to try
-        if (!tryNext) setCooldown(c.name, mins, 'rate limited');
+        if (!tryNext) setCooldown(c.name, mins, accountWide ? 'quota used up for the whole account' : 'rate limited');
         attempt.reason += ` (cooldown ${mins}m)`;
       }
       attempt.next = nextStep(attempt.reason, { name: c.name, p: c.p, log: path.relative(root, path.join(runDir, `${c.name}${mi ? `.${mi + 1}` : ''}.log`)) });
