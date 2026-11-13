@@ -297,6 +297,17 @@ function readContextFiles(root, files, budget, extraSecret = []) {
   return out;
 }
 
+/**
+ * The Design notes lines that concern this task: the ones mentioning one of its files. Notes usually describe every
+ * module in the plan, and a task must not be held to another task's exports (found by the pilot: a T4 worker was
+ * asked to export T1's slugify).
+ */
+export function notesForFiles(notes, files) {
+  const keys = files.map((f) => f.replace(/^\.\//, '')).filter(Boolean);
+  if (!keys.length) return '';
+  return String(notes || '').split('\n').filter((l) => keys.some((k) => l.includes(k))).join('\n');
+}
+
 // ---------------- chat workers (H7) ----------------
 const CHAT_JOB = {
   build: 'Implement the task below, and add or update tests for the behaviour you change.',
@@ -691,7 +702,7 @@ async function dispatchOnce(cfg, opts) {
         const missing = settings.contractCheck === false || !section ? [] : missingContract(work, section);
         // the export check: names the acceptance checks call, or the plan says to export, need a NAMED export (JS/TS)
         const noExport = settings.contractCheck === false || !section || !['build', 'fix'].includes(role) ? []
-          : unexported(work, `${extractSection(planText, 'Design notes')}\n${section}`, taskFiles(section).flatMap(expandBraces), parseChecks(criteria).map((x) => x.expr)).filter((n) => !missing.includes(n));
+          : unexported(work, `${notesForFiles(extractSection(planText, 'Design notes'), taskFiles(section).flatMap(expandBraces))}\n${section}`, taskFiles(section).flatMap(expandBraces), parseChecks(criteria).map((x) => x.expr)).filter((n) => !missing.includes(n));
         if (syntax.length || missing.length || noExport.length) {
           guard = { syntax, missing, unexported: noExport };
           res = { ...res, ok: false, reason: syntax.length ? `syntax error in ${syntax.map((x) => x.file).join(', ')}`

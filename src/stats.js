@@ -80,3 +80,45 @@ export function formatFailureStats(st) {
   L.push('', 'Fix the top cause first, then measure the change with: conductor eval run');
   return L.join('\n');
 }
+
+/**
+ * Q10: is conductor delivering? From this project's runs: how often a write task was accepted on the first try with
+ * proof (done, one worker, no hand-off or retry), where the rest ended, and what the workers cost. The alpha gate is
+ * a first-try accept rate of 70% or more over at least 10 write tasks.
+ */
+export function qualityStats({ root, days = 30 } = {}) {
+  const since = Date.now() - days * 86_400_000;
+  const runs = listRuns(root, { limit: 1000 }).filter((r) => r.state !== 'running' && (!r.startedAt || Date.parse(r.startedAt) >= since));
+  const write = runs.filter((r) => r.mode === 'write' || ['build', 'fix', 'test', 'docs'].includes(r.role));
+  const firstTry = write.filter((r) => r.state === 'done' && r.attempts.length === 1 && !r.handedOn && !r.continued);
+  const outcomes = {};
+  for (const r of write) outcomes[r.state] = (outcomes[r.state] || 0) + 1;
+  const pct = (n, d) => (d ? Math.round((n / d) * 100) : 0);
+  const gate = write.length >= 10 ? (pct(firstTry.length, write.length) >= 70 ? 'met' : 'not met') : `needs ${10 - write.length} more write task(s)`;
+  return {
+    days, runs: runs.length, writeTasks: write.length,
+    firstTry: firstTry.length, firstTryRate: pct(firstTry.length, write.length),
+    done: outcomes.done || 0, doneRate: pct(outcomes.done || 0, write.length), outcomes,
+    handedOn: write.filter((r) => r.handedOn).length, retried: write.filter((r) => r.continued).length,
+    fallbacks: write.filter((r) => r.attempts.length > 1).length,
+    workerTokens: runs.reduce((t, r) => t + (r.tokens || 0), 0),
+    workerCost: Math.round(runs.reduce((t, r) => t + (r.cost || 0), 0) * 10000) / 10000,
+    contextKeptOut: runs.reduce((t, r) => t + (r.tokensSaved || 0), 0),
+    workerMinutes: Math.round(runs.reduce((t, r) => t + (r.seconds || 0), 0) / 60),
+    gate,
+  };
+}
+
+export function formatQualityStats(q) {
+  const L = [`Last ${q.days} days in this project: ${q.runs} runs, ${q.writeTasks} write tasks.`, ''];
+  if (!q.writeTasks) return [...L, 'No write tasks yet. Run some (conductor run build …), then check again.'].join('\n');
+  L.push(`accepted first try   ${q.firstTry}/${q.writeTasks} = ${q.firstTryRate}%   (done, one worker, no hand-off or retry)`);
+  L.push(`done in the end      ${q.done}/${q.writeTasks} = ${q.doneRate}%`);
+  L.push(`outcomes             ${Object.entries(q.outcomes).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ${n}`).join(' · ')}`);
+  L.push(`help needed          ${q.fallbacks} fell back to another worker · ${q.handedOn} handed on after failing checks · ${q.retried} retried with a note`);
+  L.push(`worker cost          ${q.workerTokens.toLocaleString()} tokens${q.workerCost ? ` · $${q.workerCost}` : ''} · ${q.workerMinutes} worker-minutes`);
+  L.push(`context kept out     ~${q.contextKeptOut.toLocaleString()} tokens (estimate: trimmed reports, compact diffs, free-model picks)`);
+  L.push('', `alpha gate (≥70% first try over ≥10 write tasks): ${q.gate}`);
+  L.push('Why the rest failed: conductor stats --failures');
+  return L.join('\n');
+}

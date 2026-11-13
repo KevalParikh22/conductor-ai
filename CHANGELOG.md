@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **`conductor stats`: is it delivering?** Shows, for this project's write tasks:
+  - how many were accepted **on the first try** (done, one worker, no hand-off or retry);
+  - how many were done in the end, and where the rest ended;
+  - fallbacks, hand-offs and retries;
+  - worker tokens, cost and minutes, and the context kept out;
+  - the **alpha gate**: at least 70% accepted first try over at least 10 write tasks.
+
+  `--failures` still lists the causes.
+- **First pilot results ([docs/BENCHMARK.md](docs/BENCHMARK.md)).** Six tasks, hidden tests, Claude Code on Sonnet. With conductor, Claude used **56% less** (72% fewer tokens) and the result was equally correct (6/6 in both). On tasks this small it was **5.8× slower**, because the workers take minutes where Claude takes seconds. It's labelled a pilot: one repo, one run each.
+- **Pilot benchmark harness (`bench/`).** Six tasks in a small Node library with hidden tests and a reference solution. `node bench/run.mjs check | A | C` compares Claude Code alone with Claude Code as conductor's controller, measuring Claude's tokens and cost from `claude -p --output-format json`.
+- **Fix: the export check held a task to other tasks' exports.** The plan's Design notes describe every module, and the check read all of them, so a pagination task was told to export `slugify`. Only Design-notes lines that mention the task's own files count now. Found by the pilot's dry run.
 - **Guard hooks (opt-in): no commit while verify fails.**
   - `conductor guard on` (or `init --guards`) installs a hook in the controller. While the last `conductor verify` in this checkout failed, the controller's `git commit` is blocked, with the reason and what to do: fix it and `conductor verify` again, or `conductor guard allow` for a one-time exception.
   - Verify results from `conductor verify`, the MCP verify tool and runs in the main checkout are recorded for this. On Claude Code, Stop also shows a reminder of task branches waiting for review.

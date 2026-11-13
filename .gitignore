@@ -3,3 +3,4 @@ node_modules/
 .conductor/.env
 *.log
 .DS_Store
+bench/results/*-dry.json
