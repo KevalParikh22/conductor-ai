@@ -736,6 +736,8 @@ async function dispatchOnce(cfg, opts) {
       // another model can help when this one is rate-limited, or (for APIs) when it stalled or answered nothing
       const timedOut = /^timeout/.test(res.reason || '');
       if (timedOut) timeouts++;
+      // a free route that hung twice is cooled down, so the next call (the next task, a review) doesn't wait on it again
+      if (timedOut && timeouts === 2 && kind === 'chat' && settings.hangCooldownMin !== 0) setCooldown(c.name, settings.hangCooldownMin ?? 15, 'timed out twice');
       // one more model after a timeout; a second timeout means the provider itself is hanging, so move on
       const modelProblem = quota || (kind === 'chat' && /^(timeout|empty output|server 5)/.test(res.reason || '') && timeouts < 2);
       if (modelProblem && mi === models.length - 1 && auto) { models = [...models, ...(await auto())]; auto = null; }
@@ -934,7 +936,11 @@ export function claimedFiles(report, { roots = [], known = [] } = {}) {
     if (!p || /^\(?(none|nothing|n\/a)\)?\.?$/i.test(p)) return null;
     return p;
   };
-  const looksLikePath = (p) => knownSet.has(p) || /\//.test(p) || /\.[A-Za-z0-9_-]{1,10}$/.test(p) || /^(Dockerfile|Makefile|Procfile|Gemfile|Rakefile)$/.test(p);
+  // a word with a dot is a file only with a real file extension: `Math.ceil` or `user.name` in a report is code, not a
+  // path (a top-level file with an unusual extension still counts when it exists)
+  const FILE_EXT = /\.(m?[jt]sx?|c[jt]s|json5?|md|mdx|txt|py|pyi|php|go|rb|java|kt|kts|rs|cs|swift|c|cc|cpp|h|hpp|m|mm|scala|sh|bash|zsh|ps1|sql|css|scss|sass|less|html?|vue|svelte|astro|xml|ya?ml|toml|ini|cfg|conf|env|lock|gradle|properties|csv|tsv|graphql|gql|proto|tf|dart|ex|exs|erl|hs|lua|pl|r|jl|zig|nim|snap|svg|png|jpe?g|gif|webp|ico|pdf|wasm|map|d\.ts)$/i;
+  const exists = (p) => bases.some((b) => { try { return fs.existsSync(path.join(b, p)); } catch { return false; } });
+  const looksLikePath = (p) => knownSet.has(p) || /\//.test(p) || FILE_EXT.test(p) || /^(Dockerfile|Makefile|Procfile|Gemfile|Rakefile|LICENSE|README)$/.test(p) || (/\.[A-Za-z0-9_-]{1,10}$/.test(p) && exists(p));
   for (const line of m[1].split('\n')) {
     const item = line.match(/^\s*(?:[-*+]|\d+[.)])\s+(.*)$/);
     if (!item) continue;

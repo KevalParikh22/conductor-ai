@@ -29,6 +29,6 @@ While running:
 
 When all tasks are done:
 1. `conductor verify` on the merged result (parallel tasks were verified separately).
-2. `conductor run review --plan <plan>` (background). Triage each finding yourself and fix the real ones (small ones yourself, larger ones with `conductor run fix "<finding>"`), then commit.
+2. Review only when something calls for it: a task ended partial, out of scope or handed on, a run summary shows a `review:` line with findings, or the plan asks for a review. Then run `conductor run review --plan <plan>` (background), triage each finding yourself and fix the real ones (small ones yourself, larger ones with `conductor run fix "<finding>"`), then commit. When every task passed its checks the first time, skip it and say "no extra review: every task passed its checks" (conductor already gets a second model's review on risky work).
 3. `conductor worktree` should list nothing; remove leftovers.
 4. Update `HANDOFF.md` and summarise: tasks per provider, review verdict, leftovers.

@@ -5,6 +5,7 @@ import path from 'node:path';
 import { ROLES } from './presets.js';
 import { checkTask } from './plancheck.js';
 import { detectVerify } from './verify.js';
+import { speedStats } from './selector.js';
 import { dispatch, extractTask, taskFiles, resolveChain, chooseChain, openQuestions, UsageError, outcome, unverifiedBlocks } from './core.js';
 
 const field = (section, name) => (section.match(new RegExp(`\\*\\*${name}:\\*\\*\\s*(.+)`, 'i')) || [])[1]?.trim() || '';
@@ -59,12 +60,23 @@ export function spreadChains(cfg, items, { provider } = {}) {
       const own = chooseChain(cfg, t.role, { section: t.section || '', body: t.section || '', files: t.files || [] });
       if (own.how === 'plan' || own.how === 'route') return { ...t, chain: own.chain.map((c) => c.name), route: own.note };
     }
-    const resolved = resolveChain(cfg, t.role, { provider });
-    const names = resolved.map((c) => c.name);
-    const ready = resolved.filter((c) => !c.skip).map((c) => c.name);
-    const n = seen[t.role] = (seen[t.role] ?? -1) + 1;
-    if (!ready.length || provider) return { ...t, chain: names };
-    const first = ready[n % ready.length];
+    if (provider) return { ...t, chain: resolveChain(cfg, t.role, { provider }).map((c) => c.name) };
+    // this task's own order (the selector puts fast, reliable providers first for small tasks), then spread: at most
+    // maxParallelPerProvider tasks start on one provider, so a wave isn't stacked on one slow agent and its quota
+    const ordered = chooseChain(cfg, t.role, { section: t.section || '', body: t.section || '', files: t.files || [] }).chain;
+    const names = ordered.map((c) => c.name);
+    const ready = ordered.filter((c) => !c.skip).map((c) => c.name);
+    if (!ready.length) return { ...t, chain: names };
+    // the provider expected to finish this task soonest: its measured median time, plus half of it again for every
+    // task it already has (they share its quota and machine); unknown providers count as equal, so they spread evenly
+    const cap = cfg.settings?.maxParallelPerProvider ?? 2;
+    const speed = speedStats(ready, t.role);
+    const median = (n) => (speed[n] && speed[n].okRate >= 0.6 && speed[n].median != null ? speed[n].median : 100);
+    const eta = (n) => median(n) * (1 + 0.5 * (seen[n] || 0));
+    const open = ready.filter((n) => (seen[n] || 0) < cap);
+    const pool = open.length ? open : ready;
+    const first = pool.reduce((a, b) => (eta(b) < eta(a) ? b : a));
+    seen[first] = (seen[first] || 0) + 1;
     return { ...t, chain: [first, ...names.filter((x) => x !== first)] };
   });
 }

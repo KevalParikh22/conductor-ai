@@ -97,3 +97,8 @@ test('batch: unverified results are counted, marked "?" and fail the batch unles
   assert.match(out, /result: +1 done, 1 unverified, 0 failed/);
   assert.match(out, /For each \?: no verify ran/);
 });
+
+test('report paths: code words with a dot are not files (the pilot\'s Math.ceil false alarm)', () => {
+  const r = claimedFiles('## Files changed\n- src/paginate.js — Math.floor → Math.ceil\n- `Math.ceil` used\n- `user.name` read\n- `config.yml` updated\n- README.md\n- `App.vue`');
+  assert.deepEqual(r, ['src/paginate.js', 'config.yml', 'README.md', 'App.vue']);
+});

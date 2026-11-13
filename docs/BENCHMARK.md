@@ -29,10 +29,26 @@
 
 Five of six tasks were accepted on the first try. Worker tokens totalled 669k, on plans that cost nothing extra here. The final independent review found no free reviewer available (two timeouts, one 503), so Claude reviewed the diffs itself.
 
+## After the speed fixes (same day, same plan)
+
+The first C run spent its time in two places: **agy took up to 299 s on a small task** that OpenCode's free model did in 35 s, and **185 s went to dead free reviewers** (two timeouts and a 503). Four changes followed:
+1. **Speed-aware routing:** for small tasks, conductor's measured run times now order the workers: fastest *and* reliable first. In this history, OpenCode ~38 s vs agy ~253 s on `build`. Big tasks keep the order you chose.
+2. **Batch spreads a wave** by expected finish time, with at most 2 tasks per provider.
+3. **`/conduct-run` skips the extra end-of-plan review** when every task passed its checks the first time (risky work is still reviewed per task).
+4. **A free route that times out twice cools down,** so the next call doesn't wait on it again.
+
+| C: Claude + conductor | First run | **After the fixes** | A: Claude alone |
+|---|---|---|---|
+| Wall-clock | 623 s | **137 s (−78%)** | 107 s |
+| Claude cost | $0.272 | $0.276 | $0.625 |
+| Hidden tests | 6/6 | **6/6** | 6/6 |
+
+**Read with care:** in this run agy and Codex were both out of quota, so OpenCode did all six tasks. The speed ranking had already put it first for the five `build` tasks; the `fix` task reached it because the others were out of quota. On tasks this small, Claude alone is still somewhat faster (107 s vs 137 s). The Claude saving (56%) and the quality (6/6) held.
+
 ## What it means
 
 - **Claude quota: the claim holds on this pilot.** Claude spent 56% less (72% fewer tokens), and the result was equally correct. Most of the saving is Claude Code's fixed overhead: each call reads about 150–235k tokens of its own context, and A made six calls where C made one.
-- **Time: it doesn't hold, at least on tasks this small.** Claude finished each task in 12–22 s. Antigravity took 1.5–5 minutes per task, so running in parallel didn't make up the gap. Expect conductor to save quota, not minutes, on small tasks.
+- **Time: close, after the speed fixes.** The first run was 5.8× slower than Claude alone; after routing small tasks to the fastest reliable worker and skipping dead reviewers, it was 1.3× slower (137 s vs 107 s). On small tasks, expect conductor to save quota, not minutes.
 - **Quality held,** and the work was checked rather than assumed: every task passed verify, and conductor proved each regression test against the original code.
 
 ## Not yet shown
