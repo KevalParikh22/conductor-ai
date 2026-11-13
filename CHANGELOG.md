@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Guard hooks (opt-in): no commit while verify fails.**
+  - `conductor guard on` (or `init --guards`) installs a hook in the controller. While the last `conductor verify` in this checkout failed, the controller's `git commit` is blocked, with the reason and what to do: fix it and `conductor verify` again, or `conductor guard allow` for a one-time exception.
+  - Verify results from `conductor verify`, the MCP verify tool and runs in the main checkout are recorded for this. On Claude Code, Stop also shows a reminder of task branches waiting for review.
+  - **Claude Code:** `.claude/settings.local.json`, your personal settings, not the team's. **Antigravity:** `.agents/hooks.json`.
+  - Checked with real runs: both tools blocked the commit and passed conductor's reason to the model, and normal commands kept running.
+  - In agy, an empty hook answer denies the command, so the guard answers "ask" for everything else; that defers to agy's own permission rules, which a hook can never loosen. Codex is not supported yet: its project hooks need a trusted project and approval in `/hooks`.
+  - `conductor guard [status] | on | off | allow`. Your own hooks in those files are kept, and a file with invalid JSON is never overwritten.
 - **The edit guard checks exports.**
   - For JavaScript and TypeScript `build` and `fix` tasks, a function or class the acceptance checks call (`slugify(…)`, `new LRUCache(…)`), or that the plan says to export ("exporting `toQuery(params)`"), must be exported **by that name**.
   - An `export default` or an unexported function doesn't count, because `import { slugify }` would still fail.
