@@ -20,7 +20,14 @@ export async function listFreeModels({ all = false, timeoutMs = 20000 } = {}) {
 }
 
 /** Models from any OpenAI-compatible provider's GET /models (Kilo, OpenCode Zen, Groq, Cerebras, NVIDIA, Ollama...). */
-export async function listProviderModels(p, { freeOnly = false, timeoutMs = 20000 } = {}) {
+export async function listProviderModels(p, opts = {}) {
+  // the same hard deadline as API calls: this runs mid-task, right after a model failed (see httpJson in providers.js)
+  let hard;
+  const deadline = new Promise((resolve) => { hard = setTimeout(() => resolve({ error: 'timeout', models: [] }), (opts.timeoutMs || 20000) + 5000); });
+  try { return await Promise.race([listProviderModelsOnce(p, opts), deadline]); } finally { clearTimeout(hard); }
+}
+
+async function listProviderModelsOnce(p, { freeOnly = false, timeoutMs = 20000 } = {}) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
