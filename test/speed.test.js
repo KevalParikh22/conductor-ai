@@ -46,3 +46,19 @@ test('batch: each task goes where it should finish soonest, at most 2 per provid
   cfg.settings = { ...cfg.settings, maxParallelPerProvider: 2 };
   assert.deepEqual(spreadChains(cfg, items).map((t) => t.chain[0]), ['a', 'b', 'a', 'b'], 'no history: an even spread');
 });
+
+test('cold start: a provider with no history counts as average, so it gets tried and measured; an unreliable one stays last', async () => {
+  const { expectedSeconds } = await import('../src/selector.js');
+  usage([['slow', true, 200], ['slow', true, 190], ['slow', true, 210], ['fast', true, 35], ['fast', true, 30], ['fast', true, 40], ['flaky', true, 5], ['flaky', false, 3], ['flaky', false, 3]]);
+  const secs = expectedSeconds(speedStats(['slow', 'fast', 'flaky', 'fresh'], 'build'), ['slow', 'fast', 'flaky', 'fresh']);
+  assert.deepEqual(['fast', 'fresh', 'slow', 'flaky'].map(secs), [35, 117.5, 200, Infinity]);
+  const order = smartOrder([agent('slow'), agent('flaky'), agent('fresh'), agent('fast')], { role: 'build', mode: 'write', body: 'x', files: ['src/a.js'] });
+  assert.deepEqual(order.chain.map((e) => e.name), ['fast', 'fresh', 'slow', 'flaky'], 'the new one before the slow one, not last');
+  assert.match(order.note, /fresh \(new: no history yet\)/);
+  const { dir } = makeRepo();
+  const cfg = loadConfig(dir);
+  cfg.providers = { slow: { type: 'cli', enabled: true, bin: 'node' }, fast: { type: 'cli', enabled: true, bin: 'node' }, fresh: { type: 'cli', enabled: true, bin: 'node' } };
+  cfg.roles = { ...cfg.roles, build: ['slow', 'fast', 'fresh'] };
+  const items = ['T1', 'T2', 'T3', 'T4'].map((id) => ({ id, role: 'build', files: ['src/x.js'], section: `### ${id}: x\n- **files:** \`src/x.js\`` }));
+  assert.deepEqual(spreadChains(cfg, items).map((t) => t.chain[0]), ['fast', 'fast', 'fresh', 'fresh'], 'the new provider gets the work the fast one has no room for');
+});

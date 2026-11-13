@@ -8,6 +8,7 @@
   - **Hang cool-down:** a free route that times out twice cools down (`hangCooldownMin`, 15).
   - **Review only when needed:** `/conduct-run` skips the extra end-of-plan review when every task passed its checks the first time.
   - **Pilot C:** 623 s → **137 s**, with the same 6/6 and the same Claude cost ([docs/BENCHMARK.md](docs/BENCHMARK.md)).
+  - **No cold start:** a provider with no history yet (a new one, or a fresh account) counts as average for its group (the median of the measured ones), not last, so it gets tried and its speed gets measured. A measured provider that fails often still goes last.
 - **Fix:** a worker report mentioning `Math.ceil` or `user.name` no longer counts as a changed file. A dotted word counts only with a real file extension, or when it exists.
 - **`conductor stats`: is it delivering?** Shows, for this project's write tasks:
   - how many were accepted **on the first try** (done, one worker, no hand-off or retry);
