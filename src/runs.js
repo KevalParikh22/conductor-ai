@@ -6,6 +6,8 @@ import { PROJECT_DIRNAME } from './config.js';
 import { readJSON } from './util.js';
 import { outcome } from './core.js';
 import { fixLines } from './nextsteps.js';
+import { runGates, gatesPass, formatGates } from './rungates.js';
+import { compactDiff } from './diffview.js';
 
 export const runsDir = (root) => path.join(root, PROJECT_DIRNAME, 'runs');
 
@@ -30,6 +32,7 @@ export function listRuns(root, { limit = 20 } = {}) {
       changed: s.changed?.length || 0,
       warnings: s.warnings || [],
       fixes: fixLines(s.attempts || [], { won: !!s.winner }),
+      validated: gatesPass(runGates(s)),
       outside: s.scope?.outside || [],
       base: s.base?.status || null,
       acceptance: s.acceptance ? { met: s.acceptance.met, total: s.acceptance.total, answered: s.acceptance.answered } : null,
@@ -51,6 +54,7 @@ export function listRuns(root, { limit = 20 } = {}) {
 
 /** Full summary.json of one run (id, or a unique prefix of it). */
 export function readRun(root, id) {
+  if (!id || /[\\/]/.test(id)) return null;
   let dirs = [];
   try { dirs = fs.readdirSync(runsDir(root)); } catch { /* none */ }
   const hit = dirs.filter((d) => d === id || d.startsWith(id));
@@ -71,3 +75,36 @@ export function formatRuns(rows) {
   L.push('', 'Details: conductor runs show <run>');
   return L.join('\n');
 }
+
+const tail = (root, rel, max) => {
+  if (!rel) return null;
+  const abs = path.resolve(root, rel);
+  if (abs !== root && !abs.startsWith(root + path.sep)) return null; // never outside the project
+  try { const t = fs.readFileSync(abs, 'utf8'); return t.length > max ? `…\n${t.slice(-max)}` : t; } catch { return null; }
+};
+
+/** Everything the run page shows: outcome, the checklist, attempts with next steps, report, logs, and the diff of a kept branch. */
+export function runDetail(root, id) {
+  const r = readRun(root, id);
+  if (!r) return null;
+  const s = r.summary;
+  const gates = runGates(s);
+  let diff = null;
+  const wt = s.worktree;
+  if (wt?.commit && wt.branch && wt.base) {
+    try { const d = compactDiff(root, { range: `${wt.base}...${wt.branch}`, maxFileLines: 200 }); diff = d.empty ? '' : d.text; } catch { diff = null; }
+  }
+  return {
+    id: r.id, role: s.role, task: s.task, plan: s.plan, startedAt: s.startedAt, mode: s.mode || null,
+    state: outcome(s), validated: gatesPass(gates), gates,
+    winner: s.winner, model: s.model, status: s.status, changed: s.changed || [], warnings: s.warnings || [],
+    attempts: (s.attempts || []).map((a) => ({ provider: a.provider, model: a.model, ok: a.ok, reason: a.reason, next: a.next || '', seconds: a.seconds, tokens: a.tokens || null, skipped: !!a.skipped })),
+    fixes: fixLines(s.attempts || [], { won: !!s.winner }),
+    branch: wt?.commit ? wt.branch : null, worktreeId: wt?.id || null,
+    report: tail(root, s.report, 20_000),
+    logs: Object.fromEntries(gates.filter((g) => g.log).map((g) => [g.id, tail(root, g.log, 6_000)])),
+    diff,
+  };
+}
+
+export { formatGates, runGates };

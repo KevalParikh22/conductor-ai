@@ -181,13 +181,13 @@ const TOKEN = new URLSearchParams(location.hash.slice(1)).get('t') || '';
 // the open page lives in the address (#t=…&p=roles), so a reload or a shared link opens the same page
 function pageFromHash() { const p = new URLSearchParams(location.hash.slice(1)).get('p'); return ['overview', 'runs', 'roles', 'providers', 'skills', 'keys', 'settings', 'setup'].includes(p) ? p : 'overview'; }
 function go(page) {
-  if (page === tab) return render();
+  if (page === tab && !runOpen) return render();
   tab = page;
-  const h = new URLSearchParams(location.hash.slice(1)); h.set('p', page);
+  const h = new URLSearchParams(location.hash.slice(1)); h.set('p', page); h.delete('run'); runOpen = null; runDet = null;
   history.pushState(null, '', `#${h}`);
   render();
 }
-addEventListener('popstate', () => { tab = pageFromHash(); if (S) render(); });
+addEventListener('popstate', () => { tab = pageFromHash(); const r = new URLSearchParams(location.hash.slice(1)).get('run'); if (r !== runOpen) { runOpen = r; runDet = null; } if (S) render(); });
 // small stroke icons (24x24 paths), drawn for this page
 const ICONS = {
   overview: 'M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 3v6h8V3z',
@@ -208,6 +208,7 @@ const icon = (n, t = '') => `<svg class="i" viewBox="0 0 24 24" aria-hidden="tru
 const TABS = [['overview', 'Overview'], ['runs', 'Runs'], ['roles', 'Roles'], ['providers', 'Providers'], ['skills', 'Skills'], ['keys', 'API keys'], ['settings', 'Settings'], ['setup', 'Setup']];
 let S = null, W = null, tab = pageFromHash(), dirty = false, freeModels = null, runsData = null, gOpen = null, gFilter = { q: '', cat: 'all' };
 let rPreview = null; // routing preview result
+let runOpen = new URLSearchParams(location.hash.slice(1)).get('run'), runDet = null; // the run page (#p=runs&run=<id>)
 let ctrlPick = null; // controller picked in Settings but not applied yet (a project action, not part of Save)
 let rtLib = null, rtLibKey = '', rtLibOpen = null; // rule library, resolved against the current (unsaved) providers
 const ROUTING_GUIDE = 'https://github.com/KevalParikh22/conductor-ai/blob/main/docs/ROUTING.md';
@@ -269,7 +270,43 @@ let skillsData = null, skillEdit = null, skillNew = false; // skills page: libra
 function loadSkills() { api('GET', '/api/skills').then((d) => { skillsData = d; if (tab === 'skills') render(); }, (e) => toast(e.message)); }
 function loadRuns() { api('GET', '/api/runs').then((d) => { runsData = d; if (tab === 'runs') render(); }, (e) => toast(e.message)); }
 // keep the Runs page current while it is open (runs started from the terminal show up on their own)
-setInterval(() => { if (tab === 'runs' && document.visibilityState === 'visible') loadRuns(); }, 5000);
+setInterval(() => { if (tab === 'runs' && !runOpen && document.visibilityState === 'visible') loadRuns(); }, 5000);
+function openRun(id) {
+  runOpen = id; runDet = null;
+  const h = new URLSearchParams(location.hash.slice(1)); if (id) h.set('run', id); else h.delete('run');
+  history.pushState(null, '', `#${h}`);
+  render();
+}
+let runFetching = null;
+function fetchRun(id) {
+  if (runFetching === id) return;
+  runFetching = id;
+  api('GET', `/api/run?id=${encodeURIComponent(id)}`).then((d) => { runFetching = null; if (runOpen === id) { runDet = d; if (tab === 'runs') render(); } },
+    (e) => { runFetching = null; toast(e.message); runOpen = null; render(); });
+}
+const GATE_PILL = { pass: 'ok', fail: 'bad', missing: 'bad', waived: 'warn', off: 'warn', skipped: '', unknown: 'warn' };
+function runPage() {
+  const back = '<button class="btn small" id="run-back">← All runs</button>';
+  if (!runDet) { fetchRun(runOpen); return `<div class="head">${back}<h1>Run</h1><p class="sub">Loading…</p></div>`; }
+  const d = runDet;
+  const det = (title, body, open = false) => body ? `<details class="card" ${open ? 'open' : ''}><summary><b>${title}</b></summary><pre class="cmd" style="max-height:480px">${esc(body)}</pre></details>` : '';
+  const next = d.branch ? [`conductor diff ${d.branch}`, `git merge --no-ff ${d.branch}`, `conductor worktree rm ${d.worktreeId}`, `conductor worktree rm ${d.worktreeId} --force`] : [];
+  return `<div class="head">${back}<h1>${esc(d.role)}${d.task ? ` · ${esc(d.task)}` : ''}</h1>
+    <p class="sub"><span class="mono">${esc(d.id)}</span>${d.plan ? ` · plan <span class="mono">${esc(d.plan)}</span>` : ''} · ${d.validated ? '<span class="pill ok">validated: every required check passed</span>' : '<span class="pill bad">not validated</span>'} · result <b>${esc(d.state)}</b></p></div>
+    <div class="card"><h2>Checks</h2><p class="note">A run counts as done only when every required check passes (or was waived on purpose). Info rows don't decide it.</p>
+      <table><tr><th>Check</th><th>Result</th><th>Evidence</th></tr>${d.gates.map((g) => `<tr><td>${esc(g.label)}${g.required ? '' : ' <span class="note">(info)</span>'}</td>
+        <td><span class="pill ${GATE_PILL[g.status] ?? ''}">${esc(g.status)}</span></td>
+        <td>${esc(g.evidence || '')}${g.log && d.logs[g.id] ? `<details><summary class="note">log: <span class="mono">${esc(g.log)}</span></summary><pre class="cmd">${esc(d.logs[g.id])}</pre></details>` : ''}</td></tr>`).join('')}</table></div>
+    <div class="card"><h2>Attempts</h2><table><tr><th>Worker</th><th>Result</th><th>Time</th><th>Tokens in / out</th><th>What to do</th></tr>${d.attempts.map((a) => `<tr>
+      <td><b>${esc(a.provider)}</b>${a.model ? `<div class="note mono">${esc(a.model)}</div>` : ''}</td>
+      <td>${a.ok ? '<span class="pill ok">ok</span>' : `<span class="pill ${a.skipped ? '' : 'bad'}">${esc(a.skipped ? 'skipped' : 'failed')}</span><div class="note">${esc(a.reason)}</div>`}</td>
+      <td>${a.seconds != null ? `${a.seconds}s` : ''}</td><td>${a.tokens ? `${(a.tokens.input || 0).toLocaleString()} / ${(a.tokens.output || 0).toLocaleString()}` : '–'}</td>
+      <td class="note">${esc(a.next || '')}</td></tr>`).join('')}</table>
+      ${d.warnings.length ? d.warnings.map((w) => `<div class="note">⚠ ${esc(w)}</div>`).join('') : ''}</div>
+    ${next.length ? `<div class="card"><h2>Next</h2><p class="note">Review the diff, then merge it, or discard the branch. Run these in the project.</p>${cmd(next[0])}${cmd(next[1])}${cmd(next[2])}<p class="note">Discard instead:</p>${cmd(next[3])}</div>` : ''}
+    ${d.changed.length ? `<div class="card"><h2>Files changed</h2><div class="mono">${d.changed.map(esc).join('<br>')}</div></div>` : ''}
+    ${det('Report', d.report, true)}${det('Diff', d.diff)}`;
+}
 
 const GCATS = [['all', 'All'], ['free', 'Free'], ['aggregator', 'Gateways'], ['frontier', 'Model makers'], ['fast', 'Fast hosts'], ['cloud', 'Cloud'], ['local', 'Local']];
 const gMatch = (c) => (gFilter.cat === 'all' || c.category === gFilter.cat || (gFilter.cat === 'free' && !!c.free))
@@ -350,12 +387,13 @@ const views = {
         <p class="note" style="margin-top:10px">Library folders: all projects <span class="mono">${esc(dirs.global)}</span> · this project <span class="mono">${esc(dirs.project)}</span>. Terminal: <span class="mono">conductor skills</span>.</p></div>`;
   },
   runs() {
+    if (runOpen) return runPage();
     if (!runsData) { loadRuns(); return '<div class="head"><h1>Runs</h1><p class="sub">Loading…</p></div>'; }
     const { runs, usage, budget } = runsData;
     const money = (n) => (n == null ? '–' : n ? `$${n.toFixed(n < 0.01 ? 4 : 2)}` : '$0');
     const result = (r) => ({
       running: '<span class="pill warn">running</span>',
-      done: '<span class="pill ok">done</span>',
+      done: r.validated === false ? '<span class="pill warn" title="A required check did not pass">not validated</span>' : '<span class="pill ok" title="Every required check passed">done</span>',
       partial: `<span class="pill warn" title="${esc(r.status || 'the worker did only part of the task')}">partial</span>`,
       'verify-failed': '<span class="pill bad" title="The worker finished, but verify fails">verify failed</span>',
       'out-of-scope': `<span class="pill warn" title="${esc('Changed files the task does not list: ' + (r.outside || []).join(', '))}">out of scope</span>`,
@@ -369,7 +407,7 @@ const views = {
       <div class="card stat"><div class="l">Known API cost today</div><div class="n">${money(usage.today)}</div><div class="note">${budget ? `daily budget ${money(budget)}` : 'no daily budget (Settings)'}</div></div>
     </div>
     <div class="card"><h2>Recent runs</h2>${runs.length ? `<table><tr><th>When</th><th>Role · task</th><th>Result</th><th>Worker</th><th>Verify</th><th>Files</th><th>Time</th></tr>
-      ${runs.map((r) => `<tr><td class="mono">${esc(r.startedAt ? new Date(r.startedAt).toLocaleString() : r.id)}</td>
+      ${runs.map((r) => `<tr><td class="mono">${r.state === 'running' ? esc(r.startedAt ? new Date(r.startedAt).toLocaleString() : r.id) : `<a href="#" data-run="${esc(r.id)}" title="Checks, attempts, report and diff">${esc(r.startedAt ? new Date(r.startedAt).toLocaleString() : r.id)}</a>`}</td>
         <td><b>${esc(r.role)}</b>${r.task ? ` · ${esc(r.task)}` : ''}${r.branch ? `<div class="note mono">${esc(r.branch)}</div>` : ''}</td>
         <td>${result(r)}</td>
         <td>${esc(r.winner || '–')}${r.why ? `<div class="note">${esc(r.why)}</div>` : ''}${r.attempts?.length > 1 ? `<div class="note">${r.attempts.map((a) => a.ok ? `${esc(a.provider)} ✓` : `<span title="${esc(a.reason + (a.next ? ' — next: ' + a.next : ''))}">${esc(a.provider)} ✗</span>`).join(' → ')}</div>` : ''}</td>
@@ -565,6 +603,8 @@ function render() {
 }
 
 function bind() {
+  document.querySelectorAll('[data-run]').forEach((a) => a.onclick = (e) => { e.preventDefault(); openRun(a.dataset.run); });
+  const rb = $('#run-back'); if (rb) rb.onclick = () => { openRun(null); loadRuns(); };
   const skr = async (p, body, msg) => { try { skillsData = await api('POST', p, body); render(); if (msg) toast(msg); return true; } catch (e) { toast(e.message); return false; } };
   const skn = $('#sk-newbtn'); if (skn) skn.onclick = () => { skillNew = !skillNew; render(); };
   const skc = $('#sk-create'); if (skc) skc.onclick = () => skr('/api/skills/new', { name: $('#sk-name').value.trim(), scope: $('#sk-scope').value, description: $('#sk-desc').value.trim(), files: $('#sk-files').value.trim(), roles: $('#sk-roles').value.trim(), text: $('#sk-text').value.trim() }, 'Skill created. Write its instructions with Edit').then((ok) => { if (ok) { skillNew = false; render(); } });

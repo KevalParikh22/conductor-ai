@@ -24,7 +24,7 @@ import { CLI_PRESETS, ROLES, CONTROLLERS, controllerWorker } from '../src/preset
 import { VERSION } from '../src/version.js';
 import { which, keyValue } from '../src/util.js';
 import { usageReport, formatUsage, recordSaving } from '../src/usage.js';
-import { listRuns, readRun, formatRuns } from '../src/runs.js';
+import { listRuns, readRun, formatRuns, runDetail, runGates, formatGates } from '../src/runs.js';
 import { CATALOG, CATEGORIES, urlFields } from '../src/catalog.js';
 import { runAdd, catalogStatus, detect, enableDetected, enableLocal, keyList, interactive, askSecret, confirm, choose } from '../src/setup.js';
 import { detectLocal } from '../src/local.js';
@@ -592,7 +592,7 @@ async function main() {
       if (o._[0] === 'show') {
         const r = o._[1] && readRun(root, o._[1]);
         if (!r) throw new UsageError(`usage: conductor runs show <run>   (no single run matches "${o._[1] || ''}"; see conductor runs)`);
-        console.log(o.json ? JSON.stringify(r.summary, null, 2) : `run: ${r.id}${formatSummary(r.summary)}`);
+        console.log(o.json ? JSON.stringify(runDetail(root, r.id), null, 2) : `run: ${r.id}${formatSummary(r.summary)}\n\n${formatGates(runGates(r.summary))}`);
         return 0;
       }
       const rows = listRuns(root, { limit: Number(o.limit) || 20 });
