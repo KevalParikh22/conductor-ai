@@ -124,7 +124,7 @@ function report(res) {
 
 async function main() {
   if (condition === 'check') return check();
-  if (!['A', 'C'].includes(condition)) { console.error('usage: node bench/run.mjs check | A | C [--suite pilot|b2] [--tasks T1,T2] [--model sonnet] [--max-cost 1.50]'); return 2; }
+  if (!['A', 'C', 'W'].includes(condition)) { console.error('usage: node bench/run.mjs check | A | C | W [--suite pilot|b2] [--tasks T1,T2] [--model sonnet] [--max-cost 1.50]'); return 2; }
   const dir = prepare();
   const t0 = Date.now(), startedAt = new Date().toISOString();
   const calls = [];
@@ -139,6 +139,15 @@ async function main() {
       git(dir, 'add', '-A'); git(dir, 'commit', '-qm', `A: ${t}`, '--allow-empty');
       process.stderr.write(`${SUITE} A ${t}: $${(c.cost ?? 0).toFixed(4)}, ${c.seconds}s\n`);
     }
+  } else if (condition === 'W') {
+    // W: conductor alone, no controller (and no Claude cost): `batch --all` runs the whole plan with the workers and
+    // merges what passed. Measures conductor's own part of C's wall-clock (workers, checks, merges, reviews).
+    sh(process.execPath, [CONDUCTOR, 'init', '--controller', 'claude-code', '--no-mcp'], dir);
+    git(dir, 'add', '-A'); git(dir, 'commit', '-qm', 'conductor init', '--allow-empty');
+    const prio = argv.includes('--priority') ? ['--priority', argv[argv.indexOf('--priority') + 1]] : [];
+    const w0 = Date.now();
+    const r = sh(process.execPath, [CONDUCTOR, 'batch', '--plan', PLAN, ...(tasks.length === TASKS.length ? ['--all'] : ['--tasks', tasks.join(','), '--merge']), ...prio], dir, { env: cleanEnv(), timeout: 60 * 60_000 });
+    calls.push({ task: null, ok: r.status === 0, cost: 0, seconds: Math.round((Date.now() - w0) / 1000), turns: 0, tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, result: String(r.stdout || '').slice(-4000) + String(r.stderr || '').slice(-1500) });
   } else {
     // C: conductor in the project, Claude Code as the controller, the plan fixed in advance
     sh(process.execPath, [CONDUCTOR, 'init', '--controller', 'claude-code', '--no-mcp'], dir);
@@ -151,7 +160,7 @@ async function main() {
   const res = {
     suite: SUITE, condition, model, tasks, startedAt, seconds: Math.round((Date.now() - t0) / 1000), stopped, dir,
     claudeCost: sum(calls, 'cost'), claudeTokens: { input: sum(calls, 'input'), output: sum(calls, 'output'), cacheRead: sum(calls, 'cacheRead'), cacheWrite: sum(calls, 'cacheWrite') },
-    hidden, calls, workers: condition === 'C' ? workerUsage(dir) : null, dry: argv.includes('--dry'),
+    hidden, calls, workers: condition !== 'A' ? workerUsage(dir) : null, dry: argv.includes('--dry'),
   };
   report(res);
   return 0;

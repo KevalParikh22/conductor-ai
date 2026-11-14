@@ -202,7 +202,7 @@ export async function runBatch(cfg, { planPath, tasks, role, provider, concurren
     let stopB = null, b = null, hedgeReady;
     const hedged = new Promise((res) => { hedgeReady = res; });
     r.startHedge = (to) => {
-      r.hedge = to; stopB = new AbortController();
+      r.hedge = to; r.hedgeAt = Date.now(); stopB = new AbortController();
       emit({ type: 'hedge', provider: to, from: r.primary });
       b = settle(dispatch(cfg, { ...base, chain: [to], worktreeId: `${t.id}-h`, noReview: true, noEscalate: true, race: false, signal: stopB.signal }), 'b');
       hedgeReady(b);
@@ -219,7 +219,7 @@ export async function runBatch(cfg, { planPath, tasks, role, provider, concurren
       await Promise.allSettled([a, b]);
       const winId = winner.who === 'a' ? t.id : `${t.id}-h`;
       for (const id of [t.id, `${t.id}-h`]) if (id !== winId) { try { removeWorktree(cfg.root, id, { force: true }); } catch { /* already gone */ } }
-      if (winner.s) winner.s.hedged = { from: r.primary, to: r.hedge, won: winner.who === 'a' ? r.primary : r.hedge, afterSec: Math.round((Date.now() - r.start) / 1000) };
+      if (winner.s) winner.s.hedged = { from: r.primary, to: r.hedge, won: winner.who === 'a' ? r.primary : r.hedge, afterSec: Math.round((r.hedgeAt - r.start) / 1000) };
       emit({ type: 'hedge-won', provider: winner.who === 'a' ? r.primary : r.hedge });
     }
     running.delete(t.id);
@@ -333,9 +333,9 @@ export function formatBatch(b) {
   if (b.results.some((r) => r.summary?.verify?.scope === 'task')) L.push('verify:    "(task)" = the task\'s own verify line from the plan; run `conductor verify` after merging');
   if (b.merge) L.push(b.merged === b.results.length ? 'next:      everything is merged into your branch. Review it: git log --oneline, git diff <start>..HEAD' : 'next:      merged tasks are on your branch; for the rest see their lines above.');
   else L.push('next:      for each ✓: review `conductor diff conductor/<id>`, then `git merge --no-ff conductor/<id>`; afterwards `conductor worktree rm <id>` (or run the batch with --merge).');
-  if (b.results.some((r) => r.summary?.hedged?.won === r.summary?.hedged?.to)) L.push('           A hedged task that the second attempt won lives on conductor/<id>-h (the branch on its line).');
+  if (b.results.some((r) => r.summary?.hedged && r.summary.hedged.won === r.summary.hedged.to)) L.push('           A hedged task that the second attempt won lives on conductor/<id>-h (the branch on its line).');
   if (b.unverified) L.push('           For each ?: no verify ran, so nothing proves it works. Set a verify command (conductor init --verify "<cmd>"), or check it yourself before merging.');
   if (b.partial) L.push('           For each ⚠: the worker did only part of it. Read its report.md, then finish it or retry the rest.');
-  L.push('           For each ✗: retry it alone with `conductor run <role> --plan … --task <id> --worktree --provider <other>`, or do it yourself.');
+  if (b.failed || b.results.some((r) => r.merge && !['merged', 'no-changes'].includes(r.merge.status))) L.push('           For each ✗: retry it alone with `conductor run <role> --plan … --task <id> --worktree --provider <other>`, or do it yourself.');
   return L.join('\n');
 }
