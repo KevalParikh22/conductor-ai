@@ -55,6 +55,8 @@ export async function doctorData(cfg, { live = false } = {}) {
   }
   const errs = validateConfig(cfg);
   const ctrlIssues = checkControllerFiles(cfg.root, cfg.controller || 'claude-code');
+  const cmd = conductorCommandCheck();
+  if (cmd.ok === false) ctrlIssues.push({ level: 'warn', file: 'PATH', problem: cmd.problem, fix: cmd.fix });
   // V6: your own controller entries must name formats conductor can write
   for (const [n, c] of Object.entries(allControllers(cfg.root))) {
     if (CONTROLLERS[n]) continue;
@@ -63,4 +65,23 @@ export async function doctorData(cfg, { live = false } = {}) {
   if (!allControllers(cfg.root)[cfg.controller || 'claude-code']) ctrlIssues.push({ level: 'error', file: 'controller', problem: `unknown controller "${cfg.controller}"`, fix: 'conductor controller list, then conductor init --controller <name>' });
   const problems = results.filter((r) => !r.ok).length + errs.length + ctrlIssues.filter((c) => c.level === 'error').length;
   return { results, errs, ctrlIssues, problems };
+}
+
+/**
+ * Is the `conductor` command on PATH this program? Other tools install a `conductor` command too (Conductor OSS's
+ * `@conductor-oss/conductor-cli`, the `conductor-cli` package); with both installed, the last one installed wins.
+ * → { ok: true } | { ok: false, path, problem, fix } | { missing: true }
+ */
+export function conductorCommandCheck(ownBin = new URL('../bin/conductor.js', import.meta.url).pathname) {
+  const found = which('conductor');
+  if (!found) return { missing: true };
+  let real = found, own = ownBin;
+  try { real = fs.realpathSync(found); } catch { /* keep the path */ }
+  try { own = fs.realpathSync(ownBin); } catch { /* keep the path */ }
+  if (real === own) return { ok: true };
+  // a wrapper script (npm on Windows, some installers) that points at this program counts as ours
+  let text = '';
+  try { text = fs.readFileSync(found, 'utf8').slice(0, 2000); } catch { /* binary */ }
+  if (text.includes('conductor-ai')) return { ok: true };
+  return { ok: false, path: found, problem: `the "conductor" command on your PATH is another program (${real}), not conductor-ai`, fix: 'use the "conductor-ai" command (same program, same options), or put conductor-ai\'s folder first in PATH; your controller\'s MCP entry can use "conductor-ai mcp"' };
 }
