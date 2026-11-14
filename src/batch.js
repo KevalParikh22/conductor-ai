@@ -147,7 +147,7 @@ export async function mergeTask(cfg, s, { emit, keepWorktree } = {}) {
   if (!wt?.commit) { if (wt?.id && !keepWorktree) removeWorktree(cfg.root, wt.id, { force: true }); return { status: 'no-changes' }; }
   emit?.({ type: 'merge', branch: wt.branch });
   try {
-    gitIn(cfg.root, ['merge', '--no-ff', '--no-edit', '-m', `conductor: merge ${String(wt.id).replace(/-(s\d+|h)$/, '')} (${s.winner})`, wt.branch]);
+    gitIn(cfg.root, ['merge', '--no-ff', '--no-edit', '-m', `conductor: merge ${String(wt.id).replace(/-(s\d+|h\d*)$/, '')} (${s.winner})`, wt.branch]);
   } catch (e) {
     let files = [];
     try { files = gitIn(cfg.root, ['diff', '--name-only', '--diff-filter=U']).trim().split('\n').filter(Boolean); } catch { /* none */ }
@@ -175,57 +175,77 @@ export async function runBatch(cfg, { planPath, tasks, role, provider, concurren
     if (routes.length < 2) warnings.push(`priority speed: ${routes.length} route(s) can take a second attempt (${routes.join(', ') || 'none'}); hedging needs 2. Add a free route (conductor providers --free) or enable another agent`);
   }
   // S1: hedge stragglers. Once a task in this batch has finished, a task still running past 1.5× the finished ones'
-  // median (and at least hedgeAfterSec) gets a second attempt on an idle route its priority allows; the first attempt
-  // that passes every check wins and the other is stopped. The slowest worker no longer sets the wave's time.
+  // median (and at least hedgeAfterSec) gets a second attempt on the idle route its priority allows that is expected to
+  // be fastest for a task this size. Later, a route that becomes idle and is expected to be clearly faster (by
+  // hedgeFaster, 1.5×) than every route already trying gets one more (up to hedgeMax attempts in all). The first
+  // attempt that passes every check wins and the others are stopped. The slowest worker no longer sets the wave's time.
   const finished = [], running = new Map();
   const minSec = Number(cfg.settings?.hedgeAfterSec ?? 45);
-  const busy = () => new Set([...running.values()].flatMap((r) => [r.primary, r.hedge].filter(Boolean)));
+  const maxTries = Math.max(2, Number(cfg.settings?.hedgeMax ?? 3));
+  const faster = Number(cfg.settings?.hedgeFaster ?? 1.5);
+  const busy = () => new Set([...running.values()].flatMap((r) => r.tries.filter((x) => !x.result).map((x) => x.provider)));
   const monitor = prio === 'save' || cfg.settings?.hedge === false ? null : setInterval(() => {
     if (!finished.length) return;
     const sorted = [...finished].sort((a, b) => a - b);
     const limitMs = Math.max(minSec * 1000, 1.5 * sorted[Math.floor(sorted.length / 2)]);
     for (const r of running.values()) {
-      if (r.hedge || r.done || Date.now() - r.start < limitMs) continue;
+      if (r.done || Date.now() - r.start < limitMs || r.tries.length >= maxTries) continue;
       const taken = busy();
-      const to = r.chain.find((n) => n !== r.primary && !taken.has(n) && hedgeAllowed(cfg, n, prio));
-      if (to) r.startHedge(to);
+      const tried = new Set(r.tries.map((x) => x.provider));
+      const free = r.chain.filter((n) => !tried.has(n) && !taken.has(n) && hedgeAllowed(cfg, n, prio));
+      if (!free.length) continue;
+      const secs = expectedSeconds(speedStats(r.chain, r.role, { size: r.size }), r.chain);
+      const best = free.reduce((x, y) => (secs(y) < secs(x) ? y : x));
+      // the first hedge goes to the fastest idle route; another only to one clearly faster than every route trying
+      const trying = r.tries.filter((x) => !x.result).map((x) => secs(x.provider));
+      if (r.tries.length === 1 || secs(best) * faster <= Math.min(...trying)) r.startHedge(best);
     }
   }, Number(cfg.settings?.hedgeCheckMs ?? 2000));
   monitor?.unref?.();
   const runOne = async (t, emit) => {
     const base = { role: t.role, planPath, taskId: t.id, priority: prio, deferReview: true, note, noVerify, allowUnverified, allowScope, allowWeakPlan, noEscalate, allowNoRepro, review, noReview, timeoutMs, worktree: true, replace, allowOpenQuestions, onEvent: emit };
-    const stopA = new AbortController();
-    const r = { start: Date.now(), primary: t.chain[0], chain: t.chain, hedge: null, done: false };
+    const size = taskSize({ role: t.role, mode: 'write', body: t.section || '', files: t.files || [] }).size;
+    const r = { start: Date.now(), primary: t.chain[0], chain: t.chain, role: t.role, size, tries: [], done: false };
     running.set(t.id, r);
-    const settle = (p, who) => p.then((s) => ({ s, who }), (e) => ({ e, who }));
-    const a = settle(dispatch(cfg, { ...base, chain: t.chain, worktreeId: t.id, signal: stopA.signal }), 'a');
-    let stopB = null, b = null, hedgeReady;
-    const hedged = new Promise((res) => { hedgeReady = res; });
-    r.startHedge = (to) => {
-      r.hedge = to; r.hedgeAt = Date.now(); stopB = new AbortController();
-      emit({ type: 'hedge', provider: to, from: r.primary });
-      b = settle(dispatch(cfg, { ...base, chain: [to], worktreeId: `${t.id}-h`, noReview: true, noEscalate: true, race: false, signal: stopB.signal }), 'b');
-      hedgeReady(b);
+    let wake = () => {}; // resolves the wait below when a hedge starts
+    const launch = (provider, extra, wtId) => {
+      const stop = new AbortController();
+      const x = { provider, wtId, stop, at: Date.now(), result: null };
+      x.p = dispatch(cfg, { ...base, worktreeId: wtId, signal: stop.signal, ...extra }).then((s) => ({ s }), (e) => ({ e })).then((res) => { x.result = res; return x; });
+      r.tries.push(x);
+      wake();
     };
-    const passed = (x) => !!x?.s && outcome(x.s) === 'done';
-    // the first result, from the original attempt or (once started) the hedge
-    const first = await Promise.race([a, hedged.then((p) => p)]);
+    launch(t.chain[0], { chain: t.chain }, t.id);
+    r.startHedge = (to) => {
+      emit({ type: 'hedge', provider: to, from: r.primary });
+      launch(to, { chain: [to], noReview: true, noEscalate: true, race: false }, `${t.id}-h${r.tries.length > 1 ? r.tries.length : ''}`);
+    };
+    const passed = (x) => !!x.result?.s && outcome(x.result.s) === 'done';
+    let win = null;
+    for (;;) {
+      const open = r.tries.filter((x) => !x.result);
+      if (!open.length) break;
+      const added = new Promise((res) => { wake = res; });
+      const x = await Promise.race([...open.map((y) => y.p), added]);
+      if (x && passed(x)) { win = x; break; }
+    }
     r.done = true; // no hedge starts after this point
-    let winner = first;
-    if (b) {
-      const other = first.who === 'a' ? b : a;
-      if (passed(first)) (first.who === 'a' ? stopB : stopA).abort();
-      else { const o = await other; winner = passed(o) ? o : first.who === 'a' ? first : o; }
-      await Promise.allSettled([a, b]);
-      const winId = winner.who === 'a' ? t.id : `${t.id}-h`;
-      for (const id of [t.id, `${t.id}-h`]) if (id !== winId) { try { removeWorktree(cfg.root, id, { force: true }); } catch { /* already gone */ } }
-      if (winner.s) winner.s.hedged = { from: r.primary, to: r.hedge, won: winner.who === 'a' ? r.primary : r.hedge, afterSec: Math.round((r.hedgeAt - r.start) / 1000) };
-      emit({ type: 'hedge-won', provider: winner.who === 'a' ? r.primary : r.hedge });
+    const primary = r.tries[0];
+    // nothing passed every check: the original attempt's result stands (a hedge's, if the original threw)
+    if (!win) win = primary.result.e ? r.tries.find((x) => x.result.s) || primary : primary;
+    if (r.tries.length > 1) {
+      for (const x of r.tries) if (x !== win) x.stop.abort();
+      await Promise.allSettled(r.tries.map((x) => x.p));
+      for (const x of r.tries) if (x !== win) { try { removeWorktree(cfg.root, x.wtId, { force: true }); } catch { /* already gone */ } }
+      const hedges = r.tries.slice(1);
+      if (win.result.s) win.result.s.hedged = { from: r.primary, to: hedges.map((x) => x.provider).join(', '), won: win.provider, afterSec: Math.round((hedges[0].at - r.start) / 1000),
+        tries: hedges.map((x) => ({ provider: x.provider, afterSec: Math.round((x.at - r.start) / 1000) })) };
+      emit({ type: 'hedge-won', provider: win.provider });
     }
     running.delete(t.id);
     finished.push(Date.now() - r.start);
-    if (winner.e) throw winner.e;
-    return winner.s;
+    if (win.result.e) throw win.result.e;
+    return win.result.s;
   };
   // S2/S3: tasks start when their in-batch dependencies are merged; with merge, conductor merges each task that passed
   // (one at a time, in the order they finish), runs verify on the merged result, and stops at the first conflict or
@@ -325,7 +345,7 @@ export function formatBatch(b) {
     const rv = s.review;
     if (rv?.skipped) L.push(`         review: not done (${rv.skipped})`);
     else if (rv?.reviewer) L.push(`         review: ${rv.reviewer}: ${rv.verdict || 'no verdict'}, ${rv.findings.length} finding(s) (advisory${rv.report ? `; ${rv.report}` : ''})`);
-    if (s.hedged) L.push(`         hedged: ${s.hedged.from} was slow, so ${s.hedged.to} started a second attempt after ${s.hedged.afterSec} s; ${s.hedged.won} won`);
+    if (s.hedged) L.push(`         hedged: ${s.hedged.from} was slow, so ${(s.hedged.tries || [{ provider: s.hedged.to, afterSec: s.hedged.afterSec }]).map((x) => `${x.provider} (after ${x.afterSec} s)`).join(', then ')} also tried it; ${s.hedged.won} won`);
     for (const w of s.warnings) L.push(`         WARNING: ${w}`);
   }
   L.push(`result:    ${b.merge ? `${b.merged}/${b.results.length} merged · ` : ''}${b.ok} done, ${b.partial ? `${b.partial} partial, ` : ''}${b.outOfScope ? `${b.outOfScope} out of scope, ` : ''}${b.unverified ? `${b.unverified} unverified, ` : ''}${b.failed} failed${b.blocked ? `, ${b.blocked} not started` : ''}`);
@@ -333,7 +353,7 @@ export function formatBatch(b) {
   if (b.results.some((r) => r.summary?.verify?.scope === 'task')) L.push('verify:    "(task)" = the task\'s own verify line from the plan; run `conductor verify` after merging');
   if (b.merge) L.push(b.merged === b.results.length ? 'next:      everything is merged into your branch. Review it: git log --oneline, git diff <start>..HEAD' : 'next:      merged tasks are on your branch; for the rest see their lines above.');
   else L.push('next:      for each ✓: review `conductor diff conductor/<id>`, then `git merge --no-ff conductor/<id>`; afterwards `conductor worktree rm <id>` (or run the batch with --merge).');
-  if (b.results.some((r) => r.summary?.hedged && r.summary.hedged.won === r.summary.hedged.to)) L.push('           A hedged task that the second attempt won lives on conductor/<id>-h (the branch on its line).');
+  if (b.results.some((r) => r.summary?.hedged && r.summary.hedged.won !== r.summary.hedged.from)) L.push('           A hedged task that the second attempt won lives on conductor/<id>-h… (the branch on its line).');
   if (b.unverified) L.push('           For each ?: no verify ran, so nothing proves it works. Set a verify command (conductor init --verify "<cmd>"), or check it yourself before merging.');
   if (b.partial) L.push('           For each ⚠: the worker did only part of it. Read its report.md, then finish it or retry the rest.');
   if (b.failed || b.results.some((r) => r.merge && !['merged', 'no-changes'].includes(r.merge.status))) L.push('           For each ✗: retry it alone with `conductor run <role> --plan … --task <id> --worktree --provider <other>`, or do it yourself.');

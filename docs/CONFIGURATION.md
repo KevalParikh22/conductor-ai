@@ -108,6 +108,8 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | `raceWidth` | 2 | How many attempts a race starts |
 | `priority` | `balanced` | Tokens against time, for every run and batch: `save`, `balanced` or `speed` (see **Priority** below). `--priority` per run |
 | `hedgeAfterSec` | 45 | In a batch, a task running at least this long, and past 1.5× the median time of the tasks already finished, may get a second attempt (hedging). Only under `balanced` and `speed` |
+| `hedgeMax` | 3 | Most attempts at one task, the original included |
+| `hedgeFaster` | 1.5 | After the first hedge, another starts only on a route expected to be this many times faster than every route already trying (by its measured median for tasks of this size) |
 | `hedge` | true | `false` turns batch hedging off whatever the priority |
 | `maxParallelPerProvider` | 2 (3 under `speed`) | Most tasks of one batch wave started on the same provider (a provider's own `maxParallel` wins) |
 | `hangCooldownMin` | 15 | A free route that times out twice in one run cools down this long (0 = off) |
@@ -245,7 +247,8 @@ Speed costs tokens: a second attempt at the same task finishes sooner, but both 
 - Pay-per-token routes (a `price` in the provider's config) never take a hedge or a race, under any priority: conductor won't spend money to save time without you choosing that route yourself.
 - The controller's own CLI never takes a hedge: it is what you are trying to save.
 - Hedging starts only after at least one task in the batch has finished, so there is a median to compare against. A batch of tasks that all take about as long never hedges.
-- The loser of a hedge is stopped and its worktree removed; the batch line shows `hedged: … won`.
+- The first hedge goes to the idle route expected to be fastest for a task this size. If that route turns out slow too and a clearly faster one frees up later, it gets another attempt (up to `hedgeMax`).
+- The losers of a hedge are stopped and their worktrees removed; the batch line shows `hedged: … won`.
 
 ```bash
 conductor batch --plan docs/plan/x.md --tasks T1,T2,T3,T4 --priority speed
