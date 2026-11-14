@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 // Pilot benchmark: Claude alone (A) vs Claude + conductor (C) on the same plan, scored by hidden tests.
 //
-//   node bench/run.mjs check                         is the pilot fair? (no model: fails on the start, passes on the solution)
-//   node bench/run.mjs A [--tasks T1,T2] [--model sonnet] [--max-cost 1.50]
-//   node bench/run.mjs C [--tasks T1,T2] [--model sonnet]
+//   node bench/run.mjs check [--suite b2]            is the suite fair? (no model: fails on the start, passes on the solution)
+//   node bench/run.mjs A [--suite b2] [--tasks T1,T2] [--model sonnet] [--max-cost 1.50]
+//   node bench/run.mjs C [--suite b2] [--tasks T1,T2] [--model sonnet]
+//
+// Suites: pilot (6 small utility tasks) and b2 (5 bigger, multi-file tasks on a bookshop library; T5 needs T1 and T2).
 //
 // Every Claude call is `claude -p --output-format json`, which reports its tokens and an equivalent cost: those numbers
 // are the measurement. A runs one task at a time and stops before the next task once --max-cost is reached. C lets
@@ -16,12 +18,16 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const PILOT = path.join(HERE, 'pilot');
-const CONDUCTOR = path.join(HERE, '..', 'bin', 'conductor.js');
-const TASKS = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6'];
-
 const argv = process.argv.slice(2);
 const opt = (k, d) => { const i = argv.indexOf(`--${k}`); return i >= 0 ? argv[i + 1] : d; };
+const SUITE = opt('suite', 'pilot');
+const SUITES = { pilot: { branch: 'feat/utils' }, b2: { branch: 'feat/orders' } };
+if (!SUITES[SUITE]) { console.error(`unknown suite "${SUITE}": ${Object.keys(SUITES).join(' | ')}`); process.exit(2); }
+const PILOT = path.join(HERE, SUITE);
+const CONDUCTOR = path.join(HERE, '..', 'bin', 'conductor.js');
+// the tasks are the plan's "### T<n>:" headings
+const TASKS = [...fs.readFileSync(path.join(PILOT, 'plan.md'), 'utf8').matchAll(/^### (T\d+):/gm)].map((m) => m[1]);
+const PLAN = `docs/plan/${SUITE}.md`;
 const condition = argv[0];
 const model = opt('model', 'sonnet');
 const tasks = (opt('tasks', '') || TASKS.join(',')).split(',').map((t) => t.trim()).filter(Boolean);
@@ -32,15 +38,15 @@ const git = (cwd, ...a) => sh('git', ['-c', 'user.email=bench@conductor.local', 
 const cleanEnv = () => { const e = { ...process.env }; delete e.NODE_TEST_CONTEXT; return e; };
 
 function prepare() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'conductor-pilot-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), `conductor-${SUITE}-`));
   fs.cpSync(path.join(PILOT, 'repo'), dir, { recursive: true });
   fs.mkdirSync(path.join(dir, 'docs', 'plan'), { recursive: true });
-  fs.copyFileSync(path.join(PILOT, 'plan.md'), path.join(dir, 'docs', 'plan', 'pilot.md'));
+  fs.copyFileSync(path.join(PILOT, 'plan.md'), path.join(dir, PLAN));
   fs.writeFileSync(path.join(dir, '.gitignore'), 'node_modules/\n');
   git(dir, 'init', '-q', '-b', 'main');
   // a real project has a commit identity; without one every merge fails ("unable to auto-detect email")
   sh('git', ['config', 'user.email', 'bench@conductor.local'], dir); sh('git', ['config', 'user.name', 'bench'], dir);
-  git(dir, 'add', '-A'); git(dir, 'commit', '-qm', 'pilot start'); git(dir, 'switch', '-qc', 'feat/utils');
+  git(dir, 'add', '-A'); git(dir, 'commit', '-qm', `${SUITE} start`); git(dir, 'switch', '-qc', SUITES[SUITE].branch);
   return dir;
 }
 
@@ -48,11 +54,11 @@ function prepare() {
 function score(dir) {
   const h = path.join(dir, 'hidden');
   fs.mkdirSync(h, { recursive: true });
-  fs.copyFileSync(path.join(PILOT, 'hidden', 'pilot.hidden.test.js'), path.join(h, 'pilot.hidden.test.js'));
-  const r = sh(process.execPath, ['--test', '--test-reporter=tap', 'hidden/pilot.hidden.test.js'], dir, { env: cleanEnv() });
+  fs.copyFileSync(path.join(PILOT, 'hidden', `${SUITE}.hidden.test.js`), path.join(h, `${SUITE}.hidden.test.js`));
+  const r = sh(process.execPath, ['--test', '--test-reporter=tap', `hidden/${SUITE}.hidden.test.js`], dir, { env: cleanEnv() });
   fs.rmSync(h, { recursive: true, force: true });
   const out = {};
-  for (const m of `${r.stdout}`.matchAll(/^(not ok|ok) \d+ - (T\d)\b/gm)) out[m[2]] = m[1] === 'ok';
+  for (const m of `${r.stdout}`.matchAll(/^(not ok|ok) \d+ - (T\d+)\b/gm)) out[m[2]] = m[1] === 'ok';
   return out;
 }
 
@@ -102,10 +108,10 @@ function check() {
 function report(res) {
   const dir = path.join(HERE, 'results');
   fs.mkdirSync(dir, { recursive: true });
-  const file = path.join(dir, `${res.startedAt.replace(/[:.]/g, '-')}-${res.condition}${res.dry ? '-dry' : ''}.json`);
+  const file = path.join(dir, `${res.startedAt.replace(/[:.]/g, '-')}-${SUITE === 'pilot' ? '' : `${SUITE}-`}${res.condition}${res.dry ? '-dry' : ''}.json`);
   fs.writeFileSync(file, JSON.stringify(res, null, 2));
   const passed = Object.values(res.hidden).filter(Boolean).length;
-  console.log(`\n=== pilot ${res.condition} (${res.model}) · ${res.tasks.join(',')} ===`);
+  console.log(`\n=== ${SUITE} ${res.condition} (${res.model}) · ${res.tasks.join(',')} ===`);
   for (const c of res.calls) console.log(`  ${(c.task || 'controller').padEnd(10)} $${(c.cost ?? 0).toFixed(4)}  in ${c.tokens.input} / out ${c.tokens.output} / cache read ${c.tokens.cacheRead} / cache write ${c.tokens.cacheWrite}  ${c.seconds}s  ${c.ok ? '' : 'ERROR ' + c.result.slice(0, 80)}`);
   console.log(`hidden tests: ${passed}/${res.tasks.length} · Claude $${res.claudeCost.toFixed(4)} · ${res.seconds}s${res.workers ? ` · workers: ${res.workers.runs} runs, ${res.workers.tokens} tokens, ${JSON.stringify(res.workers.providers)}` : ''}${res.stopped ? ` · STOPPED: ${res.stopped}` : ''}`);
   console.log(`saved: ${file}`);
@@ -113,7 +119,7 @@ function report(res) {
 
 async function main() {
   if (condition === 'check') return check();
-  if (!['A', 'C'].includes(condition)) { console.error('usage: node bench/run.mjs check | A | C [--tasks T1,T2] [--model sonnet] [--max-cost 1.50]'); return 2; }
+  if (!['A', 'C'].includes(condition)) { console.error('usage: node bench/run.mjs check | A | C [--suite pilot|b2] [--tasks T1,T2] [--model sonnet] [--max-cost 1.50]'); return 2; }
   const dir = prepare();
   const t0 = Date.now(), startedAt = new Date().toISOString();
   const calls = [];
@@ -122,23 +128,23 @@ async function main() {
     for (const t of tasks) {
       const spent = sum(calls, 'cost');
       if (spent >= maxCost) { stopped = `--max-cost ${maxCost} reached ($${spent.toFixed(4)}) before ${t}`; break; }
-      const c = claude(dir, `Do task ${t} from docs/plan/pilot.md: read the plan (its Design notes too), implement the task, and run \`npm test\` until it passes. Do not commit. Reply with one line when done.`,
+      const c = claude(dir, `Do task ${t} from ${PLAN}: read the plan (its Design notes too), implement the task, and run \`npm test\` until it passes. Do not commit. Reply with one line when done.`,
         ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'Bash(npm test:*)', 'Bash(node:*)']);
       calls.push({ task: t, ...c });
       git(dir, 'add', '-A'); git(dir, 'commit', '-qm', `A: ${t}`, '--allow-empty');
-      process.stderr.write(`pilot A ${t}: $${(c.cost ?? 0).toFixed(4)}, ${c.seconds}s\n`);
+      process.stderr.write(`${SUITE} A ${t}: $${(c.cost ?? 0).toFixed(4)}, ${c.seconds}s\n`);
     }
   } else {
     // C: conductor in the project, Claude Code as the controller, the plan fixed in advance
     sh(process.execPath, [CONDUCTOR, 'init', '--controller', 'claude-code', '--no-mcp'], dir);
     git(dir, 'add', '-A'); git(dir, 'commit', '-qm', 'conductor init', '--allow-empty');
-    const prompt = tasks.length === TASKS.length ? '/conduct-run docs/plan/pilot.md' : `/conduct-build docs/plan/pilot.md ${tasks[0]}`;
+    const prompt = tasks.length === TASKS.length ? `/conduct-run ${PLAN}` : `/conduct-build ${PLAN} ${tasks[0]}`;
     const c = claude(dir, prompt, ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'Bash(conductor:*)', 'Bash(git:*)', 'Bash(npm test:*)']);
     calls.push({ task: null, ...c });
   }
   const hidden = Object.fromEntries(Object.entries(score(dir)).filter(([t]) => tasks.includes(t)));
   const res = {
-    condition, model, tasks, startedAt, seconds: Math.round((Date.now() - t0) / 1000), stopped, dir,
+    suite: SUITE, condition, model, tasks, startedAt, seconds: Math.round((Date.now() - t0) / 1000), stopped, dir,
     claudeCost: sum(calls, 'cost'), claudeTokens: { input: sum(calls, 'input'), output: sum(calls, 'output'), cacheRead: sum(calls, 'cacheRead'), cacheWrite: sum(calls, 'cacheWrite') },
     hidden, calls, workers: condition === 'C' ? workerUsage(dir) : null, dry: argv.includes('--dry'),
   };

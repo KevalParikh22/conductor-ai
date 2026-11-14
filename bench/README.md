@@ -1,16 +1,22 @@
-# Pilot benchmark
+# Benchmarks
 
 Claude Code alone (condition **A**) against Claude Code as the controller with conductor (condition **C**), on the same fixed plan, scored by hidden tests that neither Claude nor the workers see.
 
-- `pilot/plan.md`: 6 tasks in a small Node library (4 independent, 2 that depend on earlier ones), all passing `conductor plan check`.
-- `pilot/repo/`: the starting project. `pilot/hidden/`: the hidden tests, one per task. `pilot/solution/`: a reference solution, used only by `check`.
+| Suite | What | Tasks |
+|---|---|---|
+| `pilot` | a small Node utility library (slugs, durations, LRU cache, pagination) | 6 small tasks, 12–22 s each for Claude alone; 4 independent, 2 build on earlier ones |
+| `b2` | the order side of a bookshop library: cart, discounts, CSV import, order lifecycle, checkout | 5 bigger, multi-file tasks (spec'd to the cent); 4 independent, T5 needs T1 and T2 |
+
+Each suite has `plan.md` (passes `conductor plan check`), `repo/` (the starting project, its own tests pass), `hidden/<suite>.hidden.test.js` (one top-level test per task, written from the plan before any run) and `solution/` (a reference solution, used only by `check`).
 
 ```bash
-node bench/run.mjs check                                    # fair? fails on the start, passes on the solution (no model)
-node bench/run.mjs C --model sonnet                         # Claude as controller: /conduct-run on the whole plan
-node bench/run.mjs A --model sonnet --max-cost 1.50         # Claude alone, one task at a time, stops at the cost limit
+node bench/run.mjs check --suite b2                         # fair? every task fails on the start, passes on the solution (no model)
+node bench/run.mjs C --suite b2 --model sonnet              # Claude as controller: /conduct-run on the whole plan
+node bench/run.mjs A --suite b2 --model sonnet --max-cost 3 # Claude alone, one task at a time, stops at the cost limit
 ```
 
-Every Claude call is `claude -p --output-format json`: the tokens (input, output, cache read and write) and the equivalent cost it reports are the measurement. Worker usage in C comes from conductor's run summaries. Results land in `bench/results/<date>-<condition>.json`.
+`--suite` defaults to `pilot`. Every Claude call is `claude -p --output-format json`: the tokens (input, output, cache read and write) and the equivalent cost it reports are the measurement. Worker usage in C (now including Codex and OpenCode tokens) comes from conductor's run summaries. Results land in `bench/results/<date>-[<suite>-]<condition>.json`.
 
-Run C first (cheap on Claude), then A one task at a time. Note your plan's usage before and after. Label results "pilot": one repo and six tasks don't support general claims.
+**Before spending quota:** run `check`, then C first (cheaper on Claude), then A one task at a time with `--max-cost`. A and C don't have to run in the same usage window. Note your plan's usage before and after. One repo per suite doesn't support general claims: label results as what they are.
+
+**B2 estimate (from the pilot's measured numbers):** about $2–4 equivalent for one A and one C run; ×3 for repeated runs.
