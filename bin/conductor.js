@@ -32,6 +32,7 @@ import { detectLocal } from '../src/local.js';
 import { writeSecrets, writeScope } from '../src/config.js';
 import { ROUTE_TEMPLATES, resolveTemplate, addTemplates, starterIds, describeRoute, routeErrors } from '../src/routing.js';
 import { compactDiff } from '../src/diffview.js';
+import { runProgress, batchProgress } from '../src/progress.js';
 
 const HELP = `conductor ${VERSION}: your coding agent (Claude Code, Codex, Antigravity, OpenCode) plans and reviews; cheaper models do the work.
 
@@ -574,6 +575,7 @@ async function main() {
       const cfg = loadConfig();
       const errs = validateConfig(cfg);
       if (errs.length) throw new UsageError('config problems:\n  ' + errs.join('\n  '));
+      const prog = runProgress();
       const s = await dispatch(cfg, {
         role, task: o._.join(' ') || undefined, planPath: o.plan, taskId: o.task, provider: o.provider,
         chain: o.chain ? o.chain.split(',').map((x) => x.trim()).filter(Boolean) : undefined,
@@ -581,9 +583,12 @@ async function main() {
         save: o.save, noVerify: o['no-verify'], allowUnverified: o['allow-unverified'], allowScope: o['allow-scope'], allowWeakPlan: o['allow-weak-plan'], noEscalate: o['no-escalate'], allowNoRepro: o['allow-no-repro'], samples: o.samples ? Number(o.samples) : undefined, race: o.race ? true : o['no-race'] ? false : undefined, review: o.review, noReview: o['no-review'], allowDirty: o['allow-dirty'], worktree: o.worktree, continue: o.continue, worktreeId: o.worktreeId, timeoutMs: timeoutOpt(o), replace: o.replace, allowOpenQuestions: o['allow-open-questions'],
         onEvent: o.json ? undefined : (e) => {
           const m = { worktree: `working in ${e.dir} (branch ${e.branch})`, wait: `waiting for ${e.provider} (one task at a time on it)…`, try: `trying ${e.provider} (${e.kind})…`, skip: `skip ${e.provider}: ${e.reason}`, 'race-won': `${e.provider} passed every check first: stopping the others…`, fail: `${e.provider} failed: ${e.reason}`, ok: `${e.provider} finished`, verify: 'running verify…', repro: 'running the repro…', review: 'independent review by another model family…', isolate: 'verify failed: checking the code alone against the original tests…', base: 'checking the starting commit (verify, cached per commit)…', escalate: `verify failed: handing ${e.from}'s work to ${e.provider}…`, repair: `${e.provider} sent no files: asking once more…` }[e.type];
-          if (m) process.stderr.write(`conductor${e.sample ? ` [attempt ${e.sample}]` : ''}: ${m}\n`);
+          // the event line as before; on a terminal also a live status line (spinner, step, time against the limit)
+          if (m) prog.line(m, e.sample ? `attempt ${e.sample}` : '');
+          prog.step(e);
         },
       });
+      prog.stop();
       console.log(o.json ? JSON.stringify(s, null, 2) : formatSummary(s));
       return s.exitCode;
     }
@@ -610,13 +615,12 @@ async function main() {
       const errs = validateConfig(cfg);
       if (errs.length) throw new UsageError('config problems:\n  ' + errs.join('\n  '));
       const tasks = (o.tasks || o._.join(',')).split(',').map((x) => x.trim()).filter(Boolean);
+      const table = batchProgress(tasks);
       const b = await runBatch(cfg, {
         planPath: o.plan, tasks, role: o.role, provider: o.provider, concurrency: o.concurrency, noVerify: o['no-verify'], allowUnverified: o['allow-unverified'], allowScope: o['allow-scope'], allowWeakPlan: o['allow-weak-plan'], noEscalate: o['no-escalate'], allowNoRepro: o['allow-no-repro'], review: o.review, noReview: o['no-review'], timeoutMs: timeoutOpt(o), replace: o.replace, note: o.note, allowOpenQuestions: o['allow-open-questions'],
-        onEvent: o.json ? undefined : (e) => {
-          const m = { start: `starting (first choice: ${e.provider})`, wait: `waiting for ${e.provider} (one task at a time on it)…`, try: `trying ${e.provider}…`, fail: `${e.provider} failed: ${e.reason}`, ok: `${e.provider} finished`, verify: 'running verify…', base: 'checking the starting commit…', escalate: `verify failed: handing ${e.from}'s work to ${e.provider}…`, repair: `${e.provider} sent no files: asking once more…`, done: 'done' }[e.type];
-          if (m) process.stderr.write(`conductor [${e.task}]: ${m}\n`);
-        },
+        onEvent: o.json ? undefined : (e) => table.event(e), // a live table on a terminal, plain lines otherwise
       });
+      table.stop();
       console.log(o.json ? JSON.stringify(b, null, 2) : formatBatch(b));
       return b.exitCode;
     }
