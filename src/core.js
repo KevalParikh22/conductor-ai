@@ -539,7 +539,7 @@ async function dispatchOnce(cfg, opts) {
     for (let mi = 0; mi < models.length; mi++) {
       if (opts.signal?.aborted) { summary.cancelled = true; break providers; }
       const model = models[mi];
-      emit({ type: 'try', provider: c.name, kind, model: mi ? model : undefined });
+      emit({ type: 'try', provider: c.name, kind, model: mi ? model : undefined, limitMs: limitFor(c.p, kind).timeoutMs });
       const before = inRepo ? git.stateHash(work) : null;
       const t0 = Date.now();
       lastPromptChars = userPrompt.length;

@@ -105,7 +105,7 @@ export async function runBatch(cfg, { planPath, tasks, role, provider, concurren
       } catch (e) {
         results[i] = { task: t.id, role: t.role, error: e.message };
       }
-      emit({ type: 'done' });
+      emit({ type: 'done', outcome: results[i].summary ? outcome(results[i].summary) : 'failed' });
     }
   };
   await Promise.all(Array.from({ length: limit }, worker));
