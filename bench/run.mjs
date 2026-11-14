@@ -10,7 +10,8 @@
 // Every Claude call is `claude -p --output-format json`, which reports its tokens and an equivalent cost: those numbers
 // are the measurement. A runs one task at a time and stops before the next task once --max-cost is reached. C lets
 // Claude act as the controller with conductor (/conduct-run); worker usage comes from conductor's run summaries.
-// Results go to bench/results/<date>-<condition>.json, with a table on stdout.
+// Results go to lab/bench/<date>-[<suite>-]<condition>.json (local, not in git), with a table on stdout; add
+// --publish to also write a run to bench/results/ (committed) when docs/BENCHMARK.md reports it.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -106,10 +107,14 @@ function check() {
 }
 
 function report(res) {
-  const dir = path.join(HERE, 'results');
+  // every run goes to lab/bench (local, not in git); --publish also writes it to bench/results (committed), for a run
+  // docs/BENCHMARK.md reports
+  const lab = path.join(HERE, '..', 'lab', 'bench');
+  const dir = lab;
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, `${res.startedAt.replace(/[:.]/g, '-')}-${SUITE === 'pilot' ? '' : `${SUITE}-`}${res.condition}${res.dry ? '-dry' : ''}.json`);
   fs.writeFileSync(file, JSON.stringify(res, null, 2));
+  if (argv.includes('--publish') && !res.dry) { const pub = path.join(HERE, 'results'); fs.mkdirSync(pub, { recursive: true }); fs.copyFileSync(file, path.join(pub, path.basename(file))); console.log(`published: bench/results/${path.basename(file)}`); }
   const passed = Object.values(res.hidden).filter(Boolean).length;
   console.log(`\n=== ${SUITE} ${res.condition} (${res.model}) · ${res.tasks.join(',')} ===`);
   for (const c of res.calls) console.log(`  ${(c.task || 'controller').padEnd(10)} $${(c.cost ?? 0).toFixed(4)}  in ${c.tokens.input} / out ${c.tokens.output} / cache read ${c.tokens.cacheRead} / cache write ${c.tokens.cacheWrite}  ${c.seconds}s  ${c.ok ? '' : 'ERROR ' + c.result.slice(0, 80)}`);

@@ -3,4 +3,6 @@ node_modules/
 .conductor/.env
 *.log
 .DS_Store
-bench/results/*-dry.json
+
+# local test material: benchmark runs, eval history, notes (only published results go in bench/results)
+lab/

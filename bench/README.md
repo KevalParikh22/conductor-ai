@@ -15,7 +15,7 @@ node bench/run.mjs C --suite b2 --model sonnet              # Claude as controll
 node bench/run.mjs A --suite b2 --model sonnet --max-cost 3 # Claude alone, one task at a time, stops at the cost limit
 ```
 
-`--suite` defaults to `pilot`. Every Claude call is `claude -p --output-format json`: the tokens (input, output, cache read and write) and the equivalent cost it reports are the measurement. Worker usage in C (now including Codex and OpenCode tokens) comes from conductor's run summaries. Results land in `bench/results/<date>-[<suite>-]<condition>.json`.
+`--suite` defaults to `pilot`. Every Claude call is `claude -p --output-format json`: the tokens (input, output, cache read and write) and the equivalent cost it reports are the measurement. Worker usage in C (now including Codex and OpenCode tokens) comes from conductor's run summaries. Results land in `lab/bench/` (local, not in git). Add `--publish` to also write a run to `bench/results/`, for the runs docs/BENCHMARK.md reports.
 
 **Before spending quota:** run `check`, then C first (cheaper on Claude), then A one task at a time with `--max-cost`. A and C don't have to run in the same usage window. Note your plan's usage before and after. One repo per suite doesn't support general claims: label results as what they are.
 
