@@ -44,8 +44,11 @@ The controller reaches conductor through its **MCP server** (`conductor mcp`). I
 - `conductor_diff`, `conductor_runs`: review what ran.
 - `conductor_plan_check`, `conductor_route`, `conductor_skills`, `conductor_status`: check a plan and see how work will be handled.
 - `conductor_verify`: run your checks.
+- `conductor_stats`, `conductor_doctor`, `conductor_rules`, `conductor_lessons`: quality numbers, health, project rules and lessons.
 
-Each tool also takes an optional `project` path.
+Each tool also takes an optional `project` path. Every action and where it lives (CLI, MCP, UI): [SURFACES.md](SURFACES.md).
+
+Run reports are also **MCP resources**: `conductor://runs/latest` and `conductor://runs/<id>` (listed newest first) hold a run's summary, the checklist that decides "done", and the worker's report, so a controller can open one like a file instead of calling a tool.
 
 ---
 

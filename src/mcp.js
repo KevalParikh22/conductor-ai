@@ -261,6 +261,33 @@ async function callTool(name, args, startRoot) {
   throw Object.assign(new Error(`unknown tool ${name}`), { code: -32602 });
 }
 
+// ---------------- resources: run reports ----------------
+const RUN_URI = /^conductor:\/\/runs\/(latest|[\w.-]+)$/;
+
+/** The recent runs as MCP resources (newest first), plus conductor://runs/latest. */
+export function listRunResources(root, { limit = 20 } = {}) {
+  const runs = listRuns(root, { limit }).filter((r) => r.state !== 'running');
+  const out = runs.map((r) => ({
+    uri: `conductor://runs/${r.id}`, name: `${r.role}${r.task ? ` ${r.task}` : ''}: ${r.state}`, mimeType: 'text/markdown',
+    description: `${r.startedAt ? new Date(r.startedAt).toISOString().slice(0, 16).replace('T', ' ') : r.id} · ${r.winner || 'no worker'} · verify ${r.verify || '-'}`,
+  }));
+  if (runs.length) out.unshift({ uri: 'conductor://runs/latest', name: `latest run (${runs[0].id})`, mimeType: 'text/markdown', description: 'The most recent finished run in this project' });
+  return out;
+}
+
+/** One run as a markdown resource: summary, checklist, then the worker's report. → { uri, mimeType, text } or null */
+export function readRunResource(root, uri) {
+  const m = uri.match(RUN_URI);
+  if (!m) return null;
+  const id = m[1] === 'latest' ? listRuns(root, { limit: 5 }).find((r) => r.state !== 'running')?.id : m[1];
+  const r = id && readRun(root, id);
+  if (!r) return null;
+  let report = '';
+  try { report = r.summary.report ? fs.readFileSync(path.join(root, r.summary.report), 'utf8') : ''; } catch { /* gone */ }
+  const text = `# conductor run ${r.id}\n\n\`\`\`text\n${formatSummary(r.summary).trim()}\n\n${formatGates(runGates(r.summary))}\n\`\`\`\n${report ? `\n## Worker report\n\n${report.slice(-20000)}\n` : ''}`;
+  return { uri, mimeType: 'text/markdown', text };
+}
+
 export function startMcpServer({ cwd = process.cwd() } = {}) {
   const root = findProjectRoot(cwd);
   const serverInfo = { name: 'conductor-ai', version: VERSION };
@@ -285,13 +312,21 @@ export function startMcpServer({ cwd = process.cwd() } = {}) {
       switch (method) {
         case 'initialize': {
           const v = SUPPORTED.includes(params.protocolVersion) ? params.protocolVersion : SUPPORTED[1];
-          return reply(id, { protocolVersion: v, capabilities: { tools: {} }, serverInfo });
+          return reply(id, { protocolVersion: v, capabilities: { tools: {}, resources: {} }, serverInfo });
         }
         case 'server/discover':
-          return reply(id, { resultType: 'complete', supportedVersions: SUPPORTED, capabilities: { tools: {} }, _meta: { 'io.modelcontextprotocol/serverInfo': serverInfo } });
+          return reply(id, { resultType: 'complete', supportedVersions: SUPPORTED, capabilities: { tools: {}, resources: {} }, _meta: { 'io.modelcontextprotocol/serverInfo': serverInfo } });
         case 'ping': return reply(id, {});
         case 'tools/list': return reply(id, { tools: TOOLS });
         case 'tools/call': return reply(id, await callTool(params.name, params.arguments || {}, root));
+        // run reports as resources: a controller (or its user) can open a run like a file, without a tool call
+        case 'resources/list': return reply(id, { resources: listRunResources(root) });
+        case 'resources/templates/list': return reply(id, { resourceTemplates: [{ uriTemplate: 'conductor://runs/{id}', name: 'A conductor run', description: 'One run: its summary, the checklist that decides "done", and the worker\'s report', mimeType: 'text/markdown' }] });
+        case 'resources/read': {
+          const r = readRunResource(root, String(params.uri || ''));
+          if (!r) return fail(id, -32002, `resource not found: ${params.uri}`);
+          return reply(id, { contents: [r] });
+        }
         default:
           if (method?.startsWith('notifications/')) return; // no reply to notifications
           if (isRequest) return fail(id, -32601, `method not found: ${method}`);

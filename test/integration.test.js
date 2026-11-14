@@ -103,6 +103,7 @@ test('MCP server: handshake, tools/list, status and usage errors', async () => {
   const init = await m.request('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 't', version: '1' } });
   assert.equal(init.result.protocolVersion, '2025-06-18');
   assert.equal(init.result.serverInfo.name, 'conductor-ai');
+  assert.deepEqual(init.result.capabilities, { tools: {}, resources: {} }, 'tools and run reports as resources');
   m.notify('notifications/initialized');
   const disc = await m.request('server/discover', {});
   assert.ok(disc.result.supportedVersions.includes('2026-07-28'));
@@ -127,6 +128,10 @@ test('MCP server: handshake, tools/list, status and usage errors', async () => {
   assert.match(pro.result.content[0].text, /added to AGENTS\.md: - Keep dates in UTC/);
   const rm = await m.request('tools/call', { name: 'conductor_lessons', arguments: { remove: lid } });
   assert.match(rm.result.content[0].text, new RegExp(`removed ${lid}`));
+  // run reports as resources: none yet in a fresh project; the URI template is listed; an unknown run is an error
+  assert.deepEqual((await m.request('resources/list', {})).result.resources, []);
+  assert.equal((await m.request('resources/templates/list', {})).result.resourceTemplates[0].uriTemplate, 'conductor://runs/{id}');
+  assert.equal((await m.request('resources/read', { uri: 'conductor://runs/nope' })).error.code, -32002);
   const unk = await m.request('nope/method', {});
   assert.equal(unk.error.code, -32601);
   // the plan check tool: a vague task is reported, with exactly what's missing
