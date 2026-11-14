@@ -9,6 +9,7 @@ import { speedStats, expectedSeconds, taskSize } from './selector.js';
 import { removeWorktree } from './worktree.js';
 import { execFileSync } from 'node:child_process';
 import { planTaskIds } from './plancheck.js';
+import { setTaskStatus } from './plan.js';
 import { runVerify } from './verify.js';
 import { providerLocation, providerReadiness } from './config.js';
 import { controllerWorker } from './presets.js';
@@ -160,6 +161,22 @@ export async function mergeTask(cfg, s, { emit, keepWorktree } = {}) {
   if (v.status === 'FAIL') return { status: 'verify-failed', branch: wt.branch, commit: head, cmd: v.cmd, tail: v.tail, log: v.log };
   if (!keepWorktree) removeWorktree(cfg.root, wt.id);
   return { status: 'merged', branch: wt.branch, commit: head, verify: v.status };
+}
+
+/** Set `status: done` for these tasks in the plan and commit it when the plan is tracked. → the ids changed. */
+export function markDone(root, planPath, ids) {
+  const abs = path.resolve(root, planPath);
+  const before = fs.readFileSync(abs, 'utf8');
+  let text = before;
+  const changed = [];
+  for (const id of ids) { const next = setTaskStatus(text, id, 'done'); if (next !== text) { text = next; changed.push(id); } }
+  if (!changed.length) return [];
+  fs.writeFileSync(abs, text);
+  try {
+    gitIn(root, ['ls-files', '--error-unmatch', planPath]);
+    gitIn(root, ['commit', '-q', '-m', `conductor: ${changed.join(', ')} done in ${planPath}`, '--', planPath]);
+  } catch { /* untracked or ignored plan: the edit stays in the file */ }
+  return changed;
 }
 
 export async function runBatch(cfg, { planPath, tasks, role, provider, concurrency, noVerify, allowUnverified, allowScope, allowWeakPlan, noEscalate, allowNoRepro, review, noReview, replace, note, allowOpenQuestions, timeoutMs, priority, all, merge, onEvent }) {
@@ -314,6 +331,12 @@ export async function runBatch(cfg, { planPath, tasks, role, provider, concurren
   if (monitor) clearInterval(monitor);
   await Promise.allSettled(reviews);
   await merging;
+  // conductor marks merged tasks done in the plan (one commit), so the controller doesn't spend turns on it
+  let marked = [];
+  if (merge && cfg.settings?.markDone !== false) {
+    marked = results.filter((r) => r.merge?.status === 'merged' || r.merge?.status === 'no-changes').map((r) => r.task);
+    if (marked.length) marked = markDone(cfg.root, planPath, marked);
+  }
   for (const r of results) r.outcome = r.summary ? outcome(r.summary) : 'failed';
   const ok = results.filter((r) => r.outcome === 'done').length;
   const partial = results.filter((r) => r.outcome === 'partial').length;
@@ -323,7 +346,7 @@ export async function runBatch(cfg, { planPath, tasks, role, provider, concurren
   const accepted = ok + results.filter((r) => r.outcome === 'unverified' && !unverifiedBlocks(r.summary, { allowUnverified: allowUnverified || cfg.settings?.allowUnverified })).length;
   const merged = merge ? results.filter((r) => r.merge?.status === 'merged' || r.merge?.status === 'no-changes').length : undefined;
   const blocked = results.filter((r) => r.blocked).length;
-  return { plan: planPath, warnings, results, ok, partial, unverified, outOfScope, blocked, failed: results.length - ok - partial - unverified - outOfScope - blocked, merge: !!merge, merged, stopped: stop,
+  return { plan: planPath, warnings, results, ok, partial, unverified, outOfScope, blocked, failed: results.length - ok - partial - unverified - outOfScope - blocked, merge: !!merge, merged, marked, stopped: stop,
     exitCode: accepted === results.length && (!merge || merged === results.length) ? 0 : 3 };
 }
 
@@ -349,6 +372,7 @@ export function formatBatch(b) {
     for (const w of s.warnings) L.push(`         WARNING: ${w}`);
   }
   L.push(`result:    ${b.merge ? `${b.merged}/${b.results.length} merged · ` : ''}${b.ok} done, ${b.partial ? `${b.partial} partial, ` : ''}${b.outOfScope ? `${b.outOfScope} out of scope, ` : ''}${b.unverified ? `${b.unverified} unverified, ` : ''}${b.failed} failed${b.blocked ? `, ${b.blocked} not started` : ''}`);
+  if (b.marked?.length) L.push(`plan:      marked ${b.marked.join(', ')} status: done in the plan`);
   if (b.stopped) L.push(`stopped:   after ${b.stopped}; tasks after it were not started or merged`);
   if (b.results.some((r) => r.summary?.verify?.scope === 'task')) L.push('verify:    "(task)" = the task\'s own verify line from the plan; run `conductor verify` after merging');
   if (b.merge) L.push(b.merged === b.results.length ? 'next:      everything is merged into your branch. Review it: git log --oneline, git diff <start>..HEAD' : 'next:      merged tasks are on your branch; for the rest see their lines above.');

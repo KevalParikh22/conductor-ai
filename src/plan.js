@@ -16,6 +16,28 @@ export function extractTask(planText, taskId) {
   return lines.slice(start, end).join('\n').trim();
 }
 
+/**
+ * Set a task's `- **status:** <value>` line (added after its heading's field list start when missing). → new plan text;
+ * unchanged when the task isn't found.
+ */
+export function setTaskStatus(planText, taskId, value) {
+  const lines = planText.split('\n');
+  const head = new RegExp(`^(#{2,4})\\s+${taskId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![0-9A-Za-z])`);
+  const start = lines.findIndex((l) => head.test(l));
+  if (start < 0) return planText;
+  const level = lines[start].match(/^#+/)[0].length;
+  let end = lines.length;
+  for (let i = start + 1; i < lines.length; i++) { const m = lines[i].match(/^(#+)\s/); if (m && m[1].length <= level) { end = i; break; } }
+  const at = lines.slice(start + 1, end).findIndex((l) => /^\s*[-*]\s+\*\*status:\*\*/i.test(l));
+  if (at >= 0) lines[start + 1 + at] = lines[start + 1 + at].replace(/(\*\*status:\*\*\s*).*/i, `$1${value}`);
+  else {
+    // after the role line if there is one, else right under the heading
+    const role = lines.slice(start + 1, end).findIndex((l) => /^\s*[-*]\s+\*\*role:\*\*/i.test(l));
+    lines.splice(role >= 0 ? start + 2 + role : start + 1, 0, `- **status:** ${value}`);
+  }
+  return lines.join('\n');
+}
+
 export function extractSection(planText, title) {
   const m = planText.match(new RegExp(`^##\\s+${title}[^\\n]*\\n([\\s\\S]*?)(?=^##\\s|$(?![\\s\\S]))`, 'mi'));
   return m ? m[1].trim() : '';

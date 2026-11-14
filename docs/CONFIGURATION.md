@@ -110,6 +110,7 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | `hedgeAfterSec` | 45 | In a batch, a task running at least this long, and past 1.5× the median time of the tasks already finished, may get a second attempt (hedging). Only under `balanced` and `speed` |
 | `hedgeMax` | 3 | Most attempts at one task, the original included |
 | `hedgeFaster` | 1.5 | After the first hedge, another starts only on a route expected to be this many times faster than every route already trying (by its measured median for tasks of this size) |
+| `markDone` | true | After `batch --merge`/`--all`, set `status: done` on merged tasks in the plan and commit it |
 | `hedge` | true | `false` turns batch hedging off whatever the priority |
 | `maxParallelPerProvider` | 2 (3 under `speed`) | Most tasks of one batch wave started on the same provider (a provider's own `maxParallel` wins) |
 | `hangCooldownMin` | 15 | A free route that times out twice in one run cools down this long (0 = off) |

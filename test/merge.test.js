@@ -50,6 +50,13 @@ test('batch --all: runs every worker task, starts T3 after T1 and T2 are merged,
   assert.deepEqual(listWorktrees(dir), []);
   assert.equal(git('for-each-ref', '--format=%(refname:short)', 'refs/heads/conductor').trim(), '', 'merged branches deleted');
   assert.match(formatBatch(b), /3\/3 merged/);
+  // conductor marked the merged tasks done in the plan, in one commit; the controller task is untouched
+  const planNow = fs.readFileSync(path.join(dir, 'docs/plan/p.md'), 'utf8');
+  assert.equal((planNow.match(/\*\*status:\*\* done/g) || []).length, 3);
+  assert.deepEqual(b.marked, ['T1', 'T2', 'T3']);
+  assert.match(git('log', '-1', '--format=%s'), /conductor: T1, T2, T3 done in docs\/plan\/p\.md/);
+  assert.equal(git('status', '--porcelain', '--untracked-files=no').trim(), '');
+  assert.match(formatBatch(b), /marked T1, T2, T3 status: done in the plan/);
   assert.match(formatBatch(b), /merged: [0-9a-f]+, verify passed on the merged code/);
 });
 
