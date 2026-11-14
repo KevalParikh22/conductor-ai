@@ -33,6 +33,7 @@ import { writeSecrets, writeScope } from '../src/config.js';
 import { ROUTE_TEMPLATES, resolveTemplate, addTemplates, starterIds, describeRoute, routeErrors } from '../src/routing.js';
 import { compactDiff } from '../src/diffview.js';
 import { runProgress, batchProgress } from '../src/progress.js';
+import { runDemo } from '../src/demo.js';
 
 const HELP = `conductor ${VERSION}: your coding agent (Claude Code, Codex, Antigravity, OpenCode) plans and reviews; cheaper models do the work.
 
@@ -41,6 +42,7 @@ Start
   conductor add <provider>        add one of ${Object.keys(CATALOG).length} chat APIs (see: conductor providers)
   conductor init                  set up the current project
   conductor ui                    settings page
+  conductor demo                  see it work end to end on a throwaway project (about 2 minutes)
   conductor doctor [--live]       check everything
 
 Work
@@ -64,6 +66,7 @@ Setup
   conductor local [--enable]           find local model servers (Ollama, LM Studio, llama.cpp…) and turn them on
   conductor init [--controller <c>] [--verify "<cmd>"] [--guards] [--vscode] [--no-mcp] [--share]   add conductor to the current project (its files go in .gitignore unless --share)
                                        controllers: ${Object.keys(CONTROLLERS).join(', ')} (or your own: conductor controller add)
+  conductor demo [--keep] [--provider p]   a throwaway project, 2 tasks handed out in parallel, merged and tested
   conductor ui [--port 4545] [--no-open]   settings page
   conductor doctor [--live] [--details] [--json]   check installs and keys (--live sends a test prompt)
 
@@ -217,7 +220,7 @@ function routeRules(cfg, o) {
 /** A controller entry, built-in or your own (V6). */
 const ctrl = (n) => allControllers(findProjectRoot())[n] || {};
 
-const COMMANDS = ['controller', 'lessons', 'stats', 'guard', 'rules', 'eval', 'plan', 'skills', 'setup', 'providers', 'add', 'keys', 'local', 'route', 'diff', 'init', 'ui', 'mcp', 'status', 'doctor', 'verify', 'run', 'models', 'batch', 'worktree', 'runs', 'usage', 'cooldown', 'config', 'retry', 'help'];
+const COMMANDS = ['demo', 'controller', 'lessons', 'stats', 'guard', 'rules', 'eval', 'plan', 'skills', 'setup', 'providers', 'add', 'keys', 'local', 'route', 'diff', 'init', 'ui', 'mcp', 'status', 'doctor', 'verify', 'run', 'models', 'batch', 'worktree', 'runs', 'usage', 'cooldown', 'config', 'retry', 'help'];
 /** The command closest to a typo (edit distance ≤ 2), or null. */
 function closest(word, options) {
   // edit distance where swapping two neighbouring letters (stauts → status) counts as one edit
@@ -369,6 +372,20 @@ async function main() {
       if (r.unsupported) { console.log(`Guards are not available for ${ctrl(controller)?.label || controller} yet: only Claude Code and Antigravity, whose hooks were tested. (Codex runs project hooks only in trusted projects after you approve them in /hooks.)`); return 1; }
       console.log(r.changed ? `guards ${sub} (${r.file})${sub === 'on' ? ': a `git commit` by the controller is blocked while the last conductor verify failed' : ''}` : `guards already ${sub}`);
       return 0;
+    }
+    case 'demo': {
+      // a throwaway project, both tasks handed out in parallel with every check, merged and tested: about 2 minutes
+      console.log('conductor demo: see conductor work end to end, without touching your projects.\n');
+      const table = batchProgress(['T1', 'T2']);
+      const t0 = Date.now();
+      const d = await runDemo({ keep: !!o.keep, provider: o.provider, say: (m) => console.log(m), onEvent: (e) => table.event(e) });
+      table.stop();
+      // the batch summary without its "next: review, then merge" lines: the demo merged already
+      console.log(`\n${formatBatch(d.batch).split('\n').filter((l, i, all) => !/^next:/.test(l) && !(/^\s/.test(l) && all.slice(0, i).reverse().find((x) => !/^\s/.test(x))?.startsWith('next:'))).join('\n')}`);
+      console.log(`\n3. Merged what passed every check: ${d.merged.length ? d.merged.join(', ') : 'nothing'} · the project's tests: ${d.verify.status}${d.verify.output ? ` (${d.verify.output})` : ''}`);
+      console.log(`   ${Math.round((Date.now() - t0) / 1000)}s in total.${d.kept ? ` The project is kept: ${d.dir} (open it, or: cd ${d.dir} && conductor ui)` : ' The project is removed (--keep to look around).'}`);
+      console.log('\nNext, in your own project:  conductor init   then plan with your coding agent (/conduct-plan in Claude Code).');
+      return d.merged.length === 2 && d.verify.status === 'PASS' ? 0 : 3;
     }
     case 'controller': case 'controllers': {
       // V6: controllers are data (src/presets.js CONTROLLERS); your own go in config.controllers

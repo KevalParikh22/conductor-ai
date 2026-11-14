@@ -31,6 +31,7 @@ A dash means the action is left out of that surface on purpose, with the reason.
 | Set up a project for a controller | `conductor init` | — *runs once, before the controller can use MCP* | `POST /api/init` |
 | First-time setup | `conductor setup` | — *runs before any controller is connected* | `GET /api/state` |
 | List or remove task worktrees | `conductor worktree [rm]` | — *merging and removing branches is your call: the run page shows the commands* | — *shown as commands on the run page* |
+| See conductor work end to end on a throwaway project | `conductor demo [--keep]` | — *a first look for a person, not a task for a controller* | — *runs in the terminal, with a live table; --keep leaves the project to open in conductor ui* |
 | Score conductor on tasks with hidden tests | `conductor eval [run]` | — *long and spends provider quota: run it yourself* | — *long-running: use the terminal* |
 
 Controller skills and commands (`/conduct-…`) call the MCP tools or the CLI; see `templates/commands/`.
