@@ -279,6 +279,9 @@ export const DEFAULT_PROVIDERS = {
   'opencode': { type: 'cli', preset: 'opencode', enabled: true, model: 'opencode/big-pickle', notes: 'Free models through OpenCode. Good for tests and docs.' },
   'kimi-cli': { type: 'cli', preset: 'kimi', enabled: false, model: '' },
   'claude-cli': { type: 'cli', preset: 'claude', enabled: false, model: '', notes: 'Claude as a worker (spends Claude quota).' },
+  // W1: you paste the prompt into any web chat (DeepSeek, Kimi, Qwen, Gemini, ChatGPT…) and import the answer. Never
+  // automated: no cookies, no browser, no logins. In no role chain: name it (--provider manual) when you want it.
+  'manual': { type: 'manual', enabled: true, model: 'web chat', maxPromptChars: 100_000, notes: 'You paste the prompt into a web chat yourself, then: conductor import <run> <answer file>. Add your own (e.g. "deepseek-web") with a lower maxPromptChars for a chat with a smaller limit.' },
   'copilot-cli': { type: 'cli', preset: 'copilot', enabled: false, model: '', notes: 'GitHub Copilot as a worker (uses your Copilot plan).' },
   'grok-cli': { type: 'cli', preset: 'grok', enabled: false, model: '', notes: 'xAI Grok Build: OS-sandboxed agent. Uses your grok login or XAI_API_KEY.' },
   'kiro-cli': { type: 'cli', preset: 'kiro', enabled: false, model: '', notes: 'AWS Kiro: sandboxed commands; uses your Kiro login or KIRO_API_KEY.' },

@@ -177,6 +177,13 @@ In your controller, inside the project:
 4. Retrying with a note instead of rewriting the work yourself.
 5. Routing rules.
 
+**Free web chats, by hand.** DeepSeek, Kimi, Qwen, Gemini or ChatGPT in the browser (deep-research modes too) can do a task, with you carrying it there and back. conductor never opens the chat, never holds cookies and never logs into an account.
+1. `conductor build --plan docs/plan/x.md --task T3 --provider manual` writes the whole prompt (task, design notes, files, the reply format) to the run folder, copies it to the clipboard when it can, and waits (exit 5).
+2. Paste it into the chat, and save the chat's whole answer to a file.
+3. `conductor import <run> answer.md` (or `-` to paste on stdin) runs the answer through every check, like any worker's: file blocks applied (protected files refused), verify, acceptance checks, scope. The run page in `conductor ui` does the same with Copy prompt and a paste box.
+- A deep-research report: `conductor import --research report.md` saves it in `docs/research/`, for `ask --files` and your controller.
+- A chat with a smaller limit: add your own provider (e.g. `"deepseek-web": { "type": "manual", "enabled": true, "maxPromptChars": 60000 }`). A prompt over the limit isn't written, and the run stops there instead of spending another worker's quota.
+
 ---
 
 ## 6. Controllers

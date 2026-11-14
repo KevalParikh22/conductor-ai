@@ -12,6 +12,10 @@ export function runGates(s) {
 
   if (s.planGate) add('plan', 'Task ready to hand out (files, checks, size)', s.planGate.status, { pass: 'the plan task passed the plan gate', waived: 'skipped with --allow-weak-plan', off: 'planGate is off in settings' }[s.planGate.status]);
 
+  if (!s.winner && s.waiting) {
+    add('worker', 'A worker finished', s.importedAs ? 'waived' : 'waiting', s.importedAs ? `your answer was imported as run ${s.importedAs}` : 'waiting for your answer from a web chat');
+    return G;
+  }
   if (!s.winner) {
     add('worker', 'A worker finished', 'fail', `every provider failed or was skipped: ${s.attempts.map((a) => `${a.provider} (${a.reason})`).join(', ') || 'none tried'}`);
     return G;
@@ -74,7 +78,7 @@ export function runGates(s) {
 /** True when every required gate passed (or was waived on purpose). */
 export const gatesPass = (gates) => gates.filter((g) => g.required).every((g) => OK.has(g.status));
 
-const MARK = { pass: '✓', fail: '✗', missing: '✗', waived: '~', off: '~', skipped: '-', unknown: '?' };
+const MARK = { pass: '✓', fail: '✗', missing: '✗', waived: '~', off: '~', skipped: '-', unknown: '?', waiting: '…' };
 
 /** Text checklist for the CLI and MCP. */
 export function formatGates(gates) {

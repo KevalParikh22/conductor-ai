@@ -29,13 +29,13 @@ import { budgetBlock, estimateCost, recordUsage, recordSaving } from './usage.js
 import { nextStep } from './nextsteps.js';
 import { extractTask, extractSection, openQuestions, taskFiles, expandBraces, notesForFiles, parseDuration } from './plan.js';
 import { getCooldowns, setCooldown, modelKey, withSlot } from './cooldowns.js';
-import { outcome, EXIT_UNVERIFIED, unverifiedBlocks } from './outcome.js';
+import { outcome, EXIT_UNVERIFIED, EXIT_WAITING, unverifiedBlocks } from './outcome.js';
 import { isProtected, trimReport, parseFileBlocks, applyFileBlocks, checkEvidence } from './files.js';
 import { localWindow, estimateTokens } from './local.js';
 // moved out unchanged (V12); re-exported so every importer of core.js keeps working
 export { extractTask, extractSection, openQuestions, taskFiles, expandBraces, notesForFiles, parseDuration } from './plan.js';
 export { getCooldowns, setCooldown, clearCooldowns, withSlot } from './cooldowns.js';
-export { outcome, EXIT_UNVERIFIED, unverifiedBlocks } from './outcome.js';
+export { outcome, EXIT_UNVERIFIED, EXIT_WAITING, unverifiedBlocks } from './outcome.js';
 export { isProtected, trimReport, parseFileBlocks, applyFileBlocks, claimedFiles, checkEvidence } from './files.js';
 export { formatSummary } from './summary.js';
 
@@ -554,7 +554,7 @@ async function dispatchOnce(cfg, opts) {
         ? { ok: false, text: '', reason: 'no model set, and its model list could not be fetched', log: '' }
         : tooBig ? { ok: false, text: '', reason: `context too small: the prompt needs ~${promptTokens + (p.maxTokens || 2048)} tokens with the answer, ${p.model} runs with ${win.window} (${win.server})`, log: '' }
         : await withSlot(slotKey, c.p.maxParallel ?? CLI_PRESETS[c.p.preset]?.maxParallel ?? (local ? 1 : undefined), () => runProvider(c.name, p, { mode, prompt: userPrompt, system: chatSystem, cwd: work, runDir: ioDir, quotaRe,
-          allowCommands: buildCommands(settings), ...limitFor(c.p, kind), signal: opts.signal }), () => emit({ type: 'wait', provider: c.name }));
+          allowCommands: buildCommands(settings), ...limitFor(c.p, kind), signal: opts.signal, manualAnswer: opts.manualAnswer }), () => emit({ type: 'wait', provider: c.name }));
       if (p !== c.p && p.model && !res.model) res.model = p.model;
       // V13: the server counted far fewer prompt tokens than were sent: it cut the prompt (any server, window known or not)
       if (local && res.ok && res.tokens?.input && res.tokens.input < promptTokens * 0.5) {
@@ -568,7 +568,7 @@ async function dispatchOnce(cfg, opts) {
       fs.writeFileSync(path.join(runDir, `${c.name}${mi ? `.${mi + 1}` : ''}.log`), res.log || '');
 
       // H7: a chat reply without file blocks gets one repair turn that shows the model what it said and what is needed
-      if (res.ok && kind === 'chat' && mode === 'write' && !parseFileBlocks(res.text).length && settings.chatRepair !== false) {
+      if (res.ok && kind === 'chat' && mode === 'write' && !parseFileBlocks(res.text).length && settings.chatRepair !== false && c.p.type !== 'manual') {
         emit({ type: 'repair', provider: c.name });
         const again = await runProvider(c.name, p, { mode, prompt: userPrompt, system: chatSystem, cwd: work, runDir: ioDir, quotaRe, ...limitFor(c.p, kind), signal: opts.signal,
           history: [{ role: 'assistant', content: res.text.slice(0, 8000) }, { role: 'user', content: CHAT_REPAIR }] });
@@ -610,8 +610,26 @@ async function dispatchOnce(cfg, opts) {
       if (res.tokens) { attempt.tokens = res.tokens; attempt.cost = estimateCost(c.p, res.tokens); }
       if (res.denied?.length) attempt.denied = res.denied;
       if (res.ok && res.warnings?.length) summary.warnings.push(...res.warnings);
+      // W1: the prompt is ready for you to paste into a web chat; the run waits for `conductor import`
+      if (res.waiting) {
+        fs.copyFileSync(res.promptFile, path.join(runDir, 'prompt.md'));
+        const keep = ['role', 'task', 'planPath', 'taskId', 'files', 'note', 'base', 'focus', 'save', 'worktree', 'worktreeId', 'noVerify', 'allowUnverified', 'allowScope', 'allowWeakPlan', 'allowNoRepro', 'allowDirty', 'allowOpenQuestions', 'noReview', 'review', 'timeoutMs'];
+        writeJSON(path.join(runDir, 'request.json'), Object.fromEntries(keep.filter((k) => opts[k] !== undefined).map((k) => [k, opts[k]])));
+        summary.waiting = { provider: c.name, prompt: rel(root, path.join(runDir, 'prompt.md')), chars: fs.statSync(res.promptFile).size };
+        attempt.next = nextStep(attempt.reason, { name: c.name, run: path.basename(runDir), prompt: summary.waiting.prompt });
+        summary.attempts.push(attempt);
+        emit({ type: 'waiting', provider: c.name, prompt: summary.waiting.prompt });
+        break providers;
+      }
+      // W1: you chose a web chat; if it can't go (the prompt is too long), stop here rather than spend an agent's quota
+      if (c.p.type === 'manual' && !res.ok) {
+        attempt.next = nextStep(attempt.reason, { name: c.name });
+        summary.attempts.push(attempt);
+        emit({ type: 'fail', provider: c.name, reason: attempt.reason });
+        break providers;
+      }
       // a call stopped because another attempt won the race says nothing about this provider's speed or reliability
-      if (res.reason !== 'cancelled') recordUsage({ provider: c.name, model: res.model || p.model || null, kind: kind === 'agent' ? 'agent' : 'chat', role, project: path.basename(root),
+      if (res.reason !== 'cancelled' && c.p.type !== 'manual') recordUsage({ provider: c.name, model: res.model || p.model || null, kind: kind === 'agent' ? 'agent' : 'chat', role, project: path.basename(root),
         ok: res.ok, reason: attempt.reason, seconds: attempt.seconds, tokens: res.tokens || null, cost: attempt.cost ?? null });
       const changedDuringRead = mode === 'read' && inRepo && before !== git.stateHash(work);
       if (changedDuringRead) summary.warnings.push(`${c.name} changed files during a read-only run. Check git status.`);
@@ -669,6 +687,7 @@ async function dispatchOnce(cfg, opts) {
     return summary;
   }
   if (!summary.winner) {
+    if (summary.waiting) summary.exitCode = EXIT_WAITING;
     // a fresh worktree with nothing in it goes; a continued one keeps the earlier work
     if (useWorktree && !summary.worktree.continued) { removeWorktree(root, summary.worktree.id, { force: true }); summary.worktree.removed = true; }
     writeJSON(path.join(runDir, 'summary.json'), summary);

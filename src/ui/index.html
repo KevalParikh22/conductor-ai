@@ -267,7 +267,7 @@ function renderNav() {
   $('#nav').querySelectorAll('button').forEach((b) => b.onclick = () => go(b.dataset.tab));
 }
 function provStatus(name) { return S.status.providers.find((p) => p.name === name) || { ready: false, reason: 'unknown' }; }
-function locPill(p) { const l = p.location || 'cloud-api'; return `<span class="pill ${l}">${{ 'local-agent': 'local agent', 'local-model': 'local model', 'cloud-api': 'cloud API' }[l]}</span>`; }
+function locPill(p) { const l = p.location || 'cloud-api'; return `<span class="pill ${l}">${{ 'local-agent': 'local agent', 'local-model': 'local model', 'cloud-api': 'cloud API', manual: 'you, in a web chat' }[l] || l}</span>`; }
 function readyPill(name) { const st = provStatus(name); const w = W.providers[name]; if (w && !w.enabled) return '<span class="pill">disabled</span>'; if (st.optional) return '<span class="pill">optional: add key</span>'; if (st.cooling) return `<span class="pill warn" title="${esc(st.reason)}">cooling down</span>`; return st.ready ? '<span class="pill ok">ready</span>' : `<span class="pill bad">${esc(st.reason)}</span>`; }
 // short status for tight rows; the full reason is in the title
 const shortReason = (r) => /not set/.test(r) ? 'no key' : /not installed/.test(r) ? 'not installed' : r.length > 22 ? r.slice(0, 20) + '…' : r;
@@ -313,7 +313,7 @@ function overviewExtras() {
     <p class="note">The alpha gate is 70% or more over at least 10 write tasks. Hover a week for its numbers.</p></div>` : '';
   return `${quality || guard ? `<div class="grid">${quality}${guard}</div>` : ''}${why}${trend}`;
 }
-const GATE_PILL = { pass: 'ok', fail: 'bad', missing: 'bad', waived: 'warn', off: 'warn', skipped: '', unknown: 'warn' };
+const GATE_PILL = { pass: 'ok', fail: 'bad', missing: 'bad', waived: 'warn', off: 'warn', skipped: '', unknown: 'warn', waiting: 'warn' };
 function runPage() {
   const back = '<button class="btn small" id="run-back">← All runs</button>';
   if (!runDet) { fetchRun(runOpen); return `<div class="head">${back}<h1>Run</h1><p class="sub">Loading…</p></div>`; }
@@ -328,10 +328,14 @@ function runPage() {
         <td>${esc(g.evidence || '')}${g.seconds != null ? ` <span class="note">(${g.seconds}s)</span>` : ''}${g.log && d.logs[g.id] ? `<details><summary class="note">log: <span class="mono">${esc(g.log)}</span></summary><pre class="cmd">${esc(d.logs[g.id])}</pre></details>` : ''}</td></tr>`).join('')}</table></div>
     <div class="card"><h2>Attempts</h2><table><tr><th>Worker</th><th>Result</th><th>Time</th><th>Tokens in / out</th><th>What to do</th></tr>${d.attempts.map((a) => `<tr>
       <td><b>${esc(a.provider)}</b>${a.model ? `<div class="note mono">${esc(a.model)}</div>` : ''}</td>
-      <td>${a.ok ? '<span class="pill ok">ok</span>' : `<span class="pill ${a.skipped ? '' : 'bad'}">${esc(a.skipped ? 'skipped' : 'failed')}</span><div class="note">${esc(a.reason)}</div>`}</td>
+      <td>${a.ok ? '<span class="pill ok">ok</span>' : `<span class="pill ${a.skipped ? '' : /^waiting/.test(a.reason) ? 'warn' : 'bad'}">${esc(a.skipped ? 'skipped' : /^waiting/.test(a.reason) ? 'waiting' : 'failed')}</span><div class="note">${esc(a.reason)}</div>`}</td>
       <td>${a.seconds != null ? `${a.seconds}s` : ''}</td><td>${a.tokens ? `${(a.tokens.input || 0).toLocaleString()} / ${(a.tokens.output || 0).toLocaleString()}` : '–'}</td>
       <td class="note">${esc(a.next || '')}</td></tr>`).join('')}</table>
       ${d.warnings.length ? d.warnings.map((w) => `<div class="note">⚠ ${esc(w)}</div>`).join('') : ''}</div>
+    ${d.waiting && !d.waiting.importedAs ? `<div class="card"><h2>Waiting for your answer</h2><p class="note">Paste this prompt (${d.waiting.chars} characters) into any web chat (DeepSeek, Kimi, Qwen, Gemini, ChatGPT…), then paste its whole answer below. conductor applies and checks it like any worker's; it never opens the chat itself.</p>
+      <div class="row"><button class="btn small" id="mw-copy">${icon('copy')} Copy prompt</button><span class="note mono">${esc(d.waiting.prompt)}</span></div>
+      <textarea id="mw-answer" rows="10" style="width:100%;margin-top:8px;font-family:var(--mono);font-size:12.5px" placeholder="Paste the chat's answer here"></textarea>
+      <div class="row" style="margin-top:8px"><button class="btn primary" id="mw-import">Import the answer</button><span class="note">Same as <span class="mono">conductor import ${esc(d.id)} answer.md</span></span></div></div>` : d.waiting?.importedAs ? `<div class="card"><h2>Answered</h2><p class="note">Your answer was imported as <a href="#" data-run="${esc(d.waiting.importedAs)}">run ${esc(d.waiting.importedAs)}</a>.</p></div>` : ''}
     ${next.length ? `<div class="card"><h2>Next</h2><p class="note">Review the diff, then merge it, or discard the branch. Run these in the project.</p>${cmd(next[0])}${cmd(next[1])}${cmd(next[2])}<p class="note">Discard instead:</p>${cmd(next[3])}</div>` : ''}
     ${d.changed.length ? `<div class="card"><h2>Files changed</h2><div class="mono">${d.changed.map(esc).join('<br>')}</div></div>` : ''}
     ${det('Report', d.report, true)}${det('Diff', d.diff)}`;
@@ -442,6 +446,8 @@ const views = {
       'verify-failed': '<span class="pill bad" title="The worker finished, but verify fails">verify failed</span>',
       'out-of-scope': `<span class="pill warn" title="${esc('Changed files the task does not list: ' + (r.outside || []).join(', '))}">out of scope</span>`,
       unverified: '<span class="pill warn" title="The worker wrote code, but no verify ran, so nothing proves it works. Set a verify command (conductor init --verify)">unverified</span>',
+      waiting: '<span class="pill warn" title="Waiting for your answer from a web chat: open the run to copy the prompt and paste the answer">waiting for you</span>',
+      answered: '<span class="pill" title="Your answer was imported as a new run">answered</span>',
     }[r.state] || '<span class="pill bad">failed</span>');
     const verify = (v) => !v ? '–' : `<span class="pill ${v === 'PASS' ? 'ok' : v === 'FAIL' ? 'bad' : ''}">${esc(v)}</span>`;
     return `<div class="head"><h1>Runs</h1><p class="sub">Work handed out in this project, newest first; updates every few seconds (<span class="mono">conductor runs</span> in the terminal).</p></div>
@@ -657,6 +663,13 @@ function bind() {
   const gt = $('#guard-toggle'); if (gt) gt.onclick = async () => { try { guardData = await api('POST', '/api/guard', { on: !guardData.on }); render(); toast(`Commit guard ${guardData.on ? 'on' : 'off'}`); } catch (e) { toast(e.message); } };
   document.querySelectorAll('[data-run]').forEach((a) => a.onclick = (e) => { e.preventDefault(); openRun(a.dataset.run); });
   const rb = $('#run-back'); if (rb) rb.onclick = () => { openRun(null); loadRuns(); };
+  const mc = $('#mw-copy'); if (mc) mc.onclick = () => navigator.clipboard?.writeText(runDet?.waiting?.promptText || '').then(() => toast('Prompt copied: paste it into the web chat'), () => toast('Copy failed: open the prompt file'));
+  const mi = $('#mw-import'); if (mi) mi.onclick = async () => {
+    const text = $('#mw-answer').value.trim();
+    if (!text) { toast('Paste the answer first'); return; }
+    mi.disabled = true; mi.textContent = 'Checking the answer…';
+    try { const r = await api('POST', '/api/import', { run: runDet.id, text }); toast(`Imported as run ${r.run}: ${r.outcome || 'done'}`); openRun(r.run); } catch (e) { toast(e.message); mi.disabled = false; mi.textContent = 'Import the answer'; }
+  };
   const skr = async (p, body, msg) => { try { skillsData = await api('POST', p, body); render(); if (msg) toast(msg); return true; } catch (e) { toast(e.message); return false; } };
   const skn = $('#sk-newbtn'); if (skn) skn.onclick = () => { skillNew = !skillNew; render(); };
   const skc = $('#sk-create'); if (skc) skc.onclick = () => skr('/api/skills/new', { name: $('#sk-name').value.trim(), scope: $('#sk-scope').value, description: $('#sk-desc').value.trim(), files: $('#sk-files').value.trim(), roles: $('#sk-roles').value.trim(), text: $('#sk-text').value.trim() }, 'Skill created. Write its instructions with Edit').then((ok) => { if (ok) { skillNew = false; render(); } });

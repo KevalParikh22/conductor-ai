@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -182,4 +182,14 @@ export function wrapForTerminal(text, width) {
     out.push(cur);
     return out.join('\n');
   }).join('\n');
+}
+
+/** Put text on the clipboard if this machine has a way to (wl-copy, xclip, xsel, pbcopy, clip.exe). → the tool used, or null */
+export function copyToClipboard(text) {
+  const tools = [['wl-copy', []], ['xclip', ['-selection', 'clipboard']], ['xsel', ['--clipboard', '--input']], ['pbcopy', []], ['clip.exe', []], ['clip', []]];
+  for (const [bin, args] of tools) {
+    if (!which(bin)) continue;
+    try { execFileSync(bin, args, { input: text, stdio: ['pipe', 'ignore', 'ignore'], timeout: 5000 }); return bin; } catch { /* try the next */ }
+  }
+  return null;
 }

@@ -7,7 +7,12 @@
  * list), 'unverified' (it wrote code but no verify ran, so
  * nothing proves it works) or 'failed' (no provider finished).
  */
+/** Exit code 5: the run waits for your answer from a web chat (W1: conductor import <run> <file>). */
+export const EXIT_WAITING = 5;
+
 export function outcome(s) {
+  // W1: a manual run waits for your answer, then points at the run that imported it
+  if (!s?.winner && s?.waiting) return s.importedAs ? 'answered' : 'waiting';
   if (!s?.winner) return 'failed';
   if (s.verify?.status === 'FAIL') return 'verify-failed';
   if (/RESULT:\s*\**\s*(PARTIAL|BLOCKED|FAILED|FAIL)\b/i.test(s.status || '')) return 'partial';

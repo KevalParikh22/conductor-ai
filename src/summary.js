@@ -17,6 +17,13 @@ export function formatSummary(s) {
   if (s.lessonsDemoted?.length) L.push(`order:     moved to the back: ${s.lessonsDemoted.join(', ')} (failed this kind of work here before)`);
   const multi = (n) => s.attempts.filter((a) => a.provider === n).length > 1; // show models only where a provider switched model
   L.push(`attempts:  ${s.attempts.map((a) => `${a.provider}${a.model && multi(a.provider) ? `[${a.model}]` : ''}(${a.reason}${a.stashed ? ', stashed' : ''})`).join(' → ') || '(none)'}`);
+  if (!s.winner && s.waiting) {
+    // W1: the run waits for your answer from a web chat
+    const id = (s.runDir || '').split('/').pop();
+    L.push(`waiting:   for your answer (exit 5). The prompt (${s.waiting.chars} characters) is in ${s.waiting.prompt}`);
+    L.push(s.importedAs ? `answered:  imported as run ${s.importedAs}` : `next:      paste it into any web chat (DeepSeek, Kimi, Qwen, Gemini, ChatGPT…), save the whole answer to a file, then:\n           conductor import ${id} <answer file>   (or - to paste it on stdin)`);
+    return L.join('\n');
+  }
   if (!s.winner) {
     L.push('worker:    NONE. Every provider failed or was skipped (exit 3).');
     if (s.worktree?.continued) L.push(`kept:      the earlier work is still on ${s.worktree.branch}; failed attempts were stashed there`);

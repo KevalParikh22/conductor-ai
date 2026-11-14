@@ -25,6 +25,8 @@ const REASONS = {
   'daily budget reached ($1.00 of $1)': /dailyBudgetUSD/,
   'every model is cooling down': /conductor cooldown --clear x/,
   cancelled: /passed first/,
+  'waiting for your answer': /conductor import x-run <answer file>/,
+  'prompt too long for DeepSeek web: 120000 characters, its limit is 60000': /over DeepSeek web's limit \(60000\)/,
   'context too small: the prompt needs ~9000 tokens with the answer, qwen3.5:2b runs with 4096 (Ollama 0.40.13)': /OLLAMA_CONTEXT_LENGTH=16384/,
   'quota (cooldown 30m)': /rate limit or its quota/,
   'denied: command (add an allow rule, e.g. settings.allowCommands)': /refused `command`.*allowCommands/,
@@ -51,7 +53,7 @@ const REASONS = {
 };
 
 test('every reason the code writes maps to its own next step, never the generic fallback', () => {
-  const ctx = { name: 'x', p: { preset: 'antigravity', bin: 'agy', apiKeyEnv: 'GROQ_API_KEY' }, log: 'run/x.log' };
+  const ctx = { name: 'x', p: { preset: 'antigravity', bin: 'agy', apiKeyEnv: 'GROQ_API_KEY' }, log: 'run/x.log', run: 'x-run' };
   for (const [reason, want] of Object.entries(REASONS)) {
     const step = nextStep(reason, ctx);
     assert.doesNotMatch(step, FALLBACK, `"${reason}" has no step of its own`);
@@ -68,7 +70,7 @@ test('source scan: each literal reason in src/ has a sample above, so it is cove
     const text = fs.readFileSync(path.join(src, f), 'utf8');
     for (const m of text.matchAll(/reason: (?:'([^']+)'|`([^`$]*)\$?)/g)) {
       const lit = m[1] ?? m[2];
-      if (lit && !/^(ok|installed|ready|key present|no key needed|responded)/.test(lit)) found.add(lit.trim());
+      if (lit && !/^(ok|installed|ready|key present|no key needed|responded|you paste the prompt)/.test(lit)) found.add(lit.trim());
     }
   }
   assert.ok(found.size >= 8, `found ${found.size} literal reasons`);

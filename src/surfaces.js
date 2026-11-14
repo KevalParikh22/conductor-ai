@@ -13,6 +13,7 @@ export const ACTIONS = [
   { id: 'verify', title: "Run the project's verify command", cli: 'conductor verify', mcp: 'conductor_verify', ui: { na: 'runs project commands; use the terminal or your controller' } },
   // ---- reviewing results
   { id: 'runs', title: 'Recent runs, and one run in full (checks, attempts, report)', cli: 'conductor runs [show <run>]', mcp: 'conductor_runs', ui: 'GET /api/run' },
+  { id: 'import', title: 'Import your answer from a web chat for a waiting run (or a research report)', cli: 'conductor import <run> <file>', mcp: 'conductor_import', ui: 'POST /api/import' },
   { id: 'diff', title: 'Compact diff to review', cli: 'conductor diff [branch]', mcp: 'conductor_diff', ui: 'GET /api/run' },
   { id: 'stats', title: 'Quality numbers: first-try accept rate, alpha gate, failure causes', cli: 'conductor stats [--failures]', mcp: 'conductor_stats', ui: 'GET /api/stats' },
   { id: 'usage', title: 'Runs, tokens, cost and time per provider', cli: 'conductor usage', mcp: 'conductor_stats', ui: 'GET /api/runs' },

@@ -325,7 +325,23 @@ export async function runAnthropic(name, p, { system, prompt, timeoutMs, history
   return { ok: false, text: r.json?.error?.message || '', ...(r.status === 200 ? { reason: 'empty output' } : classifyHttp(r)), log };
 }
 
+/**
+ * W1: the manual "provider" is you, in a web chat. Without an answer it writes the whole prompt (as a chat model would
+ * get it) to manual.prompt.md and returns waiting; with an imported answer it returns that answer, so it goes through
+ * every check like any worker's. Nothing is sent anywhere.
+ */
+export function runManual(name, p, { prompt, system, runDir, manualAnswer }) {
+  if (manualAnswer != null) return { ok: true, text: String(manualAnswer), model: p.model || 'web chat', log: `(answer imported from a web chat by you: ${String(manualAnswer).length} characters)` };
+  const text = `${system ? `${system}\n\n---\n\n` : ''}${prompt}`;
+  const cap = Number(p.maxPromptChars) || 0;
+  if (cap && text.length > cap) return { ok: false, text: '', reason: `prompt too long for ${p.label || name}: ${text.length} characters, its limit is ${cap}`, log: '' };
+  const file = path.join(runDir, 'manual.prompt.md');
+  fs.writeFileSync(file, text);
+  return { ok: false, waiting: true, promptFile: file, text: '', reason: 'waiting for your answer', log: `(prompt written for a web chat: ${text.length} characters)` };
+}
+
 export function runProvider(name, p, opts) {
+  if (p.type === 'manual') return runManual(name, p, opts);
   if (p.type === 'cli') return runCli(name, p, opts);
   if (p.type === 'anthropic') return runAnthropic(name, p, opts);
   return runOpenAI(name, p, opts);
