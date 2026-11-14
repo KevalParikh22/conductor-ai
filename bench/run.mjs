@@ -145,6 +145,7 @@ async function main() {
     sh(process.execPath, [CONDUCTOR, 'init', '--controller', 'claude-code', '--no-mcp'], dir);
     git(dir, 'add', '-A'); git(dir, 'commit', '-qm', 'conductor init', '--allow-empty');
     const prio = argv.includes('--priority') ? ['--priority', argv[argv.indexOf('--priority') + 1]] : [];
+    if (argv.includes('--provider')) prio.push('--provider', argv[argv.indexOf('--provider') + 1]); // W only: force one worker (to test a weak one)
     const w0 = Date.now();
     const r = sh(process.execPath, [CONDUCTOR, 'batch', '--plan', PLAN, ...(tasks.length === TASKS.length ? ['--all'] : ['--tasks', tasks.join(','), '--merge']), ...prio], dir, { env: cleanEnv(), timeout: 60 * 60_000 });
     calls.push({ task: null, ok: r.status === 0, cost: 0, seconds: Math.round((Date.now() - w0) / 1000), turns: 0, tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, result: String(r.stdout || '').slice(-4000) + String(r.stderr || '').slice(-1500) });
