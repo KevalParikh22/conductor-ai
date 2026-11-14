@@ -16,12 +16,12 @@ const QUOTA = (h) => `error: Individual quota reached. Please upgrade your subsc
 const MODELS = 'gemini-3.8-flash-high\tGemini 3.8 Flash (High)\ngemini-3.8-flash-low\tGemini 3.8 Flash (Low)\nclaude-sonnet-4-6\tClaude Sonnet 4.6 (Thinking)\ngpt-oss-120b-medium\tGPT-OSS 120B (Medium)';
 const REPORT = '## RESULT: DONE\\n## Files changed\\n- none\\n## Checks run\\n- none\\n## Notes\\n- none\\n';
 // a fake agy: `models` lists models; a model in OUT_OF_QUOTA (or the default) answers with the quota error
-const fakeAgy = (outOfQuota, hours = 5) => `
+const fakeAgy = (outOfQuota, hours = 5, sameReset = false) => `
   if (args[0] === 'models') { console.log('Fetching available models...'); console.log(${JSON.stringify(MODELS)}); process.exit(0); }
   const m = args.includes('--model') ? args[args.indexOf('--model') + 1] : '(default)';
   const fam = m === '(default)' ? 'gemini' : m.match(/^[a-z]+/)[0];
   const out = ${JSON.stringify(outOfQuota)};
-  if (out.includes(fam) || out.includes('*')) { console.error(${JSON.stringify(QUOTA(hours))}.replace('${hours}h', (out.includes('*') ? ${hours} : ${hours} + out.indexOf(fam)) + 'h')); process.exit(3); }
+  if (out.includes(fam) || out.includes('*')) { console.error(${JSON.stringify(QUOTA(hours))}.replace('${hours}h', (out.includes('*') || ${sameReset} ? ${hours} : ${hours} + out.indexOf(fam)) + 'h')); process.exit(3); }
   console.log(JSON.stringify({ status: 'SUCCESS', response: '${REPORT}', usage: { input_tokens: 10, output_tokens: 2 } }));`;
 
 const cfgWith = (dir, providers) => { const cfg = loadConfig(dir); cfg.providers = providers; return cfg; };
@@ -58,17 +58,30 @@ test('quota on agy\'s default model: it tries another model family, and the cool
   assert.equal(s2.attempts.length, 1);
 });
 
-test('two models with the same reset time share the account\'s quota: stop after two, cool agy down until the reset', async () => {
+test('every family out with the same reset: the account is out; agy cools down until the reset', async () => {
   fakeBins({ 'agy-all-out': fakeAgy(['*'], 118) });
   clearCooldowns();
   const { dir } = makeRepo();
   const s = await dispatch(cfgWith(dir, { agy: agy('agy-all-out') }), { role: 'ask', task: 'q', chain: ['agy'] });
   assert.equal(s.winner, null);
-  assert.equal(s.attempts.filter((a) => !a.skipped).length, 2, 'not every model: the second identical reset proves it is the account');
+  assert.equal(s.attempts.filter((a) => !a.skipped).length, 3, 'one model per family (gemini, claude, gpt), not every model');
   const cd = getCooldowns().agy;
   assert.equal(cd.reason, 'quota used up for the whole account');
   assert.ok(cd.until > Date.now() + 117 * 3600_000, 'days, not the default 30 minutes');
-  assert.match(s.attempts[1].next, /cools down/);
+  assert.match(s.attempts[2].next, /cools down/);
+});
+
+test('two families sharing one quota (same reset) do not make the account empty while another family is untried', async () => {
+  // found 2026-11-14: Gemini's default was cooling, Claude and GPT-OSS ran out together, Gemini 3.8 Flash still had quota
+  fakeBins({ 'agy-shared': fakeAgy(['claude', 'gpt'], 138, true) });
+  clearCooldowns();
+  const { setCooldown, modelKey } = await import('../src/cooldowns.js');
+  setCooldown(modelKey('agy', ''), 60, 'rate limited');
+  const { dir } = makeRepo();
+  const s = await dispatch(cfgWith(dir, { agy: agy('agy-shared') }), { role: 'ask', task: 'q', chain: ['agy'] });
+  assert.equal(s.winner, 'agy');
+  assert.equal(s.model, 'gemini-3.8-flash-high');
+  assert.ok(!getCooldowns().agy, 'agy is not marked as out for the whole account');
 });
 
 test('model families: other families first, one each, then the rest; the list is cached', async () => {

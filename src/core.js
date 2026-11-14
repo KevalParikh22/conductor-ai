@@ -17,7 +17,7 @@ import { independentReview, riskReasons } from './review.js';
 import { lessonsPrompt, demoteByLessons, lessonsFromRun, addLesson, resolveLessons, promotable, readLessons, lessonMatches, GUIDANCE } from './lessons.js';
 import { rulesPrompt } from './controllers.js';
 import { recordVerify } from './guard.js';
-import { autoModel, autoFallbacks, cliFallbacks } from './models.js';
+import { autoModel, autoFallbacks, cliFallbacks, modelFamily } from './models.js';
 import { smartOrder, taskSize, isFree as isFreeProvider } from './selector.js';
 import { taskProviders, matchRoute, describeRoute } from './routing.js';
 import { compactDiff } from './diffview.js';
@@ -534,6 +534,9 @@ async function dispatchOnce(cfg, opts) {
     let { models, auto } = await modelsToTry(c.name, c.p, kind);
     let timeouts = 0;
     const resets = []; // V8: quota reset times seen on this provider's models in this run
+    // families whose quota ran out in this run ('' = the CLI's default model, so its default family)
+    const quotaFams = new Set();
+    const famOf = (m) => modelFamily(m) || c.p.defaultFamily || CLI_PRESETS[c.p.preset]?.defaultFamily || '';
     // its own model is cooling down, but it can list others (agy: another model family may still have quota)
     if (!models.length && auto && !getCooldowns()[c.name]) { models = await auto(); auto = null; }
     if (!models.length) {
@@ -654,7 +657,12 @@ async function dispatchOnce(cfg, opts) {
       if (timedOut && timeouts === 2 && kind === 'chat' && settings.hangCooldownMin !== 0) setCooldown(c.name, settings.hangCooldownMin ?? 15, 'timed out twice');
       // one more model after a timeout; a second timeout means the provider itself is hanging, so move on
       // V8: two models whose quotas reset at the same moment share one quota (the account's): stop trying models
-      const accountWide = quota && res.retryAfterSec > 0 && resets.some((r) => Math.abs(r - res.retryAfterSec) <= 120);
+      // …but only once no family is left untried: agy's Claude and GPT-OSS models share one quota and reset together,
+      // while its Gemini models have their own (found 2026-11-14: conductor called the account empty, Gemini had 93%)
+      if (quota) quotaFams.add(famOf(model));
+      if (quota && mi === models.length - 1 && auto) { models = [...models, ...(await auto())]; auto = null; }
+      const untried = models.slice(mi + 1).some((m) => !quotaFams.has(famOf(m)));
+      const accountWide = quota && res.retryAfterSec > 0 && resets.some((r) => Math.abs(r - res.retryAfterSec) <= 120) && !untried;
       if (quota && res.retryAfterSec > 0) resets.push(res.retryAfterSec);
       const modelProblem = !accountWide && (quota || (kind === 'chat' && /^(timeout|empty output|server 5)/.test(res.reason || '') && timeouts < 2));
       if (modelProblem && mi === models.length - 1 && auto) { models = [...models, ...(await auto())]; auto = null; }
