@@ -90,3 +90,12 @@ test('batch --merge refuses a dirty checkout and dependency cycles; without --me
   fs.writeFileSync(path.join(dir, 'docs/plan/p.md'), plan(task('T1')) + '\nedited\n');
   await assert.rejects(runBatch(cfgFor(dir), { planPath: 'docs/plan/p.md', all: true }), (e) => e instanceof UsageError && /clean checkout/.test(e.message));
 });
+
+test('batch --all skips tasks already marked status: done (a re-run picks up what is left)', async () => {
+  const { planBatch } = await import('../src/batch.js');
+  const done = task('T1').replace('- **role:** build', '- **role:** build\n- **status:** done');
+  const { dir } = repo(plan(done, task('T2', 'T1')));
+  const { items, warnings } = planBatch(cfgFor(dir), { planPath: 'docs/plan/p.md', all: true, merge: true });
+  assert.deepEqual(items.map((t) => t.id), ['T2']);
+  assert.ok(warnings.includes('T1: status done, skipped'));
+});

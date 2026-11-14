@@ -25,7 +25,9 @@ export function planBatch(cfg, { planPath, tasks, role, allowOpenQuestions, allo
   if (all) {
     // S3: every task a worker can do; controller and read-only tasks are left to the controller
     tasks = planTaskIds(planText).filter((id) => {
-      const r = role || field(extractTask(planText, id), 'role').split(/[\s|,]/)[0] || 'build';
+      const sec = extractTask(planText, id);
+      if (/^done\b/i.test(field(sec, 'status'))) { skipped.push(`${id}: status done, skipped`); return false; }
+      const r = role || field(sec, 'role').split(/[\s|,]/)[0] || 'build';
       const ok = r !== 'controller' && ROLES[r]?.mode === 'write';
       if (!ok) skipped.push(`${id} (${r}): not a worker task, left for you`);
       return ok;
