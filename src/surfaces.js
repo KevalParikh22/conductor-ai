@@ -34,6 +34,7 @@ export const ACTIONS = [
   { id: 'init', title: 'Set up a project for a controller', cli: 'conductor init', mcp: { na: 'runs once, before the controller can use MCP' }, ui: 'POST /api/init' },
   { id: 'setup', title: 'First-time setup', cli: 'conductor setup', mcp: { na: 'runs before any controller is connected' }, ui: 'GET /api/state' },
   { id: 'worktree', title: 'List or remove task worktrees', cli: 'conductor worktree [rm]', mcp: { na: 'merging and removing branches is your call: the run page shows the commands' }, ui: { na: 'shown as commands on the run page' } },
+  { id: 'demo', title: 'See conductor work end to end on a throwaway project', cli: 'conductor demo [--keep]', mcp: { na: 'a first look for a person, not a task for a controller' }, ui: { na: 'runs in the terminal, with a live table; --keep leaves the project to open in conductor ui' } },
   { id: 'eval', title: 'Score conductor on tasks with hidden tests', cli: 'conductor eval [run]', mcp: { na: 'long and spends provider quota: run it yourself' }, ui: { na: 'long-running: use the terminal' } },
 ];
 
