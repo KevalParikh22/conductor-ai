@@ -9,7 +9,7 @@ import { listWorktrees, removeWorktree, readWorktreeMeta } from '../src/worktree
 import { listSkills, setSkillOn, newSkill, addSkill, removeSkill, syncSkills, globalSkillsDir, projectSkillsDir } from '../src/skills.js';
 import { statusReport, statusData } from '../src/status.js';
 import { runVerify, detectVerify } from '../src/verify.js';
-import { checkPlan, formatPlanCheck } from '../src/plancheck.js';
+import { checkPlan, formatPlanCheck, planWarnings } from '../src/plancheck.js';
 import { listEvals, checkEvals, runEvals, formatEvals, loadResult } from '../src/evals.js';
 import { failureStats, formatFailureStats, qualityStats, formatQualityStats } from '../src/stats.js';
 import { readLessons, addLesson, removeLesson, promoteLesson, GUIDANCE, promotable, PROMOTE_AT } from '../src/lessons.js';
@@ -474,7 +474,8 @@ async function main() {
       if (!fs.existsSync(abs)) throw new UsageError(`plan not found: ${file}`);
       const rows = checkPlan(fs.readFileSync(abs, 'utf8'), { ids: o.task ? String(o.task).split(',').map((x) => x.trim()).filter(Boolean) : undefined, verifyCmd: detectVerify(cfg.root, cfg.settings), maxFiles: cfg.settings.maxTaskFiles || 4 });
       if (!rows.length) throw new UsageError(`no tasks found in ${file} (expected headings like "### T1: title")`);
-      console.log(o.json ? JSON.stringify(rows, null, 2) : formatPlanCheck(file, rows));
+      const warns = planWarnings(fs.readFileSync(abs, 'utf8'));
+      console.log(o.json ? JSON.stringify({ tasks: rows, warnings: warns }, null, 2) : formatPlanCheck(file, rows, warns));
       return rows.some((r) => r.problems.length) ? 1 : 0;
     }
     case 'eval': case 'evals': {

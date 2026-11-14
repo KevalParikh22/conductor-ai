@@ -23,7 +23,7 @@
 </div>
 
 > [!NOTE]
-> **Early and moving fast (v0.10), solo-maintained.** 267 tests run in CI on Linux and macOS with Node 20, 22 and 24. The agents it drives change their CLI flags often; each one is a small preset you can override in config.
+> **Early and moving fast (v0.10), solo-maintained.** 268 tests run in CI on Linux and macOS with Node 20, 22 and 24. The agents it drives change their CLI flags often; each one is a small preset you can override in config.
 >
 > **Not affiliated with** Conductor (conductor.build, a Mac app for parallel Claude Code agents) or Conductor OSS (Orkes, workflow orchestration). The commands `conductor` and `conductor-ai` are the same program; use `conductor-ai` if another tool already installed a `conductor` command (`conductor-ai doctor` tells you).
 

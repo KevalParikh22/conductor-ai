@@ -8,7 +8,7 @@ import { runProvider } from './providers.js';
 import * as git from './git.js';
 import { runVerify } from './verify.js';
 import { baseVerify, scopeCheck, newFailures, syntaxErrors, missingContract, failureBrief, runRepro, proveRegression, verifyOnBase, TEST_FILE, unexported } from './gates.js';
-import { checkTask, taskAcceptance, acceptancePrompt, readAcceptance } from './plancheck.js';
+import { checkTask, taskAcceptance, acceptancePrompt, readAcceptance, planWarnings, warningsForTask } from './plancheck.js';
 import { detectVerify } from './verify.js';
 import { repoMap, contextPack } from './context.js';
 import { runAcceptanceChecks, checksBrief, parseChecks } from './acceptcheck.js';
@@ -328,6 +328,8 @@ async function dispatchOnce(cfg, opts) {
         'Answer them in the plan (mark "- [x] question → answer") before handing out tasks, or pass --allow-open-questions');
     }
     // Q1: a task a worker can't do well (no files, nothing checkable, no verify, too big) goes back to the controller
+    // Q11: rules in the plan that contradict each other for this task's functions (a warning: the task still runs)
+    if (mode === 'write') for (const w of warningsForTask(planWarnings(planText), section)) preWarnings.push(`plan: ${w.message}`);
     if (mode === 'write') planGate = settings.planGate === false ? { status: 'off' } : opts.allowWeakPlan ? { status: 'waived' } : { status: 'pass' };
     if (mode === 'write' && settings.planGate !== false && !opts.allowWeakPlan) {
       const problems = checkTask(section, { verifyCmd: detectVerify(root, settings), maxFiles: settings.maxTaskFiles || 4 });

@@ -111,3 +111,21 @@ test('the worker\'s prompt ends with its acceptance criteria, and its answers de
   assert.match(prompt.slice(-900), /Before you finish: check every acceptance criterion\n1\. total\(\) of an empty cart returns 0\n2\. total\(\) sums/, 'recited at the very end');
   assert.deepEqual([s.acceptance.met, s.acceptance.total, s.outcome], [1, 2, 'partial']);
 });
+
+test('Q11: contradicting error rules are flagged (B2\'s original cart rules), and a clear rule is not', async () => {
+  const { planWarnings, warningsForTask, formatPlanCheck } = await import('../src/plancheck.js');
+  const original = `## Design notes
+- Errors: wrong type → \`TypeError\`; out-of-range number → \`RangeError\`; anything else → \`Error\`.
+  - \`add(id, qty = 1)\`: \`qty\` must be an integer ≥ 1 (else \`RangeError\`). Unknown id → \`Error\`.
+  - \`setQty(id, qty)\`: \`qty\` integer ≥ 0 (else \`RangeError\`); \`0\` removes the line.
+  - \`{ type: 'bogo', id, buy, get }\`: gets \`Math.floor(qty / (buy + get))\` free units. \`buy\` and \`get\` must be integers ≥ 1 (else \`RangeError\`).
+`;
+  const w = planWarnings(original);
+  assert.deepEqual(w.map((x) => [x.fn, x.param, x.error]), [['add', 'qty', 'RangeError'], ['setQty', 'qty', 'RangeError'], [null, 'buy', 'RangeError'], [null, 'get', 'RangeError']]);
+  assert.match(w[0].message, /add\(\): `qty` of the wrong type \(e\.g\. the string '2' for an integer\) matches two rules[\s\S]*Say which wins/);
+  const clear = original.replace('(else `RangeError`). Unknown', '; anything else, a non-integer included, throws `RangeError`. Unknown').replace('integer ≥ 0 (else `RangeError`)', 'integer ≥ 0 (anything else, a non-number included, throws `RangeError`)').replace('integers ≥ 1 (else `RangeError`)', 'integers ≥ 1; anything else throws `RangeError`');
+  assert.deepEqual(planWarnings(clear), [], 'saying which rule wins removes the warning');
+  assert.deepEqual(planWarnings(original.replace(/wrong type → `TypeError`; /, '')), [], 'no general type rule: nothing to contradict');
+  assert.deepEqual(warningsForTask(w, "- [ ] `createCart().add('bk-002', 3)` throws RangeError").map((x) => x.fn), ['add'], 'a task gets the warnings for the functions it calls');
+  assert.match(formatPlanCheck('p.md', [{ id: 'T1', title: 'cart', role: 'build', problems: [] }], w), /All 1 task\(s\) are ready[\s\S]*Warnings: 4 place\(s\)[\s\S]*! add\(\): `qty`/);
+});

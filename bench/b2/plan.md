@@ -23,7 +23,7 @@
 ### Discounts (`src/discounts.js`, T2)
 - `applyDiscounts(lines, rules)`; `lines` have the shape `cart.lines()` returns. Rules:
   - `{ type: 'percent', category, percent }`: a line in `category` gets `Math.floor(lineCents * percent / 100)`. `percent` outside 0–100 → `RangeError`.
-  - `{ type: 'bogo', id, buy, get }`: the line with that `id` gets `Math.floor(qty / (buy + get)) * get` free units: discount = free units × `unitCents`. `buy` and `get` must be integers ≥ 1 (else `RangeError`).
+  - `{ type: 'bogo', id, buy, get }`: the line with that `id` gets `Math.floor(qty / (buy + get)) * get` free units: discount = free units × `unitCents`. `buy` and `get` must be integers ≥ 1; anything else, a non-integer included, throws `RangeError`.
   - `{ type: 'amount', minSubtotalCents, amountCents }`: an order-level discount of `amountCents` when the subtotal (sum of `lineCents`, before any discount) is ≥ `minSubtotalCents`.
   - Any other `type` → `TypeError`.
 - Line discounts don't stack: each line gets only its **largest** applicable line discount (a tie goes to the earlier rule). Of the `amount` rules that apply, only the one with the largest `amountCents` is used.

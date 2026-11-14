@@ -12,7 +12,7 @@ import { listSkills } from './skills.js';
 import { runBatch, formatBatch } from './batch.js';
 import { statusReport } from './status.js';
 import { runVerify, detectVerify } from './verify.js';
-import { checkPlan, formatPlanCheck } from './plancheck.js';
+import { checkPlan, formatPlanCheck, planWarnings } from './plancheck.js';
 import { readLessons, addLesson, removeLesson, promoteLesson, GUIDANCE, PROMOTE_AT } from './lessons.js';
 import { qualityStats, formatQualityStats, failureStats, formatFailureStats } from './stats.js';
 import { usageReport, formatUsage } from './usage.js';
@@ -169,7 +169,7 @@ async function callTool(name, args, startRoot) {
     const abs = path.resolve(root, args.plan || '');
     if (!args.plan || !fs.existsSync(abs)) return text(`conductor: plan not found: ${args.plan || '(none given)'}`, true);
     const rows = checkPlan(fs.readFileSync(abs, 'utf8'), { ids: args.task_ids, verifyCmd: detectVerify(root, cfg.settings), maxFiles: cfg.settings.maxTaskFiles || 4 });
-    return text(rows.length ? formatPlanCheck(args.plan, rows) : `no tasks found in ${args.plan}`, !rows.length || rows.some((r) => r.problems.length));
+    return text(rows.length ? formatPlanCheck(args.plan, rows, planWarnings(fs.readFileSync(abs, 'utf8'))) : `no tasks found in ${args.plan}`, !rows.length || rows.some((r) => r.problems.length));
   }
   if (name === 'conductor_lessons') {
     if (args.remove) { const g = removeLesson(root, String(args.remove)); return g ? text(`removed ${g.id}`) : text(`conductor: no lesson "${args.remove}"`, true); }

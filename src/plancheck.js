@@ -69,7 +69,7 @@ export function checkPlan(planText, { ids, verifyCmd, maxFiles } = {}) {
   });
 }
 
-export function formatPlanCheck(file, rows) {
+export function formatPlanCheck(file, rows, warnings = []) {
   const L = [`plan check: ${file}`];
   for (const r of rows) {
     L.push(`${r.problems.length ? '✗' : '✓'} ${r.id}${r.title ? `: ${r.title}` : ''}${r.role && r.role !== 'build' ? ` (${r.role})` : ''}`);
@@ -77,6 +77,10 @@ export function formatPlanCheck(file, rows) {
   }
   const bad = rows.filter((r) => r.problems.length).length;
   L.push('', bad ? `${bad} of ${rows.length} task(s) need work before a worker gets them.` : `All ${rows.length} task(s) are ready to hand out.`);
+  if (warnings.length) {
+    L.push('', `Warnings: ${warnings.length} place(s) where the plan's rules contradict each other, so a worker can follow either one (fix the plan; this doesn't stop a task):`);
+    for (const w of warnings) L.push(`  ! ${w.message}`);
+  }
   return L.join('\n');
 }
 
@@ -99,4 +103,39 @@ export function readAcceptance(text, criteria) {
   // criteria the worker didn't mention at all count as not met
   for (let i = items.length; i < criteria.length; i++) unmet.push(`${i + 1}. ${criteria[i]} (not answered)`);
   return { total: criteria.length, met: Math.min(met, criteria.length), answered: true, unmet };
+}
+
+/**
+ * Q11 (found by B2): rules in a plan that contradict each other, so a worker can follow either one and still be
+ * "right". Today: a general rule sending the wrong type to TypeError, and a specific rule that a value "must be an
+ * integer/number/string/… (else RangeError)" without saying what a value of the wrong type does. B2's cart task
+ * failed its hidden test on exactly that: `add(id, '2')` threw TypeError (general rule), the test wanted RangeError.
+ * → [{ fn, param, error, rule, message }] (warnings: they don't stop a task)
+ */
+export function planWarnings(planText) {
+  const notes = String(planText);
+  const general = notes.match(/wrong type[^.\n]{0,20}?(?:→|->|=>|:|throws?|gives?|is an?)\s*`?(TypeError)`?/i);
+  if (!general) return [];
+  const out = [];
+  for (const line of notes.split('\n')) {
+    // the function the rule belongs to: one named at the start of the line (- `add(id, qty = 1)`: …), not a call inside it
+    const fn = (line.match(/^\s*[-*]?\s*`(?:\w+\.)?(\w+)\(/) || [])[1] || null;
+    // `qty` must be an integer ≥ 1 (else `RangeError`) · `qty` integer ≥ 0 (else `RangeError`) · `buy` and `get` must be integers ≥ 1 (else …)
+    const re = /((?:`\w+`(?:\s*(?:,|and|or)\s*)?)+)\s+(?:must be\s+|is\s+)?(?:an?\s+)?(integer|number|string|array|boolean|object|date)s?\b([^()\n]{0,60})\(\s*else\s+`?(\w*Error)`?\s*\)/gi;
+    for (const m of line.matchAll(re)) {
+      if (m[4] === 'TypeError') continue;
+      const tail = line.slice(m.index, m.index + m[0].length + 80);
+      if (/including|non-?number|not a number|isn't a number|wrong type|any other value|anything else/i.test(tail)) continue; // already says
+      for (const param of [...m[1].matchAll(/`(\w+)`/g)].map((x) => x[1])) {
+        out.push({ fn, param, error: m[4], rule: m[0].replace(/\s+/g, ' ').trim(),
+          message: `${fn ? `${fn}(): ` : ''}\`${param}\` of the wrong type (e.g. the string '2' for ${/^[aeiou]/i.test(m[2]) ? 'an' : 'a'} ${m[2]}) matches two rules: "${general[0].trim()}" and "${m[0].replace(/\s+/g, ' ').trim()}". Say which wins, e.g. "anything else, a non-${m[2]} included, throws ${m[4]}", and add an acceptance check for it` });
+      }
+    }
+  }
+  return out;
+}
+
+/** The warnings that concern one task: those whose function the task's text calls. */
+export function warningsForTask(warnings, section) {
+  return warnings.filter((w) => w.fn && new RegExp(`\\b${w.fn}\\(`).test(section)); // a rule with no function shows in plan check only
 }
