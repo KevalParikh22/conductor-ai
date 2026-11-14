@@ -664,7 +664,7 @@ async function dispatchOnce(cfg, opts) {
       const untried = models.slice(mi + 1).some((m) => !quotaFams.has(famOf(m)));
       const accountWide = quota && res.retryAfterSec > 0 && resets.some((r) => Math.abs(r - res.retryAfterSec) <= 120) && !untried;
       if (quota && res.retryAfterSec > 0) resets.push(res.retryAfterSec);
-      const modelProblem = !accountWide && (quota || (kind === 'chat' && /^(timeout|empty output|server 5)/.test(res.reason || '') && timeouts < 2));
+      const modelProblem = !accountWide && (quota || (kind === 'chat' && /^(timeout|empty output|server 5|model not available)/.test(res.reason || '') && timeouts < 2));
       if (modelProblem && mi === models.length - 1 && auto) { models = [...models, ...(await auto())]; auto = null; }
       const nextModel = models[mi + 1];
       const tryNext = nextModel !== undefined && modelProblem;

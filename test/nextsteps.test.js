@@ -40,6 +40,7 @@ const REASONS = {
   'server 503': /on its side/,
   'server overloaded': /on its side/,
   'http 404': /conductor models x/,
+  'model not available (404)': /not to your key.*conductor models x/,
   'no model set, and its model list could not be fetched': /set a model for x/,
   'no file blocks in reply': /give this task to an agent/,
   'only protected/outside files returned': /give this task to an agent/,

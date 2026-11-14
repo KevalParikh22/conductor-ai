@@ -72,6 +72,7 @@ const server = http.createServer((req, res) => {
     if (req.url.endsWith('/models')) return res.end(JSON.stringify({ data: [{ id: 'busy:free' }, { id: 'embed-small:free' }, { id: 'qwen-coder:free' }, { id: 'paid-big' }] }));
     const model = JSON.parse(body).model;
     calls.push(model);
+    if (model === 'gone') { res.statusCode = 404; return res.end(JSON.stringify({ status: 404, title: 'Not Found', detail: "Function 'x': Not found for account 'y'" })); }
     if (model.startsWith('busy')) { res.statusCode = 429; return res.end(JSON.stringify({ error: { message: 'rate limited' } })); }
     res.end(JSON.stringify({ model, choices: [{ message: { content: `Answer from ${model}, in enough words to count.` } }] }));
   });
@@ -95,6 +96,17 @@ test('a rate-limited model falls back to the next model on the same provider; on
   calls.length = 0;
   await dispatch(cfg, { role: 'ask', task: 'again?', chain: ['nim'] });
   assert.deepEqual(calls, ['steady'], 'the cooling model is skipped next time');
+});
+
+test('a model the account cannot use (404) falls back to the next model, like a busy one', async () => {
+  // NVIDIA lists models a free key can't call: "Function …: Not found for account …"
+  clearCooldowns(); calls.length = 0;
+  const { dir } = makeRepo();
+  const cfg = loadConfig(dir);
+  cfg.providers.nim2 = api({ model: 'gone', fallbackModels: ['steady'] });
+  const s = await dispatch(cfg, { role: 'ask', task: 'what?', chain: ['nim2'] });
+  assert.equal(s.model, 'steady');
+  assert.match(s.attempts[0].reason, /model not available \(404\)/);
 });
 
 test('a free provider with no fallbacks set finds free chat models from its own list', async () => {

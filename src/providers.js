@@ -274,6 +274,8 @@ function classifyHttp(r) {
   if (r.status === 401 || r.status === 403) return { reason: `auth (${r.status})` };
   if (r.status === 402) return { reason: 'quota' };
   if (r.status >= 500) return { reason: `server ${r.status}` };
+  // the model isn't served, or not to this key (NVIDIA lists models a free key can't call): another model may be
+  if (r.status === 404) return { reason: 'model not available (404)' };
   return { reason: `http ${r.status}` };
 }
 
