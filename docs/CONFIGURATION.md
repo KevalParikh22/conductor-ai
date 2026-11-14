@@ -101,6 +101,8 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | `contractCheck` | true | Reject it when a function or class the task names in a code span isn't defined anywhere afterwards |
 | `chatRepair` | true | Give a chat model's reply with no file blocks one repair turn |
 | `repoMapBytes` | 6000 | Size of the project map chat models get |
+| `race` | false | Race mode for small write tasks: the 2 fastest routes with no per-token price start together, the first to pass every check wins, the other is stopped. Saves waiting, not tokens. `--race` / `--no-race` per run |
+| `raceWidth` | 2 | How many attempts a race starts |
 | `maxParallelPerProvider` | 2 | Most tasks of one batch wave started on the same provider (a provider's own `maxParallel` wins) |
 | `hangCooldownMin` | 15 | A free route that times out twice in one run cools down this long (0 = off) |
 | `contextPack` | true | Give workers the task files, where their code is used elsewhere, the verify command and the matching architecture notes before they start |

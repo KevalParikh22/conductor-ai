@@ -20,6 +20,7 @@ const RULES = [
   [/^cooling down until ([^(]+)/, ({ name }, m) => `it waits until ${m[1].trim()}; to try it now: \`conductor cooldown --clear ${name}\``],
   [/^every model is cooling down/, ({ name }) => `all of ${name}'s models hit their limits; \`conductor cooldown\` shows when each resets (\`conductor cooldown --clear ${name}\` to try now)`],
   [/daily budget reached/, () => `the paid daily budget is used up: wait until tomorrow, or raise dailyBudgetUSD in ${cfgFile}`],
+  [/^cancelled/, () => 'nothing to do: another attempt in the race passed first, so this one was stopped'],
   [/^quota/, ({ name }) => `${name} hit a rate limit or its quota and cools down; conductor moved on. See \`conductor cooldown\`. More free routes: \`conductor providers --free\``],
   [/^denied: (.+?) \(/, (_, m) => `the worker was refused \`${m[1]}\` (headless runs can't ask): add it to settings.allowCommands in ${cfgFile}`],
   [/^agy status/, ({ log }) => `Antigravity reported an error: read ${log || 'the worker log in the run folder'}, then \`conductor doctor --live\``],

@@ -50,6 +50,7 @@ const TOOLS = [
         no_escalate: { type: 'boolean', description: 'when verify fails, stop instead of handing the work to the next provider' },
         review: { type: 'boolean', description: 'true: always get an independent review from another model family; false: never (default: only for risky work)' },
         samples: { type: 'number', description: 'Run this many attempts on different providers in parallel and keep the best by checks (write roles; default 1)' },
+        race: { type: 'boolean', description: 'Start the 2 fastest free routes together; the first to pass every check wins and the other stops (saves waiting, not tokens). Default: settings.race, small tasks only' },
         allow_no_repro: { type: 'boolean', description: "run a fix task even though its repro command already passes (doesn't reproduce the bug)" },
         allow_open_questions: { type: 'boolean', description: 'run plan tasks even if the plan has unresolved Open questions' },
         allow_dirty: { type: 'boolean' },
@@ -241,7 +242,7 @@ async function callTool(name, args, startRoot) {
     try {
       const s = await dispatch(cfg, {
         role: args.role, task: args.task, planPath: args.plan, taskId: args.task_id, provider: args.provider, note: args.note,
-        files: args.files, base: args.base, focus: args.focus, save: args.save, noVerify: args.no_verify, allowUnverified: args.allow_unverified, allowScope: args.allow_scope, allowWeakPlan: args.allow_weak_plan, noEscalate: args.no_escalate, allowNoRepro: args.allow_no_repro, samples: args.samples, review: args.review === true, noReview: args.review === false, allowDirty: args.allow_dirty, allowOpenQuestions: args.allow_open_questions,
+        files: args.files, base: args.base, focus: args.focus, save: args.save, noVerify: args.no_verify, allowUnverified: args.allow_unverified, allowScope: args.allow_scope, allowWeakPlan: args.allow_weak_plan, noEscalate: args.no_escalate, allowNoRepro: args.allow_no_repro, samples: args.samples, race: args.race, review: args.review === true, noReview: args.review === false, allowDirty: args.allow_dirty, allowOpenQuestions: args.allow_open_questions,
         worktree: args.worktree, worktreeId: args.task_id, replace: args.replace, continue: args.continue,
         timeoutMs: args.timeout ? parseDuration(args.timeout) || undefined : undefined,
         onEvent: (e) => process.stderr.write(`[conductor] ${e.type} ${e.provider || ''} ${e.reason || ''}\n`),

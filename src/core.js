@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { ROLES, CLI_PRESETS, BUILD_COMMANDS } from './presets.js';
+import { ROLES, CLI_PRESETS, BUILD_COMMANDS, controllerWorker } from './presets.js';
 import { providerReadiness, providerKind, readOnlyEnforced, PROJECT_DIRNAME } from './config.js';
 import { runProvider } from './providers.js';
 import * as git from './git.js';
@@ -18,7 +18,7 @@ import { lessonsPrompt, demoteByLessons, lessonsFromRun, addLesson, resolveLesso
 import { rulesPrompt } from './controllers.js';
 import { recordVerify } from './guard.js';
 import { autoModel, autoFallbacks, cliFallbacks, modelFamily } from './models.js';
-import { smartOrder, isFree as isFreeProvider } from './selector.js';
+import { smartOrder, taskSize, isFree as isFreeProvider } from './selector.js';
 import { taskProviders, matchRoute, describeRoute } from './routing.js';
 import { compactDiff } from './diffview.js';
 import { snapshot as snapshotLocal } from './localfiles.js';
@@ -356,15 +356,22 @@ const CHAT_REPAIR = 'Your reply had no <<<FILE blocks, so nothing was applied. Y
  */
 export async function dispatch(cfg, opts) {
   // H1: several attempts in parallel, the best one kept (write roles; --samples or settings.samples)
-  const n = Number(opts.samples ?? cfg.settings?.samples ?? 1);
-  if (n > 1 && ROLES[opts.role]?.mode === 'write' && !opts.continue) {
-    let section = '';
-    if (opts.planPath && opts.taskId) {
-      const abs = path.resolve(cfg.root, opts.planPath);
-      if (!fs.existsSync(abs)) throw new UsageError(`plan not found: ${opts.planPath}`);
-      section = extractTask(fs.readFileSync(abs, 'utf8'), opts.taskId);
-    }
-    const w = await runSamples(cfg, opts, n, { dispatchOnce, chooseChain, section, body: opts.task || '', files: [...(opts.files || []), ...taskFiles(section)], UsageError });
+  let n = Number(opts.samples ?? cfg.settings?.samples ?? 1);
+  const write = ROLES[opts.role]?.mode === 'write' && !opts.continue;
+  let section = '';
+  if (write && opts.planPath && opts.taskId) {
+    const abs = path.resolve(cfg.root, opts.planPath);
+    if (!fs.existsSync(abs)) throw new UsageError(`plan not found: ${opts.planPath}`);
+    section = extractTask(fs.readFileSync(abs, 'utf8'), opts.taskId);
+  }
+  const files = [...(opts.files || []), ...taskFiles(section)];
+  // V9 race (opt-in): --race, or settings.race for small tasks: the fastest free routes start together, the first to
+  // pass every check wins and the others stop. It saves waiting, not tokens (two attempts run).
+  const race = write && n <= 1 && (opts.race === true || (opts.race !== false && cfg.settings?.race === true
+    && taskSize({ role: opts.role, mode: 'write', body: section || opts.task || '', files }).size === 'small'));
+  if (race) n = Math.max(2, Number(cfg.settings?.raceWidth) || 2);
+  if (n > 1 && write) {
+    const w = await runSamples(cfg, opts, n, { dispatchOnce, chooseChain, section, body: opts.task || '', files, UsageError, race, controllerWorker: controllerWorker(cfg.controller) });
     writeJSON(path.join(cfg.root, w.runDir, 'summary.json'), w);
     return w;
   }
@@ -660,6 +667,7 @@ async function dispatchOnce(cfg, opts) {
   const protectedExtra = [...(settings.protectedPaths || []), ...(hooksRel ? [`^${hooksRel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/`] : [])];
 
   providers: for (const c of chain) {
+    if (opts.signal?.aborted) { summary.cancelled = true; break; } // V9: another attempt in the race already passed
     if (c.skip) { summary.attempts.push({ provider: c.name, ok: false, reason: c.skip, skipped: true, next: nextStep(c.skip, { name: c.name, p: c.p }) }); emit({ type: 'skip', provider: c.name, reason: c.skip }); continue; }
     const kind = providerKind(c.p);
     if (mode === 'read' && kind === 'agent' && !readOnlyEnforced(c.p)) {
@@ -685,6 +693,7 @@ async function dispatchOnce(cfg, opts) {
       continue;
     }
     for (let mi = 0; mi < models.length; mi++) {
+      if (opts.signal?.aborted) { summary.cancelled = true; break providers; }
       const model = models[mi];
       emit({ type: 'try', provider: c.name, kind, model: mi ? model : undefined });
       const before = inRepo ? git.stateHash(work) : null;
@@ -694,7 +703,7 @@ async function dispatchOnce(cfg, opts) {
       let res = kind === 'chat' && !p.model
         ? { ok: false, text: '', reason: 'no model set, and its model list could not be fetched', log: '' }
         : await withSlot(c.name, c.p.maxParallel ?? CLI_PRESETS[c.p.preset]?.maxParallel, () => runProvider(c.name, p, { mode, prompt: userPrompt, system: chatSystem, cwd: work, runDir: ioDir, quotaRe,
-          allowCommands: buildCommands(settings), ...limitFor(c.p, kind) }), () => emit({ type: 'wait', provider: c.name }));
+          allowCommands: buildCommands(settings), ...limitFor(c.p, kind), signal: opts.signal }), () => emit({ type: 'wait', provider: c.name }));
       if (p !== c.p && p.model && !res.model) res.model = p.model;
       const tampered = control ? git.restoreControl(control) : [];
       const putBack = restoreLocal();
@@ -706,7 +715,7 @@ async function dispatchOnce(cfg, opts) {
       // H7: a chat reply without file blocks gets one repair turn that shows the model what it said and what is needed
       if (res.ok && kind === 'chat' && mode === 'write' && !parseFileBlocks(res.text).length && settings.chatRepair !== false) {
         emit({ type: 'repair', provider: c.name });
-        const again = await runProvider(c.name, p, { mode, prompt: userPrompt, system: chatSystem, cwd: work, runDir: ioDir, quotaRe, ...limitFor(c.p, kind),
+        const again = await runProvider(c.name, p, { mode, prompt: userPrompt, system: chatSystem, cwd: work, runDir: ioDir, quotaRe, ...limitFor(c.p, kind), signal: opts.signal,
           history: [{ role: 'assistant', content: res.text.slice(0, 8000) }, { role: 'user', content: CHAT_REPAIR }] });
         const sum = (a, b) => (a || b ? { input: (a?.input || 0) + (b?.input || 0), output: (a?.output || 0) + (b?.output || 0) } : undefined);
         res = { ...(again.ok ? again : { ...res, text: res.text }), tokens: sum(res.tokens, again.tokens), log: `${res.log}\n\n==== repair turn ====\n${again.log || ''}`, repaired: true };
@@ -746,7 +755,8 @@ async function dispatchOnce(cfg, opts) {
       if (res.tokens) { attempt.tokens = res.tokens; attempt.cost = estimateCost(c.p, res.tokens); }
       if (res.denied?.length) attempt.denied = res.denied;
       if (res.ok && res.warnings?.length) summary.warnings.push(...res.warnings);
-      recordUsage({ provider: c.name, model: res.model || p.model || null, kind: kind === 'agent' ? 'agent' : 'chat', role, project: path.basename(root),
+      // a call stopped because another attempt won the race says nothing about this provider's speed or reliability
+      if (res.reason !== 'cancelled') recordUsage({ provider: c.name, model: res.model || p.model || null, kind: kind === 'agent' ? 'agent' : 'chat', role, project: path.basename(root),
         ok: res.ok, reason: attempt.reason, seconds: attempt.seconds, tokens: res.tokens || null, cost: attempt.cost ?? null });
       const changedDuringRead = mode === 'read' && inRepo && before !== git.stateHash(work);
       if (changedDuringRead) summary.warnings.push(`${c.name} changed files during a read-only run. Check git status.`);
@@ -796,6 +806,12 @@ async function dispatchOnce(cfg, opts) {
       summary.leaked = leaked;
       summary.warnings.push(`files appeared in your MAIN checkout during this run (from this worker, or another one running at the same time): ${leaked.join(', ')}. Inspect them with git status before merging`);
     }
+  }
+  // V9: the race was won by another attempt while this one worked: stop here, no checks (its worktree is removed by the race)
+  if (opts.signal?.aborted) {
+    summary.cancelled = true;
+    writeJSON(path.join(runDir, 'summary.json'), summary);
+    return summary;
   }
   if (!summary.winner) {
     // a fresh worktree with nothing in it goes; a continued one keeps the earlier work
@@ -1063,6 +1079,7 @@ export function formatSummary(s) {
   if (s.base) L.push(`base:      verify ${s.base.status} on the starting commit ${s.base.head}${s.base.cached ? ' (cached)' : ''}${s.base.status === 'FAIL' ? `, log: ${s.base.log}` : ''}`);
   if (s.scope?.outside?.length) L.push(`scope:     outside the task's files: ${s.scope.outside.join(', ')}${s.scope.allowed ? ' (allowed)' : ''}`);
   if (s.verify?.newFailures?.length) L.push(`new fails: ${s.verify.newFailures.slice(0, 5).join(' | ')}`);
+  if (s.race) L.push(`race:      ${s.race.winner ? `${s.race.winner} passed every check first (${s.race.seconds}s)` : 'no attempt passed every check, so the best one was kept'}${s.race.stopped.length ? `; stopped: ${s.race.stopped.join(', ')}` : ''}`);
   if (s.samples?.length) L.push(`samples:   ${s.samples.length} attempts, best kept: ${s.samples.map((x) => `${x.provider} ${x.outcome}${x.checks ? ` checks ${x.checks}` : ''}${x.lines ? ` ${x.lines} lines` : ''}${x.chosen ? ' ← chosen' : ''}`).join(' · ')}`);
   if (s.appliedFrom) L.push(`landed:    the chosen attempt's changes are in your working tree (from ${s.appliedFrom}, now removed)`);
   if (s.escalated?.length) L.push(`handed on: ${s.escalated.map((e) => `${e.from}'s work failed ${[e.verify === 'FAIL' && 'verify', e.checksFailed && 'acceptance checks'].filter(Boolean).join(' and ')}`).join(', then ')} → ${s.winner} took it over`);

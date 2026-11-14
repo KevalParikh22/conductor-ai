@@ -79,7 +79,7 @@ function untrack(kill) {
  * idleTimeoutMs stops it when it prints nothing for that long.
  * @returns {Promise<{code:number|null, stdout:string, stderr:string, timedOut:boolean, idle?:boolean, error?:string}>}
  */
-export function run(cmd, args, { cwd, input, timeoutMs = 0, idleTimeoutMs = 0, env, onData } = {}) {
+export function run(cmd, args, { cwd, input, timeoutMs = 0, idleTimeoutMs = 0, env, onData, signal } = {}) {
   return new Promise((resolve) => {
     let child;
     const group = process.platform !== 'win32';
@@ -89,7 +89,7 @@ export function run(cmd, args, { cwd, input, timeoutMs = 0, idleTimeoutMs = 0, e
       resolve({ code: null, stdout: '', stderr: String(e), timedOut: false, error: String(e) });
       return;
     }
-    let stdout = '', stderr = '', timedOut = false, idle = false, done = false, killer, idler, last;
+    let stdout = '', stderr = '', timedOut = false, idle = false, cancelled = false, done = false, killer, idler, last;
     const killTree = (sig) => {
       if (!child.pid) return;
       if (group) { try { process.kill(-child.pid, sig); return; } catch { /* group gone: fall through */ } }
@@ -101,7 +101,8 @@ export function run(cmd, args, { cwd, input, timeoutMs = 0, idleTimeoutMs = 0, e
       done = true;
       clearTimeout(killer); clearTimeout(idler); clearTimeout(last);
       untrack(killTree);
-      resolve(r);
+      signal?.removeEventListener?.('abort', onAbort);
+      resolve(cancelled ? { ...r, cancelled: true } : r);
     };
     const stop = (why) => {
       if (timedOut) return;
@@ -119,6 +120,9 @@ export function run(cmd, args, { cwd, input, timeoutMs = 0, idleTimeoutMs = 0, e
       clearTimeout(idler);
       idler = setTimeout(() => stop('idle'), idleTimeoutMs);
     };
+    // V9: a race that another attempt won stops this one (the whole process group, like a timeout)
+    function onAbort() { cancelled = true; stop('cancel'); }
+    if (signal?.aborted) onAbort(); else signal?.addEventListener?.('abort', onAbort, { once: true });
     track(killTree);
     poke();
     child.stdout.on('data', (d) => { stdout += d; poke(); onData?.(d); });
