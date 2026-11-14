@@ -107,7 +107,9 @@ export function workerTimeout(p, kind, settings, { etaMs = 0, timeoutMs = 0 } = 
   }
   let limit = timeoutMs || (p.timeoutMin ? p.timeoutMin * 60_000 : (settings.timeoutSec || 1200) * 1000);
   if (!timeoutMs && etaMs) limit = Math.max(limit, Math.round(etaMs * (settings.timeoutFactor || 2)));
-  const idleMin = p.idleTimeoutMin ?? (settings.idleTimeoutSec || 0) / 60;
+  // idle limit: the provider's own setting, then the global one, then the agent's default (Codex streams an event for
+  // every step, so 10 silent minutes means it is stuck; agents that print only at the end have none)
+  const idleMin = p.idleTimeoutMin ?? (settings.idleTimeoutSec ? settings.idleTimeoutSec / 60 : CLI_PRESETS[p.preset]?.idleTimeoutMin ?? 0);
   return { timeoutMs: limit, idleTimeoutMs: Math.round(idleMin * 60_000) };
 }
 

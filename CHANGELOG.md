@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Idle limit per agent.** Codex is stopped after 10 minutes without output (its `--json` mode prints an event for every step, so silence that long means it hangs) and the next provider runs; agents that print only at the end (agy) keep no idle limit. A provider's `idleTimeoutMin` (`0` = never) and the global `idleTimeoutSec` still win.
 - **UX checklist run (15 of 18 checks; the other 3 need a clean Claude Code, VS Code and Copilot).** Fixed what it found:
   - **Lost run:** two runs of one task started in the same second shared a run folder, so one was lost (also possible with `--samples` and race mode). Each run now gets its own folder; an exact run id still finds its run.
   - **Python Verify:** detected only when `pytest` was on the global PATH. Now the project venv, a pytest config (`pyproject.toml`, `pytest.ini`, `setup.cfg`, `tox.ini`, `conftest.py`) or a `tests/` folder gives `pytest` (or `python -m pytest`).

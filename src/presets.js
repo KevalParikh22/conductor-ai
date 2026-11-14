@@ -85,6 +85,7 @@ export const CLI_PRESETS = {
       '-c', 'sandbox_workspace_write.network_access=false', '{modelArgs}', '-o', '{outFile}', '-'],
     read: ['exec', '--skip-git-repo-check', '--json', '--sandbox', 'read-only', '-c', 'approval_policy="never"', '{modelArgs}', '-o', '{outFile}', '-'],
     output: 'codex-json',
+    idleTimeoutMin: 10, // --json prints an event per step: silence this long means it hangs
     modelArgs: ['-m', '{model}'],
     passEnv: ['OPENAI_API_KEY'],
     permissions: {
