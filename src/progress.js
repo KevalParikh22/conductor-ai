@@ -11,7 +11,7 @@ export function stepText(e) {
     start: `starting${e.provider ? ` (first choice: ${e.provider})` : ''}`, base: 'checking the starting commit', try: `${e.provider} is working`,
     wait: `waiting for ${e.provider} (one task at a time on it)`, verify: 'running verify', checks: 'running the acceptance checks',
     repro: 'running the repro', isolate: 'checking the code alone against the original tests', review: 'independent review',
-    escalate: `${e.provider} takes over ${e.from}'s work`, repair: `asking ${e.provider} once more`,
+    escalate: `${e.provider} takes over ${e.from}'s work`, repair: `asking ${e.provider} once more`, hedge: `${e.from} is slow: ${e.provider} also tries it`,
   }[e.type] || null;
 }
 
@@ -61,7 +61,7 @@ export function batchProgress(tasks, { stream = process.stderr, now = () => Date
       if (!r) return;
       if (!tty) {
         // not a terminal: the plain lines batch has always printed
-        const m = { start: `starting (first choice: ${e.provider})`, wait: `waiting for ${e.provider} (one task at a time on it)…`, try: `trying ${e.provider}…`, fail: `${e.provider} failed: ${e.reason}`, ok: `${e.provider} finished`, verify: 'running verify…', base: 'checking the starting commit…', escalate: `verify failed: handing ${e.from}'s work to ${e.provider}…`, repair: `${e.provider} sent no files: asking once more…`, done: 'done' }[e.type];
+        const m = { start: `starting (first choice: ${e.provider})`, wait: `waiting for ${e.provider} (one task at a time on it)…`, try: `trying ${e.provider}…`, fail: `${e.provider} failed: ${e.reason}`, ok: `${e.provider} finished`, verify: 'running verify…', base: 'checking the starting commit…', escalate: `verify failed: handing ${e.from}'s work to ${e.provider}…`, repair: `${e.provider} sent no files: asking once more…`, hedge: `${e.from} is slow: second attempt on ${e.provider}…`, 'hedge-won': `${e.provider} won`, done: 'done' }[e.type];
         if (m) stream.write(`conductor [${e.task}]: ${m}\n`);
         return;
       }

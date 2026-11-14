@@ -192,7 +192,9 @@ export async function dispatch(cfg, opts) {
   const files = [...(opts.files || []), ...taskFiles(section)];
   // V9 race (opt-in): --race, or settings.race for small tasks: the fastest free routes start together, the first to
   // pass every check wins and the others stop. It saves waiting, not tokens (two attempts run).
-  const race = write && n <= 1 && (opts.race === true || (opts.race !== false && cfg.settings?.race === true
+  // S0: priority 'speed' races small tasks unless told not to; 'save' and 'balanced' race only when asked
+  const priority = opts.priority || cfg.settings?.priority || 'balanced';
+  const race = write && n <= 1 && (opts.race === true || (opts.race !== false && priority !== 'save' && (cfg.settings?.race === true || priority === 'speed')
     && taskSize({ role: opts.role, mode: 'write', body: section || opts.task || '', files }).size === 'small'));
   if (race) n = Math.max(2, Number(cfg.settings?.raceWidth) || 2);
   if (n > 1 && write) {
@@ -455,6 +457,7 @@ async function dispatchOnce(cfg, opts) {
   const quotaRe = new RegExp(settings.quotaPattern, 'i');
   const etaMs = parseDuration((section.match(/\*\*eta:\*\*\s*([^\n]+)/i) || [])[1]);
   const limitFor = (p, kind) => workerTimeout(p, kind, settings, { etaMs, timeoutMs: opts.timeoutMs });
+  const runSize = taskSize({ role, mode, body: section || body, files: [...(opts.files || []), ...taskFiles(section)] }).size; // S1: speed stats per size
   const picked = chooseChain(cfg, role, { provider: opts.provider, chain: opts.chain, section, body, files: [...(opts.files || []), ...taskFiles(section)], diffBytes });
   // Q7: a provider that failed this kind of work here twice goes to the back (never when the chain was given explicitly)
   if (mode === 'write' && !['chain', 'provider'].includes(picked.how) && cfg.settings?.lessons !== false) {
@@ -631,7 +634,7 @@ async function dispatchOnce(cfg, opts) {
         break providers;
       }
       // a call stopped because another attempt won the race says nothing about this provider's speed or reliability
-      if (res.reason !== 'cancelled' && c.p.type !== 'manual') recordUsage({ provider: c.name, model: res.model || p.model || null, kind: kind === 'agent' ? 'agent' : 'chat', role, project: path.basename(root),
+      if (res.reason !== 'cancelled' && c.p.type !== 'manual') recordUsage({ provider: c.name, model: res.model || p.model || null, kind: kind === 'agent' ? 'agent' : 'chat', role, size: runSize, project: path.basename(root),
         ok: res.ok, reason: attempt.reason, seconds: attempt.seconds, tokens: res.tokens || null, cost: attempt.cost ?? null });
       const changedDuringRead = mode === 'read' && inRepo && before !== git.stateHash(work);
       if (changedDuringRead) summary.warnings.push(`${c.name} changed files during a read-only run. Check git status.`);

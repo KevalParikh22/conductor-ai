@@ -106,7 +106,10 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | `localContextCheck` | true | Ask a local server (Ollama, LM Studio) for the window the model runs with, and don't send a prompt that won't fit: a local server cuts it without an error |
 | `race` | false | Race mode for small write tasks: the 2 fastest routes with no per-token price start together, the first to pass every check wins, the other is stopped. Saves waiting, not tokens. `--race` / `--no-race` per run |
 | `raceWidth` | 2 | How many attempts a race starts |
-| `maxParallelPerProvider` | 2 | Most tasks of one batch wave started on the same provider (a provider's own `maxParallel` wins) |
+| `priority` | `balanced` | Tokens against time, for every run and batch: `save`, `balanced` or `speed` (see **Priority** below). `--priority` per run |
+| `hedgeAfterSec` | 45 | In a batch, a task running at least this long, and past 1.5× the median time of the tasks already finished, may get a second attempt (hedging). Only under `balanced` and `speed` |
+| `hedge` | true | `false` turns batch hedging off whatever the priority |
+| `maxParallelPerProvider` | 2 (3 under `speed`) | Most tasks of one batch wave started on the same provider (a provider's own `maxParallel` wins) |
 | `hangCooldownMin` | 15 | A free route that times out twice in one run cools down this long (0 = off) |
 | `contextPack` | true | Give workers the task files, where their code is used elsewhere, the verify command and the matching architecture notes before they start |
 | `contextPackBytes` | 4000 | Most characters of that pack |
@@ -224,3 +227,27 @@ Each run leaves `.conductor/runs/<time>-<role>[-task]/` in the project: the task
 ## Cooldown state
 
 Shared across projects in `~/.config/conductor/state.json`. See it with `conductor cooldown` and clear it with `conductor cooldown --clear [name]` (or from the UI Overview).
+
+## Priority: tokens or time
+
+Speed costs tokens: a second attempt at the same task finishes sooner, but both attempts spend. Pick what you are short of.
+
+| | `save` | `balanced` (default) | `speed` |
+|---|---|---|---|
+| Hedging (a second attempt at a slow batch task) | never | only on free API routes and local models | on any route without a per-token price, including agents on your subscriptions |
+| Race (two attempts at a small task from the start) | off (`--race` still works) | when you ask (`--race`, `settings.race`) | on for small tasks (`--no-race` turns it off) |
+| Tasks per provider in a batch wave | 2 | 2 | 3 |
+| Extra tokens | none | free routes only: costs you nothing, may use their daily limits | up to about 2× on the hedged or raced tasks; subscription agents spend their own quota |
+
+**Guidance**
+- Hedging and racing need at least two fast, reliable routes. With one free model, `speed` has nothing to hedge onto; the run is the same as `balanced`. Add a second route first (`conductor add <provider>`, `conductor providers --free`).
+- Pay-per-token routes (a `price` in the provider's config) never take a hedge or a race, under any priority: conductor won't spend money to save time without you choosing that route yourself.
+- The controller's own CLI never takes a hedge: it is what you are trying to save.
+- Hedging starts only after at least one task in the batch has finished, so there is a median to compare against. A batch of tasks that all take about as long never hedges.
+- The loser of a hedge is stopped and its worktree removed; the batch line shows `hedged: … won`.
+
+```bash
+conductor batch --plan docs/plan/x.md --tasks T1,T2,T3,T4 --priority speed
+```
+
+To make it the default, set `"settings": { "priority": "save" }` in `.conductor/config.json` (this project) or the global config (`conductor config` shows where).

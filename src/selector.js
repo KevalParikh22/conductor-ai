@@ -40,8 +40,11 @@ export function unhealthy(names, now = Date.now()) {
  * Measured speed per provider for a role: { name: { n, okRate, median } } from successful and failed attempts in the
  * last `days` days (only providers with at least `min` attempts). The median is over successful attempts.
  */
-export function speedStats(names, role, { days = 14, min = 3, now = Date.now() } = {}) {
-  const recent = readUsage(now - days * 86_400_000).filter((e) => e.kind !== 'saving' && (!role || e.role === role));
+export function speedStats(names, role, { days = 14, min = 3, now = Date.now(), size } = {}) {
+  const byRole = readUsage(now - days * 86_400_000).filter((e) => e.kind !== 'saving' && (!role || e.role === role));
+  // S1: a provider's speed on small tasks says little about bigger ones: use the same size when there is enough of it
+  const sized = size ? byRole.filter((e) => e.size === size) : [];
+  const recent = sized.length >= min ? sized : byRole;
   const out = {};
   for (const n of names) {
     const all = recent.filter((e) => e.provider === n && e.reason !== 'quota' && !/cooldown|rate/i.test(e.reason || ''));

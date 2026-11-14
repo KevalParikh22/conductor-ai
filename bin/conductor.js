@@ -86,6 +86,8 @@ Work (normally called by the controller)
      --timeout 45m               stop a worker after this and try the next (default: settings.timeoutSec, or 2× the task eta)
      --samples N                 run N attempts on different providers in parallel and keep the best (by checks, not opinion)
      --race / --no-race          start the 2 fastest free routes together; the first to pass every check wins, the other stops (settings.race: small tasks)
+     --priority save|balanced|speed   tokens against time (default: settings.priority, balanced). speed races small tasks and,
+                                 in a batch, gives slow tasks a second attempt; it spends more tokens. See docs/CONFIGURATION.md
      --review / --no-review      force or skip the independent review (default: only for risky work)
      --no-verify --no-escalate --allow-no-repro --allow-unverified --allow-scope --allow-weak-plan --allow-dirty --allow-open-questions --json
                                  exit 4 = the worker wrote code but no verify command proved it (--allow-unverified accepts it)
@@ -263,6 +265,11 @@ function fit(text, max) {
 }
 
 /** --timeout 45m / 2h / 90 (minutes) → ms, or undefined. */
+const priorityOpt = (o) => {
+  if (o.priority === undefined) return undefined;
+  if (!['save', 'balanced', 'speed'].includes(o.priority)) throw new UsageError(`--priority must be save, balanced or speed (got "${o.priority}")`);
+  return o.priority;
+};
 function timeoutOpt(o) {
   if (o.timeout === undefined) return undefined;
   const ms = parseDuration(o.timeout);
@@ -619,7 +626,7 @@ async function main() {
         role, task: o._.join(' ') || undefined, planPath: o.plan, taskId: o.task, provider: o.provider,
         chain: o.chain ? o.chain.split(',').map((x) => x.trim()).filter(Boolean) : undefined,
         note: o.note, files: o.files ? o.files.split(',').map((x) => x.trim()) : [], base: o.base, focus: o.focus,
-        save: o.save, noVerify: o['no-verify'], allowUnverified: o['allow-unverified'], allowScope: o['allow-scope'], allowWeakPlan: o['allow-weak-plan'], noEscalate: o['no-escalate'], allowNoRepro: o['allow-no-repro'], samples: o.samples ? Number(o.samples) : undefined, race: o.race ? true : o['no-race'] ? false : undefined, review: o.review, noReview: o['no-review'], allowDirty: o['allow-dirty'], worktree: o.worktree, continue: o.continue, worktreeId: o.worktreeId, timeoutMs: timeoutOpt(o), replace: o.replace, allowOpenQuestions: o['allow-open-questions'],
+        save: o.save, noVerify: o['no-verify'], allowUnverified: o['allow-unverified'], allowScope: o['allow-scope'], allowWeakPlan: o['allow-weak-plan'], noEscalate: o['no-escalate'], allowNoRepro: o['allow-no-repro'], samples: o.samples ? Number(o.samples) : undefined, race: o.race ? true : o['no-race'] ? false : undefined, priority: priorityOpt(o), review: o.review, noReview: o['no-review'], allowDirty: o['allow-dirty'], worktree: o.worktree, continue: o.continue, worktreeId: o.worktreeId, timeoutMs: timeoutOpt(o), replace: o.replace, allowOpenQuestions: o['allow-open-questions'],
         onEvent: o.json ? undefined : (e) => {
           const m = { worktree: `working in ${e.dir} (branch ${e.branch})`, wait: `waiting for ${e.provider} (one task at a time on it)…`, try: `trying ${e.provider} (${e.kind})…`, skip: `skip ${e.provider}: ${e.reason}`, 'race-won': `${e.provider} passed every check first: stopping the others…`, fail: `${e.provider} failed: ${e.reason}`, ok: `${e.provider} finished`, verify: 'running verify…', repro: 'running the repro…', review: 'independent review by another model family…', isolate: 'verify failed: checking the code alone against the original tests…', base: 'checking the starting commit (verify, cached per commit)…', escalate: `verify failed: handing ${e.from}'s work to ${e.provider}…`, repair: `${e.provider} sent no files: asking once more…` }[e.type];
           // the event line as before; on a terminal also a live status line (spinner, step, time against the limit)
@@ -658,7 +665,7 @@ async function main() {
       const tasks = (o.tasks || o._.join(',')).split(',').map((x) => x.trim()).filter(Boolean);
       const table = batchProgress(tasks);
       const b = await runBatch(cfg, {
-        planPath: o.plan, tasks, role: o.role, provider: o.provider, concurrency: o.concurrency, noVerify: o['no-verify'], allowUnverified: o['allow-unverified'], allowScope: o['allow-scope'], allowWeakPlan: o['allow-weak-plan'], noEscalate: o['no-escalate'], allowNoRepro: o['allow-no-repro'], review: o.review, noReview: o['no-review'], timeoutMs: timeoutOpt(o), replace: o.replace, note: o.note, allowOpenQuestions: o['allow-open-questions'],
+        planPath: o.plan, tasks, role: o.role, provider: o.provider, concurrency: o.concurrency, noVerify: o['no-verify'], allowUnverified: o['allow-unverified'], allowScope: o['allow-scope'], allowWeakPlan: o['allow-weak-plan'], noEscalate: o['no-escalate'], allowNoRepro: o['allow-no-repro'], review: o.review, noReview: o['no-review'], timeoutMs: timeoutOpt(o), replace: o.replace, note: o.note, allowOpenQuestions: o['allow-open-questions'], priority: priorityOpt(o),
         onEvent: o.json ? undefined : (e) => table.event(e), // a live table on a terminal, plain lines otherwise
       });
       table.stop();

@@ -45,6 +45,7 @@ const TOOLS = [
         focus: { type: 'string', description: 'review: what to focus on' },
         save: { type: 'string', description: 'ask: also save the answer to this path' },
         no_verify: { type: 'boolean' },
+        priority: { type: 'string', enum: ['save', 'balanced', 'speed'], description: 'Tokens against time. save: never extra attempts. balanced (default): extra attempts only on free routes. speed: races small tasks and hedges slow batch tasks on any route without a per-token price (spends more tokens/quota)' },
         allow_unverified: { type: 'boolean', description: 'accept code that no verify command checked (otherwise the outcome is "unverified")' },
         allow_scope: { type: 'boolean', description: 'accept changes to files the task does not list (otherwise the outcome is "out-of-scope")' },
         allow_weak_plan: { type: 'boolean', description: 'hand out a plan task even though conductor_plan_check finds problems (no files, vague acceptance, no verify, too big)' },
@@ -77,6 +78,7 @@ const TOOLS = [
         concurrency: { type: 'number', description: 'Max tasks at once (default 4)' },
         replace: { type: 'boolean' },
         no_verify: { type: 'boolean' },
+        priority: { type: 'string', enum: ['save', 'balanced', 'speed'], description: 'Tokens against time. save: never extra attempts. balanced (default): extra attempts only on free routes. speed: races small tasks and hedges slow batch tasks on any route without a per-token price (spends more tokens/quota)' },
         allow_weak_plan: { type: 'boolean', description: 'run tasks even though conductor_plan_check finds problems' },
         allow_open_questions: { type: 'boolean', description: 'run plan tasks even if the plan has unresolved Open questions' },
       },
@@ -238,7 +240,7 @@ async function callTool(name, args, startRoot) {
     try {
       const b = await runBatch(cfg, {
         planPath: args.plan, tasks: args.tasks, role: args.role, provider: args.provider, concurrency: args.concurrency,
-        replace: args.replace, noVerify: args.no_verify, allowWeakPlan: args.allow_weak_plan, allowOpenQuestions: args.allow_open_questions,
+        replace: args.replace, noVerify: args.no_verify, allowWeakPlan: args.allow_weak_plan, allowOpenQuestions: args.allow_open_questions, priority: args.priority,
         onEvent: (e) => process.stderr.write(`[conductor ${e.task}] ${e.type} ${e.provider || ''} ${e.reason || ''}\n`),
       });
       return text(formatBatch(b), b.ok === 0);
@@ -250,7 +252,7 @@ async function callTool(name, args, startRoot) {
     try {
       const s = await dispatch(cfg, {
         role: args.role, task: args.task, planPath: args.plan, taskId: args.task_id, provider: args.provider, note: args.note,
-        files: args.files, base: args.base, focus: args.focus, save: args.save, noVerify: args.no_verify, allowUnverified: args.allow_unverified, allowScope: args.allow_scope, allowWeakPlan: args.allow_weak_plan, noEscalate: args.no_escalate, allowNoRepro: args.allow_no_repro, samples: args.samples, race: args.race, review: args.review === true, noReview: args.review === false, allowDirty: args.allow_dirty, allowOpenQuestions: args.allow_open_questions,
+        files: args.files, base: args.base, focus: args.focus, save: args.save, noVerify: args.no_verify, allowUnverified: args.allow_unverified, allowScope: args.allow_scope, allowWeakPlan: args.allow_weak_plan, noEscalate: args.no_escalate, allowNoRepro: args.allow_no_repro, samples: args.samples, race: args.race, priority: args.priority, review: args.review === true, noReview: args.review === false, allowDirty: args.allow_dirty, allowOpenQuestions: args.allow_open_questions,
         worktree: args.worktree, worktreeId: args.task_id, replace: args.replace, continue: args.continue,
         timeoutMs: args.timeout ? parseDuration(args.timeout) || undefined : undefined,
         onEvent: (e) => process.stderr.write(`[conductor] ${e.type} ${e.provider || ''} ${e.reason || ''}\n`),
