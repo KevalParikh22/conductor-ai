@@ -111,7 +111,7 @@ details.more[open] > summary { margin-bottom: 10px; }
 .note { color: var(--muted); font-size: 12.5px; }
 .explain { margin-top: 10px; padding: 10px 12px; border-radius: 8px; background: var(--panel-2); font-size: 13px; line-height: 1.5; }
 .explain ol { margin: 4px 0 0; padding-left: 20px; } .explain li { margin: 2px 0; }
-.lib { display: grid; gap: 8px; } .lib .item { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+.lib { display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr); } .lib .item { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; min-width: 0; overflow-wrap: anywhere; }
 .lib .item .row { gap: 6px; } .lib .item .note { display: block; margin-top: 2px; }
 .switch { position: relative; width: 34px; height: 20px; flex: none; }
 .switch input { opacity: 0; width: 0; height: 0; }
@@ -145,7 +145,7 @@ th { font-size: 12px; color: var(--muted); font-weight: 600; }
   table { display: block; overflow-x: auto; }
   td input[type=password] { min-width: 140px; }
 }
-.sub .mono, td.mono { word-break: break-all; }
+.sub .mono, td.mono, .note .mono, p .mono { word-break: break-all; } /* long paths and patterns wrap instead of widening the page */
 body { overflow-x: hidden; }
 </style>
 </head>
@@ -260,7 +260,7 @@ function renderNav() {
 }
 function provStatus(name) { return S.status.providers.find((p) => p.name === name) || { ready: false, reason: 'unknown' }; }
 function locPill(p) { const l = p.location || 'cloud-api'; return `<span class="pill ${l}">${{ 'local-agent': 'local agent', 'local-model': 'local model', 'cloud-api': 'cloud API' }[l]}</span>`; }
-function readyPill(name) { const st = provStatus(name); const w = W.providers[name]; if (w && !w.enabled) return '<span class="pill">disabled</span>'; if (st.optional) return '<span class="pill">optional: add key</span>'; return st.ready ? '<span class="pill ok">ready</span>' : `<span class="pill bad">${esc(st.reason)}</span>`; }
+function readyPill(name) { const st = provStatus(name); const w = W.providers[name]; if (w && !w.enabled) return '<span class="pill">disabled</span>'; if (st.optional) return '<span class="pill">optional: add key</span>'; if (st.cooling) return `<span class="pill warn" title="${esc(st.reason)}">cooling down</span>`; return st.ready ? '<span class="pill ok">ready</span>' : `<span class="pill bad">${esc(st.reason)}</span>`; }
 // short status for tight rows; the full reason is in the title
 const shortReason = (r) => /not set/.test(r) ? 'no key' : /not installed/.test(r) ? 'not installed' : r.length > 22 ? r.slice(0, 20) + '…' : r;
 function copyBtn(text) { return `<button class="btn small copy" data-copy="${esc(text)}" title="Copy">${icon('copy')}</button>`; }
@@ -554,7 +554,7 @@ const views = {
     const keys = S.secrets.filter((k) => k.set || k.usedBy.some((n) => W.providers[n]?.enabled));
     return `<div class="head"><h1>API keys</h1><p class="sub">Saved in <span class="mono">${esc(S.paths.secrets)}</span> (only you can read it), never in config or git. Real environment variables win. Showing keys that are set or used by an enabled provider.</p></div>
     <div class="card"><table><tr><th>Variable</th><th>Status</th><th>Used by</th><th style="width:38%">Set / replace</th></tr>
-    ${keys.map((k) => `<tr><td class="mono">${esc(k.name)}</td><td>${k.set ? `<span class="pill ok">set ${esc(k.hint)}</span> <span class="note">${esc(k.source)}</span>` : '<span class="pill bad">not set</span>'}</td><td class="note">${esc(k.usedBy.join(', ') || '-')}</td>
+    ${keys.map((k) => `<tr><td class="mono">${esc(k.name)}</td><td>${k.set ? `<span class="pill ok">set ${esc(k.hint)}</span> <span class="note">${esc(k.source)}</span>` : '<span class="pill" title="Optional: only the providers that use this key need it">not set</span>'}</td><td class="note">${esc(k.usedBy.join(', ') || '-')}</td>
       <td><div class="row" style="flex-wrap:nowrap"><input type="password" data-key="${esc(k.name)}" placeholder="paste key" autocomplete="off"><button class="btn small" data-savekey="${esc(k.name)}">Save</button>${k.source === 'secrets file' ? `<button class="btn small" data-delkey="${esc(k.name)}">Remove</button>` : ''}</div></td></tr>`).join('')}
     </table></div>
     <p class="note">Need a key? Each provider's guide links to where you get one: <b>Providers → Add provider</b> (filter <b>Free</b>), or <span class="mono">conductor providers --free</span>. kilo-free and OVHcloud work without one.</p>`;
@@ -580,7 +580,8 @@ const views = {
   },
   setup() {
     const p = S.presets, sec = Object.fromEntries(S.secrets.map((x) => [x.name, x.set]));
-    const pill = (ok, yes, no) => ok ? `<span class="pill ok">${yes}</span>` : `<span class="pill bad">${no}</span>`;
+    // red only for what conductor needs (git, Node); optional things (an agent you don't use, a project not set up yet) stay neutral
+    const pill = (ok, yes, no, level = 'bad') => ok ? `<span class="pill ok">${yes}</span>` : `<span class="pill ${level}">${no}</span>`;
     const agents = Object.values(p).filter((v) => v.installed).length;
     const freeKeys = ['OPENROUTER_API_KEY', 'OPENCODE_API_KEY', 'GEMINI_API_KEY', 'GROQ_API_KEY', 'CEREBRAS_API_KEY'].filter((n) => sec[n]).length;
     const link = (u) => `<a href="https://${u}" target="_blank" rel="noopener">${u}</a>`;
@@ -589,7 +590,7 @@ const views = {
       <tr><td>Node.js 20+</td><td>${pill(+S.env.node.slice(1).split('.')[0] >= 20, esc(S.env.node), esc(S.env.node) + ' (too old)')}</td><td class="mono">nvm install 22</td></tr>
       <tr><td>git</td><td>${pill(S.env.git, 'installed', 'missing')}</td><td class="note">Needed for worktrees, evidence checks and rollback</td></tr>
       <tr><td>conductor ${esc(S.version)}</td><td>${pill(S.env.conductorOnPath, 'on PATH', 'not on PATH')}</td><td class="note">${S.env.conductorOnPath ? 'Ready' : 'Add <span class="mono">$(npm prefix -g)/bin</span> to PATH'}</td></tr>
-      <tr><td>This project</td><td>${pill(S.hasProjectConfig, 'initialised', 'not initialised')}</td><td class="mono">${S.hasProjectConfig ? '' : 'conductor init'}</td></tr>
+      <tr><td>This project</td><td>${pill(S.hasProjectConfig, 'initialised', 'not set up yet', '')}</td><td class="mono">${S.hasProjectConfig ? '' : 'conductor init'}</td></tr>
       <tr><td>Worker agents</td><td>${pill(agents, agents + ' installed', 'none installed')}</td><td class="note">Optional: free API providers work without one</td></tr>
       <tr><td>Local models</td><td>${(() => { loadLocal(); const run = (localInfo || []).filter((l) => l.running); return !localInfo ? '<span class="pill">checking…</span>' : run.length ? `<span class="pill ok">${run.map((l) => esc(l.label)).join(', ')}</span>` : '<span class="pill">none running</span>'; })()}</td><td class="note">${(localInfo || []).find((l) => l.next)?.next ? esc((localInfo || []).find((l) => l.next).next) : 'Optional: <a href="https://ollama.com/download" target="_blank" rel="noopener">Ollama</a>, then <span class="mono">ollama pull qwen3-coder</span>'}</td></tr>
       <tr><td>Free API keys</td><td>${freeKeys ? `<span class="pill ok">${freeKeys} set</span>` : '<span class="pill">none yet</span>'}</td><td class="note">kilo-free works without a key</td></tr>
@@ -616,7 +617,7 @@ const views = {
       <li><b>Use it from your controller.</b> In Claude Code: <span class="mono">/conduct-plan add password reset</span>, answer the plan's open questions, then <span class="mono">/conduct-run docs/plan/password-reset.md</span>. Other controllers read the same instructions from AGENTS.md or GEMINI.md.</li>
     </ol></div>
     <div class="card"><details class="more"><summary>${icon('chev')} <b style="color:var(--text)">Coding agents: install and sign in</b> (${Object.values(p).filter((v) => v.installed).length} of ${Object.keys(p).length} installed)</summary><table><tr><th>Agent</th><th>Status</th><th>Install</th><th>Sign in</th></tr>
-      ${Object.values(p).map((v) => `<tr><td>${esc(v.label)}</td><td>${pill(v.installed, 'installed', 'missing')}</td><td>${cmd(v.install.split(/\s+\(or: /)[0])}${/\(or: /.test(v.install) ? `<span class="note">or: <span class="mono">${esc(v.install.split(/\(or: /)[1].replace(/\)$/, ''))}</span></span>` : ''}</td><td class="mono">${esc(v.login)}</td></tr>`).join('')}
+      ${Object.values(p).map((v) => `<tr><td>${esc(v.label)}</td><td>${pill(v.installed, 'installed', 'not installed', '')}</td><td>${cmd(v.install.split(/\s+\(or: /)[0])}${/\(or: /.test(v.install) ? `<span class="note">or: <span class="mono">${esc(v.install.split(/\(or: /)[1].replace(/\)$/, ''))}</span></span>` : ''}</td><td class="mono">${esc(v.login)}</td></tr>`).join('')}
     </table><p class="note">After installing, run <span class="mono">conductor setup</span> (it turns on what it finds) or switch the agent on in Providers.</p></details></div>
     <div class="card"><details class="more"><summary>${icon('chev')} <b style="color:var(--text)">Update or remove</b></summary>${cmd('npm install -g github:KevalParikh22/conductor-ai   # update to latest\nconductor --version\nnpm uninstall -g conductor-ai                       # remove')}<span class="note">Settings and keys stay in <span class="mono">${esc(S.paths.global.replace(/[^/\\]+$/, ''))}</span>. Delete that folder to remove them too.</span></details></div>
 `;

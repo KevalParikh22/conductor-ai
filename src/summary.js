@@ -24,7 +24,7 @@ export function formatSummary(s) {
     L.push('next:      orchestrator does this task itself, or fixes a provider above and runs it again');
     return L.join('\n');
   }
-  L.push(`worker:    ${s.winner} (${s.model})`);
+  L.push(`worker:    ${s.winner}${s.model && s.model !== '(default)' ? ` (${s.model})` : ' (its default model)'}`);
   const used = s.attempts.filter((a) => a.tokens);
   if (used.length) {
     const tin = used.reduce((t, a) => t + (a.tokens.input || 0), 0), tout = used.reduce((t, a) => t + (a.tokens.output || 0), 0);

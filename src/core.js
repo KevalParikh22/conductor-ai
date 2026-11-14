@@ -411,8 +411,13 @@ async function dispatchOnce(cfg, opts) {
   fs.mkdirSync(runsDir, { recursive: true });
   if (!fs.existsSync(path.join(runsDir, '.gitignore'))) fs.writeFileSync(path.join(runsDir, '.gitignore'), '*\n');
   const stamp = timestamp();
-  const runDir = path.join(runsDir, `${stamp}-${role}${opts.taskId ? '-' + opts.taskId.replace(/[^\w.-]/g, '') : ''}`);
-  fs.mkdirSync(runDir, { recursive: true });
+  // a run folder of its own, even for runs started in the same second on the same task (parallel samples, a race,
+  // two terminals): mkdir without `recursive` fails if the folder exists, so the next free suffix is taken
+  const runBase = path.join(runsDir, `${stamp}-${role}${opts.taskId ? '-' + opts.taskId.replace(/[^\w.-]/g, '') : ''}`);
+  let runDir = runBase;
+  for (let n = 2; ; n++) {
+    try { fs.mkdirSync(runDir); break; } catch (e) { if (e.code !== 'EEXIST') throw e; runDir = `${runBase}-${n}`; }
+  }
   fs.writeFileSync(path.join(runDir, 'task.md'), body);
 
   const summary = {

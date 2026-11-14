@@ -21,9 +21,21 @@ export function detectVerify(root, settings = {}) {
       if (scripts[s] && !/no test specified/.test(scripts[s])) cmds.push(`${pm} run ${s}`);
     }
   }
-  if (has('pyproject.toml') || has('requirements.txt') || has('setup.py')) {
-    if (which('ruff')) cmds.push('ruff check .');
-    if (which('pytest')) cmds.push('pytest -q');
+  if (has('pyproject.toml') || has('requirements.txt') || has('setup.py') || has('setup.cfg') || has('pytest.ini')) {
+    const read = (f) => { try { return fs.readFileSync(path.join(root, f), 'utf8'); } catch { return ''; } };
+    const pyproject = read('pyproject.toml');
+    // the project's own venv first (where its tools really are), then PATH
+    const venv = ['.venv', 'venv'].find((v) => has(`${v}/bin/python`) || has(`${v}/Scripts/python.exe`));
+    const tool = (name) => (venv && (has(`${venv}/bin/${name}`) || has(`${venv}/Scripts/${name}.exe`)) ? `${venv}/bin/${name}` : which(name) ? name : null);
+    const ruffConfigured = /^\[tool\.ruff/m.test(pyproject) || has('ruff.toml') || has('.ruff.toml');
+    const ruff = tool('ruff');
+    if (ruff && (ruffConfigured || ruff === 'ruff')) cmds.push(`${ruff} check .`);
+    // pytest configured, or a tests folder: run it even when pytest isn't on PATH (python -m pytest)
+    const pytestConfigured = /^\[tool\.pytest/m.test(pyproject) || has('pytest.ini') || has('conftest.py') || /\[tool:pytest\]/.test(read('setup.cfg')) || /\[pytest\]/.test(read('tox.ini'))
+      || (has('tests') && fs.readdirSync(path.join(root, 'tests')).some((f) => /^test_.*\.py$|_test\.py$/.test(f)));
+    const pytest = tool('pytest');
+    if (pytest) cmds.push(`${pytest} -q`);
+    else if (pytestConfigured) cmds.push(`${venv ? `${venv}/bin/python` : 'python3'} -m pytest -q`);
   }
   if (has('composer.json')) {
     let scripts = {};

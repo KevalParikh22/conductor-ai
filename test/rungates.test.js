@@ -90,3 +90,14 @@ test('a real run: conductor runs show / MCP / UI API get the same checklist, and
   fs.writeFileSync(sumFile, JSON.stringify({ ...sj, report: '../../../../etc/hostname' }));
   assert.equal(runDetail(dir, id).report, null);
 });
+
+test('runs started in the same second on the same task each get their own folder; an exact id still finds its run', async () => {
+  const { dir } = makeRepo();
+  const cfg = loadConfig(dir);
+  cfg.providers = {};
+  const [a, b] = await Promise.all([dispatch(cfg, { role: 'ask', task: 'q', chain: [] }), dispatch(cfg, { role: 'ask', task: 'q', chain: [] })]);
+  assert.notEqual(a.runDir, b.runDir);
+  const ids = listRuns(dir).map((r) => r.id).sort();
+  assert.equal(ids.length, 2);
+  for (const id of ids) assert.equal(readRun(dir, id).id, id);
+});

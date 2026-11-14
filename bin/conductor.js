@@ -23,7 +23,7 @@ import { doctorData } from '../src/doctor.js';
 import { listFreeModels, listProviderModels } from '../src/models.js';
 import { CLI_PRESETS, ROLES, CONTROLLERS, controllerWorker } from '../src/presets.js';
 import { VERSION } from '../src/version.js';
-import { which, keyValue, untilText } from '../src/util.js';
+import { which, keyValue, untilText, wrapForTerminal } from '../src/util.js';
 import { usageReport, formatUsage, recordSaving } from '../src/usage.js';
 import { listRuns, readRun, formatRuns, runDetail, runGates, formatGates } from '../src/runs.js';
 import { CATALOG, CATEGORIES, urlFields } from '../src/catalog.js';
@@ -216,19 +216,24 @@ function routeRules(cfg, o) {
 /** A controller entry, built-in or your own (V6). */
 const ctrl = (n) => allControllers(findProjectRoot())[n] || {};
 
-const COMMANDS = ['controller', 'skills', 'setup', 'providers', 'add', 'keys', 'local', 'route', 'diff', 'init', 'ui', 'mcp', 'status', 'doctor', 'verify', 'run', 'models', 'batch', 'worktree', 'runs', 'usage', 'cooldown', 'config', 'retry', 'help'];
+const COMMANDS = ['controller', 'lessons', 'stats', 'guard', 'rules', 'eval', 'plan', 'skills', 'setup', 'providers', 'add', 'keys', 'local', 'route', 'diff', 'init', 'ui', 'mcp', 'status', 'doctor', 'verify', 'run', 'models', 'batch', 'worktree', 'runs', 'usage', 'cooldown', 'config', 'retry', 'help'];
 /** The command closest to a typo (edit distance ≤ 2), or null. */
 function closest(word, options) {
+  // edit distance where swapping two neighbouring letters (stauts → status) counts as one edit
   const d = (a, b) => {
-    const row = Array.from({ length: b.length + 1 }, (_, j) => j);
+    const m = Array.from({ length: a.length + 1 }, (_, i) => Array.from({ length: b.length + 1 }, (_, j) => (i ? (j ? 0 : i) : j)));
     for (let i = 1; i <= a.length; i++) {
-      let prev = row[0]; row[0] = i;
-      for (let j = 1; j <= b.length; j++) { const t = row[j]; row[j] = Math.min(row[j] + 1, row[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1)); prev = t; }
+      for (let j = 1; j <= b.length; j++) {
+        m[i][j] = Math.min(m[i - 1][j] + 1, m[i][j - 1] + 1, m[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+        if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) m[i][j] = Math.min(m[i][j], m[i - 2][j - 2] + 1);
+      }
     }
-    return row[b.length];
+    return m[a.length][b.length];
   };
-  const best = options.map((o) => [o, d(word.toLowerCase(), o)]).sort((x, y) => x[1] - y[1])[0];
-  return best && best[1] <= 2 ? best[0] : null;
+  const scored = [...new Set(options)].map((o) => [o, d(word.toLowerCase(), o)]).sort((x, y) => x[1] - y[1]);
+  if (!scored.length || scored[0][1] > 2) return null;
+  // a tie (runz: run or runs) names both, best first
+  return scored.filter(([, n]) => n === scored[0][1]).slice(0, 2).map(([o]) => o).join(' or conductor ');
 }
 
 // Colour for people at a terminal: ✓ green, ✗ red, ⚠ and WARNING yellow, ○ dim. Off for pipes, NO_COLOR, --no-color
@@ -279,6 +284,10 @@ async function main() {
   let cmd = argv[0] && !argv[0].startsWith('-') ? argv.shift() : 'help';
   const o = parseArgs(argv);
   // never colour machine output: the MCP protocol and --json
+  // fit long lines to the terminal (help, tables, status): wrapped at words, continuing under the text column.
+  // Only for a terminal (or COLUMNS set); piped output, --json and the MCP protocol stay exactly as they are
+  const cols = process.stdout.isTTY ? process.stdout.columns : Number(process.env.COLUMNS) || 0;
+  if (cols && cmd !== 'mcp' && cmd !== 'hook' && !o.json) { const log = console.log; console.log = (...a) => log(...a.map((x) => (typeof x === 'string' ? wrapForTerminal(x, cols) : x))); }
   if (useColor() && cmd !== 'mcp' && !o.json) { const log = console.log; console.log = (...a) => log(...a.map((x) => (typeof x === 'string' ? colorize(x) : x))); }
   if (o.version) { console.log(VERSION); return 0; }
   if (o.help || cmd === 'help') { console.log(o._[0] === 'all' || o.all ? HELP_ALL : HELP); return 0; }
@@ -672,7 +681,7 @@ async function doctor(o) {
   console.log(`project: ${cfg.root}\n`);
   for (const n of cfg.notices || []) console.log(`! ${n}`);
   for (const r of results) {
-    console.log(`${r.optional ? '○' : r.ok ? '✓' : '✗'} ${r.name.padEnd(16)} ${r.optional ? r.status : r.ok && !o.live ? 'ready (use --live to test a real call)' : r.status}${r.sample ? `: ${r.sample}` : ''}`);
+    console.log(`${r.optional ? '○' : r.cooling ? '~' : r.ok ? '✓' : '✗'} ${r.name.padEnd(16)} ${r.optional || r.cooling ? r.status : r.ok && !o.live ? 'ready (use --live to test a real call)' : r.status}${r.sample ? `: ${r.sample}` : ''}`);
     if (r.next) console.log(`    next: ${r.next}`);
     if (r.permissions && o.details) {
       console.log(`    write: ${r.permissions.write || 'unknown (custom CLI): check its own permission settings'}`);

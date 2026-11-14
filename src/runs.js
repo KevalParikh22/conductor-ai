@@ -57,7 +57,7 @@ export function readRun(root, id) {
   if (!id || /[\\/]/.test(id)) return null;
   let dirs = [];
   try { dirs = fs.readdirSync(runsDir(root)); } catch { /* none */ }
-  const hit = dirs.filter((d) => d === id || d.startsWith(id));
+  const hit = dirs.includes(id) ? [id] : dirs.filter((d) => d.startsWith(id)); // an exact id wins over its -2 sibling
   if (hit.length !== 1) return null;
   const s = readJSON(path.join(runsDir(root), hit[0], 'summary.json'), null);
   return s && { id: hit[0], summary: s };

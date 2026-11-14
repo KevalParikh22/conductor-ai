@@ -15,8 +15,9 @@ export function statusData(cfg) {
     const optional = optionalNoKey(cfg, name, p);
     return {
       optional, // on by default, no key yet: not broken
+      cooling: c ? { until: c.until, reason: c.reason } : null, // paused by a rate limit: not broken either
       name, type: p.type, preset: p.preset, model: p.model || '', enabled: !!p.enabled,
-      location: providerLocation(p), kind: providerKind(p), ready: r.ready && !c, reason: c ? `cooling down until ${untilText(c.until)}` : optional ? `optional: add ${p.apiKeyEnv} to use it` : r.reason,
+      location: providerLocation(p), kind: providerKind(p), ready: r.ready && !c, reason: c ? `cooling down until ${untilText(c.until)} (${c.reason}): conductor cooldown --clear ${name}` : optional ? `optional: add ${p.apiKeyEnv} to use it` : r.reason,
       label: p.type === 'cli' ? (CLI_PRESETS[p.preset]?.label || p.bin) : name, notes: p.notes || '',
     };
   });
@@ -38,8 +39,8 @@ export function statusReport(cfg) {
   L.push(`config:     global=${d.sources.global || '(defaults)'}  project=${d.sources.project || '(none)'}`);
   L.push(d.repo ? `repo:       branch ${d.repo.branch}, ${d.repo.dirty ? 'dirty' : 'clean'}${d.repo.failedStashes ? `, ${d.repo.failedStashes} failed-attempt stash(es)` : ''}` : 'repo:       (not a git repo)');
   L.push(`verify:     ${d.verify || '(none detected)'}`);
-  L.push('', 'roles (fallback order, ✓ = ready, ○ = optional, add a key to use):');
-  const mark = (p) => (p?.ready ? '✓' : p?.optional ? '○' : '✗');
+  L.push('', 'roles (fallback order, ✓ = ready, ○ = optional, add a key to use, ~ = cooling down after a rate limit):');
+  const mark = (p) => (p?.ready ? '✓' : p?.optional ? '○' : p?.cooling ? '~' : '✗');
   for (const [role, chain] of Object.entries(d.roles)) {
     L.push(`  ${role.padEnd(7)} ${chain.map((n) => `${mark(byName[n])} ${n}`).join('  →  ')}`);
   }

@@ -110,3 +110,19 @@ test('one call at a time per local server, even from parallel tasks', async () =
     assert.equal(o.maxInFlight, 1, 'the server never had two prompts at once');
   } finally { o.close(); }
 });
+
+test('adding a local provider checks its model is installed: it switches to a usable one, or says what to pull', async () => {
+  const { checkLocalModel } = await import('../src/setup.js');
+  const o = await fakeOllama({}); // serves tiny:2b only
+  try {
+    const { dir } = makeRepo();
+    const r = await checkLocalModel(dir, 'ollama', { name: 'ollama', provider: { type: 'openai', baseUrl: o.url, model: 'qwen3-coder' }, roles: [] });
+    assert.match(r.warning, /qwen3-coder isn't installed on this server yet \(it has tiny:2b, too small for coding tasks\): ollama pull qwen3-coder/);
+    const ok = await checkLocalModel(dir, 'ollama', { name: 'ollama', provider: { type: 'openai', baseUrl: o.url, model: 'tiny:2b' }, roles: [] });
+    assert.equal(ok.warning, undefined, 'an installed model is kept as it is');
+    const cloud = await checkLocalModel(dir, 'groq', { name: 'groq', provider: { type: 'openai', baseUrl: 'https://api.groq.com/openai/v1', model: 'x' }, roles: [] });
+    assert.equal(cloud.warning, undefined, 'cloud providers are not checked');
+    const down = await checkLocalModel(dir, 'ollama', { name: 'ollama', provider: { type: 'openai', baseUrl: 'http://localhost:9/v1', model: 'm' }, roles: [] });
+    assert.match(down.warning, /didn't answer/);
+  } finally { o.close(); }
+});
