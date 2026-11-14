@@ -21,6 +21,9 @@ const RULES = [
   [/^every model is cooling down/, ({ name }) => `all of ${name}'s models hit their limits; \`conductor cooldown\` shows when each resets (\`conductor cooldown --clear ${name}\` to try now)`],
   [/daily budget reached/, () => `the paid daily budget is used up: wait until tomorrow, or raise dailyBudgetUSD in ${cfgFile}`],
   [/^cancelled/, () => 'nothing to do: another attempt in the race passed first, so this one was stopped'],
+  [/^context too small: .*~(\d+) tokens with the answer, (\S+) runs with (\d+) \((Ollama|LM Studio)/, (_, m) => m[4] === 'LM Studio'
+    ? `load ${m[2]} in LM Studio with a context length of at least ${m[1]} (Developer → model settings), or give this task to a bigger route`
+    : `give ${m[2]} a bigger window: set OLLAMA_CONTEXT_LENGTH=${2 ** Math.ceil(Math.log2(Number(m[1])))} for the Ollama server and restart it (or \`ollama create\` a copy with PARAMETER num_ctx). More context needs more memory; smaller tasks also help`],
   [/^quota/, ({ name }) => `${name} hit a rate limit or its quota and cools down; conductor moved on. See \`conductor cooldown\`. More free routes: \`conductor providers --free\``],
   [/^denied: (.+?) \(/, (_, m) => `the worker was refused \`${m[1]}\` (headless runs can't ask): add it to settings.allowCommands in ${cfgFile}`],
   [/^agy status/, ({ log }) => `Antigravity reported an error: read ${log || 'the worker log in the run folder'}, then \`conductor doctor --live\``],
@@ -53,7 +56,7 @@ export function nextStep(reason, ctx = {}) {
 }
 
 // Failures that stay until someone acts (install, key, config). Shown even when another worker won.
-const LASTING = /^(unknown provider|disabled|"?[\w.-]+"? not installed|not installed|\w+ not set|auth \(|denied: |no model set|http 4|spawn error)/;
+const LASTING = /^(context too small|unknown provider|disabled|"?[\w.-]+"? not installed|not installed|\w+ not set|auth \(|denied: |no model set|http 4|spawn error)/;
 export const isLasting = (reason) => LASTING.test(String(reason || ''));
 
 /** One "fix:" line per provider for a summary: every failure when nothing won, only lasting ones otherwise. */

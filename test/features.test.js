@@ -147,7 +147,7 @@ test('an API provider that answers 200 with no content is asked once more', asyn
   });
   await new Promise((r) => flaky.listen(0, '127.0.0.1', r));
   const { dir } = makeRepo();
-  const cfg = cfgFor(dir, { flaky: { type: 'openai', enabled: true, baseUrl: `http://127.0.0.1:${flaky.address().port}/v1`, apiKeyEnv: '', model: 'm', free: true } });
+  const cfg = cfgFor(dir, { flaky: { type: 'openai', location: 'cloud-api', enabled: true, baseUrl: `http://127.0.0.1:${flaky.address().port}/v1`, apiKeyEnv: '', model: 'm', free: true } });
   const s = await dispatch(cfg, { role: 'ask', task: 'what?', chain: ['flaky'] });
   flaky.close();
   assert.equal(s.winner, 'flaky');

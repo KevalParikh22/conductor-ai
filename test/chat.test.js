@@ -39,7 +39,7 @@ after(() => server.close());
 
 function cfgFor(dir) {
   const cfg = loadConfig(dir);
-  for (const k of Object.keys(REPLIES)) cfg.providers[k] = { type: 'openai', enabled: true, baseUrl: `http://127.0.0.1:${port}/${k}`, apiKeyEnv: '', model: 'm' };
+  for (const k of Object.keys(REPLIES)) cfg.providers[k] = { type: 'openai', location: 'cloud-api', enabled: true, baseUrl: `http://127.0.0.1:${port}/${k}`, apiKeyEnv: '', model: 'm' };
   return cfg;
 }
 

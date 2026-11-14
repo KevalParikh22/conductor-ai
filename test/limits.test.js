@@ -78,7 +78,7 @@ const server = http.createServer((req, res) => {
 });
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 after(() => server.close());
-const api = (extra) => ({ type: 'openai', enabled: true, baseUrl: `http://127.0.0.1:${server.address().port}/v1`, apiKeyEnv: '', ...extra });
+const api = (extra) => ({ type: 'openai', location: 'cloud-api', enabled: true, baseUrl: `http://127.0.0.1:${server.address().port}/v1`, apiKeyEnv: '', ...extra });
 
 test('a rate-limited model falls back to the next model on the same provider; only that model cools down', async () => {
   clearCooldowns(); calls.length = 0;

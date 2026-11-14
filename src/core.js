@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { ROLES, CLI_PRESETS, controllerWorker, BUILD_COMMANDS } from './presets.js';
-import { providerReadiness, providerKind, readOnlyEnforced, PROJECT_DIRNAME } from './config.js';
+import { providerReadiness, providerKind, readOnlyEnforced, PROJECT_DIRNAME, providerLocation } from './config.js';
 import { runProvider } from './providers.js';
 import * as git from './git.js';
 import { runVerify } from './verify.js';
@@ -31,6 +31,7 @@ import { extractTask, extractSection, openQuestions, taskFiles, expandBraces, no
 import { getCooldowns, setCooldown, modelKey, withSlot } from './cooldowns.js';
 import { outcome, EXIT_UNVERIFIED, unverifiedBlocks } from './outcome.js';
 import { isProtected, trimReport, parseFileBlocks, applyFileBlocks, checkEvidence } from './files.js';
+import { localWindow, estimateTokens } from './local.js';
 // moved out unchanged (V12); re-exported so every importer of core.js keeps working
 export { extractTask, extractSection, openQuestions, taskFiles, expandBraces, notesForFiles, parseDuration } from './plan.js';
 export { getCooldowns, setCooldown, clearCooldowns, withSlot } from './cooldowns.js';
@@ -380,26 +381,28 @@ async function dispatchOnce(cfg, opts) {
   };
   // Q2: facts gathered once per run (task files, callers, verify, architecture), in the form each kind of worker uses
   const packs = {};
-  const packFor = (kind) => {
+  const packFor = (kind, small = false) => {
     if (settings.contextPack === false) return '';
-    if (packs[kind] === undefined) {
-      packs[kind] = timed('context', () => contextPack(work, { files: [...(opts.files || []), ...taskFiles(section)].flatMap(expandBraces), verifyCmd: detectVerify(work, verifySettings), kind, budget: settings.contextPackBytes || 4000 }));
+    const k = small ? `${kind}-small` : kind;
+    if (packs[k] === undefined) {
+      packs[k] = timed('context', () => contextPack(work, { files: [...(opts.files || []), ...taskFiles(section)].flatMap(expandBraces), verifyCmd: detectVerify(work, verifySettings), kind, budget: small ? 1500 : settings.contextPackBytes || 4000 }));
     }
-    return packs[kind];
+    return packs[k];
   };
-  const chatContext = () => {
+  // V13: small = a local model's prompt: no project map, a shorter AGENTS.md and context pack, fewer file bytes
+  const chatContext = ({ small = false } = {}) => {
     let ctx = '';
     const agents = path.join(work, 'AGENTS.md');
-    if (fs.existsSync(agents)) ctx += `# AGENTS.md (project rules, authoritative)\n${fs.readFileSync(agents, 'utf8').slice(0, 20000)}\n`;
+    if (fs.existsSync(agents)) ctx += `# AGENTS.md (project rules, authoritative)\n${fs.readFileSync(agents, 'utf8').slice(0, small ? 6000 : 20000)}\n`;
     const notes = planText && extractSection(planText, 'Design notes');
     if (notes) ctx += `\n# Design notes from ${opts.planPath}\n${notes}\n`;
-    if (mode === 'write' && inRepo) {
+    if (mode === 'write' && inRepo && !small) {
       const map = timed('context', () => repoMap(work, { budget: settings.repoMapBytes || 6000 }));
       if (map) ctx += `\n# Project map (files, and the names each code file defines)\n${map}\n`;
     }
     const files = [...(opts.files || []), ...taskFiles(section)];
-    if (files.length) ctx += `\n# Relevant files (current content)\n${readContextFiles(work, files, settings.maxContextBytes || 60000, settings.protectedPaths || [])}`;
-    if (mode === 'write') ctx += packFor('chat');
+    if (files.length) ctx += `\n# Relevant files (current content)\n${readContextFiles(work, files, small ? Math.min(settings.maxContextBytes || 60000, 20000) : settings.maxContextBytes || 60000, settings.protectedPaths || [])}`;
+    if (mode === 'write') ctx += packFor('chat', small);
     return ctx;
   };
 
@@ -510,8 +513,10 @@ async function dispatchOnce(cfg, opts) {
     const chatBody = body.replace('(read its Design notes)', '(its Design notes are included above)');
     // a per-provider addition (settings: providers.<name>.promptExtra), e.g. extra guidance a small model needs
     const extra = c.p.promptExtra ? `\n## Note for this model\n${c.p.promptExtra}\n` : '';
+    // V13: a model on this machine gets the small prompt (settings.localPromptProfile: false keeps the full one)
+    const local = kind === 'chat' && providerLocation(c.p) === 'local-model';
     const userPrompt = inline
-      ? `${chatContext()}\n---\n# TASK (role: ${role})\n${chatBody}${skillsChat.text ? `\n${skillsChat.text}` : ''}${extra}${recite}${mode === 'write' ? CHAT_CLOSE : ''}`
+      ? `${chatContext({ small: local && settings.localPromptProfile !== false })}\n---\n# TASK (role: ${role})\n${chatBody}${skillsChat.text ? `\n${skillsChat.text}` : ''}${extra}${recite}${mode === 'write' ? CHAT_CLOSE : ''}`
       : agentPrompt + (mode === 'write' ? packFor('agent') : '') + extra + recite;
     // the provider's model, then its fallback models: a model that is rate-limited is skipped until its cooldown ends
     let { models, auto } = await modelsToTry(c.name, c.p, kind);
@@ -532,11 +537,22 @@ async function dispatchOnce(cfg, opts) {
       const t0 = Date.now();
       lastPromptChars = userPrompt.length;
       const p = model === (c.p.model || '') ? c.p : { ...c.p, model };
+      // V13: a local server cuts a prompt longer than its window without an error: check it fits before sending
+      const promptTokens = estimateTokens(`${chatSystem}\n${userPrompt}`);
+      const win = local && p.model && settings.localContextCheck !== false ? await localWindow(p) : null;
+      const tooBig = win && promptTokens + (p.maxTokens || 2048) > win.window;
+      // one call at a time per local server (it shares one machine); a provider's own maxParallel wins
+      const slotKey = local ? `local:${(() => { try { return new URL(c.p.baseUrl).host; } catch { return c.name; } })()}` : c.name;
       let res = kind === 'chat' && !p.model
         ? { ok: false, text: '', reason: 'no model set, and its model list could not be fetched', log: '' }
-        : await withSlot(c.name, c.p.maxParallel ?? CLI_PRESETS[c.p.preset]?.maxParallel, () => runProvider(c.name, p, { mode, prompt: userPrompt, system: chatSystem, cwd: work, runDir: ioDir, quotaRe,
+        : tooBig ? { ok: false, text: '', reason: `context too small: the prompt needs ~${promptTokens + (p.maxTokens || 2048)} tokens with the answer, ${p.model} runs with ${win.window} (${win.server})`, log: '' }
+        : await withSlot(slotKey, c.p.maxParallel ?? CLI_PRESETS[c.p.preset]?.maxParallel ?? (local ? 1 : undefined), () => runProvider(c.name, p, { mode, prompt: userPrompt, system: chatSystem, cwd: work, runDir: ioDir, quotaRe,
           allowCommands: buildCommands(settings), ...limitFor(c.p, kind), signal: opts.signal }), () => emit({ type: 'wait', provider: c.name }));
       if (p !== c.p && p.model && !res.model) res.model = p.model;
+      // V13: the server counted far fewer prompt tokens than were sent: it cut the prompt (any server, window known or not)
+      if (local && res.ok && res.tokens?.input && res.tokens.input < promptTokens * 0.5) {
+        summary.warnings.push(`${c.name} (${p.model}) saw only ${res.tokens.input} prompt tokens of about ${promptTokens}: the local server cut the prompt, so the answer may ignore the task's files. Raise the model's context (OLLAMA_CONTEXT_LENGTH, or num_ctx)`);
+      }
       const tampered = control ? git.restoreControl(control) : [];
       const putBack = restoreLocal();
       if (putBack.length) summary.warnings.push(`${c.name} changed conductor's own files, which workers must not edit. conductor put them back: ${putBack.join(', ')}`);

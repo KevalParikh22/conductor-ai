@@ -88,7 +88,7 @@ test('a hanging free route: one more model after a timeout, then the chain moves
   const { dir } = makeRepo();
   const cfg = loadConfig(dir);
   cfg.settings.freeApiTimeoutSec = 1;
-  cfg.providers.hang = { type: 'openai', enabled: true, baseUrl: `http://127.0.0.1:${s.address().port}/v1`, apiKeyEnv: '', model: 'a:free', free: true };
+  cfg.providers.hang = { type: 'openai', location: 'cloud-api', enabled: true, baseUrl: `http://127.0.0.1:${s.address().port}/v1`, apiKeyEnv: '', model: 'a:free', free: true };
   const t0 = Date.now();
   const r = await dispatch(cfg, { role: 'ask', task: 'hi', chain: ['hang'] });
   assert.deepEqual(r.attempts.map((x) => x.model), ['a:free', 'b:free'], 'stops after the second timeout');

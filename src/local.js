@@ -54,3 +54,52 @@ export async function detectLocal({ timeoutMs = 1500, servers } = {}) {
     return { id, label: e.label, baseUrl: e.baseUrl, running: p.running, installed, models, best, tooSmall, next };
   }));
 }
+
+// ---------------- V13: the context window a local server really uses ----------------
+// Ollama runs a model with its own default window (4,096 tokens on 0.40, measured) unless num_ctx or
+// OLLAMA_CONTEXT_LENGTH says otherwise, and its OpenAI endpoint cuts a longer prompt WITHOUT an error (measured: a
+// 59,000-character prompt reached the model as 2,050 tokens, status 200). So conductor asks the server first.
+const windows = new Map(); // `${origin}|${model}` → { at, value }
+
+async function getJson(url, { method = 'GET', body, timeoutMs = 4000 } = {}) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { method, headers: body ? { 'content-type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined, signal: ctrl.signal });
+    return res.ok ? await res.json() : null;
+  } catch { return null; } finally { clearTimeout(t); }
+}
+
+/**
+ * → { window, trained, server, source } for a local OpenAI-compatible provider, or null when the server can't say.
+ * window: tokens the model runs with now; trained: the most it supports. For Ollama a model that isn't loaded is
+ * loaded first (an empty generate, kept for 10 minutes): its window is only known once loaded, and the task needs it
+ * loaded anyway.
+ */
+export async function localWindow(p, { timeoutMs = 4000, loadTimeoutMs = 120_000 } = {}) {
+  let origin; try { origin = new URL(p.baseUrl).origin; } catch { return null; }
+  const key = `${origin}|${p.model}`;
+  const hit = windows.get(key);
+  if (hit && Date.now() - hit.at < 60_000) return hit.value;
+  let value = null;
+  const version = await getJson(`${origin}/api/version`, { timeoutMs });
+  if (version?.version && p.model) {
+    const show = await getJson(`${origin}/api/show`, { method: 'POST', body: { model: p.model }, timeoutMs });
+    const numCtx = Number((String(show?.parameters || '').match(/^num_ctx\s+(\d+)/m) || [])[1]) || 0;
+    const trained = Number(Object.entries(show?.model_info || {}).find(([k]) => k.endsWith('.context_length'))?.[1]) || 0;
+    const loaded = async () => (await getJson(`${origin}/api/ps`, { timeoutMs }))?.models?.find((m) => m.name === p.model || m.model === p.model);
+    let ps = await loaded();
+    if (!ps) { await getJson(`${origin}/api/generate`, { method: 'POST', body: { model: p.model, prompt: '', keep_alive: '10m' }, timeoutMs: loadTimeoutMs }); ps = await loaded(); }
+    const win = Number(ps?.context_length) || numCtx || 0;
+    if (win) value = { window: win, trained, server: `Ollama ${version.version}`, source: ps?.context_length ? 'loaded model' : 'num_ctx' };
+  } else if (p.model) {
+    const lm = await getJson(`${origin}/api/v0/models/${encodeURIComponent(p.model)}`, { timeoutMs });
+    const win = Number(lm?.loaded_context_length) || 0;
+    if (win) value = { window: win, trained: Number(lm?.max_context_length) || 0, server: 'LM Studio', source: 'loaded model' };
+  }
+  windows.set(key, { at: Date.now(), value });
+  return value;
+}
+
+/** Rough token count for a prompt (about 3.5 characters a token for code and English; errs on the high side). */
+export const estimateTokens = (text) => Math.ceil(String(text || '').length / 3.5);
