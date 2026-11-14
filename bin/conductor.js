@@ -4,7 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { loadConfig, findProjectRoot, validateConfig, GLOBAL_CONFIG, GLOBAL_SECRETS, projectConfigPath, readScope, providerPermissions, readOnlyEnforced, readOverrideMissing, optionalNoKey } from '../src/config.js';
 import { dispatch, formatSummary, UsageError, clearCooldowns, getCooldowns, chooseChain, extractTask, taskFiles, parseDuration } from '../src/core.js';
-import { runBatch, formatBatch } from '../src/batch.js';
+import { runBatch, formatBatch, planBatch } from '../src/batch.js';
 import { listWorktrees, removeWorktree, readWorktreeMeta } from '../src/worktree.js';
 import { listSkills, setSkillOn, newSkill, addSkill, removeSkill, syncSkills, globalSkillsDir, projectSkillsDir } from '../src/skills.js';
 import { statusReport, statusData } from '../src/status.js';
@@ -92,6 +92,9 @@ Work (normally called by the controller)
      --no-verify --no-escalate --allow-no-repro --allow-unverified --allow-scope --allow-weak-plan --allow-dirty --allow-open-questions --json
                                  exit 4 = the worker wrote code but no verify command proved it (--allow-unverified accepts it)
   conductor batch --plan <file> --tasks T1,T2,T3 [--concurrency 4] [--role r] [--provider p] [--replace] [--json]
+  conductor batch --plan <file> --all              every worker task in the plan, started as soon as its depends are merged (implies --merge)
+     --merge                     merge each task that passed into your branch (one at a time), run verify on the merged
+                                 code, and stop at the first conflict or failing verify. Needs a clean checkout
   conductor diff [branch | A..B] [--lines 200]   compact diff for review (default: working tree, new files included)
   conductor route "task" [--role r] [--files a,b] | --plan f --task T1   which providers would take a task, and why
   conductor route --rules | --templates | --add starter|<id,id> | --rm <n> [--global]   list, add or remove routing rules
@@ -279,7 +282,7 @@ function timeoutOpt(o) {
 
 function parseArgs(argv) {
   const opts = { _: [] };
-  const flags = new Set(['no-verify', 'allow-dirty', 'json', 'live', 'no-open', 'no-mcp', 'all', 'clear', 'global', 'help', 'version', 'worktree', 'replace', 'force', 'allow-open-questions', 'vscode', 'yes', 'free', 'project', 'details', 'enable', 'rules', 'templates', 'continue', 'share', 'allow-unverified', 'allow-scope', 'allow-weak-plan', 'keep', 'failures', 'no-escalate', 'allow-no-repro', 'review', 'no-review', 'guards', 'no-lessons', 'race', 'no-race']);
+  const flags = new Set(['no-verify', 'allow-dirty', 'json', 'live', 'no-open', 'no-mcp', 'all', 'clear', 'global', 'help', 'version', 'worktree', 'replace', 'force', 'allow-open-questions', 'vscode', 'yes', 'free', 'project', 'details', 'enable', 'rules', 'templates', 'continue', 'share', 'allow-unverified', 'allow-scope', 'allow-weak-plan', 'keep', 'failures', 'no-escalate', 'allow-no-repro', 'review', 'no-review', 'guards', 'no-lessons', 'race', 'no-race', 'merge']);
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '-h') { opts.help = true; continue; }
@@ -662,10 +665,11 @@ async function main() {
       const cfg = loadConfig();
       const errs = validateConfig(cfg);
       if (errs.length) throw new UsageError('config problems:\n  ' + errs.join('\n  '));
-      const tasks = (o.tasks || o._.join(',')).split(',').map((x) => x.trim()).filter(Boolean);
+      let tasks = (o.tasks || o._.join(',')).split(',').map((x) => x.trim()).filter(Boolean);
+      if (o.all) tasks = planBatch(cfg, { planPath: o.plan, all: true, merge: true, role: o.role, allowOpenQuestions: o['allow-open-questions'], allowWeakPlan: o['allow-weak-plan'] }).items.map((t) => t.id);
       const table = batchProgress(tasks);
       const b = await runBatch(cfg, {
-        planPath: o.plan, tasks, role: o.role, provider: o.provider, concurrency: o.concurrency, noVerify: o['no-verify'], allowUnverified: o['allow-unverified'], allowScope: o['allow-scope'], allowWeakPlan: o['allow-weak-plan'], noEscalate: o['no-escalate'], allowNoRepro: o['allow-no-repro'], review: o.review, noReview: o['no-review'], timeoutMs: timeoutOpt(o), replace: o.replace, note: o.note, allowOpenQuestions: o['allow-open-questions'], priority: priorityOpt(o),
+        planPath: o.plan, tasks, role: o.role, provider: o.provider, concurrency: o.concurrency, noVerify: o['no-verify'], allowUnverified: o['allow-unverified'], allowScope: o['allow-scope'], allowWeakPlan: o['allow-weak-plan'], noEscalate: o['no-escalate'], allowNoRepro: o['allow-no-repro'], review: o.review, noReview: o['no-review'], timeoutMs: timeoutOpt(o), replace: o.replace, note: o.note, allowOpenQuestions: o['allow-open-questions'], priority: priorityOpt(o), all: o.all, merge: o.merge,
         onEvent: o.json ? undefined : (e) => table.event(e), // a live table on a terminal, plain lines otherwise
       });
       table.stop();

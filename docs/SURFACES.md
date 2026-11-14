@@ -6,7 +6,7 @@ A dash means the action is left out of that surface on purpose, with the reason.
 | Action | CLI | MCP (controller) | UI (route) |
 |---|---|---|---|
 | Hand a task to a worker | `conductor run <role> "task" (or conductor <role> …)` | `conductor_run` | — *work is handed out by your controller or the terminal; the UI shows the result (Runs)* |
-| Run independent plan tasks in parallel | `conductor batch --plan f --tasks T1,T2` | `conductor_batch` | — *started by the controller; each task shows on the Runs page* |
+| Run plan tasks in parallel (--all --merge: the whole plan, by depends, merged) | `conductor batch --plan f --tasks T1,T2 \| --all --merge` | `conductor_batch` | — *started by the controller; each task shows on the Runs page* |
 | Have a worker fix its own task in place | `conductor retry <task> --note "…"` | `conductor_retry` | — *needs a note about what was wrong: the run page shows the command* |
 | Preview who would take a task, and why | `conductor route "task"` | `conductor_route` | `POST /api/route-preview` |
 | Check a plan before handing it out | `conductor plan check <file>` | `conductor_plan_check` | — *plans are files in your editor; the controller checks them* |

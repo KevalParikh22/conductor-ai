@@ -11,7 +11,7 @@ export function stepText(e) {
     start: `starting${e.provider ? ` (first choice: ${e.provider})` : ''}`, base: 'checking the starting commit', try: `${e.provider} is working`,
     wait: `waiting for ${e.provider} (one task at a time on it)`, verify: 'running verify', checks: 'running the acceptance checks',
     repro: 'running the repro', isolate: 'checking the code alone against the original tests', review: 'independent review',
-    escalate: `${e.provider} takes over ${e.from}'s work`, repair: `asking ${e.provider} once more`, hedge: `${e.from} is slow: ${e.provider} also tries it`,
+    escalate: `${e.provider} takes over ${e.from}'s work`, repair: `asking ${e.provider} once more`, hedge: `${e.from} is slow: ${e.provider} also tries it`, merge: `merging ${e.branch}`,
   }[e.type] || null;
 }
 

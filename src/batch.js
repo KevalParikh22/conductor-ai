@@ -7,6 +7,9 @@ import { checkTask } from './plancheck.js';
 import { detectVerify } from './verify.js';
 import { speedStats, expectedSeconds, taskSize } from './selector.js';
 import { removeWorktree } from './worktree.js';
+import { execFileSync } from 'node:child_process';
+import { planTaskIds } from './plancheck.js';
+import { runVerify } from './verify.js';
 import { providerLocation, providerReadiness } from './config.js';
 import { controllerWorker } from './presets.js';
 import { dispatch, extractTask, taskFiles, resolveChain, chooseChain, openQuestions, UsageError, outcome, unverifiedBlocks } from './core.js';
@@ -14,11 +17,21 @@ import { dispatch, extractTask, taskFiles, resolveChain, chooseChain, openQuesti
 const field = (section, name) => (section.match(new RegExp(`\\*\\*${name}:\\*\\*\\s*(.+)`, 'i')) || [])[1]?.trim() || '';
 
 /** Read and check the tasks before anything runs. */
-export function planBatch(cfg, { planPath, tasks, role, allowOpenQuestions, allowWeakPlan }) {
+export function planBatch(cfg, { planPath, tasks, role, allowOpenQuestions, allowWeakPlan, all, merge }) {
   const planAbs = path.resolve(cfg.root, planPath || '');
   if (!planPath || !fs.existsSync(planAbs)) throw new UsageError(`plan not found: ${planPath || '(none given)'}`);
-  if (!tasks?.length) throw new UsageError('batch needs --tasks T1,T2,...');
   const planText = fs.readFileSync(planAbs, 'utf8');
+  const skipped = [];
+  if (all) {
+    // S3: every task a worker can do; controller and read-only tasks are left to the controller
+    tasks = planTaskIds(planText).filter((id) => {
+      const r = role || field(extractTask(planText, id), 'role').split(/[\s|,]/)[0] || 'build';
+      const ok = r !== 'controller' && ROLES[r]?.mode === 'write';
+      if (!ok) skipped.push(`${id} (${r}): not a worker task, left for you`);
+      return ok;
+    });
+  }
+  if (!tasks?.length) throw new UsageError(all ? `${planPath} has no tasks a worker can do` : 'batch needs --tasks T1,T2,... (or --all)');
   const open = openQuestions(planText);
   if (open.length && !allowOpenQuestions) throw new UsageError(`${planPath} still has ${open.length} open question(s): ${open.map((q) => `"${q}"`).join('; ')}. Answer them in the plan (- [x] question → answer) first, or pass --allow-open-questions`);
   const ids = [...new Set(tasks)];
@@ -39,13 +52,24 @@ export function planBatch(cfg, { planPath, tasks, role, allowOpenQuestions, allo
   }
   for (const t of items) {
     const inBatch = t.deps.filter((d) => ids.includes(d));
-    if (inBatch.length) throw new UsageError(`${t.id} depends on ${inBatch.join(', ')} in the same batch. Run ${inBatch.join(', ')} first, merge, then batch the rest`);
+    if (inBatch.length && !merge) throw new UsageError(`${t.id} depends on ${inBatch.join(', ')} in the same batch. Run ${inBatch.join(', ')} first, merge, then batch the rest`);
   }
-  const warnings = [];
+  if (merge) {
+    // S3: dependencies run in order; a cycle could never start
+    const seen = new Set(), stack = new Set(), byId = Object.fromEntries(items.map((t) => [t.id, t]));
+    const visit = (id) => {
+      if (stack.has(id)) throw new UsageError(`${id} depends on itself through ${[...stack].join(' → ')}: fix the depends lines in ${planPath}`);
+      if (seen.has(id) || !byId[id]) return;
+      stack.add(id); byId[id].deps.forEach(visit); stack.delete(id); seen.add(id);
+    };
+    items.forEach((t) => visit(t.id));
+  }
+  const warnings = [...skipped];
+  const dependsOn = (a, b) => a.deps.includes(b.id) || b.deps.includes(a.id);
   for (let i = 0; i < items.length; i++) {
     for (let j = i + 1; j < items.length; j++) {
       const shared = items[i].files.filter((f) => items[j].files.includes(f));
-      if (shared.length) warnings.push(`${items[i].id} and ${items[j].id} both list ${shared.join(', ')}: expect a merge conflict`);
+      if (shared.length && !(merge && dependsOn(items[i], items[j]))) warnings.push(`${items[i].id} and ${items[j].id} both list ${shared.join(', ')}: expect a merge conflict`);
     }
   }
   return { items, warnings };
@@ -101,8 +125,45 @@ export function hedgeAllowed(cfg, name, priority) {
   return !!p.free || providerLocation(p) === 'local-model';
 }
 
-export async function runBatch(cfg, { planPath, tasks, role, provider, concurrency, noVerify, allowUnverified, allowScope, allowWeakPlan, noEscalate, allowNoRepro, review, noReview, replace, note, allowOpenQuestions, timeoutMs, priority, onEvent }) {
-  const { items, warnings } = planBatch(cfg, { planPath, tasks, role, allowOpenQuestions, allowWeakPlan });
+const gitIn = (root, args) => execFileSync('git', args, { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] }).toString();
+
+/** S2: merging into your branch needs a clean checkout (tracked files): conductor won't mix its merges with your edits. */
+export function assertCleanCheckout(root) {
+  let dirty;
+  try { dirty = gitIn(root, ['status', '--porcelain', '--untracked-files=no']).trim(); } catch (e) { throw new UsageError(`--merge needs a git repository: ${e.message}`); }
+  if (dirty) throw new UsageError(`--merge needs a clean checkout; these files have changes:\n${dirty.split('\n').slice(0, 10).map((l) => `  ${l}`).join('\n')}\nCommit or stash them first`);
+  if (gitIn(root, ['rev-parse', '--abbrev-ref', 'HEAD']).trim() === 'HEAD') throw new UsageError('--merge needs a branch checked out (HEAD is detached)');
+}
+
+/**
+ * S2: merge one task's branch into the current branch (--no-ff), then run verify on the result. A conflict is undone
+ * (merge --abort) and reported with the files; a failing verify keeps the merge (so you can see it) and stops the batch.
+ * A merged task's worktree and branch are removed.
+ */
+export async function mergeTask(cfg, s, { emit } = {}) {
+  const wt = s.worktree;
+  if (!wt?.commit) { if (wt?.id) removeWorktree(cfg.root, wt.id, { force: true }); return { status: 'no-changes' }; }
+  emit?.({ type: 'merge', branch: wt.branch });
+  try {
+    gitIn(cfg.root, ['merge', '--no-ff', '--no-edit', '-m', `conductor: merge ${wt.id} (${s.winner})`, wt.branch]);
+  } catch (e) {
+    let files = [];
+    try { files = gitIn(cfg.root, ['diff', '--name-only', '--diff-filter=U']).trim().split('\n').filter(Boolean); } catch { /* none */ }
+    try { gitIn(cfg.root, ['merge', '--abort']); } catch { /* nothing to abort */ }
+    return { status: 'conflict', branch: wt.branch, files, why: files.length ? `conflict in ${files.join(', ')}` : (e.stderr?.toString().trim() || e.message).split('\n')[0] };
+  }
+  const head = gitIn(cfg.root, ['rev-parse', '--short', 'HEAD']).trim();
+  const v = s.verify?.status === 'SKIPPED' && !detectVerify(cfg.root, cfg.settings || {}) ? { status: 'SKIPPED' }
+    : (emit?.({ type: 'verify' }), await runVerify(cfg.root, cfg.settings || {}, s.runDir ? path.join(cfg.root, s.runDir, 'merged-verify.log') : undefined));
+  if (v.status === 'FAIL') return { status: 'verify-failed', branch: wt.branch, commit: head, cmd: v.cmd, tail: v.tail, log: v.log };
+  removeWorktree(cfg.root, wt.id);
+  return { status: 'merged', branch: wt.branch, commit: head, verify: v.status };
+}
+
+export async function runBatch(cfg, { planPath, tasks, role, provider, concurrency, noVerify, allowUnverified, allowScope, allowWeakPlan, noEscalate, allowNoRepro, review, noReview, replace, note, allowOpenQuestions, timeoutMs, priority, all, merge, onEvent }) {
+  merge = merge || all; // --all schedules by depends, which needs each task merged before its dependents start
+  if (merge) assertCleanCheckout(cfg.root);
+  const { items, warnings } = planBatch(cfg, { planPath, tasks, role, allowOpenQuestions, allowWeakPlan, all, merge });
   const work = spreadChains(cfg, items, { provider });
   const limit = Math.max(1, Math.min(Number(concurrency) || 4, work.length));
   const results = new Array(work.length);
@@ -164,23 +225,57 @@ export async function runBatch(cfg, { planPath, tasks, role, provider, concurren
     if (winner.e) throw winner.e;
     return winner.s;
   };
-  let next = 0;
-  const worker = async () => {
-    while (next < work.length) {
-      const i = next++;
-      const t = work[i];
-      const emit = (e) => onEvent?.({ ...e, task: t.id });
-      emit({ type: 'start', provider: t.chain[0] });
-      try {
-        const s = await runOne(t, emit);
-        results[i] = { task: t.id, role: t.role, summary: s };
-      } catch (e) {
-        results[i] = { task: t.id, role: t.role, error: e.message };
-      }
-      emit({ type: 'done', outcome: results[i].summary ? outcome(results[i].summary) : 'failed' });
-    }
+  // S2/S3: tasks start when their in-batch dependencies are merged; with merge, conductor merges each task that passed
+  // (one at a time, in the order they finish), runs verify on the merged result, and stops at the first conflict or
+  // failing verify. Without merge, tasks are independent (planBatch refused dependencies) and all start at once.
+  const accepts = (r) => r.summary && (outcome(r.summary) === 'done' || (outcome(r.summary) === 'unverified' && !unverifiedBlocks(r.summary, { allowUnverified: allowUnverified || cfg.settings?.allowUnverified })));
+  const state = Object.fromEntries(work.map((t) => [t.id, 'pending']));
+  const ids = new Set(work.map((t) => t.id));
+  let active = 0, merging = Promise.resolve(), mergesPending = 0, stop = null;
+  const doMerge = async (i) => {
+    const r = results[i], t = work[i];
+    if (stop) { r.merge = { status: 'not-merged', why: `stopped after ${stop}` }; state[t.id] = 'failed'; return; }
+    try {
+      r.merge = await mergeTask(cfg, r.summary, { emit: (e) => onEvent?.({ ...e, task: t.id }) });
+    } catch (e) { r.merge = { status: 'error', why: e.message }; }
+    if (r.merge.status === 'merged' || r.merge.status === 'no-changes') state[t.id] = 'merged';
+    else { state[t.id] = 'failed'; stop = `${t.id}'s merge (${r.merge.status})`; }
   };
-  await Promise.all(Array.from({ length: limit }, worker));
+  await new Promise((done) => {
+    const pump = () => {
+      for (let i = 0; i < work.length; i++) {
+        const t = work[i];
+        if (state[t.id] !== 'pending') continue;
+        const deps = t.deps.filter((d) => ids.has(d));
+        if (stop || deps.some((d) => state[d] === 'failed' || state[d] === 'blocked')) {
+          state[t.id] = 'blocked';
+          const why = stop ? `not started: the batch stopped after ${stop}` : `not started: ${deps.filter((d) => state[d] !== 'merged').join(', ')} did not pass and merge`;
+          results[i] = { task: t.id, role: t.role, error: why, blocked: true };
+          onEvent?.({ type: 'done', task: t.id, outcome: 'blocked' });
+          continue;
+        }
+        if (active >= limit || !deps.every((d) => state[d] === 'merged')) continue;
+        state[t.id] = 'running'; active++;
+        const emit = (e) => onEvent?.({ ...e, task: t.id });
+        emit({ type: 'start', provider: t.chain[0] });
+        runOne(t, emit).then((s) => { results[i] = { task: t.id, role: t.role, summary: s }; }, (e) => { results[i] = { task: t.id, role: t.role, error: e.message }; })
+          .then(() => {
+            active--;
+            emit({ type: 'done', outcome: results[i].summary ? outcome(results[i].summary) : 'failed' });
+            if (merge && accepts(results[i])) { mergesPending++; merging = merging.then(() => doMerge(i)).finally(() => { mergesPending--; pump(); }); }
+            else state[t.id] = merge ? 'failed' : 'finished';
+            pump();
+          });
+      }
+      if (!active && !mergesPending && !Object.values(state).some((x) => x === 'pending' || x === 'running')) done();
+      else if (!active && !mergesPending && Object.values(state).every((x) => x !== 'running')) {
+        // nothing running and nothing can start: whatever is still pending waits on something that never comes
+        for (let i = 0; i < work.length; i++) if (state[work[i].id] === 'pending') { state[work[i].id] = 'blocked'; results[i] = { task: work[i].id, role: work[i].role, error: 'not started: its dependencies never merged', blocked: true }; }
+        done();
+      }
+    };
+    pump();
+  });
   if (monitor) clearInterval(monitor);
   for (const r of results) r.outcome = r.summary ? outcome(r.summary) : 'failed';
   const ok = results.filter((r) => r.outcome === 'done').length;
@@ -189,7 +284,10 @@ export async function runBatch(cfg, { planPath, tasks, role, provider, concurren
   const outOfScope = results.filter((r) => r.outcome === 'out-of-scope').length;
   // unverified work fails the batch too, unless the caller skipped or allowed it
   const accepted = ok + results.filter((r) => r.outcome === 'unverified' && !unverifiedBlocks(r.summary, { allowUnverified: allowUnverified || cfg.settings?.allowUnverified })).length;
-  return { plan: planPath, warnings, results, ok, partial, unverified, outOfScope, failed: results.length - ok - partial - unverified - outOfScope, exitCode: accepted === results.length ? 0 : 3 };
+  const merged = merge ? results.filter((r) => r.merge?.status === 'merged' || r.merge?.status === 'no-changes').length : undefined;
+  const blocked = results.filter((r) => r.blocked).length;
+  return { plan: planPath, warnings, results, ok, partial, unverified, outOfScope, blocked, failed: results.length - ok - partial - unverified - outOfScope - blocked, merge: !!merge, merged, stopped: stop,
+    exitCode: accepted === results.length && (!merge || merged === results.length) ? 0 : 3 };
 }
 
 export function formatBatch(b) {
@@ -197,19 +295,24 @@ export function formatBatch(b) {
   for (const w of b.warnings) L.push(`WARNING:   ${w}`);
   for (const r of b.results) {
     const s = r.summary;
-    if (!s) { L.push(`${r.task.padEnd(6)} ✗ ${r.error}`); continue; }
+    if (!s) { L.push(`${r.task.padEnd(6)} ${r.blocked ? '·' : '✗'} ${r.error}`); continue; }
     if (!s.winner) { L.push(`${r.task.padEnd(6)} ✗ every provider failed: ${s.attempts.map((a) => `${a.provider}${a.model ? `[${a.model}]` : ''}(${a.reason})`).join(' → ')}`); continue; }
     const v = s.verify ? `verify ${s.verify.status}` : 'not verified';
     const c = s.worktree.commit ? `${s.worktree.commit} on ${s.worktree.branch}` : 'no changes';
     const mark = { done: '✓', partial: '⚠', 'out-of-scope': '⚠', unverified: '?', 'verify-failed': '✗' }[r.outcome] || '✓';
     const why = r.outcome === 'partial' ? ` · ${(s.status || '').replace(/^#+\s*/, '')}` : r.outcome === 'out-of-scope' ? ` · outside its files: ${s.scope.outside.join(', ')}` : '';
     L.push(`${r.task.padEnd(6)} ${mark} ${s.winner} · ${v}${s.verify?.scope === 'task' ? ' (task)' : ''} · ${c} · ${s.changed.length} file(s)${why}`);
+    if (r.merge) L.push(`         ${{ merged: `merged: ${r.merge.commit}${r.merge.verify === 'PASS' ? ', verify passed on the merged code' : r.merge.verify === 'SKIPPED' ? ', no verify command' : ''}`, 'no-changes': 'nothing to merge (no changes)',
+      conflict: `NOT MERGED: ${r.merge.why}. Merge it yourself: git merge --no-ff ${r.merge.branch}`, 'verify-failed': `MERGED as ${r.merge.commit}, but verify FAILED on the merged code (${r.merge.cmd}); the batch stopped. Fix it, or undo: git reset --hard HEAD~1`,
+      'not-merged': `not merged: ${r.merge.why}`, error: `merge failed: ${r.merge.why}` }[r.merge.status]}`);
     if (s.hedged) L.push(`         hedged: ${s.hedged.from} was slow, so ${s.hedged.to} started a second attempt after ${s.hedged.afterSec} s; ${s.hedged.won} won`);
     for (const w of s.warnings) L.push(`         WARNING: ${w}`);
   }
-  L.push(`result:    ${b.ok} done, ${b.partial ? `${b.partial} partial, ` : ''}${b.outOfScope ? `${b.outOfScope} out of scope, ` : ''}${b.unverified ? `${b.unverified} unverified, ` : ''}${b.failed} failed`);
+  L.push(`result:    ${b.merge ? `${b.merged}/${b.results.length} merged · ` : ''}${b.ok} done, ${b.partial ? `${b.partial} partial, ` : ''}${b.outOfScope ? `${b.outOfScope} out of scope, ` : ''}${b.unverified ? `${b.unverified} unverified, ` : ''}${b.failed} failed${b.blocked ? `, ${b.blocked} not started` : ''}`);
+  if (b.stopped) L.push(`stopped:   after ${b.stopped}; tasks after it were not started or merged`);
   if (b.results.some((r) => r.summary?.verify?.scope === 'task')) L.push('verify:    "(task)" = the task\'s own verify line from the plan; run `conductor verify` after merging');
-  L.push('next:      for each ✓: review `conductor diff conductor/<id>`, then `git merge --no-ff conductor/<id>`; afterwards `conductor worktree rm <id>`.');
+  if (b.merge) L.push(b.merged === b.results.length ? 'next:      everything is merged into your branch. Review it: git log --oneline, git diff <start>..HEAD' : 'next:      merged tasks are on your branch; for the rest see their lines above.');
+  else L.push('next:      for each ✓: review `conductor diff conductor/<id>`, then `git merge --no-ff conductor/<id>`; afterwards `conductor worktree rm <id>` (or run the batch with --merge).');
   if (b.results.some((r) => r.summary?.hedged?.won === r.summary?.hedged?.to)) L.push('           A hedged task that the second attempt won lives on conductor/<id>-h (the branch on its line).');
   if (b.unverified) L.push('           For each ?: no verify ran, so nothing proves it works. Set a verify command (conductor init --verify "<cmd>"), or check it yourself before merging.');
   if (b.partial) L.push('           For each ⚠: the worker did only part of it. Read its report.md, then finish it or retry the rest.');

@@ -6,7 +6,7 @@
 export const ACTIONS = [
   // ---- doing work
   { id: 'run', title: 'Hand a task to a worker', cli: 'conductor run <role> "task" (or conductor <role> …)', mcp: 'conductor_run', ui: { na: 'work is handed out by your controller or the terminal; the UI shows the result (Runs)' }, skill: '/conduct-build, /conduct-fix…' },
-  { id: 'batch', title: 'Run independent plan tasks in parallel', cli: 'conductor batch --plan f --tasks T1,T2', mcp: 'conductor_batch', ui: { na: 'started by the controller; each task shows on the Runs page' }, skill: '/conduct-run' },
+  { id: 'batch', title: 'Run plan tasks in parallel (--all --merge: the whole plan, by depends, merged)', cli: 'conductor batch --plan f --tasks T1,T2 | --all --merge', mcp: 'conductor_batch', ui: { na: 'started by the controller; each task shows on the Runs page' }, skill: '/conduct-run' },
   { id: 'retry', title: 'Have a worker fix its own task in place', cli: 'conductor retry <task> --note "…"', mcp: 'conductor_retry', ui: { na: 'needs a note about what was wrong: the run page shows the command' } },
   { id: 'route', title: 'Preview who would take a task, and why', cli: 'conductor route "task"', mcp: 'conductor_route', ui: 'POST /api/route-preview' },
   { id: 'plan-check', title: 'Check a plan before handing it out', cli: 'conductor plan check <file>', mcp: 'conductor_plan_check', ui: { na: 'plans are files in your editor; the controller checks them' }, skill: '/conduct-plan' },

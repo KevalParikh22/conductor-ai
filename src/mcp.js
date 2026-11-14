@@ -67,22 +67,25 @@ const TOOLS = [
   {
     name: 'conductor_batch',
     description: 'Run several INDEPENDENT plan tasks in parallel, each in its own git worktree on branch conductor/<id>, spread across different providers. ' +
-      'Refuses tasks that depend on each other. Returns one line per task (provider, verify, commit). Review each branch with `git diff HEAD...conductor/<id>` and merge the good ones.',
+      'Without merge: refuses tasks that depend on each other; review each branch with `git diff HEAD...conductor/<id>` and merge the good ones. ' +
+      'With all: true (the whole plan in one call): tasks start as soon as their depends are merged, conductor merges each one that passed and runs verify on the merged code. Returns one line per task.',
     inputSchema: {
       type: 'object',
       properties: {
         plan: { type: 'string', description: 'Plan file, e.g. docs/plan/feature.md' },
-        tasks: { type: 'array', items: { type: 'string' }, description: 'Task ids, e.g. ["T1","T2","T3"]' },
+        tasks: { type: 'array', items: { type: 'string' }, description: 'Task ids, e.g. ["T1","T2","T3"] (or all: true)' },
         role: { type: 'string', description: 'Override the role for every task (default: each task\'s role in the plan)' },
         provider: { type: 'string', description: 'Try this provider first for every task (default: spread across providers)' },
         concurrency: { type: 'number', description: 'Max tasks at once (default 4)' },
         replace: { type: 'boolean' },
+        all: { type: 'boolean', description: 'Every worker task in the plan (tasks not needed); each starts as soon as its depends are merged. Implies merge' },
+        merge: { type: 'boolean', description: 'Merge each task that passed into the current branch (one at a time), run verify on the merged code, stop at the first conflict or failing verify. Needs a clean checkout' },
         no_verify: { type: 'boolean' },
         priority: { type: 'string', enum: ['save', 'balanced', 'speed'], description: 'Tokens against time. save: never extra attempts. balanced (default): extra attempts only on free routes. speed: races small tasks and hedges slow batch tasks on any route without a per-token price (spends more tokens/quota)' },
         allow_weak_plan: { type: 'boolean', description: 'run tasks even though conductor_plan_check finds problems' },
         allow_open_questions: { type: 'boolean', description: 'run plan tasks even if the plan has unresolved Open questions' },
       },
-      required: ['plan', 'tasks'],
+      required: ['plan'],
     },
   },
   {
@@ -240,7 +243,7 @@ async function callTool(name, args, startRoot) {
     try {
       const b = await runBatch(cfg, {
         planPath: args.plan, tasks: args.tasks, role: args.role, provider: args.provider, concurrency: args.concurrency,
-        replace: args.replace, noVerify: args.no_verify, allowWeakPlan: args.allow_weak_plan, allowOpenQuestions: args.allow_open_questions, priority: args.priority,
+        replace: args.replace, noVerify: args.no_verify, allowWeakPlan: args.allow_weak_plan, allowOpenQuestions: args.allow_open_questions, priority: args.priority, all: args.all, merge: args.merge,
         onEvent: (e) => process.stderr.write(`[conductor ${e.task}] ${e.type} ${e.provider || ''} ${e.reason || ''}\n`),
       });
       return text(formatBatch(b), b.ok === 0);
