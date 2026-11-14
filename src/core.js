@@ -618,7 +618,7 @@ async function dispatchOnce(cfg, opts) {
       // W1: the prompt is ready for you to paste into a web chat; the run waits for `conductor import`
       if (res.waiting) {
         fs.copyFileSync(res.promptFile, path.join(runDir, 'prompt.md'));
-        const keep = ['role', 'task', 'planPath', 'taskId', 'files', 'note', 'base', 'focus', 'save', 'worktree', 'worktreeId', 'noVerify', 'allowUnverified', 'allowScope', 'allowWeakPlan', 'allowNoRepro', 'allowDirty', 'allowOpenQuestions', 'noReview', 'review', 'timeoutMs'];
+        const keep = ['role', 'task', 'planPath', 'taskId', 'files', 'note', 'base', 'focus', 'save', 'worktree', 'worktreeId', 'noVerify', 'allowUnverified', 'allowScope', 'allowWeakPlan', 'allowNoRepro', 'allowDirty', 'allowOpenQuestions', 'noReview', 'review', 'timeoutMs', 'priority'];
         writeJSON(path.join(runDir, 'request.json'), Object.fromEntries(keep.filter((k) => opts[k] !== undefined).map((k) => [k, opts[k]])));
         summary.waiting = { provider: c.name, prompt: rel(root, path.join(runDir, 'prompt.md')), chars: fs.statSync(res.promptFile).size };
         attempt.next = nextStep(attempt.reason, { name: c.name, run: path.basename(runDir), prompt: summary.waiting.prompt });
@@ -805,11 +805,27 @@ async function dispatchOnce(cfg, opts) {
       let lines = 0;
       try { lines = [...execFileSync('git', ['diff', '--numstat', base], { cwd: work }).toString().matchAll(/^(\d+)\t(\d+)\t/gm)].reduce((t, m) => t + Number(m[1]) + Number(m[2]), 0); } catch { /* none */ }
       const reasons = riskReasons({ changed: summary.changed, lines, section, settings, forced: opts.review });
-      if (reasons.length) {
-        emit({ type: 'review' });
-        summary.review = await timed('review', () => independentReview({ work, base, worker: summary.winner, workerModel: summary.model, section, reasons,
-          deps: { cfg, resolveChain, runProvider, loadPrompt, quotaRe, runDir, timeoutMs: (settings.reviewTimeoutSec || 600) * 1000 } }));
-        if (summary.review?.report) summary.review.report = rel(root, summary.review.report);
+      const prio = opts.priority || settings.priority || 'balanced';
+      if (reasons.length && prio === 'speed' && !opts.review && runSize === 'small') {
+        // S4: under priority speed, a small task that passed every check skips the (advisory) review
+        summary.review = { skipped: 'priority speed: a small task that passed every check', reasons };
+      } else if (reasons.length) {
+        const review = async () => {
+          emit({ type: 'review' });
+          summary.review = await timed('review', () => independentReview({ work, base, worker: summary.winner, workerModel: summary.model, section, reasons,
+            deps: { cfg, resolveChain, runProvider, loadPrompt, quotaRe, runDir, timeoutMs: (settings.reviewTimeoutSec || 600) * 1000 } }));
+          if (summary.review?.report) summary.review.report = rel(root, summary.review.report);
+        };
+        if (opts.deferReview) {
+          // S4: a batch runs the review after the worker's slot is free (it needs this worktree until then); the
+          // summary is written again when it reports
+          summary.review = { pending: true, reasons };
+          Object.defineProperty(summary, 'reviewLater', { enumerable: false, value: async () => {
+            try { await review(); } catch (e) { summary.review = { skipped: `the review failed: ${e.message}`, reasons }; }
+            writeJSON(path.join(runDir, 'summary.json'), summary);
+            return summary.review;
+          } });
+        } else await review();
       }
     }
     if (useWorktree) {

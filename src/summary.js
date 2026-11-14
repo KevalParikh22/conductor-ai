@@ -80,6 +80,7 @@ export function formatSummary(s) {
   }
   if (s.verify?.status === 'FAIL' && s.verify.brief) L.push(`why:       ${s.verify.brief.split('\n').slice(1, -1).join('\n           ')}`);
   const rv = s.review;
+  if (rv?.pending) L.push(`review:    running in the background (due: ${rv.reasons.join('; ')})`);
   if (rv?.skipped) L.push(`review:    not done (${rv.skipped}); it was due: ${rv.reasons.join('; ')}`);
   else if (rv) {
     L.push(`review:    ${rv.reviewer} (${rv.family}, the worker is ${rv.workerFamily}) because ${rv.reasons.join('; ')}: ${rv.verdict || 'no verdict'}, ${rv.findings.length} finding(s) on changed lines${rv.dropped ? ` (${rv.dropped} dropped: not on a changed line)` : ''}. Advisory: triage before committing; report ${rv.report}`);

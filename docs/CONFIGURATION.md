@@ -237,6 +237,7 @@ Speed costs tokens: a second attempt at the same task finishes sooner, but both 
 | Hedging (a second attempt at a slow batch task) | never | only on free API routes and local models | on any route without a per-token price, including agents on your subscriptions |
 | Race (two attempts at a small task from the start) | off (`--race` still works) | when you ask (`--race`, `settings.race`) | on for small tasks (`--no-race` turns it off) |
 | Tasks per provider in a batch wave | 2 | 2 | 3 |
+| Independent review (advisory) in a batch | after the worker's slot is free; that task's merge waits for it | same as save | small tasks that passed every check skip it; merges don't wait |
 | Extra tokens | none | free routes only: costs you nothing, may use their daily limits | up to about 2× on the hedged or raced tasks; subscription agents spend their own quota |
 
 **Guidance**

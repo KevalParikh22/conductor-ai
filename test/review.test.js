@@ -98,3 +98,30 @@ test('no reviewer from another family: skipped and said so; --no-review skips it
   s = await dispatch(cfgFor(repo(), 'google/gemini-x'), { role: 'build', planPath: 'docs/plan/p.md', taskId: 'T1', chain: ['worker'], noReview: true });
   assert.equal(s.review, undefined);
 });
+
+// S4: in a batch the review runs after the worker's slot is free; the merge of that task waits for it unless the
+// priority is speed, and under speed a small task that passed every check skips it
+const { runBatch, formatBatch } = await import('../src/batch.js');
+test('batch: the review runs in the background and is in the result and summary.json; --merge waits for it', async () => {
+  clearCooldowns(); seen.length = 0;
+  const dir = repo();
+  const cfg = cfgFor(dir, 'google/gemini-x');
+  cfg.roles = { ...cfg.roles, build: ['worker'] };
+  const b = await runBatch(cfg, { planPath: 'docs/plan/p.md', tasks: ['T1'], merge: true });
+  const s = b.results[0].summary;
+  assert.equal(s.review.reviewer, 'judge');
+  assert.ok(!s.review.pending);
+  assert.equal(b.results[0].merge.status, 'merged');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dir, s.runDir, 'summary.json'), 'utf8')).review.verdict, 'CHANGES_REQUESTED', 'summary.json rewritten when the review reported');
+  assert.match(formatBatch(b), /review: judge: CHANGES_REQUESTED, 1 finding\(s\) \(advisory/);
+});
+
+test('batch, priority speed: a small task that passed every check skips the review', async () => {
+  clearCooldowns(); seen.length = 0;
+  const cfg = cfgFor(repo(), 'google/gemini-x');
+  cfg.roles = { ...cfg.roles, build: ['worker'] };
+  const b = await runBatch(cfg, { planPath: 'docs/plan/p.md', tasks: ['T1'], merge: true, priority: 'speed' });
+  assert.match(b.results[0].summary.review.skipped, /priority speed: a small task/);
+  assert.equal(seen.length, 0, 'no reviewer was called');
+  assert.equal(b.results[0].merge.status, 'merged');
+});

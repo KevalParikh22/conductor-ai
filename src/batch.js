@@ -140,9 +140,9 @@ export function assertCleanCheckout(root) {
  * (merge --abort) and reported with the files; a failing verify keeps the merge (so you can see it) and stops the batch.
  * A merged task's worktree and branch are removed.
  */
-export async function mergeTask(cfg, s, { emit } = {}) {
+export async function mergeTask(cfg, s, { emit, keepWorktree } = {}) {
   const wt = s.worktree;
-  if (!wt?.commit) { if (wt?.id) removeWorktree(cfg.root, wt.id, { force: true }); return { status: 'no-changes' }; }
+  if (!wt?.commit) { if (wt?.id && !keepWorktree) removeWorktree(cfg.root, wt.id, { force: true }); return { status: 'no-changes' }; }
   emit?.({ type: 'merge', branch: wt.branch });
   try {
     gitIn(cfg.root, ['merge', '--no-ff', '--no-edit', '-m', `conductor: merge ${wt.id} (${s.winner})`, wt.branch]);
@@ -156,7 +156,7 @@ export async function mergeTask(cfg, s, { emit } = {}) {
   const v = s.verify?.status === 'SKIPPED' && !detectVerify(cfg.root, cfg.settings || {}) ? { status: 'SKIPPED' }
     : (emit?.({ type: 'verify' }), await runVerify(cfg.root, cfg.settings || {}, s.runDir ? path.join(cfg.root, s.runDir, 'merged-verify.log') : undefined));
   if (v.status === 'FAIL') return { status: 'verify-failed', branch: wt.branch, commit: head, cmd: v.cmd, tail: v.tail, log: v.log };
-  removeWorktree(cfg.root, wt.id);
+  if (!keepWorktree) removeWorktree(cfg.root, wt.id);
   return { status: 'merged', branch: wt.branch, commit: head, verify: v.status };
 }
 
@@ -191,7 +191,7 @@ export async function runBatch(cfg, { planPath, tasks, role, provider, concurren
   }, Number(cfg.settings?.hedgeCheckMs ?? 2000));
   monitor?.unref?.();
   const runOne = async (t, emit) => {
-    const base = { role: t.role, planPath, taskId: t.id, note, noVerify, allowUnverified, allowScope, allowWeakPlan, noEscalate, allowNoRepro, review, noReview, timeoutMs, worktree: true, replace, allowOpenQuestions, onEvent: emit };
+    const base = { role: t.role, planPath, taskId: t.id, priority: prio, deferReview: true, note, noVerify, allowUnverified, allowScope, allowWeakPlan, noEscalate, allowNoRepro, review, noReview, timeoutMs, worktree: true, replace, allowOpenQuestions, onEvent: emit };
     const stopA = new AbortController();
     const r = { start: Date.now(), primary: t.chain[0], chain: t.chain, hedge: null, done: false };
     running.set(t.id, r);
@@ -232,11 +232,12 @@ export async function runBatch(cfg, { planPath, tasks, role, provider, concurren
   const state = Object.fromEntries(work.map((t) => [t.id, 'pending']));
   const ids = new Set(work.map((t) => t.id));
   let active = 0, merging = Promise.resolve(), mergesPending = 0, stop = null;
-  const doMerge = async (i) => {
+  const reviews = [];
+  const doMerge = async (i, keepWorktree) => {
     const r = results[i], t = work[i];
     if (stop) { r.merge = { status: 'not-merged', why: `stopped after ${stop}` }; state[t.id] = 'failed'; return; }
     try {
-      r.merge = await mergeTask(cfg, r.summary, { emit: (e) => onEvent?.({ ...e, task: t.id }) });
+      r.merge = await mergeTask(cfg, r.summary, { emit: (e) => onEvent?.({ ...e, task: t.id }), keepWorktree });
     } catch (e) { r.merge = { status: 'error', why: e.message }; }
     if (r.merge.status === 'merged' || r.merge.status === 'no-changes') state[t.id] = 'merged';
     else { state[t.id] = 'failed'; stop = `${t.id}'s merge (${r.merge.status})`; }
@@ -262,7 +263,19 @@ export async function runBatch(cfg, { planPath, tasks, role, provider, concurren
           .then(() => {
             active--;
             emit({ type: 'done', outcome: results[i].summary ? outcome(results[i].summary) : 'failed' });
-            if (merge && accepts(results[i])) { mergesPending++; merging = merging.then(() => doMerge(i)).finally(() => { mergesPending--; pump(); }); }
+            // S4: the review (advisory) runs now that the worker's slot is free. Under speed the merge doesn't wait for
+            // it (the worktree stays until it reports); otherwise only this task's merge waits, other tasks go on.
+            const s = results[i].summary;
+            const rv = s?.reviewLater ? s.reviewLater() : null;
+            if (rv) reviews.push(rv);
+            if (merge && accepts(results[i])) {
+              mergesPending++;
+              const holdMerge = rv && prio !== 'speed';
+              (holdMerge ? rv : Promise.resolve()).then(() => {
+                merging = merging.then(() => doMerge(i, !!rv && !holdMerge)).finally(() => { mergesPending--; pump(); });
+                if (rv && !holdMerge) rv.then(() => merging).then(() => { const id = s.worktree?.id; if (id && ['merged', 'no-changes'].includes(results[i].merge?.status)) removeWorktree(cfg.root, id, { force: results[i].merge.status === 'no-changes' }); });
+              });
+            }
             else state[t.id] = merge ? 'failed' : 'finished';
             pump();
           });
@@ -277,6 +290,8 @@ export async function runBatch(cfg, { planPath, tasks, role, provider, concurren
     pump();
   });
   if (monitor) clearInterval(monitor);
+  await Promise.allSettled(reviews);
+  await merging;
   for (const r of results) r.outcome = r.summary ? outcome(r.summary) : 'failed';
   const ok = results.filter((r) => r.outcome === 'done').length;
   const partial = results.filter((r) => r.outcome === 'partial').length;
@@ -305,6 +320,9 @@ export function formatBatch(b) {
     if (r.merge) L.push(`         ${{ merged: `merged: ${r.merge.commit}${r.merge.verify === 'PASS' ? ', verify passed on the merged code' : r.merge.verify === 'SKIPPED' ? ', no verify command' : ''}`, 'no-changes': 'nothing to merge (no changes)',
       conflict: `NOT MERGED: ${r.merge.why}. Merge it yourself: git merge --no-ff ${r.merge.branch}`, 'verify-failed': `MERGED as ${r.merge.commit}, but verify FAILED on the merged code (${r.merge.cmd}); the batch stopped. Fix it, or undo: git reset --hard HEAD~1`,
       'not-merged': `not merged: ${r.merge.why}`, error: `merge failed: ${r.merge.why}` }[r.merge.status]}`);
+    const rv = s.review;
+    if (rv?.skipped) L.push(`         review: not done (${rv.skipped})`);
+    else if (rv?.reviewer) L.push(`         review: ${rv.reviewer}: ${rv.verdict || 'no verdict'}, ${rv.findings.length} finding(s) (advisory${rv.report ? `; ${rv.report}` : ''})`);
     if (s.hedged) L.push(`         hedged: ${s.hedged.from} was slow, so ${s.hedged.to} started a second attempt after ${s.hedged.afterSec} s; ${s.hedged.won} won`);
     for (const w of s.warnings) L.push(`         WARNING: ${w}`);
   }
