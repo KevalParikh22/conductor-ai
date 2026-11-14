@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Race mode (V9, opt-in).** `--race` (or `settings.race` for small write tasks) starts the two fastest routes that have no per-token price (free APIs, agents on your subscriptions; never a paid API or the controller's own CLI) in their own worktrees. The first attempt that passes every check (verify, acceptance checks, scope, guard) wins; the other is stopped at once: its process group is killed and its API call aborted. A fast but wrong attempt doesn't win. It saves waiting, not tokens. Live: OpenCode passed 3/3 checks in 17 s and kilo-free was stopped. Cancelled calls are left out of the speed stats; the summary shows `race:` with the winner and what was stopped.
 - **A free API call can no longer hang a task.** In an eval, one call to a free route stayed open for 1 h 40 min after its abort fired (a stalled TLS connection). Every API call and model-list request now has a hard deadline (its time limit + 5 s) and returns `timeout`, so conductor moves on even if `fetch` never settles.
 - **Controllers as data (V6).**
   - **One entry per controller** (`CONTROLLERS` in `src/presets.js`) says where it reads its instructions, commands, skills, rules and reviewer subagent, how it registers MCP, and its hook file. Each format names one writer in `src/controllers.js` or `src/guard.js`. `init`, `rules sync`, the commit guard, skill sync and the doctor checks now all read the entries instead of checking controller names.

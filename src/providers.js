@@ -160,7 +160,7 @@ export async function runCli(name, p, opts) {
   return res;
 }
 
-async function runCliOnce(name, p, { mode, prompt, cwd, timeoutMs, idleTimeoutMs = 0, runDir, quotaRe, allowCommands = [] }) {
+async function runCliOnce(name, p, { mode, prompt, cwd, timeoutMs, idleTimeoutMs = 0, runDir, quotaRe, allowCommands = [], signal }) {
   const preset = { ...(CLI_PRESETS[p.preset] || {}), ...p };
   if (!which(preset.bin)) return { ok: false, text: '', reason: 'not installed', log: '' };
   const promptFile = path.join(runDir, `${name}.prompt.md`);
@@ -181,7 +181,8 @@ async function runCliOnce(name, p, { mode, prompt, cwd, timeoutMs, idleTimeoutMs
   const args = expandArgs(template, { prompt: promptArg, promptFile, outFile, ioDir: path.dirname(promptFile), cwd: realCwd, model: p.model, sessionSettings,
     timeout: timeoutMs ? `${Math.max(1, Math.round(timeoutMs / 60_000))}m` : '0' }, preset.modelArgs || []);
   const env = workerEnv(preset, mode, realCwd);
-  const r = await run(preset.bin, args, { cwd, input: preset.stdin ? prompt : undefined, timeoutMs, idleTimeoutMs, env });
+  const r = await run(preset.bin, args, { cwd, input: preset.stdin ? prompt : undefined, timeoutMs, idleTimeoutMs, env, signal });
+  if (r.cancelled) return { ok: false, text: '', reason: 'cancelled', log: `$ ${preset.bin} (stopped: another attempt finished first)` };
   const log = `$ ${preset.bin} ${args.map((a) => (a.length > 80 ? JSON.stringify(a.slice(0, 77) + '...') : a)).join(' ')}\n` +
     `--- exit ${r.code}${r.timedOut ? (r.idle ? ' (stopped: no output)' : ' (stopped: time limit)') : ''}\n--- stdout\n${r.stdout}\n--- stderr\n${r.stderr}`;
   let text = '';
@@ -244,7 +245,7 @@ export function chatLog(url, model, r) {
     (reasoning ? `\n--- reasoning\n${reasoning.slice(0, 4000)}${reasoning.length > 4000 ? '\n[… cut]' : ''}` : '');
 }
 
-async function httpJson(url, { headers, body, timeoutMs }) {
+async function httpJson(url, { headers, body, timeoutMs, signal }) {
   const ctrl = new AbortController();
   const t = timeoutMs ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
   const call = (async () => {
@@ -255,17 +256,19 @@ async function httpJson(url, { headers, body, timeoutMs }) {
   })();
   // a hard deadline on top of the abort: a stalled TLS connection once held a free route for hours after its abort
   // fired (eval, 2026-11-13). The call is abandoned; its socket is closed by the abort or when the process ends.
-  let hard;
+  let hard, onAbort;
   const deadline = timeoutMs ? new Promise((resolve) => { hard = setTimeout(() => resolve({ status: 0, error: 'timeout' }), timeoutMs + 5000); }) : null;
+  // V9: a race another attempt won: give up at once
+  const cancel = signal ? new Promise((resolve) => { onAbort = () => { ctrl.abort(); resolve({ status: 0, error: 'cancelled' }); }; if (signal.aborted) onAbort(); else signal.addEventListener('abort', onAbort, { once: true }); }) : null;
   try {
-    return await (deadline ? Promise.race([call, deadline]) : call);
+    return await Promise.race([call, deadline, cancel].filter(Boolean));
   } catch (e) {
     return { status: 0, error: e.name === 'AbortError' ? 'timeout' : String(e.cause?.code || e.message || e) };
-  } finally { clearTimeout(t); clearTimeout(hard); call.catch(() => {}); }
+  } finally { clearTimeout(t); clearTimeout(hard); signal?.removeEventListener('abort', onAbort); call.catch(() => {}); }
 }
 
 function classifyHttp(r) {
-  if (r.status === 0) return { reason: r.error === 'timeout' ? 'timeout' : `network: ${r.error}` };
+  if (r.status === 0) return { reason: r.error === 'timeout' || r.error === 'cancelled' ? r.error : `network: ${r.error}` };
   const ra = Number(r.headers?.get?.('retry-after'));
   if (r.status === 429) return { reason: 'quota', retryAfterSec: Number.isFinite(ra) && ra > 0 ? ra : undefined };
   if (r.status === 401 || r.status === 403) return { reason: `auth (${r.status})` };
@@ -275,7 +278,7 @@ function classifyHttp(r) {
 }
 
 /** Any OpenAI-compatible chat API: Gemini, OpenRouter, Kilo, OpenCode Zen, Groq, Ollama, LM Studio... */
-export async function runOpenAI(name, p, { system, prompt, timeoutMs, history = [] }) {
+export async function runOpenAI(name, p, { system, prompt, timeoutMs, history = [], signal }) {
   const key = keyValue(p.apiKeyEnv);
   if (p.apiKeyEnv && !key && !p.apiKeyOptional) return { ok: false, text: '', reason: `${p.apiKeyEnv} not set`, log: '' };
   const headers = { ...(p.headers || {}) };
@@ -286,9 +289,9 @@ export async function runOpenAI(name, p, { system, prompt, timeoutMs, history = 
   if (p.temperature !== undefined) body.temperature = p.temperature;
   if (Array.isArray(p.fallbackModels) && p.fallbackModels.length && p.baseUrl.includes('openrouter.ai')) body.models = [...new Set([p.model, ...p.fallbackModels])]; // OpenRouter also falls back on its side
   const url = p.baseUrl.replace(/\/+$/, '') + '/chat/completions';
-  let r = await httpJson(url, { headers, body, timeoutMs });
+  let r = await httpJson(url, { headers, body, timeoutMs, signal });
   // free routers (Kilo auto, OpenRouter free) now and then answer 200 with no content: ask once more
-  if (r.status === 200 && !r.json?.error && !r.json?.choices?.[0]?.message?.content?.trim()) r = await httpJson(url, { headers, body, timeoutMs });
+  if (r.status === 200 && !r.json?.error && !r.json?.choices?.[0]?.message?.content?.trim() && !signal?.aborted) r = await httpJson(url, { headers, body, timeoutMs, signal });
   const log = chatLog(url, p.model, r);
   const text = r.json?.choices?.[0]?.message?.content;
   const u = r.json?.usage;
@@ -305,14 +308,14 @@ export async function runOpenAI(name, p, { system, prompt, timeoutMs, history = 
 }
 
 /** Anthropic Messages API (Claude as a remote worker). */
-export async function runAnthropic(name, p, { system, prompt, timeoutMs, history = [] }) {
+export async function runAnthropic(name, p, { system, prompt, timeoutMs, history = [], signal }) {
   const key = keyValue(p.apiKeyEnv || 'ANTHROPIC_API_KEY');
   if (!key) return { ok: false, text: '', reason: `${p.apiKeyEnv || 'ANTHROPIC_API_KEY'} not set`, log: '' };
   const url = (p.baseUrl || 'https://api.anthropic.com').replace(/\/+$/, '') + '/v1/messages';
   const r = await httpJson(url, {
     headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', ...(p.headers || {}) },
     body: { model: p.model, max_tokens: p.maxTokens || 16000, system, messages: [{ role: 'user', content: prompt }, ...history] },
-    timeoutMs,
+    timeoutMs, signal,
   });
   const log = `POST ${url} model=${p.model}\n--- status ${r.status}${r.error ? ' ' + r.error : ''}\n${(r.raw || '').slice(0, 4000)}`;
   const text = (r.json?.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('\n');
