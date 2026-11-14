@@ -3,7 +3,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { validateConfig, providerPermissions, readOnlyEnforced, optionalNoKey } from './config.js';
+import { validateConfig, providerPermissions, readOnlyEnforced, optionalNoKey, providerLocation } from './config.js';
+import { localWindow } from './local.js';
 import { CLI_PRESETS, CONTROLLERS } from './presets.js';
 import { testProvider, testPermissions } from './providers.js';
 import { checkControllerFiles, allControllers, controllerErrors } from './controllers.js';
@@ -31,6 +32,11 @@ export async function doctorData(cfg, { live = false } = {}) {
       fs.rmSync(dir, { recursive: true, force: true });
       Object.assign(r, { ok: t.ok, status: t.reason, sample: t.ok ? undefined : t.sample.replace(/\s+/g, ' ').slice(0, 120),
         next: t.ok ? null : p.catalog ? `see docs/providers/${p.catalog}.md → Troubleshooting` : null });
+      // V13: a model on this machine: the window it really runs with (a longer prompt is cut without an error)
+      if (t.ok && providerLocation(p) === 'local-model' && p.model) {
+        const w = await localWindow(p);
+        if (w) { r.window = w; r.status = `${t.reason}; runs with a ${w.window}-token window${w.trained > w.window ? ` (the model supports ${w.trained})` : ''}`; if (w.window < 8192) r.next = `small for conductor's prompts (often 4,000–15,000 tokens): set OLLAMA_CONTEXT_LENGTH=16384 for the server and restart it, or use a model with PARAMETER num_ctx`; }
+      }
       // V8: an agent that answers may still be refused the commands workers need (headless mode can't ask)
       if (t.ok && p.type === 'cli') {
         const pd = fs.mkdtempSync(path.join(os.tmpdir(), 'conductor-doctor-'));

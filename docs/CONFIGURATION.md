@@ -70,6 +70,7 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | `headers`, `maxTokens`, `temperature` | api | Optional request tuning |
 | `fallbackModels` | api, cli | Models to try on this provider, in order, when `model` is rate-limited (APIs also switch when a model stalls or answers nothing). The limited model cools down alone; the provider is skipped only when every model is. Agents need a preset that takes a model (OpenCode, Codex, Claude, Kimi, Aider…). Free and auto-picked API providers find fallbacks from their live model list when this is unset; so does Antigravity (from `agy models`, another model family first, since agy's families have separate quotas) |
 | `autoFallback` | api, agy | `false` = don't look up fallback models automatically |
+| `location` | api | `local-model` or `cloud-api`: overrides the guess from the address (e.g. a remote server reached through localhost). Local models get the smaller prompt, the window check and one call at a time per server |
 | `maxParallel` | api, cli | Most calls to this provider at once, from one conductor process; the rest wait their turn. Antigravity defaults to 1 (its quota belongs to the account). Batch also starts at most this many tasks on it |
 | `timeoutMin` | all | Time limit for this provider, in minutes, instead of `timeoutSec` (or `apiTimeoutSec` for APIs) |
 | `idleTimeoutMin` | cli | Stop this agent when it prints nothing for this long |
@@ -101,6 +102,8 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | `contractCheck` | true | Reject it when a function or class the task names in a code span isn't defined anywhere afterwards |
 | `chatRepair` | true | Give a chat model's reply with no file blocks one repair turn |
 | `repoMapBytes` | 6000 | Size of the project map chat models get |
+| `localPromptProfile` | true | Models on this machine get a smaller prompt: no project map, a shorter AGENTS.md and context pack, at most 20 KB of files |
+| `localContextCheck` | true | Ask a local server (Ollama, LM Studio) for the window the model runs with, and don't send a prompt that won't fit: a local server cuts it without an error |
 | `race` | false | Race mode for small write tasks: the 2 fastest routes with no per-token price start together, the first to pass every check wins, the other is stopped. Saves waiting, not tokens. `--race` / `--no-race` per run |
 | `raceWidth` | 2 | How many attempts a race starts |
 | `maxParallelPerProvider` | 2 | Most tasks of one batch wave started on the same provider (a provider's own `maxParallel` wins) |

@@ -129,6 +129,8 @@ export function validateConfig(cfg) {
 /** "local" = runs on this machine (CLI login or localhost model); "cloud" = remote API. */
 export function providerLocation(p) {
   if (p.type === 'cli') return 'local-agent';
+  // your own say wins: e.g. a model server on another machine that you reach through localhost, or a mock in tests
+  if (['local-model', 'cloud-api'].includes(p.location)) return p.location;
   try {
     const h = new URL(p.baseUrl).hostname;
     if (['localhost', '127.0.0.1', '::1', '[::1]'].includes(h) || h.endsWith('.local')) return 'local-model';

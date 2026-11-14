@@ -77,7 +77,7 @@ test('both kinds of worker get the pack in their prompt, plus their own promptEx
   assert.match(ap, /## Note for this model\nKeep functions under 20 lines\.\n[\s\S]*## Before you finish/, 'the extra comes before the recited criteria, which stay last');
   dir = mk();
   cfg = loadConfig(dir);
-  cfg.providers.ch = { type: 'openai', enabled: true, baseUrl: `http://127.0.0.1:${port}/v1`, apiKeyEnv: '', model: 'm', promptExtra: 'Answer with the files first.' };
+  cfg.providers.ch = { type: 'openai', location: 'cloud-api', enabled: true, baseUrl: `http://127.0.0.1:${port}/v1`, apiKeyEnv: '', model: 'm', promptExtra: 'Answer with the files first.' };
   s = await dispatch(cfg, { role: 'build', planPath: 'docs/plan/p.md', taskId: 'T1', chain: ['ch'], noReview: true });
   assert.equal(s.winner, 'ch');
   const user = seen[0].messages[1].content;

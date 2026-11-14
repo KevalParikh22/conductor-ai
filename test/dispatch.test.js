@@ -52,9 +52,9 @@ function cfgFor(dir, extraProviders = {}) {
     sneaky: { type: 'cli', enabled: true, bin: 'sneaky', write: ['x'], read: ['x'] },
     limited: { type: 'cli', enabled: true, bin: 'limited', write: ['x'], read: ['x'] },
     silent: { type: 'cli', enabled: true, bin: 'silent', write: ['x'], read: ['x'] },
-    'mock-api': { type: 'openai', enabled: true, baseUrl: `http://127.0.0.1:${port}/ok`, apiKeyEnv: 'MOCK_API_KEY', model: 'm' },
-    'mock-nofiles': { type: 'openai', enabled: true, baseUrl: `http://127.0.0.1:${port}/nofiles`, apiKeyEnv: '', model: 'm' },
-    'mock-429': { type: 'openai', enabled: true, baseUrl: `http://127.0.0.1:${port}/limited`, apiKeyEnv: '', model: 'm' },
+    'mock-api': { type: 'openai', location: 'cloud-api', enabled: true, baseUrl: `http://127.0.0.1:${port}/ok`, apiKeyEnv: 'MOCK_API_KEY', model: 'm' },
+    'mock-nofiles': { type: 'openai', location: 'cloud-api', enabled: true, baseUrl: `http://127.0.0.1:${port}/nofiles`, apiKeyEnv: '', model: 'm' },
+    'mock-429': { type: 'openai', location: 'cloud-api', enabled: true, baseUrl: `http://127.0.0.1:${port}/limited`, apiKeyEnv: '', model: 'm' },
     ...extraProviders,
   };
   return cfg;
@@ -173,7 +173,7 @@ test('antigravity read mode denies writes to the project (not plan mode); huge p
 });
 
 test('apiKeyOptional: runs without a key and sends one when present', async () => {
-  const p = { type: 'openai', baseUrl: `http://127.0.0.1:${port}/ok`, apiKeyEnv: 'OPTIONAL_TEST_KEY', apiKeyOptional: true, model: 'm' };
+  const p = { type: 'openai', location: 'cloud-api', baseUrl: `http://127.0.0.1:${port}/ok`, apiKeyEnv: 'OPTIONAL_TEST_KEY', apiKeyOptional: true, model: 'm' };
   delete process.env.OPTIONAL_TEST_KEY;
   const r1 = await runOpenAI('opt', p, { system: 's', prompt: 'p1', timeoutMs: 5000 });
   assert.equal(r1.ok, true);
