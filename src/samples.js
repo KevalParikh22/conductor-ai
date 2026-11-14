@@ -49,11 +49,14 @@ export async function runSamples(cfg, opts, n, { dispatchOnce, chooseChain, sect
   const chains = ids.map((_, i) => [...ready.slice(i), ...ready.slice(0, i)]);
   // V9 race: the first attempt that passes every check wins and the others are stopped (processes killed, calls aborted)
   const stops = ids.map(() => new AbortController());
+  // the caller can stop them all (a batch hedge that won): without this, the batch waited 314 s for a race's agy attempt
+  const stopAll = () => stops.forEach((c) => c.abort());
+  if (opts.signal?.aborted) stopAll(); else opts.signal?.addEventListener?.('abort', stopAll, { once: true });
   const t0 = Date.now();
   let first = -1, firstSec = 0;
   const settled = await Promise.allSettled(ids.map((id, i) => dispatchOnce(cfg, {
     ...opts, samples: 1, race: false, provider: undefined, chain: chains[i], worktree: true, worktreeId: id, replace: true, noEscalate: true, noReview: true, // one review per task, not per attempt
-    signal: race ? stops[i].signal : undefined,
+    signal: stops[i].signal,
     onEvent: opts.onEvent ? (e) => opts.onEvent({ ...e, sample: i + 1 }) : undefined,
   }).then((s) => {
     if (race && first < 0 && !s.cancelled && s.outcome === 'done') {

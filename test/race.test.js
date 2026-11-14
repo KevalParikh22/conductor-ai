@@ -30,6 +30,7 @@ const RIGHT = 'export const add = (a, b) => a + b;\n';
 fakeBins({
   'r-fast': worker(300, RIGHT, 'fast'),
   'r-slow': worker(20_000, RIGHT, 'slow'),
+  'r-slow-2': worker(20_000, RIGHT, 'slow-2'),
   'r-fast-wrong': worker(200, 'export const add = (a, b) => a - b;\n', 'fast-wrong'),
 });
 const repo = () => makeRepo({ files: { 'docs/plan/p.md': PLAN, 'src/.keep': '', 'package.json': JSON.stringify({ name: 'r', type: 'module', scripts: { test: 'node --test' } }) } });
@@ -90,4 +91,20 @@ test('a stop signal kills a running process group and says so', async () => {
   const r = await run(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'], { signal: ctrl.signal });
   assert.equal(r.cancelled, true);
   assert.ok(Date.now() - t0 < 12_000);
+});
+
+test('race: stopping the run from outside (a batch hedge that won) stops every attempt at once', async () => {
+  // found in B2: the batch's stop never reached a race's attempts, so it waited 314 s for a slow agy attempt
+  clearCooldowns();
+  process.env.RACE_LOG = path.join(tmpdir(), 'race-stop.log'); fs.writeFileSync(process.env.RACE_LOG, '');
+  const { dir } = repo();
+  const stop = new AbortController();
+  setTimeout(() => stop.abort(), 1000);
+  const t0 = Date.now();
+  const cfg = cfgFor(dir, ['r-slow', 'r-slow-2']);
+  const s = await dispatch(cfg, { role: 'build', planPath: 'docs/plan/p.md', taskId: 'T1', race: true, worktree: true, worktreeId: 'T1', signal: stop.signal });
+  assert.ok(Date.now() - t0 < 10_000, `stopped in ${Date.now() - t0} ms, not after the 20 s attempts`);
+  assert.ok(s.cancelled || s.race?.stopped?.length === 2, JSON.stringify(s.race));
+  await new Promise((r) => setTimeout(r, 300));
+  assert.equal(fs.readFileSync(process.env.RACE_LOG, 'utf8').trim(), '', 'neither slow attempt finished');
 });

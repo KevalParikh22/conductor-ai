@@ -200,7 +200,10 @@ export async function runBatch(cfg, { planPath, tasks, role, provider, concurren
   const minSec = Number(cfg.settings?.hedgeAfterSec ?? 45);
   const maxTries = Math.max(2, Number(cfg.settings?.hedgeMax ?? 3));
   const faster = Number(cfg.settings?.hedgeFaster ?? 1.5);
-  const busy = () => new Set([...running.values()].flatMap((r) => r.tries.filter((x) => !x.result).map((x) => x.provider)));
+  // the workers each open attempt is on now (an attempt moves on when a worker fails or hands its work on; a race runs
+  // several at once), so the monitor judges the worker that is actually working, not the one the attempt started on
+  const working = (x) => [...new Set(x.working.size ? x.working.values() : [x.provider])];
+  const busy = () => new Set([...running.values()].flatMap((r) => r.tries.filter((x) => !x.result).flatMap(working)));
   const monitor = prio === 'save' || cfg.settings?.hedge === false ? null : setInterval(() => {
     if (!finished.length) return;
     const sorted = [...finished].sort((a, b) => a - b);
@@ -208,13 +211,13 @@ export async function runBatch(cfg, { planPath, tasks, role, provider, concurren
     for (const r of running.values()) {
       if (r.done || Date.now() - r.start < limitMs || r.tries.length >= maxTries) continue;
       const taken = busy();
-      const tried = new Set(r.tries.map((x) => x.provider));
+      const tried = new Set(r.tries.flatMap((x) => [x.provider, ...x.seen]));
       const free = r.chain.filter((n) => !tried.has(n) && !taken.has(n) && hedgeAllowed(cfg, n, prio));
       if (!free.length) continue;
       const secs = expectedSeconds(speedStats(r.chain, r.role, { size: r.size }), r.chain);
       const best = free.reduce((x, y) => (secs(y) < secs(x) ? y : x));
       // the first hedge goes to the fastest idle route; another only to one clearly faster than every route trying
-      const trying = r.tries.filter((x) => !x.result).map((x) => secs(x.provider));
+      const trying = r.tries.filter((x) => !x.result).flatMap(working).map((n) => secs(n));
       if (r.tries.length === 1 || secs(best) * faster <= Math.min(...trying)) r.startHedge(best);
     }
   }, Number(cfg.settings?.hedgeCheckMs ?? 2000));
@@ -227,8 +230,9 @@ export async function runBatch(cfg, { planPath, tasks, role, provider, concurren
     let wake = () => {}; // resolves the wait below when a hedge starts
     const launch = (provider, extra, wtId) => {
       const stop = new AbortController();
-      const x = { provider, wtId, stop, at: Date.now(), result: null };
-      x.p = dispatch(cfg, { ...base, worktreeId: wtId, signal: stop.signal, ...extra }).then((s) => ({ s }), (e) => ({ e })).then((res) => { x.result = res; return x; });
+      const x = { provider, wtId, stop, at: Date.now(), result: null, working: new Map(), seen: new Set() };
+      const track = (e) => { if (e.type === 'try' && e.provider) { x.working.set(e.sample || 0, e.provider); x.seen.add(e.provider); } emit(e); };
+      x.p = dispatch(cfg, { ...base, worktreeId: wtId, signal: stop.signal, ...extra, onEvent: track }).then((s) => ({ s }), (e) => ({ e })).then((res) => { x.result = res; return x; });
       r.tries.push(x);
       wake();
     };
@@ -253,11 +257,12 @@ export async function runBatch(cfg, { planPath, tasks, role, provider, concurren
     if (r.tries.length > 1) {
       for (const x of r.tries) if (x !== win) x.stop.abort();
       await Promise.allSettled(r.tries.map((x) => x.p));
-      for (const x of r.tries) if (x !== win) { try { removeWorktree(cfg.root, x.wtId, { force: true }); } catch { /* already gone */ } }
+      // a loser's worktree: its own id, or the one its run ended in (a race attempt's T4-s1)
+      for (const x of r.tries) if (x !== win) for (const id of new Set([x.wtId, x.result?.s?.worktree?.id].filter(Boolean))) { try { removeWorktree(cfg.root, id, { force: true }); } catch { /* already gone */ } }
       const hedges = r.tries.slice(1);
-      if (win.result.s) win.result.s.hedged = { from: r.primary, to: hedges.map((x) => x.provider).join(', '), won: win.provider, afterSec: Math.round((hedges[0].at - r.start) / 1000),
+      if (win.result.s) win.result.s.hedged = { from: r.primary, to: hedges.map((x) => x.provider).join(', '), won: win.result.s.winner || win.provider, afterSec: Math.round((hedges[0].at - r.start) / 1000),
         tries: hedges.map((x) => ({ provider: x.provider, afterSec: Math.round((x.at - r.start) / 1000) })) };
-      emit({ type: 'hedge-won', provider: win.provider });
+      emit({ type: 'hedge-won', provider: win.result.s?.winner || win.provider });
     }
     running.delete(t.id);
     finished.push(Date.now() - r.start);
@@ -377,7 +382,7 @@ export function formatBatch(b) {
   if (b.results.some((r) => r.summary?.verify?.scope === 'task')) L.push('verify:    "(task)" = the task\'s own verify line from the plan; run `conductor verify` after merging');
   if (b.merge) L.push(b.merged === b.results.length ? 'next:      everything is merged into your branch. Review it: git log --oneline, git diff <start>..HEAD' : 'next:      merged tasks are on your branch; for the rest see their lines above.');
   else L.push('next:      for each ✓: review `conductor diff conductor/<id>`, then `git merge --no-ff conductor/<id>`; afterwards `conductor worktree rm <id>` (or run the batch with --merge).');
-  if (b.results.some((r) => r.summary?.hedged && r.summary.hedged.won !== r.summary.hedged.from)) L.push('           A hedged task that the second attempt won lives on conductor/<id>-h… (the branch on its line).');
+  if (b.results.some((r) => r.summary?.hedged && /-h\d*$/.test(r.summary.worktree?.id || ''))) L.push('           A hedged task that the second attempt won lives on conductor/<id>-h… (the branch on its line).');
   if (b.unverified) L.push('           For each ?: no verify ran, so nothing proves it works. Set a verify command (conductor init --verify "<cmd>"), or check it yourself before merging.');
   if (b.partial) L.push('           For each ⚠: the worker did only part of it. Read its report.md, then finish it or retry the rest.');
   if (b.failed || b.results.some((r) => r.merge && !['merged', 'no-changes'].includes(r.merge.status))) L.push('           For each ✗: retry it alone with `conductor run <role> --plan … --task <id> --worktree --provider <other>`, or do it yourself.');
