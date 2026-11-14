@@ -637,7 +637,7 @@ export const BUILTIN_ALIASES = {
   'cerebras-api': ['cerebras', { notes: 'Free tier, very fast. Pick a model with: conductor models cerebras-api' }],
   'mistral-api': ['mistral', { notes: 'Free mode keys for testing. Prompts may be used for training. Pick a model with: conductor models mistral-api' }],
   // verified 2026-11-15: these answer fast on a free key; several listed models hang (deepseek-v4.1-flash, glm-5.3-flash) or 404
-  'nvidia-nim': ['nvidia', { free: true, model: 'minimaxai/minimax-m3.1-flash', fallbackModels: ['nvidia/nemotron-3-ultra-550b-a55b', 'google/gemma-4-31b-it'], notes: 'Free developer access, about 40 req/min; some listed models hang or are not open to free keys. Pick a model with: conductor models nvidia-nim' }],
+  'nvidia-nim': ['nvidia', { free: true, model: 'nvidia/nemotron-3-ultra-550b-a55b', fallbackModels: ['minimaxai/minimax-m3.1-flash', 'google/gemma-4-31b-it'], notes: 'Free developer access, about 40 req/min; some listed models hang or are not open to free keys. Pick a model with: conductor models nvidia-nim' }],
   'claude-api': ['anthropic', {}],
   'ollama': ['ollama', { free: true, notes: 'Local model, free, private.' }],
   'lmstudio': ['lmstudio', { free: true }],
