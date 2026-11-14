@@ -11,7 +11,7 @@ You are the controller (see `.conductor/ORCHESTRATOR.md`). Execute `the argument
 **One call does the plan.** Keep your turns few: each turn costs time and quota.
 
 1. `conductor plan check <plan>`. Fix every ✗ task and every `!` warning in the plan first (a contradiction there becomes a wrong test).
-2. Make sure the checkout is clean (`git status`): commit or stash your own changes. Then run, in the background:
+2. Make sure the checkout is clean (`git status`): commit or stash your own changes. Then run it **in the foreground**, with the longest timeout your shell tool allows (Claude Code: 600000 ms); it prints one summary when it is done. Don't start it in the background and then poll or `sleep` for it: a wait loop can outlast the batch by many minutes (seen in B2: the batch took 98 s, the loop 20 min). If it outlasts your timeout, `conductor runs` shows what finished:
    `conductor batch --plan <plan> --all`
    (from a given task id: `conductor batch --plan <plan> --tasks <that id and the ones after it> --merge`). conductor starts every worker task as soon as the tasks it depends on are merged, each in its own worktree on a different provider; checks each one (verify, acceptance checks, scope); merges each one that passed into this branch and runs verify on the merged code; gives slow tasks a second attempt and runs reviews off the critical path. Controller tasks and tasks already `status: done` are listed and left to you. Add `--priority speed` only if the user asked for speed over tokens (`save` for the opposite).
 3. Read the batch summary once. Per task:
