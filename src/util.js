@@ -154,3 +154,32 @@ export function untilText(ts) {
   if (d.toDateString() === new Date().toDateString()) return d.toLocaleTimeString();
   return d.toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
+
+/**
+ * Fit text to a terminal `width`: a long line wraps at word boundaries, and its continuation lines start under the
+ * line's text column (after the first run of 2+ spaces in the first half: the description in help, the notes in a
+ * table), so columns stay readable on an 80-column terminal. Shorter lines are untouched.
+ */
+export function wrapForTerminal(text, width) {
+  if (!(width > 20)) return text;
+  return String(text).split('\n').map((raw) => {
+    if ([...raw].length <= width) return raw;
+    const line = raw.trimEnd(); // trailing spaces alone would wrap into an empty line
+    if ([...line].length <= width) return line;
+    const lead = (line.match(/^\s*/) || [''])[0].length;
+    let indent = lead;
+    const gaps = [...line.matchAll(/\S( {2,})(?=\S)/g)].map((m) => m.index + 1 + m[1].length).filter((i) => i <= width / 2);
+    if (gaps.length) indent = gaps.at(-1);
+    if (indent > width / 2) indent = lead + 2;
+    const out = [];
+    let cur = line;
+    while ([...cur].length > width) {
+      let cut = cur.lastIndexOf(' ', width);
+      if (cut <= indent) cut = width; // one long word (a path): cut it
+      out.push(cur.slice(0, cut).trimEnd());
+      cur = ' '.repeat(indent) + cur.slice(cut).trimStart();
+    }
+    out.push(cur);
+    return out.join('\n');
+  }).join('\n');
+}

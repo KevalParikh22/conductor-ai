@@ -8,7 +8,8 @@ import { localWindow } from './local.js';
 import { CLI_PRESETS, CONTROLLERS } from './presets.js';
 import { testProvider, testPermissions } from './providers.js';
 import { checkControllerFiles, allControllers, controllerErrors } from './controllers.js';
-import { which, keyValue } from './util.js';
+import { which, keyValue, untilText } from './util.js';
+import { getCooldowns } from './cooldowns.js';
 
 /** → { results: [{ name, kind, ok, status, next, permissions, readOnlyEnforced, ... }], errs, ctrlIssues, problems } */
 export async function doctorData(cfg, { live = false } = {}) {
@@ -26,6 +27,9 @@ export async function doctorData(cfg, { live = false } = {}) {
       else Object.assign(r, { ok: false, status: `${p.apiKeyEnv} not set${process.env[p.apiKeyEnv] ? ' (placeholder value)' : ''}`, next: add });
       continue;
     }
+    // a rate limit pauses a provider; it isn't broken (status shows the same)
+    const cd = getCooldowns()[name];
+    if (cd) Object.assign(r, { cooling: true, status: `cooling down until ${untilText(cd.until)} (${cd.reason})`, next: `it waits; to try it now: conductor cooldown --clear ${name}` });
     if (live) {
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'conductor-doctor-'));
       const t = await testProvider(name, p, cfg.root, dir);

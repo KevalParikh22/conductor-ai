@@ -3,9 +3,9 @@
 import readline from 'node:readline';
 import { CATALOG, CATEGORIES, providerFromCatalog, urlFields } from './catalog.js';
 import { CLI_PRESETS, ROLES, DEFAULT_CONFIG, controllerWorker } from './presets.js';
-import { loadConfig, loadSecrets, readScope, writeScope, writeSecrets, GLOBAL_SECRETS } from './config.js';
+import { loadConfig, loadSecrets, readScope, writeScope, writeSecrets, GLOBAL_SECRETS, providerLocation } from './config.js';
 import { keyValue, which, loadEnvFile } from './util.js';
-import { listProviderModels, rankModels } from './models.js';
+import { listProviderModels, rankModels, modelSizeB, MIN_LOCAL_MODEL_B } from './models.js';
 
 /** Roles a chat API is added to: the ones that don't need an agent that edits files itself. */
 export const CHAT_ROLES = ['docs', 'test', 'review', 'ask'];
@@ -73,8 +73,24 @@ export async function addProviderAuto(root, id, opts = {}) {
     const m = rankModels(list.models || [])[0];
     if (m) r = { ...addProvider(root, id, { scope: opts.scope, model: m.id, roles: [] }), roles: r.roles };
     else r.warning = `no model set${list.error ? ` (could not list models: ${list.error})` : ''}: conductor will pick one when it runs, or set one on its card`;
-  }
+  } else r = await checkLocalModel(root, id, r, opts.scope);
   return r;
+}
+
+/**
+ * A local server only runs what is installed on it, and the catalog's suggested model may not be (found by the UX
+ * checklist, 2026-11-14). → r, switched to the best installed model of a usable size, or with a warning saying what to pull.
+ */
+export async function checkLocalModel(root, id, r, scope) {
+  if (providerLocation(r.provider) !== 'local-model' || !r.provider.model) return r;
+  const list = await listProviderModels(r.provider, { freeOnly: false, timeoutMs: 4000 });
+  const ids = (list.models || []).map((m) => m.id);
+  const has = (m) => ids.some((x) => x === m || x === `${m}:latest` || x.split(':')[0] === m);
+  if (list.error) return { ...r, warning: `the server at ${r.provider.baseUrl} didn't answer (${list.error}): start it, then test it` };
+  if (has(r.provider.model)) return r;
+  const usable = rankModels(list.models || []).filter((m) => (modelSizeB(m.id) ?? MIN_LOCAL_MODEL_B) >= MIN_LOCAL_MODEL_B);
+  if (usable.length) return { ...addProvider(root, id, { scope, model: usable[0].id, roles: [] }), roles: r.roles, warning: `${r.provider.model} isn't installed here, so it uses ${usable[0].id}` };
+  return { ...r, warning: `${r.provider.model} isn't installed on this server yet${ids.length ? ` (it has ${ids.join(', ')}, too small for coding tasks)` : ''}: ollama pull ${r.provider.model}` };
 }
 
 // ---------------- terminal prompts (no dependencies) ----------------
@@ -155,6 +171,8 @@ export async function runAdd(root, id, o = {}) {
     } else if (models.length && !r.provider.model) r = addProvider(root, id, { model: models[0].id, scope: o.scope, roles: [] });
     else if (list.error) console.log(`\nCould not list models (${list.error}). Set one later: conductor ui → Providers → ${r.name}`);
   }
+  r = await checkLocalModel(root, id, r, o.scope);
+  if (r.warning) console.log(`\n! ${r.warning}`);
   return r;
 }
 

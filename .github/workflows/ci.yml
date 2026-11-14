@@ -14,3 +14,11 @@ jobs:
         with: { node-version: "${{ matrix.node }}" }
       - run: git config --global user.email ci@example.com && git config --global user.name ci
       - run: npm test
+  plugin:
+    # the Claude Code plugin and marketplace manifests, checked by Claude Code itself (offline, no login needed)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: "22" }
+      - run: npx -y @anthropic-ai/claude-code@2.1.317 plugin validate .

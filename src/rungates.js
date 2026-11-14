@@ -16,7 +16,7 @@ export function runGates(s) {
     add('worker', 'A worker finished', 'fail', `every provider failed or was skipped: ${s.attempts.map((a) => `${a.provider} (${a.reason})`).join(', ') || 'none tried'}`);
     return G;
   }
-  add('worker', 'A worker finished', 'pass', `${s.winner}${s.model ? ` (${s.model})` : ''}${s.attempts.length > 1 ? ` after ${s.attempts.length - 1} failed attempt(s)` : ''}`);
+  add('worker', 'A worker finished', 'pass', `${s.winner}${s.model && s.model !== '(default)' ? ` (${s.model})` : ''}${s.attempts.length > 1 ? ` after ${s.attempts.length - 1} failed attempt(s)` : ''}`);
 
   if (write) {
     const rejected = s.attempts.filter((a) => a.guard);

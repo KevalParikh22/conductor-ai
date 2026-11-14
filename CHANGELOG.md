@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **UX checklist run (15 of 18 checks; the other 3 need a clean Claude Code, VS Code and Copilot).** Fixed what it found:
+  - **Lost run:** two runs of one task started in the same second shared a run folder, so one was lost (also possible with `--samples` and race mode). Each run now gets its own folder; an exact run id still finds its run.
+  - **Python Verify:** detected only when `pytest` was on the global PATH. Now the project venv, a pytest config (`pyproject.toml`, `pytest.ini`, `setup.cfg`, `tox.ini`, `conftest.py`) or a `tests/` folder gives `pytest` (or `python -m pytest`).
+  - **Local model not installed:** adding Ollama (UI gallery or `conductor add`) set a model the server didn't have, without a word. It now switches to an installed model of a usable size, or says what to pull.
+  - **doctor vs status:** a provider cooling down after a rate limit was ✗ in `status` and ready in `doctor`. Both now show `~ cooling down until … (reason)` with `conductor cooldown --clear <name>`, and the UI shows an amber "cooling down" pill.
+  - **Fresh install:** optional API keys, a project not set up yet and agents you don't use were shown in red on API keys and Setup; red is now only for what conductor needs (git, Node).
+  - **80 columns:** on a terminal, long lines wrap at words and continue under their text column (help, tables, status); piped output and `--json` are unchanged.
+  - **Typos:** `lessons`, `stats`, `guard`, `rules`, `eval` and `plan` now get a suggestion; a tie names both (`runz` → run or runs); a swapped pair of letters counts as one edit (`stauts`).
+  - **Phone width:** the rule library on Roles and folder paths on Skills widened the page; they wrap now.
+  - `worker: x ((default))` → `worker: x (its default model)`.
+  - **CI:** a `plugin` job runs `claude plugin validate .` (passes locally with Claude Code 2.1.317).
 - **B2 benchmark tasks are ready** (`bench/b2/`): five bigger, multi-file tasks on a bookshop library (cart with stock rules, a discount engine, CSV product import with an error report, an order state machine with a refund window, checkout totals that need the cart and discounts), specified to the cent, with hidden tests written before any run and a reference solution. `node bench/run.mjs check --suite b2` proves each task fails on the start and passes on the solution; the plan passes `conductor plan check`. `bench/run.mjs` takes `--suite pilot|b2`. Not run yet: it needs Claude quota.
 - **Local models that don't fail silently (V13).** Measured on Ollama 0.40: a model runs with a 4,096-token window unless told otherwise (the model itself supported 262,144), and a longer prompt is cut without an error: 59,000 characters reached the model as 2,050 tokens, status 200.
   - **Window check:** before a local chat call conductor asks the server for the window the model really runs with (Ollama `/api/show` and `/api/ps`, loading the model first if needed, which also keeps it loaded for 10 minutes; LM Studio `/api/v0/models`). A prompt that won't fit is not sent: the attempt fails with `context too small: …` and a fix (`OLLAMA_CONTEXT_LENGTH=16384`, or a Modelfile with `num_ctx`; the LM Studio load setting), and the next route runs.
