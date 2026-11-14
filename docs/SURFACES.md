@@ -12,6 +12,7 @@ A dash means the action is left out of that surface on purpose, with the reason.
 | Check a plan before handing it out | `conductor plan check <file>` | `conductor_plan_check` | — *plans are files in your editor; the controller checks them* |
 | Run the project's verify command | `conductor verify` | `conductor_verify` | — *runs project commands; use the terminal or your controller* |
 | Recent runs, and one run in full (checks, attempts, report) | `conductor runs [show <run>]` | `conductor_runs` | `GET /api/run` |
+| Import your answer from a web chat for a waiting run (or a research report) | `conductor import <run> <file>` | `conductor_import` | `POST /api/import` |
 | Compact diff to review | `conductor diff [branch]` | `conductor_diff` | `GET /api/run` |
 | Quality numbers: first-try accept rate, alpha gate, failure causes | `conductor stats [--failures]` | `conductor_stats` | `GET /api/stats` |
 | Runs, tokens, cost and time per provider | `conductor usage` | `conductor_stats` | `GET /api/runs` |

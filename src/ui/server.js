@@ -9,6 +9,8 @@ import { loadConfig, findProjectRoot, readScope, writeScope, validateConfig, GLO
 import { DEFAULT_CONFIG, CLI_PRESETS, ROLES, CONTROLLERS, controllerWorker } from '../presets.js';
 import { statusData } from '../status.js';
 import { listRuns, runDetail } from '../runs.js';
+import { importAnswer, ImportError } from '../manual.js';
+import { dispatch } from '../core.js';
 import { qualityStats, failureStats, qualityTrend } from '../stats.js';
 import { readLessons, addLesson, removeLesson, promoteLesson, promotable, GUIDANCE } from '../lessons.js';
 import { readRules, rulesDir, allControllers } from '../controllers.js';
@@ -157,6 +159,12 @@ export function createUiServer({ cwd = process.cwd(), token = crypto.randomBytes
           const r = switchGuards(root, controller, !!body.on);
           if (r.unsupported) return send(400, { error: 'guards are only available for Claude Code and Antigravity' });
           return send(200, guardState(root));
+        }
+        case 'POST /api/import': {
+          try {
+            const s = await importAnswer(loadConfig(root), String(body.run || ''), body.text, { dispatch });
+            return send(200, { run: (s.runDir || '').split('/').pop(), outcome: s.outcome || null, exitCode: s.exitCode });
+          } catch (e) { if (e instanceof ImportError) return send(400, { error: e.message }); throw e; }
         }
         case 'GET /api/run': {
           const d = runDetail(root, String(url.searchParams.get('id') || ''));

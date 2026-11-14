@@ -63,7 +63,9 @@ export function loadConfig(root = findProjectRoot()) {
   loadSecrets(root);
   const global = readJSON(GLOBAL_CONFIG, {});
   const project = readJSON(projectConfigPath(root), {});
-  let cfg = deepMerge(DEFAULT_CONFIG, global);
+  // a fresh copy each time: deepMerge shares what it doesn't override, so a caller changing cfg.settings or a
+  // provider would otherwise change the defaults for every later load in the same process (the UI and MCP servers)
+  let cfg = deepMerge(structuredClone(DEFAULT_CONFIG), global);
   cfg = deepMerge(cfg, project);
   cfg.notices = dropRetired(cfg);
   cfg.root = root;
@@ -111,9 +113,9 @@ export function validateConfig(cfg) {
   const errors = [];
   if (!isPlainObject(cfg.providers)) errors.push('providers must be an object');
   for (const [name, p] of Object.entries(cfg.providers || {})) {
-    if (!['cli', 'openai', 'anthropic'].includes(p.type)) errors.push(`provider ${name}: unknown type "${p.type}"`);
+    if (!['cli', 'openai', 'anthropic', 'manual'].includes(p.type)) errors.push(`provider ${name}: unknown type "${p.type}"`);
     if (p.type === 'cli' && !CLI_PRESETS[p.preset] && !(p.bin && p.write)) errors.push(`provider ${name}: unknown preset "${p.preset}" (or give bin + write/read args)`);
-    if (p.type !== 'cli' && !p.baseUrl) errors.push(`provider ${name}: baseUrl is required`);
+    if (p.type !== 'cli' && p.type !== 'manual' && !p.baseUrl) errors.push(`provider ${name}: baseUrl is required`);
     if (p.fallbackModels !== undefined && !(Array.isArray(p.fallbackModels) && p.fallbackModels.every((m) => typeof m === 'string'))) errors.push(`provider ${name}: fallbackModels must be a list of model names`);
     for (const k of ['timeoutMin', 'idleTimeoutMin']) if (p[k] !== undefined && !(Number(p[k]) > 0 || (k === 'idleTimeoutMin' && Number(p[k]) === 0))) errors.push(`provider ${name}: ${k} must be a number of minutes`);
   }
@@ -129,6 +131,7 @@ export function validateConfig(cfg) {
 /** "local" = runs on this machine (CLI login or localhost model); "cloud" = remote API. */
 export function providerLocation(p) {
   if (p.type === 'cli') return 'local-agent';
+  if (p.type === 'manual') return 'manual'; // W1: you, in a web chat
   // your own say wins: e.g. a model server on another machine that you reach through localhost, or a mock in tests
   if (['local-model', 'cloud-api'].includes(p.location)) return p.location;
   try {
@@ -189,6 +192,7 @@ export function providerReadiness(name, p) {
     const bin = preset.bin;
     return which(bin) ? { ready: true, reason: 'installed' } : { ready: false, reason: `"${bin}" not installed` };
   }
+  if (p.type === 'manual') return { ready: true, reason: 'you paste the prompt into a web chat' };
   if (p.apiKeyEnv && !p.apiKeyOptional && !keyValue(p.apiKeyEnv)) return { ready: false, reason: `${p.apiKeyEnv} not set${process.env[p.apiKeyEnv] ? ' (placeholder value)' : ''}` };
   if (!p.model) return { ready: true, reason: 'ready (model picked automatically)' };
   return { ready: true, reason: p.apiKeyEnv && process.env[p.apiKeyEnv] ? 'key present' : 'no key needed' };

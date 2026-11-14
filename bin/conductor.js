@@ -23,7 +23,7 @@ import { doctorData } from '../src/doctor.js';
 import { listFreeModels, listProviderModels } from '../src/models.js';
 import { CLI_PRESETS, ROLES, CONTROLLERS, controllerWorker } from '../src/presets.js';
 import { VERSION } from '../src/version.js';
-import { which, keyValue, untilText, wrapForTerminal } from '../src/util.js';
+import { which, keyValue, untilText, wrapForTerminal, copyToClipboard } from '../src/util.js';
 import { usageReport, formatUsage, recordSaving } from '../src/usage.js';
 import { listRuns, readRun, formatRuns, runDetail, runGates, formatGates } from '../src/runs.js';
 import { CATALOG, CATEGORIES, urlFields } from '../src/catalog.js';
@@ -34,6 +34,7 @@ import { ROUTE_TEMPLATES, resolveTemplate, addTemplates, starterIds, describeRou
 import { compactDiff } from '../src/diffview.js';
 import { runProgress, batchProgress } from '../src/progress.js';
 import { runDemo } from '../src/demo.js';
+import { importAnswer, importResearch, ImportError } from '../src/manual.js';
 
 const HELP = `conductor ${VERSION}: your coding agent (Claude Code, Codex, Antigravity, OpenCode) plans and reviews; cheaper models do the work.
 
@@ -106,6 +107,8 @@ Work (normally called by the controller)
   conductor worktree [list] | rm <id>|--all [--force]
 
 Inspect
+  conductor import <run> [file | -]      your answer from a web chat for a run with --provider manual (applied and checked like any worker's)
+  conductor import --research <file> [--save docs/research/x.md]   file a web chat's research report into the project
   conductor runs [--limit 20] [--json] | runs show <run>
   conductor usage [--days 7] [--json]  runs, tokens and cost per provider
   conductor status [--json]            providers, chains and repo state
@@ -114,7 +117,7 @@ Inspect
   conductor config path                config file locations
   conductor mcp                        run as an MCP server (stdio)
 
-Exit codes: 0 ok · 2 usage/unsafe state · 3 every provider failed (controller takes over)`;
+Exit codes: 0 ok · 2 usage/unsafe state · 3 every provider failed (controller takes over) · 4 unverified · 5 waiting for your answer (--provider manual)`;
 
 /** conductor skills [list] | new <name> | add <path> | on|off <name> | rm <name> | sync: one skill library for every controller. */
 function skillsCmd(o) {
@@ -220,7 +223,7 @@ function routeRules(cfg, o) {
 /** A controller entry, built-in or your own (V6). */
 const ctrl = (n) => allControllers(findProjectRoot())[n] || {};
 
-const COMMANDS = ['demo', 'controller', 'lessons', 'stats', 'guard', 'rules', 'eval', 'plan', 'skills', 'setup', 'providers', 'add', 'keys', 'local', 'route', 'diff', 'init', 'ui', 'mcp', 'status', 'doctor', 'verify', 'run', 'models', 'batch', 'worktree', 'runs', 'usage', 'cooldown', 'config', 'retry', 'help'];
+const COMMANDS = ['import', 'demo', 'controller', 'lessons', 'stats', 'guard', 'rules', 'eval', 'plan', 'skills', 'setup', 'providers', 'add', 'keys', 'local', 'route', 'diff', 'init', 'ui', 'mcp', 'status', 'doctor', 'verify', 'run', 'models', 'batch', 'worktree', 'runs', 'usage', 'cooldown', 'config', 'retry', 'help'];
 /** The command closest to a typo (edit distance ≤ 2), or null. */
 function closest(word, options) {
   // edit distance where swapping two neighbouring letters (stauts → status) counts as one edit
@@ -372,6 +375,24 @@ async function main() {
       if (r.unsupported) { console.log(`Guards are not available for ${ctrl(controller)?.label || controller} yet: only Claude Code and Antigravity, whose hooks were tested. (Codex runs project hooks only in trusted projects after you approve them in /hooks.)`); return 1; }
       console.log(r.changed ? `guards ${sub} (${r.file})${sub === 'on' ? ': a `git commit` by the controller is blocked while the last conductor verify failed' : ''}` : `guards already ${sub}`);
       return 0;
+    }
+    case 'import': {
+      // W1: the answer you got from a web chat for a waiting run (--provider manual), or a deep-research report
+      const root = findProjectRoot();
+      if (o.research) {
+        const rel = importResearch(root, typeof o.research === 'string' ? o.research : o._[0], o.save);
+        console.log(`saved ${rel}. Use it as context: conductor ask "…" --files ${rel}`);
+        return 0;
+      }
+      const [runId, src = '-'] = o._;
+      if (!runId) throw new UsageError('usage: conductor import <run> [answer file | -]   (or: conductor import --research <file> [--save docs/research/x.md])');
+      const text = src === '-' ? fs.readFileSync(0, 'utf8') : fs.readFileSync(path.resolve(src), 'utf8');
+      const prog = runProgress();
+      let s;
+      try { s = await importAnswer(loadConfig(), runId, text, { dispatch, onEvent: (e) => prog.step(e) }); } catch (e) { prog.stop(); if (e instanceof ImportError) throw new UsageError(e.message); throw e; }
+      prog.stop();
+      console.log(formatSummary(s));
+      return s.exitCode;
     }
     case 'demo': {
       // a throwaway project, both tasks handed out in parallel with every check, merged and tested: about 2 minutes
@@ -606,6 +627,8 @@ async function main() {
         },
       });
       prog.stop();
+      // W1: put the waiting run's prompt on the clipboard, ready to paste into a web chat
+      if (s.waiting && !o.json) { const via = copyToClipboard(fs.readFileSync(path.join(findProjectRoot(), s.waiting.prompt), 'utf8')); if (via) process.stderr.write(`conductor: the prompt is on your clipboard (${via})\n`); }
       console.log(o.json ? JSON.stringify(s, null, 2) : formatSummary(s));
       return s.exitCode;
     }

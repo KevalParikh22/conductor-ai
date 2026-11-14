@@ -17,6 +17,7 @@ import { readLessons, addLesson, removeLesson, promoteLesson, GUIDANCE, PROMOTE_
 import { qualityStats, formatQualityStats, failureStats, formatFailureStats } from './stats.js';
 import { usageReport, formatUsage } from './usage.js';
 import { doctorData } from './doctor.js';
+import { importAnswer, ImportError } from './manual.js';
 import { readRules } from './controllers.js';
 import { recordVerify } from './guard.js';
 import { ROLES } from './presets.js';
@@ -116,6 +117,7 @@ const TOOLS = [
   },
   { name: 'conductor_stats', description: 'Quality numbers for this project: first-try accept rate, done rate, the alpha gate, why tasks failed, and runs, tokens, cost and time per provider.', inputSchema: { type: 'object', properties: { days: { type: 'number', description: 'Look back this many days (default 30)' } } } },
   { name: 'conductor_doctor', description: 'Check every enabled provider: installed, key set, config errors, controller files. live: true also sends each a one-word prompt and checks agents can run build commands (slow: up to minutes per agent).', inputSchema: { type: 'object', properties: { live: { type: 'boolean' } } } },
+  { name: 'conductor_import', description: "W1: the user's answer from a web chat for a run that waits (started with provider manual). It goes through every check like a worker's reply. Only pass an answer the user gave you; never make one up.", inputSchema: { type: 'object', properties: { run: { type: 'string', description: 'The waiting run id' }, answer: { type: 'string', description: 'The whole answer the user pasted' } }, required: ['run', 'answer'] } },
   { name: 'conductor_rules', description: "This project's rules (.conductor/rules): what each covers and the files it applies to. Every controller and worker gets the matching ones.", inputSchema: { type: 'object', properties: {} } },
   {
     name: 'conductor_route',
@@ -187,6 +189,12 @@ async function callTool(name, args, startRoot) {
     for (const c of d.ctrlIssues) L.push(`${c.level === 'error' ? '✗' : '!'} ${c.file}: ${c.problem} (fix: ${c.fix})`);
     L.push(d.problems ? `${d.problems} problem(s)` : 'All enabled providers look good.');
     return text(L.join('\n'), d.problems > 0);
+  }
+  if (name === 'conductor_import') {
+    try {
+      const s = await importAnswer(cfg, String(args.run || ''), args.answer, { dispatch });
+      return text(formatSummary(s), s.exitCode !== 0);
+    } catch (e) { if (e instanceof ImportError) return text(`conductor: ${e.message}`, true); throw e; }
   }
   if (name === 'conductor_rules') {
     const rules = readRules(root);

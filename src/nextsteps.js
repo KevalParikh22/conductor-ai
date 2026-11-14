@@ -20,6 +20,8 @@ const RULES = [
   [/^cooling down until ([^(]+)/, ({ name }, m) => `it waits until ${m[1].trim()}; to try it now: \`conductor cooldown --clear ${name}\``],
   [/^every model is cooling down/, ({ name }) => `all of ${name}'s models hit their limits; \`conductor cooldown\` shows when each resets (\`conductor cooldown --clear ${name}\` to try now)`],
   [/daily budget reached/, () => `the paid daily budget is used up: wait until tomorrow, or raise dailyBudgetUSD in ${cfgFile}`],
+  [/^waiting for your answer/, ({ run, prompt }) => `paste ${prompt || 'the prompt in the run folder'} into any web chat, save its whole answer to a file, then: conductor import ${run || '<run>'} <answer file>`],
+  [/^prompt too long for (.+?): (\d+) characters, its limit is (\d+)/, (_, m) => `the prompt (${m[2]} characters) is over ${m[1]}'s limit (${m[3]}): give it a smaller task, fewer --files, or a chat with a bigger limit (raise maxPromptChars)`],
   [/^cancelled/, () => 'nothing to do: another attempt in the race passed first, so this one was stopped'],
   [/^context too small: .*~(\d+) tokens with the answer, (\S+) runs with (\d+) \((Ollama|LM Studio)/, (_, m) => m[4] === 'LM Studio'
     ? `load ${m[2]} in LM Studio with a context length of at least ${m[1]} (Developer → model settings), or give this task to a bigger route`
