@@ -73,7 +73,7 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | `location` | api | `local-model` or `cloud-api`: overrides the guess from the address (e.g. a remote server reached through localhost). Local models get the smaller prompt, the window check and one call at a time per server |
 | `maxParallel` | api, cli | Most calls to this provider at once, from one conductor process; the rest wait their turn. Antigravity defaults to 1 (its quota belongs to the account). Batch also starts at most this many tasks on it |
 | `timeoutMin` | all | Time limit for this provider, in minutes, instead of `timeoutSec` (or `apiTimeoutSec` for APIs) |
-| `idleTimeoutMin` | cli | Stop this agent when it prints nothing for this long |
+| `idleTimeoutMin` | cli | Stop this agent when it prints nothing for this long (`0` = never). Default: 10 for Codex (it prints an event for every step), off for the others (some print only at the end) |
 | `price` | api | `{ "input": 0.3, "output": 2.5 }`: dollars per 1M tokens, used for cost and budgets. Without it, cost is shown as unknown |
 | `free` | api | `true` = costs nothing (set on Kilo, OpenRouter free and local models). Remove it if you switch that provider to a paid model |
 | `dailyBudgetUSD` | api | Daily cap for this provider alone (needs `price`) |
@@ -86,7 +86,7 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | `timeoutSec` | 1200 | Max seconds per agent attempt. The worker and everything it started are stopped, the attempt is stashed and the next provider runs. `--timeout 45m` on `run` or `batch` overrides it |
 | `allowCommands` | `[]` | Extra commands write workers may run without a permission prompt (Antigravity), on top of the usual build and test tools and your verify command, e.g. `["npx expo export"]` |
 | `timeoutFactor` | 2 | A plan task with `- **eta:** 1h` may run eta × this (here 2h) before it is stopped; an eta never lowers the limit |
-| `idleTimeoutSec` | 0 | Stop an agent that prints nothing for this long. Off by default because some agents print only at the end |
+| `idleTimeoutSec` | 0 | Stop every agent that prints nothing for this long. 0 = each agent's own default (Codex 10 minutes, the others none) |
 | `freeApiTimeoutSec` | 90 | Free API providers give up after this. Free routes sometimes hang; after a timeout one more model is tried on that provider, then the chain moves on |
 | `apiTimeoutSec` | 300 | API (chat) providers give up after this and the next provider runs; a stalled free route shouldn't hold the chain for the agent timeout |
 | `cooldownMinutes` | 30 | How long a rate-limited provider is skipped (or its `Retry-After`) |
