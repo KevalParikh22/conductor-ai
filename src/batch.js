@@ -147,7 +147,7 @@ export async function mergeTask(cfg, s, { emit, keepWorktree } = {}) {
   if (!wt?.commit) { if (wt?.id && !keepWorktree) removeWorktree(cfg.root, wt.id, { force: true }); return { status: 'no-changes' }; }
   emit?.({ type: 'merge', branch: wt.branch });
   try {
-    gitIn(cfg.root, ['merge', '--no-ff', '--no-edit', '-m', `conductor: merge ${wt.id} (${s.winner})`, wt.branch]);
+    gitIn(cfg.root, ['merge', '--no-ff', '--no-edit', '-m', `conductor: merge ${String(wt.id).replace(/-(s\d+|h)$/, '')} (${s.winner})`, wt.branch]);
   } catch (e) {
     let files = [];
     try { files = gitIn(cfg.root, ['diff', '--name-only', '--diff-filter=U']).trim().split('\n').filter(Boolean); } catch { /* none */ }

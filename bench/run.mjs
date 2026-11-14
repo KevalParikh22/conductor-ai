@@ -151,6 +151,11 @@ async function main() {
   } else {
     // C: conductor in the project, Claude Code as the controller, the plan fixed in advance
     sh(process.execPath, [CONDUCTOR, 'init', '--controller', 'claude-code', '--no-mcp'], dir);
+    // --priority: the project's setting, as a user would set it (the controller's /conduct-run doesn't pass one)
+    if (argv.includes('--priority')) {
+      const f = path.join(dir, '.conductor', 'config.json'); const c = JSON.parse(fs.readFileSync(f, 'utf8'));
+      c.settings = { ...c.settings, priority: argv[argv.indexOf('--priority') + 1] }; fs.writeFileSync(f, JSON.stringify(c, null, 2) + '\n');
+    }
     git(dir, 'add', '-A'); git(dir, 'commit', '-qm', 'conductor init', '--allow-empty');
     const prompt = tasks.length === TASKS.length ? `/conduct-run ${PLAN}` : `/conduct-build ${PLAN} ${tasks[0]}`;
     const c = claude(dir, prompt, ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'Bash(conductor:*)', 'Bash(git:*)', 'Bash(npm test:*)']);
@@ -158,7 +163,7 @@ async function main() {
   }
   const hidden = Object.fromEntries(Object.entries(score(dir)).filter(([t]) => tasks.includes(t)));
   const res = {
-    suite: SUITE, condition, model, tasks, startedAt, seconds: Math.round((Date.now() - t0) / 1000), stopped, dir,
+    suite: SUITE, condition, model, priority: argv.includes('--priority') ? argv[argv.indexOf('--priority') + 1] : 'balanced', tasks, startedAt, seconds: Math.round((Date.now() - t0) / 1000), stopped, dir,
     claudeCost: sum(calls, 'cost'), claudeTokens: { input: sum(calls, 'input'), output: sum(calls, 'output'), cacheRead: sum(calls, 'cacheRead'), cacheWrite: sum(calls, 'cacheWrite') },
     hidden, calls, workers: condition !== 'A' ? workerUsage(dir) : null, dry: argv.includes('--dry'),
   };
