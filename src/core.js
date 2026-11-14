@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { ROLES, CLI_PRESETS, BUILD_COMMANDS, controllerWorker } from './presets.js';
+import { ROLES, CLI_PRESETS, controllerWorker, BUILD_COMMANDS } from './presets.js';
 import { providerReadiness, providerKind, readOnlyEnforced, PROJECT_DIRNAME } from './config.js';
 import { runProvider } from './providers.js';
 import * as git from './git.js';
@@ -17,141 +17,31 @@ import { independentReview, riskReasons } from './review.js';
 import { lessonsPrompt, demoteByLessons, lessonsFromRun, addLesson, resolveLessons, promotable, readLessons, lessonMatches, GUIDANCE } from './lessons.js';
 import { rulesPrompt } from './controllers.js';
 import { recordVerify } from './guard.js';
-import { autoModel, autoFallbacks, cliFallbacks, modelFamily } from './models.js';
+import { autoModel, autoFallbacks, cliFallbacks } from './models.js';
 import { smartOrder, taskSize, isFree as isFreeProvider } from './selector.js';
 import { taskProviders, matchRoute, describeRoute } from './routing.js';
 import { compactDiff } from './diffview.js';
 import { snapshot as snapshotLocal } from './localfiles.js';
 import { skillsForTask } from './skills.js';
 import { createWorktree, openWorktree, commitWorktree, removeWorktree, readWorktreeMeta, writeWorktreeMeta } from './worktree.js';
-import { GLOBAL_DIR, readJSON, writeJSON, timestamp, rel, untilText, run as runCmd } from './util.js';
+import { writeJSON, timestamp, rel, untilText, run as runCmd } from './util.js';
 import { budgetBlock, estimateCost, recordUsage, recordSaving } from './usage.js';
-import { nextStep, fixLines } from './nextsteps.js';
+import { nextStep } from './nextsteps.js';
+import { extractTask, extractSection, openQuestions, taskFiles, expandBraces, notesForFiles, parseDuration } from './plan.js';
+import { getCooldowns, setCooldown, modelKey, withSlot } from './cooldowns.js';
+import { outcome, EXIT_UNVERIFIED, unverifiedBlocks } from './outcome.js';
+import { isProtected, trimReport, parseFileBlocks, applyFileBlocks, checkEvidence } from './files.js';
+// moved out unchanged (V12); re-exported so every importer of core.js keeps working
+export { extractTask, extractSection, openQuestions, taskFiles, expandBraces, notesForFiles, parseDuration } from './plan.js';
+export { getCooldowns, setCooldown, clearCooldowns, withSlot } from './cooldowns.js';
+export { outcome, EXIT_UNVERIFIED, unverifiedBlocks } from './outcome.js';
+export { isProtected, trimReport, parseFileBlocks, applyFileBlocks, claimedFiles, checkEvidence } from './files.js';
+export { formatSummary } from './summary.js';
 
 const PROMPTS = new URL('./prompts/', import.meta.url);
 const loadPrompt = (n) => fs.readFileSync(new URL(`${n}.md`, PROMPTS), 'utf8');
 
 export class UsageError extends Error {}
-
-// Files workers must never touch (agents are told; chat output is filtered).
-const PROTECTED = [/^AGENTS\.md$/, /^CLAUDE\.md$/, /^GEMINI\.md$/, /^HANDOFF\.md$/, /^docs\/plan\//, /^\.claude\//, /^\.gemini\//, /^\.agents\//,
-  /^\.conductor\//, /^\.git\//, /^\.husky\//, /^\.githooks\//, /^\.vscode\/mcp\.json$/, /^\.mcp\.json$/, /(^|\/)node_modules\//, /(^|\/)\.env(\.|$)/, /(^|\/)auth\.json$/];
-/** `extra`: regex strings from settings.protectedPaths (e.g. "^app/etc/env\\.php$"). */
-export const isProtected = (p, extra = []) => {
-  const norm = p.replaceAll('\\', '/');
-  return PROTECTED.some((re) => re.test(norm)) || extra.some((src) => new RegExp(src).test(norm));
-};
-
-// ---------------- cooldowns (shared across projects) ----------------
-const STATE = () => path.join(GLOBAL_DIR, 'state.json');
-
-export function getCooldowns() {
-  const s = readJSON(STATE(), {});
-  const now = Date.now(), out = {};
-  for (const [n, c] of Object.entries(s.cooldowns || {})) if (c.until > now) out[n] = c;
-  return out;
-}
-export function setCooldown(name, minutes, reason) {
-  const s = readJSON(STATE(), {});
-  s.cooldowns = { ...getCooldowns(), [name]: { until: Date.now() + minutes * 60_000, reason } };
-  writeJSON(STATE(), s);
-}
-export function clearCooldowns(name) {
-  const s = readJSON(STATE(), {});
-  if (name) delete (s.cooldowns ||= {})[name]; else s.cooldowns = {};
-  writeJSON(STATE(), s);
-}
-
-// ---------------- plan parsing ----------------
-export function extractTask(planText, taskId) {
-  const lines = planText.split('\n');
-  const head = new RegExp(`^(#{2,4})\\s+${taskId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![0-9A-Za-z])`);
-  const start = lines.findIndex((l) => head.test(l));
-  if (start < 0) return '';
-  const level = lines[start].match(/^#+/)[0].length;
-  let end = lines.length;
-  for (let i = start + 1; i < lines.length; i++) {
-    const m = lines[i].match(/^(#+)\s/);
-    if (m && m[1].length <= level) { end = i; break; }
-  }
-  return lines.slice(start, end).join('\n').trim();
-}
-
-export function extractSection(planText, title) {
-  const m = planText.match(new RegExp(`^##\\s+${title}[^\\n]*\\n([\\s\\S]*?)(?=^##\\s|$(?![\\s\\S]))`, 'mi'));
-  return m ? m[1].trim() : '';
-}
-
-/**
- * Unresolved items under "## Open questions" in a plan: "- [ ] ..." lines. Resolved ones are "- [x] ... → answer".
- * Workers must not guess at open questions, so write tasks from a plan with any left are refused.
- */
-export function openQuestions(planText) {
-  return extractSection(planText, 'Open questions').split('\n')
-    .map((l) => l.match(/^\s*[-*]\s*\[ \]\s*(.+)$/)?.[1]?.trim())
-    .filter((q) => q && !/^<.*>$/.test(q));
-}
-
-/**
- * The part of a worker's output the controller needs: from its RESULT/VERDICT line on (agents often print their
- * whole transcript before it), capped at maxBytes. Falls back to the end of the output.
- * Findings or notes the worker wrote before that line are kept too, and a bare "VERDICT: CHANGES_REQUESTED"
- * (or a PARTIAL/BLOCKED result) with nothing after it gets the end of the output before it.
- */
-export function trimReport(text, maxBytes = 8000) {
-  const at = text.search(/^#{0,4}\s*(RESULT|VERDICT):/m);
-  let r = at > 0 ? text.slice(at) : text;
-  if (at > 0) {
-    const before = text.slice(0, at);
-    const kept = [];
-    for (const name of ['Findings', 'Notes']) {
-      if (new RegExp(`^#{1,4}\\s*${name}\\b`, 'mi').test(r)) continue;
-      const last = [...before.matchAll(new RegExp(`^#{1,4}\\s*${name}\\b[^\\n]*\\n[\\s\\S]*?(?=^#{1,2}\\s|(?![\\s\\S]))`, 'gmi'))].at(-1);
-      if (last && last[0].trim().split('\n').length > 1) kept.push(last[0].trim());
-    }
-    if (kept.length) r = `${r.trimEnd()}\n\n${kept.join('\n\n')}\n`;
-    else if (/CHANGES_REQUESTED|PARTIAL|BLOCKED|FAIL/i.test(r.split('\n')[0]) && r.trim().split('\n').length < 3) {
-      r = `${r.trimEnd()}\n\n## Output before the verdict (last part; full output: report.full.md)\n${before.slice(-4000).trim()}\n`;
-    }
-  }
-  if (r.length > maxBytes) r = at >= 0 ? r.slice(0, maxBytes) + `\n… [cut at ${maxBytes} characters; full output: report.full.md]\n` : `[… start cut; full output: report.full.md]\n` + r.slice(-maxBytes);
-  return r;
-}
-
-/** Paths in backticks on a "files:" line of a task. */
-export function taskFiles(section) {
-  const line = section.split('\n').find((l) => /\bfiles\b\**\s*:/i.test(l)) || '';
-  return [...line.matchAll(/`([^`]+)`/g)].map((m) => m[1].trim()).filter((p) => !p.includes(' '));
-}
-
-// ---------------- chat-model file blocks ----------------
-export function parseFileBlocks(text) {
-  const blocks = [];
-  const re = /^<<<FILE[ \t]+(\S+)[ \t]*\r?\n([\s\S]*?)^FILE>>>[ \t]*$/gm;
-  let m;
-  while ((m = re.exec(text))) {
-    let content = m[2];
-    // tolerate models that wrap the content in a code fence
-    const fenced = content.match(/^```[\w.+-]*\r?\n([\s\S]*?)\r?\n```\s*$/);
-    if (fenced) content = fenced[1] + '\n';
-    blocks.push({ path: m[1], content });
-  }
-  return blocks;
-}
-
-export function applyFileBlocks(root, blocks, extraProtected = []) {
-  const applied = [], rejected = [];
-  for (const b of blocks) {
-    const norm = path.normalize(b.path).replaceAll('\\', '/');
-    const abs = path.resolve(root, norm);
-    if (path.isAbsolute(b.path) || norm.startsWith('..') || !abs.startsWith(path.resolve(root) + path.sep)) { rejected.push(`${b.path} (outside repo)`); continue; }
-    if (isProtected(norm, extraProtected)) { rejected.push(`${b.path} (protected)`); continue; }
-    fs.mkdirSync(path.dirname(abs), { recursive: true });
-    fs.writeFileSync(abs, b.content);
-    applied.push(norm);
-  }
-  return { applied, rejected };
-}
 
 // ---------------- chain resolution ----------------
 /**
@@ -172,54 +62,10 @@ export function chooseChain(cfg, role, { provider, chain, section = '', body = '
   const pick = smartOrder(base, { role, mode: ROLES[role]?.mode, body, files, diffBytes });
   return { chain: pick.chain, how: pick.note ? 'selector' : 'role', note: pick.note };
 }
-/**
- * How a finished run ended: 'done', 'partial' (the worker says it did only part: RESULT PARTIAL / BLOCKED /
- * FAILED), 'verify-failed' (it finished but the checks fail), 'out-of-scope' (it changed files the task doesn't
- * list), 'unverified' (it wrote code but no verify ran, so
- * nothing proves it works) or 'failed' (no provider finished).
- */
-export function outcome(s) {
-  if (!s?.winner) return 'failed';
-  if (s.verify?.status === 'FAIL') return 'verify-failed';
-  if (/RESULT:\s*\**\s*(PARTIAL|BLOCKED|FAILED|FAIL)\b/i.test(s.status || '')) return 'partial';
-  // H11: an acceptance criterion that fails when conductor runs it, whatever the worker said
-  if (s.checks?.failed?.length) return 'partial';
-  // Q4: a fix that doesn't make the repro pass, or a regression test that doesn't fail on the old code
-  if (s.repro?.ok === false && !s.repro.waived) return 'partial';
-  // H5: DONE, but not every acceptance criterion answered with evidence
-  const a = s.acceptance;
-  if (a && !a.waived && (!a.answered || a.met < a.total)) return 'partial';
-  if (s.scope?.outside?.length && !s.scope.allowed) return 'out-of-scope';
-  // no proof, no "done": code a worker wrote counts as done only when verify ran and passed
-  if (isWriteRun(s) && s.verify?.status !== 'PASS') return 'unverified';
-  return 'done';
-}
-
-const WRITE_ROLES = new Set(['build', 'fix', 'test', 'docs']);
-const isWriteRun = (s) => (s.mode ? s.mode === 'write' : WRITE_ROLES.has(s.role));
-
-/** Exit code 4: a worker finished but nothing proved its work (no verify command), and the caller didn't choose that. */
-export const EXIT_UNVERIFIED = 4;
-export function unverifiedBlocks(s, { allowUnverified = false } = {}) {
-  return outcome(s) === 'unverified' && !allowUnverified && !s.verify?.chosen;
-}
-
 /** Commands write workers may run without a permission prompt: the usual build/test tools, the verify command, allowCommands. */
 export function buildCommands(settings) {
   const verify = String(settings.verify || '').split(/&&|\|\||;|\|/).map((c) => c.trim()).filter(Boolean);
   return [...new Set([...BUILD_COMMANDS, ...verify, ...(settings.allowCommands || [])])];
-}
-
-const modelKey = (name, model) => `${name}@${model || '(default)'}`;
-
-// V8: a provider with maxParallel (agy: 1) runs that many calls at once in this process; the rest wait their turn
-const slots = new Map();
-export async function withSlot(name, limit, fn, onWait) {
-  if (!(limit > 0)) return fn();
-  const s = slots.get(name) || { busy: 0, queue: [] };
-  slots.set(name, s);
-  if (s.busy >= limit) { onWait?.(); await new Promise((resolve) => s.queue.push(resolve)); } else s.busy++;
-  try { return await fn(); } finally { const nextUp = s.queue.shift(); if (nextUp) nextUp(); else s.busy--; }
 }
 
 /**
@@ -245,19 +91,6 @@ export async function modelsToTry(name, p, kind) {
         .filter((m) => !cooling[modelKey(name, m)] && !all.includes(m))
       : null;
   return { models: all.length > 1 || auto ? left : all, auto };
-}
-
-/** "90m", "1h", "1h30m", "2 hours", "45 min", "1.5h" → milliseconds (0 when it can't be read). */
-export function parseDuration(text) {
-  if (!text) return 0;
-  const t = String(text).toLowerCase().replace(/`/g, '').trim();
-  if (/^\d+(\.\d+)?$/.test(t)) return Number(t) * 60_000; // a bare number is minutes
-  let ms = 0, any = false;
-  for (const m of t.matchAll(/(\d+(?:\.\d+)?)\s*(h(?:ours?|rs?)?|m(?:in(?:ute)?s?)?|s(?:ec(?:ond)?s?)?)(?![a-z])/g)) {
-    any = true;
-    ms += Number(m[1]) * (m[2][0] === 'h' ? 3_600_000 : m[2][0] === 'm' ? 60_000 : 1000);
-  }
-  return any ? Math.round(ms) : 0;
 }
 
 /**
@@ -311,17 +144,6 @@ function readContextFiles(root, files, budget, extraSecret = []) {
     out += `\n### ${f}\n\`\`\`\n${body}\n\`\`\`\n`;
   }
   return out;
-}
-
-/**
- * The Design notes lines that concern this task: the ones mentioning one of its files. Notes usually describe every
- * module in the plan, and a task must not be held to another task's exports (found by the pilot: a T4 worker was
- * asked to export T1's slugify).
- */
-export function notesForFiles(notes, files) {
-  const keys = files.map((f) => f.replace(/^\.\//, '')).filter(Boolean);
-  if (!keys.length) return '';
-  return String(notes || '').split('\n').filter((l) => keys.some((k) => l.includes(k))).join('\n');
 }
 
 // ---------------- chat workers (H7) ----------------
@@ -547,12 +369,21 @@ async function dispatchOnce(cfg, opts) {
     ? `${loadPrompt('_chat_worker')}\n## Your job\n${CHAT_JOB[role] || CHAT_JOB.build}\n\n${loadPrompt('_chat_write')}\n\n${CHAT_REPORT}`
     : `${loadPrompt('_worker')}\n${loadPrompt(meta.prompt)}`;
   let work = root; // where the worker runs: the repo, or its own worktree
+  // V12: seconds spent in each step of this run (context, base, guard, verify, checks, repro, isolate, review)
+  const timings = {};
+  const timed = (k, fn) => {
+    const t0 = Date.now();
+    const done = () => { timings[k] = Math.round(((timings[k] || 0) + (Date.now() - t0) / 1000) * 10) / 10; };
+    const r = fn();
+    if (r && typeof r.then === 'function') return r.finally(done);
+    done(); return r;
+  };
   // Q2: facts gathered once per run (task files, callers, verify, architecture), in the form each kind of worker uses
   const packs = {};
   const packFor = (kind) => {
     if (settings.contextPack === false) return '';
     if (packs[kind] === undefined) {
-      packs[kind] = contextPack(work, { files: [...(opts.files || []), ...taskFiles(section)].flatMap(expandBraces), verifyCmd: detectVerify(work, verifySettings), kind, budget: settings.contextPackBytes || 4000 });
+      packs[kind] = timed('context', () => contextPack(work, { files: [...(opts.files || []), ...taskFiles(section)].flatMap(expandBraces), verifyCmd: detectVerify(work, verifySettings), kind, budget: settings.contextPackBytes || 4000 }));
     }
     return packs[kind];
   };
@@ -563,7 +394,7 @@ async function dispatchOnce(cfg, opts) {
     const notes = planText && extractSection(planText, 'Design notes');
     if (notes) ctx += `\n# Design notes from ${opts.planPath}\n${notes}\n`;
     if (mode === 'write' && inRepo) {
-      const map = repoMap(work, { budget: settings.repoMapBytes || 6000 });
+      const map = timed('context', () => repoMap(work, { budget: settings.repoMapBytes || 6000 }));
       if (map) ctx += `\n# Project map (files, and the names each code file defines)\n${map}\n`;
     }
     const files = [...(opts.files || []), ...taskFiles(section)];
@@ -585,6 +416,7 @@ async function dispatchOnce(cfg, opts) {
     role, mode, startedAt: new Date().toISOString(), task: opts.taskId || null, plan: opts.planPath || null, attempts: [], winner: null, model: null,
     report: null, status: null, changed: [], applied: [], rejected: [], warnings: [...preWarnings], verify: null, runDir: rel(root, runDir), exitCode: 3,
     ...(planGate ? { planGate } : {}),
+    timings, // V12: filled in as the run goes (seconds per step); workers' own time is in attempts[].seconds
   };
   let ioDir = runDir; // where CLI workers get their prompt/output files
   let wtBase = ''; // the commit a worktree started from
@@ -631,7 +463,7 @@ async function dispatchOnce(cfg, opts) {
   if (opts.inheritedBase) summary.base = opts.inheritedBase;
   else if (verifyOn && settings.checkBase !== false && !opts.continue && !opts.inherited) {
     emit({ type: 'base' });
-    const b = await baseVerify(root, work, verifySettings, path.join(runDir, 'base-verify.log'));
+    const b = await timed('base', () => baseVerify(root, work, verifySettings, path.join(runDir, 'base-verify.log')));
     if (b) {
       summary.base = { status: b.status, cmd: b.cmd, head: b.head, cached: !!b.cached, log: b.log ? rel(root, b.log) : null, failures: (b.failures || []).slice(0, 50) };
       if (b.status === 'FAIL') {
@@ -646,7 +478,7 @@ async function dispatchOnce(cfg, opts) {
     if (opts.inheritedRepro) summary.repro = { cmd: reproCmd, before: opts.inheritedRepro };
     else if (!opts.continue && !opts.inherited) {
       emit({ type: 'repro' });
-      const b = await runRepro(work, reproCmd, path.join(runDir, 'repro-before.log'));
+      const b = await timed('repro', () => runRepro(work, reproCmd, path.join(runDir, 'repro-before.log')));
       summary.repro = { cmd: reproCmd, before: b.status };
       if (b.status === 'PASS' && !opts.allowNoRepro) {
         if (useWorktree && !summary.worktree?.continued) { removeWorktree(root, summary.worktree.id, { force: true }); }
@@ -733,7 +565,7 @@ async function dispatchOnce(cfg, opts) {
       let guard = null;
       if (res.ok && mode === 'write' && inRepo) {
         const edited = git.changedFiles(work).filter((f) => !preDirty.has(f));
-        const syntax = settings.syntaxCheck === false ? [] : syntaxErrors(work, edited);
+        const syntax = settings.syntaxCheck === false ? [] : timed('guard', () => syntaxErrors(work, edited));
         const missing = settings.contractCheck === false || !section ? [] : missingContract(work, section);
         // the export check: names the acceptance checks call, or the plan says to export, need a NAMED export (JS/TS)
         const noExport = settings.contractCheck === false || !section || !['build', 'fix'].includes(role) ? []
@@ -858,7 +690,7 @@ async function dispatchOnce(cfg, opts) {
     if (settings.autoVerify !== false && !opts.noVerify) {
       emit({ type: 'verify' });
       // in a worktree, other parallel tasks' work is missing, so the task's own verify line from the plan is preferred
-      summary.verify = await runVerify(work, verifySettings, path.join(runDir, 'verify.log'));
+      summary.verify = await timed('verify', () => runVerify(work, verifySettings, path.join(runDir, 'verify.log')));
       if (verifySettings !== settings) summary.verify.scope = 'task';
       if (!useWorktree) recordVerify(root, summary.verify); // the commit guard follows the main checkout's latest verify
       if (summary.verify.status === 'FAIL' && summary.base?.status === 'FAIL') {
@@ -875,13 +707,13 @@ async function dispatchOnce(cfg, opts) {
       // H11: run the acceptance criteria themselves (`expr` returns `value`), JavaScript tasks for now
       if (criteria.length && ['build', 'fix'].includes(role) && settings.runAcceptance !== false && taskFiles(section).some((f) => /\.(m?js|cjs)$/.test(f))) {
         emit({ type: 'checks' });
-        summary.checks = await runAcceptanceChecks(work, criteria, taskFiles(section).flatMap(expandBraces), { dir: runDir });
+        summary.checks = await timed('checks', () => runAcceptanceChecks(work, criteria, taskFiles(section).flatMap(expandBraces), { dir: runDir }));
         if (summary.checks && !summary.checks.total) summary.checks = null;
       }
       let reproBrief = '';
       if (reproCmd) {
         emit({ type: 'repro' });
-        const a = await runRepro(work, reproCmd, path.join(runDir, 'repro-after.log'));
+        const a = await timed('repro', () => runRepro(work, reproCmd, path.join(runDir, 'repro-after.log')));
         summary.repro = { ...(summary.repro || { cmd: reproCmd }), after: a.status, ok: a.status === 'PASS' };
         if (a.status !== 'PASS') reproBrief = `The bug still reproduces: \`${reproCmd}\` still fails. Its output ends with:\n${a.tail}`;
       } else if (wantsRegression) {
@@ -889,7 +721,7 @@ async function dispatchOnce(cfg, opts) {
         if (!tests.length) { summary.repro = { kind: 'test', ok: false, why: 'no regression test added' }; reproBrief = 'Add a regression test: one that fails on the original code because of this bug, and passes with your fix.'; }
         else {
           emit({ type: 'repro' });
-          const p = await proveRegression(root, work, useWorktree ? wtBase : headBefore, tests, verifySettings, path.join(runDir, 'repro-proof.log'));
+          const p = await timed('repro', () => proveRegression(root, work, useWorktree ? wtBase : headBefore, tests, verifySettings, path.join(runDir, 'repro-proof.log')));
           summary.repro = { kind: 'test', tests, proof: p.status, ok: p.status === 'proved' ? true : p.status === 'not-proved' ? false : null, ...(p.why ? { why: p.why } : {}) };
           if (p.status === 'not-proved') reproBrief = `Your new or changed tests (${tests.join(', ')}) also pass on the original, buggy code, so they don't prove the fix. Make a test fail without the fix and pass with it.`;
         }
@@ -905,7 +737,7 @@ async function dispatchOnce(cfg, opts) {
         const tests = mine.filter((f) => TEST_FILE.test(f)), code = mine.filter((f) => !TEST_FILE.test(f));
         if (tests.length && code.length) {
           emit({ type: 'isolate' });
-          const r = await verifyOnBase(root, work, useWorktree ? wtBase : headBefore, code, verifySettings, path.join(runDir, 'code-only-verify.log'));
+          const r = await timed('isolate', () => verifyOnBase(root, work, useWorktree ? wtBase : headBefore, code, verifySettings, path.join(runDir, 'code-only-verify.log')));
           if (r.status === 'PASS') {
             summary.verify.suspectTests = tests;
             const n = summary.checks?.total;
@@ -928,8 +760,8 @@ async function dispatchOnce(cfg, opts) {
       const reasons = riskReasons({ changed: summary.changed, lines, section, settings, forced: opts.review });
       if (reasons.length) {
         emit({ type: 'review' });
-        summary.review = await independentReview({ work, base, worker: summary.winner, workerModel: summary.model, section, reasons,
-          deps: { cfg, resolveChain, runProvider, loadPrompt, quotaRe, runDir, timeoutMs: (settings.reviewTimeoutSec || 600) * 1000 } });
+        summary.review = await timed('review', () => independentReview({ work, base, worker: summary.winner, workerModel: summary.model, section, reasons,
+          deps: { cfg, resolveChain, runProvider, loadPrompt, quotaRe, runDir, timeoutMs: (settings.reviewTimeoutSec || 600) * 1000 } }));
         if (summary.review?.report) summary.review.report = rel(root, summary.review.report);
       }
     }
@@ -949,169 +781,4 @@ async function dispatchOnce(cfg, opts) {
   if (unverifiedBlocks(summary, { allowUnverified: opts.allowUnverified || settings.allowUnverified })) summary.exitCode = EXIT_UNVERIFIED;
   writeJSON(path.join(runDir, 'summary.json'), summary);
   return summary;
-}
-
-/** "src/{a,b}.ts" → ["src/a.ts", "src/b.ts"] (nested groups too). */
-export function expandBraces(p) {
-  const m = p.match(/^(.*?)\{([^{}]*)\}(.*)$/);
-  if (!m || !m[2].includes(',')) return [p];
-  return [...new Set(m[2].split(',').flatMap((alt) => expandBraces(`${m[1]}${alt.trim()}${m[3]}`)))];
-}
-
-/**
- * Paths a worker lists under "## Files changed" in its report, or null when the report has no such section.
- * Accepts "- path — summary", "- `path`: summary", "* path", "- `a.ts`, `b.ts`", markdown links
- * "[a.ts](file:///…/a.ts)", absolute paths (made relative to `roots`), "src/{a,b}.ts" and "a.ts:12".
- * Words that aren't paths ("No", "Tabs") are skipped unless they name a file in `known`.
- */
-export function claimedFiles(report, { roots = [], known = [] } = {}) {
-  const m = report.match(/^#{1,4}\s*Files changed\s*$([\s\S]*?)(?=^#{1,4}\s|(?![\s\S]))/mi);
-  if (!m) return null;
-  const bases = [...new Set(roots.flatMap((r) => { try { return [r, fs.realpathSync(r)]; } catch { return [r]; } }))].map((r) => r.replace(/\/+$/, ''));
-  const knownSet = new Set(known);
-  const files = [];
-  const clean = (raw) => {
-    let p = decodeURIComponent(raw.trim()).replace(/^file:\/\//, '').replace(/^\*\*|\*\*$/g, '').replace(/[),.;:]+$/, '');
-    p = p.replace(/#L?\d+(-L?\d+)?$/, '').replace(/:\d+(:\d+)?$/, '');
-    if (path.isAbsolute(p)) {
-      const base = bases.find((b) => p === b || p.startsWith(b + '/'));
-      if (!base) return null; // outside the project
-      p = p.slice(base.length + 1);
-    }
-    p = p.replace(/^\.\//, '');
-    if (!p || /^\(?(none|nothing|n\/a)\)?\.?$/i.test(p)) return null;
-    return p;
-  };
-  // a word with a dot is a file only with a real file extension: `Math.ceil` or `user.name` in a report is code, not a
-  // path (a top-level file with an unusual extension still counts when it exists)
-  const FILE_EXT = /\.(m?[jt]sx?|c[jt]s|json5?|md|mdx|txt|py|pyi|php|go|rb|java|kt|kts|rs|cs|swift|c|cc|cpp|h|hpp|m|mm|scala|sh|bash|zsh|ps1|sql|css|scss|sass|less|html?|vue|svelte|astro|xml|ya?ml|toml|ini|cfg|conf|env|lock|gradle|properties|csv|tsv|graphql|gql|proto|tf|dart|ex|exs|erl|hs|lua|pl|r|jl|zig|nim|snap|svg|png|jpe?g|gif|webp|ico|pdf|wasm|map|d\.ts)$/i;
-  const exists = (p) => bases.some((b) => { try { return fs.existsSync(path.join(b, p)); } catch { return false; } });
-  const looksLikePath = (p) => knownSet.has(p) || /\//.test(p) || FILE_EXT.test(p) || /^(Dockerfile|Makefile|Procfile|Gemfile|Rakefile|LICENSE|README)$/.test(p) || (/\.[A-Za-z0-9_-]{1,10}$/.test(p) && exists(p));
-  for (const line of m[1].split('\n')) {
-    const item = line.match(/^\s*(?:[-*+]|\d+[.)])\s+(.*)$/);
-    if (!item) continue;
-    const text = item[1];
-    let raw = [...text.matchAll(/\[([^\]]*)\]\(([^)\s]+)\)/g)].map((l) => (/^https?:/.test(l[2]) ? l[1] : l[2]));
-    if (!raw.length) raw = [...text.matchAll(/`([^`]+)`/g)].map((b) => b[1]).filter((b) => !/\s/.test(b.trim()));
-    if (!raw.length) raw = [text.trim().split(/\s+/)[0]];
-    // a backticked or linked path list may be followed by prose; only the first group of paths counts
-    for (const r of raw) {
-      for (const one of expandBraces(r.replace(/^\*\*|\*\*$/g, ''))) {
-        const p = clean(one);
-        if (p && looksLikePath(p) && !files.includes(p)) files.push(p);
-      }
-    }
-  }
-  return files;
-}
-
-/**
- * Evidence check: does the worker's report match what git shows? Claims are not trusted on their own.
- * Returns warnings plus the details for the summary.
- */
-export function checkEvidence(report, changed, status, preDirty = new Set(), roots = []) {
-  const claimed = claimedFiles(report, { roots, known: changed });
-  const actual = new Set(changed);
-  const warnings = [];
-  if (/RESULT:\s*DONE/i.test(status || '') && !changed.length) warnings.push('the worker reports DONE but changed no files');
-  changed = changed.filter((f) => !preDirty.has(f)); // their changes may be from before the run
-  if (!claimed) return { claimed: null, notChanged: [], notReported: [], warnings };
-  const claimedSet = new Set(claimed);
-  const notChanged = claimed.filter((f) => !actual.has(f) && !changed.some((c) => c.startsWith(f.replace(/\/?$/, '/'))));
-  const notReported = changed.filter((f) => !claimedSet.has(f) && ![...claimedSet].some((c) => f.startsWith(c.replace(/\/?$/, '/'))));
-  if (notChanged.length) warnings.push(`the worker says it changed ${notChanged.join(', ')}, but git shows no change there`);
-  if (notReported.length) warnings.push(`changed but not listed in the worker's report: ${notReported.join(', ')}`);
-  return { claimed, notChanged, notReported, warnings };
-}
-
-export function formatSummary(s) {
-  const L = [];
-  L.push('', '==================== CONDUCTOR RESULT ====================');
-  L.push(`role:      ${s.role}${s.task ? `   task: ${s.task}` : ''}${s.plan ? `   plan: ${s.plan}` : ''}`);
-  if (s.worktree) L.push(`worktree:  ${s.worktree.branch}${s.worktree.removed ? ' (removed: nothing to keep)' : `  ${s.worktree.dir}`}`);
-  if (s.route) L.push(`route:     ${s.route}`);
-  if (s.selector) L.push(`selector:  ${s.selector}`);
-  if (s.skills?.length) L.push(`skills:    ${s.skills.join(', ')}`);
-  if (s.lessons?.length) L.push(`lessons:   ${s.lessons.length} from earlier work here were in the prompt (conductor lessons)`);
-  if (s.lessonsResolved) L.push(`lessons:   ${s.winner} passed this kind of work here, so ${s.lessonsResolved} earlier failure(s) of its no longer move it back`);
-  for (const l of s.promotable || []) L.push(`promote?:  seen ${l.count}×: "${String(l.text).slice(0, 100)}" → make it a rule: conductor lessons promote ${l.id}`);
-  if (s.lessonsDemoted?.length) L.push(`order:     moved to the back: ${s.lessonsDemoted.join(', ')} (failed this kind of work here before)`);
-  const multi = (n) => s.attempts.filter((a) => a.provider === n).length > 1; // show models only where a provider switched model
-  L.push(`attempts:  ${s.attempts.map((a) => `${a.provider}${a.model && multi(a.provider) ? `[${a.model}]` : ''}(${a.reason}${a.stashed ? ', stashed' : ''})`).join(' → ') || '(none)'}`);
-  if (!s.winner) {
-    L.push('worker:    NONE. Every provider failed or was skipped (exit 3).');
-    if (s.worktree?.continued) L.push(`kept:      the earlier work is still on ${s.worktree.branch}; failed attempts were stashed there`);
-    for (const f of fixLines(s.attempts)) L.push(`fix:       ${f}`);
-    L.push('next:      orchestrator does this task itself, or fixes a provider above and runs it again');
-    return L.join('\n');
-  }
-  L.push(`worker:    ${s.winner} (${s.model})`);
-  const used = s.attempts.filter((a) => a.tokens);
-  if (used.length) {
-    const tin = used.reduce((t, a) => t + (a.tokens.input || 0), 0), tout = used.reduce((t, a) => t + (a.tokens.output || 0), 0);
-    const known = used.filter((a) => a.cost != null), cost = known.reduce((t, a) => t + a.cost, 0);
-    L.push(`usage:     ${tin} tokens in / ${tout} out${known.length ? ` · $${cost.toFixed(4)}` : ' · cost unknown (no price set)'}`);
-  }
-  L.push(`report:    ${s.report}`);
-  L.push(`status:    ${s.status || '(no RESULT/VERDICT line, so read the report)'}`);
-  const out = outcome(s);
-  const acc = s.acceptance;
-  const accShort = acc && !acc.waived && (!acc.answered || acc.met < acc.total);
-  const chFail = s.checks?.failed?.length;
-  const rp = s.repro;
-  if (out === 'partial' && !chFail && rp?.ok === false) L.push(`outcome:   PARTIAL. ${rp.cmd ? `The bug still reproduces: \`${rp.cmd}\` still fails` : rp.why === 'no regression test added' ? 'The fix has no regression test' : 'The new test also passes on the original code, so it doesn\'t prove the fix'}`);
-  else if (out === 'partial' && chFail) L.push(`outcome:   PARTIAL. ${chFail} acceptance check(s) fail when conductor runs them: see "checks" below`);
-  else if (out === 'partial') L.push(accShort && !/RESULT:\s*\**\s*(PARTIAL|BLOCKED|FAILED|FAIL)\b/i.test(s.status || '')
-    ? `outcome:   PARTIAL. ${acc.answered ? `Only ${acc.met} of ${acc.total} acceptance criteria are met with evidence` : 'The worker reports DONE but did not answer the acceptance criteria'}: check them, then finish or retry with --note`
-    : 'outcome:   PARTIAL. The worker says it did only part of the task: read the report, then finish it or retry the rest');
-  if (acc) L.push(`acceptance: ${acc.met}/${acc.total} met with evidence${acc.waived ? ' (not required)' : ''}${acc.unmet.length ? `; not met: ${acc.unmet.slice(0, 4).join(' | ')}` : ''}`);
-  if (out === 'verify-failed' && s.verify?.suspectTests?.length) L.push(`outcome:   NOT DONE, but the code looks right: it passes every earlier test and every acceptance check. Only the worker's own tests fail (${s.verify.suspectTests.join(', ')}): check those tests first`);
-  else if (out === 'verify-failed') L.push(s.verify?.baseFailed
-    ? `outcome:   NOT PROVEN. Verify already failed before the worker started, so it can't prove this work. ${s.verify.newFailures?.length ? `${s.verify.newFailures.length} failure line(s) are new: check them first` : 'No new failure lines: the worker probably added no new failures'}`
-    : 'outcome:   NOT DONE. The worker finished but verify fails: fix it, or retry with --note "<what failed>"');
-  if (out === 'out-of-scope') L.push(`outcome:   OUT OF SCOPE. The worker changed files the task doesn't list: ${s.scope.outside.join(', ')}. Check them in the diff: if they're needed, accept the work (and list them next time); if not, revert them or retry with --note`);
-  if (out === 'unverified') L.push(s.verify?.chosen
-    ? 'outcome:   UNVERIFIED. Verify was skipped, so nothing proves this works: check it yourself before committing'
-    : 'outcome:   UNVERIFIED (exit 4). No verify command, so nothing proves this works. Set one: conductor init --verify "<cmd>" (or the Verify line in AGENTS.md), then run conductor verify');
-  if (s.applied.length) L.push(`applied:   ${s.applied.join(', ')}`);
-  if (s.rejected.length) L.push(`rejected:  ${s.rejected.join(', ')}`);
-  if (s.mode === 'write') L.push(`changed:   ${s.changed.join(', ') || '(nothing)'}`);
-  if (s.base) L.push(`base:      verify ${s.base.status} on the starting commit ${s.base.head}${s.base.cached ? ' (cached)' : ''}${s.base.status === 'FAIL' ? `, log: ${s.base.log}` : ''}`);
-  if (s.scope?.outside?.length) L.push(`scope:     outside the task's files: ${s.scope.outside.join(', ')}${s.scope.allowed ? ' (allowed)' : ''}`);
-  if (s.verify?.newFailures?.length) L.push(`new fails: ${s.verify.newFailures.slice(0, 5).join(' | ')}`);
-  if (s.race) L.push(`race:      ${s.race.winner ? `${s.race.winner} passed every check first (${s.race.seconds}s)` : 'no attempt passed every check, so the best one was kept'}${s.race.stopped.length ? `; stopped: ${s.race.stopped.join(', ')}` : ''}`);
-  if (s.samples?.length) L.push(`samples:   ${s.samples.length} attempts, best kept: ${s.samples.map((x) => `${x.provider} ${x.outcome}${x.checks ? ` checks ${x.checks}` : ''}${x.lines ? ` ${x.lines} lines` : ''}${x.chosen ? ' ← chosen' : ''}`).join(' · ')}`);
-  if (s.appliedFrom) L.push(`landed:    the chosen attempt's changes are in your working tree (from ${s.appliedFrom}, now removed)`);
-  if (s.escalated?.length) L.push(`handed on: ${s.escalated.map((e) => `${e.from}'s work failed ${[e.verify === 'FAIL' && 'verify', e.checksFailed && 'acceptance checks'].filter(Boolean).join(' and ')}`).join(', then ')} → ${s.winner} took it over`);
-  if (s.verify) L.push(`verify:    ${s.verify.status}${s.verify.scope === 'task' ? ' [task verify]' : ''}${s.verify.cmd ? ` (${s.verify.cmd})` : ''}${s.verify.status === 'FAIL' ? `, log: ${s.verify.log}` : ''}${s.verify.note ? `, ${s.verify.note}` : ''}`);
-  if (rp) L.push(`repro:     ${rp.cmd ? `\`${rp.cmd}\` ${rp.before || '?'} before${rp.after ? `, ${rp.after} after` : ''}` : rp.tests ? `regression test ${rp.tests.join(', ')}: ${rp.proof === 'proved' ? 'fails on the original code (proves the bug)' : rp.proof === 'not-proved' ? 'also passes on the original code (proves nothing)' : `couldn't check: ${rp.why}`}` : rp.why}${rp.waived ? ' (not required)' : ''}`);
-  if (s.checks) {
-    L.push(`checks:    ${s.checks.passed}/${s.checks.total} acceptance checks pass when run${s.checks.skipped?.length ? ` (${s.checks.skipped.length} skipped: ${s.checks.skipped.map((x) => x.why).join('; ')})` : ''}`);
-    for (const f of s.checks.failed.slice(0, 5)) L.push(`           ✗ ${f.expr} → ${f.got} (expected ${f.kind === 'returns' ? f.expected : `${f.kind === 'rejects' ? 'rejection with' : ''} ${f.expected}`.trim()})`);
-    if (s.verify?.status === 'FAIL' && !s.checks.failed.length && !s.verify.suspectTests) L.push('hint:      every acceptance check passes, so the failing test may itself be wrong');
-  }
-  if (s.verify?.status === 'FAIL' && s.verify.brief) L.push(`why:       ${s.verify.brief.split('\n').slice(1, -1).join('\n           ')}`);
-  const rv = s.review;
-  if (rv?.skipped) L.push(`review:    not done (${rv.skipped}); it was due: ${rv.reasons.join('; ')}`);
-  else if (rv) {
-    L.push(`review:    ${rv.reviewer} (${rv.family}, the worker is ${rv.workerFamily}) because ${rv.reasons.join('; ')}: ${rv.verdict || 'no verdict'}, ${rv.findings.length} finding(s) on changed lines${rv.dropped ? ` (${rv.dropped} dropped: not on a changed line)` : ''}. Advisory: triage before committing; report ${rv.report}`);
-    for (const f of rv.findings.slice(0, 6)) L.push(`           ${f.severity === 'high' || f.severity === 'critical' ? '!' : '·'} [${f.severity}${f.confidence === 'low' ? ', low confidence' : ''}] ${f.file}:${f.line} ${f.text.split('\n')[0].replace(/^`?[\w./@-]+:\d+`?:?\s*/, '').slice(0, 140)}`);
-  }
-  if (s.saved) L.push(`saved:     ${s.saved}`);
-  if (s.tokensSaved?.tokens) L.push(`context:   ~${s.tokensSaved.tokens.toLocaleString()} tokens kept out (estimate: ${Object.entries(s.tokensSaved).filter(([k]) => k !== 'tokens').map(([k, n]) => `${{ report: 'report trimmed', 'review-diff': 'compact review diff', 'free-model': 'free model chosen' }[k] || k} ~${n.toLocaleString()}`).join(', ')})`);
-  if (s.worktree?.commit) L.push(`commit:    ${s.worktree.commit} on ${s.worktree.branch} (from ${s.worktree.base})`);
-  for (const w of s.warnings) L.push(`WARNING:   ${w}`);
-  for (const f of fixLines(s.attempts, { won: true })) L.push(`fix:       ${f}`);
-  if (s.worktree) {
-    L.push(s.worktree.commit
-      ? `next:      orchestrator reviews \`conductor diff ${s.worktree.branch}\`, then \`git merge --no-ff ${s.worktree.branch}\` and \`conductor worktree rm ${s.worktree.id}\` (or rm --force to reject)`
-      : s.worktree.continued
-        ? `next:      nothing new this time; the earlier work is still on ${s.worktree.branch}. Retry with another note or provider, or merge it as it is`
-        : `next:      the worker changed nothing; \`conductor worktree rm ${s.worktree.id}\``);
-    return L.join('\n');
-  }
-  L.push(s.mode === 'write'
-    ? 'next:      orchestrator checks `conductor diff`, then commits, or retries with --provider <other> --note "<what was wrong>"'
-    : 'next:      orchestrator reads the report and triages it. Workers can be wrong.');
-  return L.join('\n');
 }

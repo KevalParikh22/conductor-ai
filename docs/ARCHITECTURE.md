@@ -2,7 +2,12 @@
 
 ```
 bin/conductor.js        CLI: arg parsing, commands
-src/core.js             dispatch(): role → chain → attempts → verify → summary
+src/core.js             dispatch(): role → chain → attempts → checks → summary (times each step: timings)
+src/plan.js             plan text: tasks, sections, open questions, file lists, durations
+src/outcome.js          a run's outcome: done only with proof
+src/files.js            worker replies: file blocks, protected paths, report trimming, evidence check
+src/summary.js          the run summary the controller reads
+src/cooldowns.js        rate-limit cooldowns and per-provider parallel slots
 src/providers.js        runCli / runOpenAI / runAnthropic, error classification
 src/presets.js          CLI presets, default providers, roles, controllers, settings
 src/config.js           layered config (defaults ← global ← project), secrets, readiness

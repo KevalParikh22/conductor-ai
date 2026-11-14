@@ -63,6 +63,11 @@ export function runGates(s) {
   const rv = s.review;
   if (rv) G.push({ id: 'review', label: 'Independent review (advisory)', status: rv.skipped ? 'skipped' : 'pass', required: false,
     evidence: rv.skipped ? `not done (${rv.skipped})` : `${rv.reviewer}: ${rv.verdict || 'no verdict'}, ${rv.findings?.length || 0} finding(s)`, log: rv.report || null });
+  // V12: how long each check took (summary.timings), shown next to its evidence
+  const KEY = { guard: 'guard', verify: 'verify', base: 'base', checks: 'checks', repro: 'repro', review: 'review' };
+  for (const g of G) if (KEY[g.id] && s.timings?.[KEY[g.id]] != null) g.seconds = s.timings[KEY[g.id]];
+  const w = G.find((g) => g.id === 'worker');
+  if (w) w.seconds = Math.round((s.attempts || []).reduce((t, a) => t + (a.seconds || 0), 0) * 10) / 10;
   return G;
 }
 
@@ -74,7 +79,7 @@ const MARK = { pass: '✓', fail: '✗', missing: '✗', waived: '~', off: '~', 
 /** Text checklist for the CLI and MCP. */
 export function formatGates(gates) {
   const L = ['checks:'];
-  for (const g of gates) L.push(`  ${MARK[g.status] || '?'} ${g.label}${g.required ? '' : ' (info)'}: ${g.status}. ${g.evidence || ''}${g.log ? `  [log: ${g.log}]` : ''}`.trimEnd());
+  for (const g of gates) L.push(`  ${MARK[g.status] || '?'} ${g.label}${g.required ? '' : ' (info)'}: ${g.status}. ${g.evidence || ''}${g.seconds != null ? ` (${g.seconds}s)` : ''}${g.log ? `  [log: ${g.log}]` : ''}`.trimEnd());
   L.push(`  → ${gatesPass(gates) ? 'every required check passed' : 'NOT validated: a required check failed or is missing'}`);
   return L.join('\n');
 }
