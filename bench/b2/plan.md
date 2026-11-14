@@ -14,8 +14,8 @@
 
 ### Cart (`src/cart.js`, T1)
 - `createCart(catalog = PRODUCTS)` returns a cart object:
-  - `add(id, qty = 1)`: `qty` must be an integer ≥ 1 (else `RangeError`). Unknown id → `Error` with message containing `unknown product`. Adding an id already in the cart increases its quantity. If the cart's quantity for the product would go over its `stock` → `RangeError` with message containing `not enough stock`, and the cart is unchanged. Returns the cart.
-  - `setQty(id, qty)`: `qty` integer ≥ 0 (else `RangeError`); `0` removes the line. An id not in the cart → `Error` containing `not in cart`. Same stock rule as `add`. Returns the cart.
+  - `add(id, qty = 1)`: `qty` must be an integer ≥ 1; anything else, including a value that isn't a number at all (such as the string `'2'`), throws `RangeError`. Unknown id → `Error` with message containing `unknown product`. Adding an id already in the cart increases its quantity. If the cart's quantity for the product would go over its `stock` → `RangeError` with message containing `not enough stock`, and the cart is unchanged. Returns the cart.
+  - `setQty(id, qty)`: `qty` integer ≥ 0 (anything else, a non-number included, throws `RangeError`); `0` removes the line. An id not in the cart → `Error` containing `not in cart`. Same stock rule as `add`. Returns the cart.
   - `remove(id)` → `true` if a line was removed, else `false`.
   - `lines()` → a new array of `{ id, name, category, unitCents, qty, lineCents }` in the order products were first added (`unitCents` = the product's `priceCents`, `lineCents = unitCents * qty`).
   - `subtotalCents()` → sum of `lineCents`; `count()` → sum of `qty`. An empty cart: `0` and `0`.
