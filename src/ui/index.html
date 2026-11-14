@@ -307,7 +307,7 @@ function runPage() {
     <div class="card"><h2>Checks</h2><p class="note">A run counts as done only when every required check passes (or was waived on purpose). Info rows don't decide it.</p>
       <table><tr><th>Check</th><th>Result</th><th>Evidence</th></tr>${d.gates.map((g) => `<tr><td>${esc(g.label)}${g.required ? '' : ' <span class="note">(info)</span>'}</td>
         <td><span class="pill ${GATE_PILL[g.status] ?? ''}">${esc(g.status)}</span></td>
-        <td>${esc(g.evidence || '')}${g.log && d.logs[g.id] ? `<details><summary class="note">log: <span class="mono">${esc(g.log)}</span></summary><pre class="cmd">${esc(d.logs[g.id])}</pre></details>` : ''}</td></tr>`).join('')}</table></div>
+        <td>${esc(g.evidence || '')}${g.seconds != null ? ` <span class="note">(${g.seconds}s)</span>` : ''}${g.log && d.logs[g.id] ? `<details><summary class="note">log: <span class="mono">${esc(g.log)}</span></summary><pre class="cmd">${esc(d.logs[g.id])}</pre></details>` : ''}</td></tr>`).join('')}</table></div>
     <div class="card"><h2>Attempts</h2><table><tr><th>Worker</th><th>Result</th><th>Time</th><th>Tokens in / out</th><th>What to do</th></tr>${d.attempts.map((a) => `<tr>
       <td><b>${esc(a.provider)}</b>${a.model ? `<div class="note mono">${esc(a.model)}</div>` : ''}</td>
       <td>${a.ok ? '<span class="pill ok">ok</span>' : `<span class="pill ${a.skipped ? '' : 'bad'}">${esc(a.skipped ? 'skipped' : 'failed')}</span><div class="note">${esc(a.reason)}</div>`}</td>

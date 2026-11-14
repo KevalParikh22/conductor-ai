@@ -3,7 +3,7 @@
 > Node.js CLI and MCP server (zero dependencies, Node 20+). A controller agent (Claude Code by default; Antigravity CLI, Codex CLI or OpenCode also work) plans and reviews, while worker LLMs do the coding, tests and docs. Each role (build, fix, test, docs, review, ask) has an ordered fallback chain of providers; rate-limited providers cool down and the next one runs. Every CLI worker runs under per-run permission rules, write tasks are verified with the project's tests, and independent tasks can run in parallel git worktrees.
 
 Key facts for agents working in this repo:
-- Entry point: `bin/conductor.js` (CLI). Core dispatch loop: `src/core.js` (`dispatch`, `formatSummary`, evidence and open-question checks).
+- Entry point: `bin/conductor.js` (CLI). Core dispatch loop: `src/core.js` (`dispatch`); the summary text is `src/summary.js`, outcomes `src/outcome.js`, plan parsing `src/plan.js`, reply files and evidence `src/files.js`, cooldowns `src/cooldowns.js` (all re-exported from core.js).
 - Providers and permissions: `src/presets.js` (CLI presets with per-mode args, `sessionSettings`, `modeEnv`, `passEnv`), `src/providers.js` (runs CLIs and OpenAI-compatible / Anthropic APIs).
 - Parallel runs: `src/worktree.js`, `src/batch.js`. Usage and budgets: `src/usage.js`. Run history: `src/runs.js`. Settings UI: `src/ui/`.
 - Tests: `npm test` (node:test, fake CLI binaries in `test/helpers.js`; no network).
