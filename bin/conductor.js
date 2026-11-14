@@ -33,7 +33,7 @@ import { writeSecrets, writeScope } from '../src/config.js';
 import { ROUTE_TEMPLATES, resolveTemplate, addTemplates, starterIds, describeRoute, routeErrors } from '../src/routing.js';
 import { compactDiff } from '../src/diffview.js';
 
-const HELP = `conductor ${VERSION}: Claude (or any controller) plans and reviews; cheaper models do the work.
+const HELP = `conductor ${VERSION}: your coding agent (Claude Code, Codex, Antigravity, OpenCode) plans and reviews; cheaper models do the work.
 
 Start
   conductor setup                 guided setup: finds your agents and keys, adds a free provider
@@ -53,7 +53,7 @@ Work
 
 All commands and options: conductor help all`;
 
-const HELP_ALL = `conductor-ai ${VERSION}: one controller (Claude by default), many worker LLMs.
+const HELP_ALL = `conductor-ai ${VERSION}: one controller (Claude Code, Codex, Antigravity or OpenCode), many worker LLMs.
 
 Setup
   conductor setup [--yes]              guided first-time setup: finds your agents and keys, adds a free provider, tests

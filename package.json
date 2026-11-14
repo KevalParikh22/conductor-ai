@@ -1,7 +1,7 @@
 {
   "name": "conductor-ai",
   "version": "0.10.0",
-  "description": "Claude plans and reviews; free and cheap models write the code. Multi-LLM orchestrator for Claude Code, Codex, Antigravity, OpenCode, Ollama and 45+ APIs, with quota-aware fallback, task routing, per-agent sandboxes and parallel worktrees.",
+  "description": "Your coding agent plans and reviews; free and cheap models write the code. Multi-LLM orchestrator with Claude Code, Codex CLI, Antigravity CLI or OpenCode as the controller and agents, 45+ APIs and local models (Ollama) as workers: quota-aware fallback, task routing, per-agent sandboxes, checks on every task and parallel worktrees.",
   "keywords": [
     "claude",
     "claude-code",
@@ -26,7 +26,8 @@
     "llm-router",
     "token-optimization",
     "developer-tools",
-    "cli"
+    "cli",
+    "codex-cli"
   ],
   "homepage": "https://github.com/KevalParikh22/conductor-ai#readme",
   "bugs": {
@@ -55,7 +56,8 @@
     ".mcp.json",
     "mcp_config.json",
     "assets",
-    "evals"
+    "evals",
+    "!evals/*/solution"
   ],
   "engines": {
     "node": ">=20"
