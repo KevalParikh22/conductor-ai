@@ -122,3 +122,22 @@ export function formatQualityStats(q) {
   L.push('Why the rest failed: conductor stats --failures');
   return L.join('\n');
 }
+
+/**
+ * The trend for the Overview: the first-try accept rate per week (Monday to Sunday) for the last `weeks` weeks, oldest
+ * first. → [{ week: 'YYYY-MM-DD' (its Monday), writeTasks, firstTry, rate (null when there were none) }]
+ */
+export function qualityTrend({ root, weeks = 6, now = Date.now() } = {}) {
+  const monday = (t) => { const d = new Date(t); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d.getTime(); };
+  const start = monday(now) - (weeks - 1) * 7 * 86_400_000;
+  const out = Array.from({ length: weeks }, (_, i) => ({ at: start + i * 7 * 86_400_000, writeTasks: 0, firstTry: 0 }));
+  for (const r of listRuns(root, { limit: 2000 })) {
+    if (r.state === 'running' || !r.startedAt) continue;
+    if (!(r.mode === 'write' || ['build', 'fix', 'test', 'docs'].includes(r.role))) continue;
+    const i = Math.floor((monday(Date.parse(r.startedAt)) - start) / (7 * 86_400_000));
+    if (i < 0 || i >= weeks) continue;
+    out[i].writeTasks++;
+    if (r.state === 'done' && r.attempts.length === 1 && !r.handedOn && !r.continued) out[i].firstTry++;
+  }
+  return out.map((w) => ({ week: (() => { const d = new Date(w.at); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })(), writeTasks: w.writeTasks, firstTry: w.firstTry, rate: w.writeTasks ? Math.round((w.firstTry / w.writeTasks) * 100) : null }));
+}

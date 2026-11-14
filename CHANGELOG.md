@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **UI: Overview, Roles and Settings.** Overview now shows why work failed (this project's runs not done, by cause, and failed worker attempts everywhere) and the first-try accept rate by week for the last 6 weeks, against the 70% alpha gate. Roles shows one role at a time in tabs, each tab with its first provider. Settings are in minutes and KB (the config keeps seconds and bytes).
 - **Live progress in the terminal.** `conductor run` keeps its event lines and adds one status line at the bottom: a spinner, the current step (worker, verify, checks, repro, review) and the time spent against the worker's limit (`codex-cli is working · 3:12 of 20:00`). `conductor batch` shows a table with one row per task (state, worker, time) redrawn in place, then the summary. Piped output, `--json` and MCP keep the plain lines exactly as before.
 - **Idle limit per agent.** Codex is stopped after 10 minutes without output (its `--json` mode prints an event for every step, so silence that long means it hangs) and the next provider runs; agents that print only at the end (agy) keep no idle limit. A provider's `idleTimeoutMin` (`0` = never) and the global `idleTimeoutSec` still win.
 - **UX checklist run (15 of 18 checks; the other 3 need a clean Claude Code, VS Code and Copilot).** Fixed what it found:
