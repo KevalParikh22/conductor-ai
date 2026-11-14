@@ -6,7 +6,7 @@
   <img alt="conductor-ai" src="docs/assets/logo-light.svg" width="460">
 </picture>
 
-### Claude plans and reviews. Free and cheap models write the code.
+### Your coding agent plans and reviews. Free and cheap models write the code.
 
 [![CI](https://github.com/KevalParikh22/conductor-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/KevalParikh22/conductor-ai/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/github/package-json/v/KevalParikh22/conductor-ai?color=4f46e5&label=version)](CHANGELOG.md)
@@ -23,9 +23,9 @@
 </div>
 
 > [!NOTE]
-> **Early and moving fast (v0.10), solo-maintained.** 119 tests run in CI on Linux and macOS with Node 20, 22 and 24. The agents it drives change their CLI flags often; each one is a small preset you can override in config.
+> **Early and moving fast (v0.10), solo-maintained.** 236 tests run in CI on Linux and macOS with Node 20, 22 and 24. The agents it drives change their CLI flags often; each one is a small preset you can override in config.
 
-A Claude subscription runs out fast when Claude types every line. Claude is best at judgement: planning, design and catching bugs. **conductor-ai** keeps Claude (or any agent you choose) as the controller and quality gate, and hands the typing to Antigravity, Codex, OpenCode, free Kilo / OpenRouter / Groq / Gemini models, Kimi or local models. When one hits its limit, the next one takes over.
+Your best agent's quota runs out fast when it types every line, and its strength is judgement: planning, design and catching bugs. **conductor-ai** keeps the agent you work in (Claude Code, Codex CLI, Antigravity CLI or OpenCode) as the controller and quality gate, and hands the typing to Antigravity, Codex, OpenCode, free Kilo / OpenRouter / Groq / Gemini models, Kimi or local models. When one hits its limit, the next one takes over.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/KevalParikh22/conductor-ai/main/scripts/install.sh | bash
@@ -33,10 +33,10 @@ curl -fsSL https://raw.githubusercontent.com/KevalParikh22/conductor-ai/main/scr
 
 ### 🎯 Why conductor-ai
 
-| | Claude does everything | With conductor-ai |
+| | Your agent does everything | With conductor-ai |
 |---|---|---|
-| **Who types the code** | Claude, line by line | Antigravity, Codex, OpenCode, free APIs or a local model |
-| **What Claude spends tokens on** | Everything | Planning, review and the hard parts |
+| **Who types the code** | Your best model, line by line | Antigravity, Codex, OpenCode, free APIs or a local model |
+| **What your controller spends tokens on** | Everything | Planning, review and the hard parts |
 | **When a quota runs out** | Work stops | The next provider takes over |
 | **Checking the work** | You hope it's right | Your tests and lint run after every task; git is compared with the worker's report |
 | **Who takes which task** | One model | Your rules: security work to your best agent, docs to a free model |
@@ -116,19 +116,15 @@ cd my-app && conductor init     # rules, commands, MCP entry
 conductor add groq              # add any of 45 chat APIs: key, model, test, roles
 ```
 
-Using Claude Code or Antigravity? Install the plugin for the skills and MCP tools:
+Then set it up for the agent you work in (`conductor init --controller <name>` writes its rules, skills and MCP entry; [what each one gets](docs/CONTROLLERS.md)):
 
-```text
-/plugin install conductor-ai --marketplace KevalParikh22/conductor-ai     # Claude Code (or: /plugin marketplace add KevalParikh22/conductor-ai, then /plugin install conductor-ai@conductor-ai)
-agy plugin install "$(npm root -g)/conductor-ai"                          # Antigravity
-```
-
-Then, in Claude Code inside the project:
-
-```text
-/conduct-plan add password reset by email
-/conduct-run docs/plan/password-reset.md
-```
+| Your controller | Set up | Then, in it |
+|---|---|---|
+| **Claude Code** | `conductor init` (or the plugin: `/plugin install conductor-ai --marketplace KevalParikh22/conductor-ai`) | `/conduct-plan add password reset by email`, then `/conduct-run docs/plan/password-reset.md` |
+| **Codex CLI** | `conductor init --controller codex-cli`, then once: `codex mcp add conductor -- conductor mcp` | "Use the conduct-plan skill to plan password reset by email", then "use conduct-run on docs/plan/password-reset.md" |
+| **Antigravity CLI** | `conductor init --controller antigravity` (or `agy plugin install "$(npm root -g)/conductor-ai"`), then once: `agy mcp add conductor conductor mcp` | the same `conduct-plan` and `conduct-run` skills |
+| **OpenCode** | `conductor init --controller opencode` (the MCP entry goes in `opencode.json`) | the same `conduct-plan` and `conduct-run` skills |
+| **Another agent** | `conductor controller add <name> --like <one above>` | see [Controllers](docs/CONTROLLERS.md) |
 
 <details>
 <summary><b>Install the worker agents</b> (at least one)</summary>
@@ -256,7 +252,7 @@ Exit codes: `0` ok · `2` usage or unsafe repo state · `3` every provider faile
 
 ### ⚖️ Honest limits
 
-- Workers are weaker than Claude at judgement. That's why plans are detailed, tasks stay small, and every diff passes verify and the controller's review.
+- Workers are weaker than your controller's model at judgement. That's why plans are detailed, tasks stay small, and every diff passes verify and the controller's review.
 - Chat-only API models can't run your tests; prefer CLI agents for `build`, APIs for `docs`, `test` and `ask`.
 - OpenCode's shell and agents without a sandbox (Kimi, custom CLIs) are only as contained as their own permission systems allow.
 - Cost is only known for API providers with a `price` set; CLI agents on subscriptions are counted in runs and minutes.

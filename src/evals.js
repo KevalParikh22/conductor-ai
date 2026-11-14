@@ -114,6 +114,8 @@ export async function checkEvals({ ids, dir } = {}) {
       for (const r of checkPlan(plan, { verifyCmd: 'npm test' })) for (const p of r.problems) problems.push(`plan ${r.id}: ${p}`);
       prepareEval(task, work);
       if ((await scoreEval(task, work)).pass) problems.push('already passes on the starting project: the task tests nothing');
+      // the reference solutions ship only in the git repository, not the npm package (V10): the check needs them
+      if (!fs.existsSync(path.join(task.dir, 'solution'))) throw new Error('no reference solution in this install: run conductor eval check from a clone of the repository');
       fs.cpSync(path.join(task.dir, 'solution'), work, { recursive: true });
       const own = await nodeTest(work);
       if (own.code !== 0) problems.push(`the reference solution fails the project's own tests:\n${tail(own)}`);
