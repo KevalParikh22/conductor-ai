@@ -9,7 +9,7 @@ import { loadConfig, findProjectRoot, readScope, writeScope, validateConfig, GLO
 import { DEFAULT_CONFIG, CLI_PRESETS, ROLES, CONTROLLERS, controllerWorker } from '../presets.js';
 import { statusData } from '../status.js';
 import { listRuns, runDetail } from '../runs.js';
-import { qualityStats, failureStats } from '../stats.js';
+import { qualityStats, failureStats, qualityTrend } from '../stats.js';
 import { readLessons, addLesson, removeLesson, promoteLesson, promotable, GUIDANCE } from '../lessons.js';
 import { readRules, rulesDir, allControllers } from '../controllers.js';
 import { readVerifyState, switchGuards, guardsOn, GUARD_SUPPORTED } from '../guard.js';
@@ -140,7 +140,7 @@ export function createUiServer({ cwd = process.cwd(), token = crypto.randomBytes
           finally { fs.rmSync(dir, { recursive: true, force: true }); }
         }
         // V3: the same actions as the CLI and MCP (src/surfaces.js)
-        case 'GET /api/stats': return send(200, { quality: qualityStats({ root }), failures: failureStats({ root }) });
+        case 'GET /api/stats': return send(200, { quality: qualityStats({ root }), failures: failureStats({ root }), trend: qualityTrend({ root }) });
         case 'GET /api/lessons': return send(200, lessonsState(root));
         case 'POST /api/lessons/add': {
           const text = String(body.text || '').trim();

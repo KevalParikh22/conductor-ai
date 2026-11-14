@@ -100,7 +100,13 @@ svg.i { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none;
 .prow-body { padding: 0 14px 14px 60px; } .prow.open { background: var(--panel-2); }
 .chev { transition: transform .15s; } .prow.open .chev { transform: rotate(180deg); }
 .kind { color: var(--muted); display: inline-flex; } .kind svg.i { width: 14px; height: 14px; }
-.roles { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; } .roles .card { margin: 0; }
+.roles { display: grid; gap: 14px; } .roles .card { margin: 0; max-width: 760px; }
+.trend { display: flex; gap: 10px; align-items: flex-end; } .tw { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 40px; font-size: 12.5px; }
+.tbar { height: 70px; width: 22px; background: var(--panel-2); border-radius: 4px; display: flex; align-items: flex-end; overflow: hidden; }
+.tbar span { display: block; width: 100%; background: var(--muted); } .tbar span.ok { background: var(--ok); } .tbar span.low { background: var(--warn); }
+.rtabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.rtab { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; border: 1px solid var(--line); background: var(--panel); color: var(--text); border-radius: 8px; padding: 6px 12px; cursor: pointer; font: inherit; }
+.rtab .note { font-size: 11.5px; } .rtab.on { border-color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
 .status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); } .status.bad { color: var(--bad); }
 details.more > summary { cursor: pointer; color: var(--muted); font-size: 13px; list-style: none; display: flex; align-items: center; gap: 6px; } details.more > summary::-webkit-details-marker { display: none; }
 details.more[open] > summary { margin-bottom: 10px; }
@@ -209,6 +215,8 @@ const icon = (n, t = '') => `<svg class="i" viewBox="0 0 24 24" aria-hidden="tru
 const TABS = [['overview', 'Overview'], ['runs', 'Runs'], ['roles', 'Roles'], ['providers', 'Providers'], ['skills', 'Skills'], ['lessons', 'Lessons & rules'], ['keys', 'API keys'], ['settings', 'Settings'], ['setup', 'Setup']];
 let S = null, W = null, tab = pageFromHash(), dirty = false, freeModels = null, runsData = null, gOpen = null, gFilter = { q: '', cat: 'all' };
 let rPreview = null; // routing preview result
+let rTab = null; // the role shown on the Roles page (tabs)
+const roleTab = () => (rTab && W.roles[rTab] ? rTab : Object.keys(W.roles)[0]);
 let runOpen = new URLSearchParams(location.hash.slice(1)).get('run'), runDet = null; // the run page (#p=runs&run=<id>)
 let ctrlPick = null; // controller picked in Settings but not applied yet (a project action, not part of Save)
 let rtLib = null, rtLibKey = '', rtLibOpen = null; // rule library, resolved against the current (unsaved) providers
@@ -293,7 +301,17 @@ function overviewExtras() {
   const q = statsData.quality, g = guardData;
   const quality = q ? `<div class="card stat"><div class="l" title="Done with one worker, no hand-off or retry (conductor stats)">Accepted first try (${q.days} days)</div><div class="n">${q.writeTasks ? `${q.firstTryRate}%` : '–'}</div><div class="note">${q.writeTasks ? `${q.firstTry} of ${q.writeTasks} write tasks · alpha gate: ${esc(q.gate)}` : 'no write tasks yet'}</div></div>` : '';
   const guard = g.controller ? `<div class="card stat"><div class="l" title="conductor guard">Commit guard</div><div class="n" style="font-size:16px">${!g.supported ? 'not available' : g.on ? 'on' : 'off'}</div><div class="note">${g.supported ? `blocks the controller's commit while the last verify failed · last verify: ${g.lastVerify ? esc(g.lastVerify.status) : 'none'}` : 'only Claude Code and Antigravity'}</div>${g.supported ? `<button class="btn small" id="guard-toggle" style="margin-top:6px">${g.on ? 'Turn off' : 'Turn on'}</button>` : ''}</div>` : '';
-  return quality || guard ? `<div class="grid">${quality}${guard}</div>` : '';
+  // failure causes (this project's runs, then worker attempts everywhere) and the weekly first-try trend
+  const f = statsData.failures || {};
+  const causes = (f.causes || []).slice(0, 4), kinds = (f.attempts || []).slice(0, 3);
+  const why = causes.length || kinds.length ? `<div class="card"><h2>Why work failed (${f.days} days)</h2>
+    ${causes.length ? `<table><tr><th>Runs not done</th><th>How many</th></tr>${causes.map((c) => `<tr><td>${esc(c.cause)}</td><td>${c.count}</td></tr>`).join('')}</table>` : '<p class="note">Every run in this project ended done.</p>'}
+    ${kinds.length ? `<p class="note" style="margin-top:8px">Failed worker attempts (all projects): ${kinds.map((k) => `${esc(k.kind)} <b>${k.count}</b>`).join(' · ')}. Details: <span class="mono">conductor stats --failures</span></p>` : ''}</div>` : '';
+  const tr = statsData.trend || [];
+  const trend = tr.some((w) => w.writeTasks) ? `<div class="card"><h2>Accepted first try, by week</h2><div class="trend">${tr.map((w) => `<div class="tw" title="${esc(`week of ${w.week}: ${w.writeTasks ? `${w.firstTry} of ${w.writeTasks} write tasks` : 'no write tasks'}`)}">
+      <div class="tbar"><span style="height:${w.rate ?? 0}%" class="${w.rate == null ? '' : w.rate >= 70 ? 'ok' : 'low'}"></span></div><b>${w.rate == null ? '–' : `${w.rate}%`}</b><span class="note">${esc(w.week.slice(5))}</span></div>`).join('')}</div>
+    <p class="note">The alpha gate is 70% or more over at least 10 write tasks. Hover a week for its numbers.</p></div>` : '';
+  return `${quality || guard ? `<div class="grid">${quality}${guard}</div>` : ''}${why}${trend}`;
 }
 const GATE_PILL = { pass: 'ok', fail: 'bad', missing: 'bad', waived: 'warn', off: 'warn', skipped: '', unknown: 'warn' };
 function runPage() {
@@ -506,7 +524,8 @@ const views = {
         <div class="row" style="margin-top:8px"><button class="btn small" id="pv-go">Preview</button>${rPreview ? `<span class="note">${esc({ plan: 'set by the plan', route: 'routing rule', selector: 'smart selector', role: "role's chain" }[rPreview.how] || rPreview.how)}${rPreview.note ? `: ${esc(rPreview.note)}` : ''}</span>` : ''}</div>
         ${rPreview ? `<div class="chainline" style="margin-top:8px">${rPreview.chain.map((c, i) => `${i ? '<span class="arrow">→</span>' : ''}<span class="pill" title="${esc(c.skip || 'ready')}"><span class="dot ${c.skip ? '' : 'ok'}"></span>${esc(c.name)}</span>`).join('')}</div>` : ''}
       </details></div>
-    <div class="roles">${Object.entries(W.roles).map(([r, chain]) => `<div class="card"><div class="row"><h2 style="margin:0">${esc(S.roles[r]?.label || r)}</h2>${S.roles[r]?.mode === 'read' ? '<span class="pill">read-only</span>' : '<span class="pill warn">edits files</span>'}</div>
+    <div class="rtabs" role="tablist">${Object.entries(W.roles).map(([r, chain]) => `<button class="rtab ${r === roleTab() ? 'on' : ''}" role="tab" aria-selected="${r === roleTab()}" data-rtab="${esc(r)}">${esc(S.roles[r]?.label || r)}<span class="note">${chain[0] ? esc(chain[0]) : 'empty'}${chain.length > 1 ? ` +${chain.length - 1}` : ''}</span></button>`).join('')}</div>
+    <div class="roles">${Object.entries(W.roles).filter(([r]) => r === roleTab()).map(([r, chain]) => `<div class="card"><div class="row"><h2 style="margin:0">${esc(S.roles[r]?.label || r)}</h2>${S.roles[r]?.mode === 'read' ? '<span class="pill">read-only</span>' : '<span class="pill warn">edits files</span>'}</div>
       <div class="note">${esc(S.roles[r]?.description || '')}</div>
       <div class="chain">${chain.map((n, i) => `<div class="link"><span class="idx">${i + 1}</span><span class="nm">${kindIcon(n)}<b>${esc(n)}</b>${st(n)}</span>
         <span class="row" style="gap:2px"><button class="btn icon ghost small" data-mv="${r}|${i}|-1" ${i === 0 ? 'disabled' : ''} aria-label="Move up">${icon('up')}</button><button class="btn icon ghost small" data-mv="${r}|${i}|1" ${i === chain.length - 1 ? 'disabled' : ''} aria-label="Move down">${icon('down')}</button><button class="btn icon ghost small" data-rm="${r}|${i}" aria-label="Remove">${icon('x')}</button></span></div>`).join('') || '<div class="note">No providers: the controller does this role itself.</div>'}</div>
@@ -560,7 +579,8 @@ const views = {
     <p class="note">Need a key? Each provider's guide links to where you get one: <b>Providers → Add provider</b> (filter <b>Free</b>), or <span class="mono">conductor providers --free</span>. kilo-free and OVHcloud work without one.</p>`;
   },
   settings() {
-    const st = W.settings; const num = (k, l, h) => `<div><label class="f">${l}</label><input type="number" data-set="${k}" value="${esc(st[k])}"><div class="note">${h}</div></div>`;
+    // shown in the unit people think in (minutes, KB); saved in the unit the config uses (seconds, bytes)
+    const st = W.settings; const num = (k, l, h, factor = 1) => `<div><label class="f">${l}</label><input type="number" min="0" step="any" data-set="${k}" data-factor="${factor}" value="${esc(st[k] == null ? '' : Math.round((st[k] / factor) * 100) / 100)}"><div class="note">${h}</div></div>`;
     const chk = (k, l) => `<label class="row"><input type="checkbox" data-setb="${k}" ${st[k] ? 'checked' : ''}> ${l}</label>`;
     return `<div class="head"><h1>Settings</h1><p class="sub">Defaults suit most projects.</p></div>
     <div class="card"><h2>Controller</h2><p class="note" style="margin-top:-4px">The agent that plans, delegates, reviews and commits. Applying writes its instruction file, <span class="mono">/conduct-*</span> commands and MCP entry into this project, keeping your own content.</p>
@@ -569,10 +589,10 @@ const views = {
       <div class="row" style="margin-top:12px"><button class="btn primary" id="apply-ctrl" ${S.inRepo && pick !== cur ? '' : 'disabled'}>${pick !== cur ? `Switch this project to ${lbl(pick)}` : `${lbl(cur)} is this project's controller`}</button>`; })()}<label class="row note"><input type="checkbox" id="ctrl-mcp" checked> also register the MCP server</label>${S.inRepo ? '' : '<span class="note">Open the UI inside a git project to apply.</span>'}</div>
       <pre class="cmd" id="init-out" style="display:none"></pre></div>
     <div class="card"><h2>Runs</h2><div class="fields">
-      ${num('timeoutSec', 'Timeout per attempt (seconds)', 'A worker is stopped and the next one tried')}
+      ${num('timeoutSec', 'Time limit per attempt (minutes)', 'A worker is stopped and the next one tried (a plan task\'s eta: line can raise it)', 60)}
       ${num('cooldownMinutes', 'Cooldown after rate limit (minutes)', "Rate-limited providers are skipped this long (or for the provider's Retry-After)")}
-      ${num('maxDiffBytes', 'Max review diff (bytes)', 'Larger diffs are truncated')}
-      ${num('maxContextBytes', 'Max context for API models (bytes)', 'File content sent to chat-only providers')}
+      ${num('maxDiffBytes', 'Max review diff (KB)', 'Larger diffs are cut for review', 1000)}
+      ${num('maxContextBytes', 'Max file context for API models (KB)', 'File content sent to chat-only providers', 1000)}
       ${num('dailyBudgetUSD', 'Daily budget for paid APIs ($)', '0 = no cap. Counts API providers with a price set; free ones never count')}
       <div><label class="f">Verify command</label><input type="text" data-sets="verify" value="${esc(st.verify)}" placeholder="auto: AGENTS.md Verify line, then npm/composer/pytest/cargo/go"><div class="note">Must pass before a task counts as done.${!st.verify && S.status.verify ? ` Detected now: <span class="mono">${esc(S.status.verify)}</span>` : ''}</div></div>
       <div><label class="f">Protected branches</label><input type="text" data-setl="protectedBranches" value="${esc((st.protectedBranches || []).join(', '))}"><div class="note">Workers never write on these</div></div>
@@ -647,6 +667,7 @@ function bind() {
   document.querySelectorAll('[data-skrm]').forEach((b) => b.onclick = () => { const [name, scope] = b.dataset.skrm.split('|'); if (confirm(`Remove ${name} from the ${scope === 'global' ? 'library for all projects' : 'project library'}? This deletes its folder.`)) { skillEdit = null; skr('/api/skills/remove', { name, scope }, 'Removed'); } });
   document.querySelectorAll('[data-goto]').forEach((b) => b.onclick = (e) => { e.preventDefault(); go(b.dataset.goto); }); // links too: "#" would drop the token
   document.querySelectorAll('[data-clear]').forEach((b) => b.onclick = async () => { load(await api('POST', '/api/cooldowns/clear', { name: b.dataset.clear })); toast('Cooldown cleared'); });
+  document.querySelectorAll('[data-rtab]').forEach((b) => b.onclick = () => { rTab = b.dataset.rtab; render(); });
   document.querySelectorAll('[data-mv]').forEach((b) => b.onclick = () => { const [r, i, d] = b.dataset.mv.split('|'); const c = W.roles[r]; const j = +i + +d; [c[i], c[j]] = [c[j], c[i]]; markDirty(); render(); });
   document.querySelectorAll('[data-rm]').forEach((b) => b.onclick = () => { const [r, i] = b.dataset.rm.split('|'); W.roles[r].splice(+i, 1); markDirty(); render(); });
   document.querySelectorAll('[data-addsel]').forEach((s) => s.onchange = () => { if (s.value) { W.roles[s.dataset.addsel].push(s.value); markDirty(); render(); } });
@@ -746,7 +767,7 @@ function bind() {
       const pre = $('#init-out'); pre.style.display = 'block'; pre.textContent = out; toast('Project updated');
     } catch (e) { toast(e.message); ap.disabled = false; }
   };
-  document.querySelectorAll('[data-set]').forEach((i) => i.oninput = () => { W.settings[i.dataset.set] = Number(i.value); markDirty(); });
+  document.querySelectorAll('[data-set]').forEach((i) => i.oninput = () => { const f = Number(i.dataset.factor || 1); W.settings[i.dataset.set] = f === 1 ? Number(i.value) : Math.round(Number(i.value) * f); markDirty(); });
   document.querySelectorAll('[data-sets]').forEach((i) => i.oninput = () => { W.settings[i.dataset.sets] = i.value; markDirty(); });
   document.querySelectorAll('[data-setl]').forEach((i) => i.oninput = () => { W.settings[i.dataset.setl] = i.value.split(',').map((x) => x.trim()).filter(Boolean); markDirty(); });
   document.querySelectorAll('[data-setb]').forEach((i) => i.onchange = () => { W.settings[i.dataset.setb] = i.checked; markDirty(); });
