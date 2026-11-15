@@ -1,0 +1,59 @@
+{
+  "suite": "b2",
+  "condition": "C",
+  "model": "sonnet",
+  "priority": "speed",
+  "tasks": [
+    "T1",
+    "T2",
+    "T3",
+    "T4",
+    "T5"
+  ],
+  "startedAt": "2026-11-15T09:24:33.169Z",
+  "seconds": 131,
+  "stopped": null,
+  "dir": "/tmp/conductor-b2-sP2NeV",
+  "claudeCost": 0.09305010000000001,
+  "claudeTokens": {
+    "input": 8,
+    "output": 555,
+    "cacheRead": 152201,
+    "cacheWrite": 18066
+  },
+  "hidden": {
+    "T1": true,
+    "T2": true,
+    "T3": true,
+    "T4": true,
+    "T5": true
+  },
+  "calls": [
+    {
+      "task": null,
+      "ok": true,
+      "cost": 0.09305010000000001,
+      "seconds": 131,
+      "turns": 4,
+      "tokens": {
+        "input": 8,
+        "output": 555,
+        "cacheRead": 152201,
+        "cacheWrite": 18066
+      },
+      "result": "All 5 tasks in `docs/plan/b2.md` (T1 cart, T2 discounts, T3 CSV product import, T4 order lifecycle, T5 checkout) are done and merged into `feat/orders`.\n\n- **Providers:** codex-cli finished all five. antigravity-cli and opencode were also started on some tasks, but they were cancelled once codex-cli finished first.\n- **Checks:** each task passed its own verify, and verify passed again on the merged code after each merge.\n- **Review:** no extra review. Every task passed its checks on the first try, and the batch summary had no `review:` findings.\n- **Leftovers:** none. The checkout is clean and no conductor worktrees remain. `HANDOFF.md` is unchanged because nothing is left for later.",
+      "denied": []
+    }
+  ],
+  "workers": {
+    "runs": 9,
+    "tokens": 703471,
+    "cost": 0,
+    "providers": {
+      "codex-cli": 5,
+      "antigravity-cli": 3,
+      "opencode": 1
+    }
+  },
+  "dry": false
+}

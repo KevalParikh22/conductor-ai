@@ -1,0 +1,59 @@
+{
+  "suite": "b2",
+  "condition": "C",
+  "model": "sonnet",
+  "priority": "speed",
+  "tasks": [
+    "T1",
+    "T2",
+    "T3",
+    "T4",
+    "T5"
+  ],
+  "startedAt": "2026-11-15T09:29:14.753Z",
+  "seconds": 145,
+  "stopped": null,
+  "dir": "/tmp/conductor-b2-Xb81nG",
+  "claudeCost": 0.09117529999999999,
+  "claudeTokens": {
+    "input": 8,
+    "output": 402,
+    "cacheRead": 152113,
+    "cacheWrite": 17982
+  },
+  "hidden": {
+    "T1": true,
+    "T2": true,
+    "T3": true,
+    "T4": true,
+    "T5": true
+  },
+  "calls": [
+    {
+      "task": null,
+      "ok": true,
+      "cost": 0.09117529999999999,
+      "seconds": 144,
+      "turns": 4,
+      "tokens": {
+        "input": 8,
+        "output": 402,
+        "cacheRead": 152113,
+        "cacheWrite": 17982
+      },
+      "result": "All 5 tasks in `docs/plan/b2.md` (T1–T5) are merged into `feat/orders`. Each passed its own verify, and verify passed again on the merged code.\n\n- **Providers:** codex-cli finished all five. The opencode and antigravity-cli attempts were cancelled while codex-cli was already running the same tasks.\n- **Review findings:** the batch printed no `review:` lines.\n- **Extra review:** none, since every task passed its checks the first time.\n- **Leftovers:** none. No worktrees remain and the checkout is clean.",
+      "denied": []
+    }
+  ],
+  "workers": {
+    "runs": 9,
+    "tokens": 908294,
+    "cost": 0,
+    "providers": {
+      "codex-cli": 5,
+      "antigravity-cli": 3,
+      "opencode": 1
+    }
+  },
+  "dry": false
+}

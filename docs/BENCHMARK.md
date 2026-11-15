@@ -1,6 +1,6 @@
-# Benchmark: pilot (2026-11-13)
+# Benchmark: pilot (2026-11-13) and B2 (2026-11-15)
 
-**A pilot, not a general claim:** one small Node library, six tasks, one run per condition. The full benchmark (three repos, three stacks, three runs each) is still to come. The raw data is in [`bench/results/`](../bench/results/), and anyone can rerun it with [`bench/run.mjs`](../bench/run.mjs).
+**Not a general claim yet:** the pilot is one small Node library, six tasks, one run per condition; [B2](#b2-bigger-tasks-2026-11-15) is five bigger tasks, three runs per condition. The full benchmark (three repos, three stacks, three runs each) is still to come. The raw data is in [`bench/results/`](../bench/results/), and anyone can rerun it with [`bench/run.mjs`](../bench/run.mjs).
 
 ## Setup
 
@@ -58,10 +58,48 @@ The first C run spent its time in two places: **agy took up to 299 s on a small 
 - **Time: close, after the speed fixes.** The first run was 5.8× slower than Claude alone. After routing small tasks to the fastest reliable worker and skipping dead reviewers, it was 1.3–1.4× slower (137–151 s vs 107 s) in two runs with different workers available. On small tasks, expect conductor to save quota, not minutes.
 - **Quality held,** and the work was checked rather than assumed: every task passed verify, and conductor proved each regression test against the original code.
 
+## B2: bigger tasks (2026-11-15)
+
+The second suite ([`bench/b2`](../bench/b2/)): five multi-file tasks on a bookshop library: a cart with stock rules, a discount engine, a CSV import with an error report, an order state machine, and checkout totals that need the cart and the discounts. The hidden tests were written from the plan before any run, and `node bench/run.mjs check --suite b2` proves each task fails on the starting code and passes with the reference solution.
+
+**Three runs of each condition, alternating A and C.** Claude Code 2.1.317 (Sonnet). C runs `/conduct-run`, which makes one `conductor batch --all` call with priority `speed`. Workers: Codex CLI 0.166.0, Antigravity CLI 1.5.9 and OpenCode (free model); NVIDIA NIM and OpenRouter (free) were enabled too.
+
+| B2, median of 3 | A: Claude alone | C: Claude + conductor | Change |
+|---|---|---|---|
+| Wall-clock | 150 s (147, 150, 150) | **131 s** (122, 131, 145) | **13% faster** |
+| Claude cost (equivalent) | $0.753 | **$0.091** | **−88%** |
+| Claude output tokens | 20,711 | **413** | −98% |
+| Claude cache read | 1,045,039 | **152,134** | −85% |
+| Hidden tests passed | 14/15 (T3 missed once) | **15/15** | |
+| Worker tokens | — | 703k–908k per run | free and subscription routes |
+
+**Who did the work in C:**
+- Each task started as a race between two workers: Codex against Antigravity (T1, T2, T5) or OpenCode (T4); T3 went straight to Codex.
+- **Codex won all 15 tasks.** The other attempt was stopped 1–2 s later each time (e.g. agy 68 s against Codex 67 s).
+- NVIDIA and OpenRouter weren't started: their recent work had failed verify or timed out, so routing ranked them after the reliable workers.
+- So these numbers measure Codex with conductor around it. With another set of workers they will differ.
+
+**Read with care:**
+- **Time:** C was faster in every run, but by 5–28 s. Claude alone spends only 19–40 s per task here, so the gain comes from running tasks in parallel, not from faster workers.
+- **Claude quota:** the saving is larger than in the pilot (−88% against −56%) because the controller makes one call: it reads the plan, starts the batch, and reads one summary. Most of A's cost is Claude Code's own context, read again on each of its five calls.
+- **Quality:** A's one miss was T3 (the CSV import) in its second run. In C, every task passed verify, its acceptance checks and verify on the merged code before it was merged.
+- **Three runs per condition** on one machine and one day. The spread is shown; it is not a general claim.
+
+**How B2 got here.** The first B2 run (2026-11-14, before these changes) was 1.9× slower than Claude alone (285 s against 149 s) and passed 4/5: a rule in our plan contradicted another, and conductor reported that task done. The fixes that followed are in the [changelog](../CHANGELOG.md):
+- `plan check` warns about contradicting rules;
+- workers are held to the Design notes' exact values and edge cases;
+- conductor merges, runs the whole plan by its dependencies (`batch --all`), and marks tasks done;
+- slow tasks get a second attempt on the fastest idle worker;
+- reviews run off the critical path;
+- routing counts work that fails verify as a failure.
+
+Raw data: `bench/results/2026-11-15T09-*-b2-*.json`.
+
 ## Not yet shown
 
-- Larger tasks, where Claude's own time per task grows and parallel workers may win on time.
-- Other stacks (Python, PHP), repeated runs, and the spread between runs.
+- Tasks big enough that Claude alone takes minutes each (B2's took 19–40 s).
+- A run where several worker models win tasks, not only Codex.
+- Other stacks (Python, PHP).
 - Condition B (conductor one task at a time).
 
 ## How the run went
