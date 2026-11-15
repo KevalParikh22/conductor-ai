@@ -90,9 +90,10 @@ test('re-hedge: the first hedge takes the only idle route; a route expected to b
   const hist = (p, sec) => Array.from({ length: 3 }, () => JSON.stringify({ ts: new Date().toISOString(), provider: p, role: 'build', ok: true, seconds: sec })).join('\n');
   fs.mkdirSync(path.dirname(USAGE_FILE()), { recursive: true });
   fs.writeFileSync(USAGE_FILE(), [hist('rh-a', 100), hist('rh-b', 100), hist('rh-c', 5)].join('\n') + '\n');
-  // the worktree folder names the attempt: T2 and T2-h are slow, T2-h2 fast; T3 takes 1.5 s; T1 0.2 s
+  // the worktree folder names the attempt: T2 and T2-h are slow (40 s), T2-h2 fast; T3 takes 6 s, so rh-c is still busy
+  // when the first hedge starts, even on a slow machine (Windows CI); T1 0.2 s
   const w = `let p='';process.stdin.on('data',d=>p+=d).on('end',()=>{const f=require('path').basename(process.cwd());const id=f.replace(/-h\\d*$/,'');
-    const ms={T2:20000,'T2-h':20000,T3:1500}[f]||200;setTimeout(()=>{const o=args[args.indexOf('-o')+1];fs.mkdirSync('src',{recursive:true});
+    const ms={T2:40000,'T2-h':40000,T3:6000}[f]||200;setTimeout(()=>{const o=args[args.indexOf('-o')+1];fs.mkdirSync('src',{recursive:true});
     fs.writeFileSync('src/'+id+'.js','export default 1;\\n');fs.writeFileSync(o,'## RESULT: DONE\\n## Files changed\\n- src/'+id+'.js\\n## Checks run\\n- none\\n## Acceptance\\n- [x] 1. exists — evidence: src/'+id+'.js:1\\n');
     fs.appendFileSync(process.env.HEDGE_LOG,f+'\\n');},ms);});`;
   fakeBins({ 'rh-a': w, 'rh-b': w, 'rh-c': w });
@@ -105,7 +106,7 @@ test('re-hedge: the first hedge takes the only idle route; a route expected to b
   const t0 = Date.now();
   const b = await runBatch(cfg, { planPath: 'docs/plan/p.md', tasks: ['T1', 'T2', 'T3'], allowUnverified: true });
   const h = b.results.find((r) => r.task === 'T2').summary.hedged;
-  assert.ok(Date.now() - t0 < 15_000, `took ${Date.now() - t0} ms; hedged: ${JSON.stringify(h)}; log: ${fs.readFileSync(process.env.HEDGE_LOG, 'utf8').replace(/\s+/g, ' ')}`);
+  assert.ok(Date.now() - t0 < 30_000, `took ${Date.now() - t0} ms; hedged: ${JSON.stringify(h)}; log: ${fs.readFileSync(process.env.HEDGE_LOG, 'utf8').replace(/\s+/g, ' ')}`);
   assert.deepEqual(h.tries.map((x) => x.provider), ['rh-a', 'rh-c'], 'first the idle route, then the fast one once it was free');
   assert.equal(h.won, 'rh-c');
   assert.match(formatBatch(b), /hedged: rh-b was slow, so rh-a \(after \d+ s\), then rh-c \(after \d+ s\) also tried it; rh-c won/);
