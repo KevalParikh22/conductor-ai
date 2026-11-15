@@ -57,6 +57,25 @@ export function which(bin) {
   return null;
 }
 
+// Windows (cross-spawn's rules): cmd.exe metacharacters, escaped with ^ when a command has to go through cmd.exe
+const CMD_META = /([()\][%!^"`<>&|;, *?])/g;
+const cmdArg = (a) => `"${String(a).replace(/(?=(\\+?)?)\1"/g, '$1$1\\"').replace(/(?=(\\+?)?)\1$/, '$1$1')}"`.replace(CMD_META, '^$1');
+
+/**
+ * Windows: how to start `cmd`. Node can't start a .cmd or .bat file directly, and npm installs CLIs (Codex, OpenCode,
+ * Copilot…) as .cmd shims. An npm shim runs its script with node directly, so prompt text in the arguments never
+ * passes through cmd.exe; any other .cmd/.bat goes through cmd.exe with every argument escaped. → { file, args, opts }
+ */
+export function winCommand(cmd, args) {
+  const full = which(cmd) || cmd;
+  if (!/\.(cmd|bat)$/i.test(full)) return { file: full, args, opts: {} };
+  let text = '';
+  try { text = fs.readFileSync(full, 'utf8'); } catch { /* not readable: use cmd.exe */ }
+  const m = text.match(/(?:node(?:\.exe)?"?|%_prog%"?)\s+"%~?dp0%?\\([^"]+)"\s+%\*/i);
+  if (m) return { file: process.execPath, args: [path.join(path.dirname(full), m[1]), ...args], opts: {} };
+  return { file: process.env.ComSpec || 'cmd.exe', args: ['/d', '/s', '/c', `"${full.replace(CMD_META, '^$1')} ${args.map(cmdArg).join(' ')}"`], opts: { windowsVerbatimArguments: true } };
+}
+
 // Worker processes still running: killed with their whole process group if conductor itself is stopped.
 const live = new Set();
 function onSignal(sig) {
@@ -84,7 +103,8 @@ export function run(cmd, args, { cwd, input, timeoutMs = 0, idleTimeoutMs = 0, e
     let child;
     const group = process.platform !== 'win32';
     try {
-      child = spawn(cmd, args, { cwd, env: env || process.env, stdio: ['pipe', 'pipe', 'pipe'], detached: group });
+      const w = process.platform === 'win32' ? winCommand(cmd, args) : { file: cmd, args, opts: {} };
+      child = spawn(w.file, w.args, { cwd, env: env || process.env, stdio: ['pipe', 'pipe', 'pipe'], detached: group, ...w.opts });
     } catch (e) {
       resolve({ code: null, stdout: '', stderr: String(e), timedOut: false, error: String(e) });
       return;
