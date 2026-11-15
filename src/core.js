@@ -50,7 +50,7 @@ export class UsageError extends Error {}
  * given on the command line, the plan task's "provider:" line, a matching route in config, then the smart
  * selector over the role's chain. Returns { chain (resolved entries), how, note }.
  */
-export function chooseChain(cfg, role, { provider, chain, section = '', body = '', files = [], diffBytes = 0 } = {}) {
+export function chooseChain(cfg, role, { provider, chain, section = '', body = '', files = [], diffBytes = 0, priority } = {}) {
   if (chain?.length) return { chain: resolveChain(cfg, role, { chain }), how: 'chain', note: 'chain given' };
   if (provider) return { chain: resolveChain(cfg, role, { provider }), how: 'provider', note: `${provider} first (--provider)` };
   const own = cfg.roles[role] || [];
@@ -60,7 +60,7 @@ export function chooseChain(cfg, role, { provider, chain, section = '', body = '
   if (hit?.providers.length) return { chain: resolveChain(cfg, role, { chain: [...hit.providers, ...own.filter((n) => !hit.providers.includes(n))] }), how: 'route', note: `route ${hit.index + 1}: ${describeRoute(hit.route)}` };
   const base = resolveChain(cfg, role, {});
   if (cfg.settings?.smartSelect === false) return { chain: base, how: 'role', note: '' };
-  const pick = smartOrder(base, { role, mode: ROLES[role]?.mode, body, files, diffBytes });
+  const pick = smartOrder(base, { role, mode: ROLES[role]?.mode, body, files, diffBytes, priority: priority || cfg.settings?.priority });
   return { chain: pick.chain, how: pick.note ? 'selector' : 'role', note: pick.note };
 }
 /** Commands write workers may run without a permission prompt: the usual build/test tools, the verify command, allowCommands. */
@@ -263,6 +263,17 @@ function shouldEscalate(s, opts, settings) {
   return true;
 }
 
+/**
+ * For the usage log: did the winner's work fail conductor's checks? → {} when it passed (or wasn't checked), else
+ * { ok: false, reason }. Failures the starting commit already had don't count against the worker.
+ */
+export function workFailure(s) {
+  if (s.checks?.failed?.length) return { ok: false, reason: 'acceptance check failed' };
+  if (s.repro?.ok === false && !s.repro.waived) return { ok: false, reason: 'repro failed' };
+  if (s.verify?.status === 'FAIL' && !(s.verify.baseFailed && !s.verify.newFailures?.length)) return { ok: false, reason: 'verify failed' };
+  return {};
+}
+
 async function dispatchOnce(cfg, opts) {
   const { root, settings } = cfg;
   const role = opts.role;
@@ -458,7 +469,7 @@ async function dispatchOnce(cfg, opts) {
   const etaMs = parseDuration((section.match(/\*\*eta:\*\*\s*([^\n]+)/i) || [])[1]);
   const limitFor = (p, kind) => workerTimeout(p, kind, settings, { etaMs, timeoutMs: opts.timeoutMs });
   const runSize = taskSize({ role, mode, body: section || body, files: [...(opts.files || []), ...taskFiles(section)] }).size; // S1: speed stats per size
-  const picked = chooseChain(cfg, role, { provider: opts.provider, chain: opts.chain, section, body, files: [...(opts.files || []), ...taskFiles(section)], diffBytes });
+  const picked = chooseChain(cfg, role, { provider: opts.provider, chain: opts.chain, section, body, files: [...(opts.files || []), ...taskFiles(section)], diffBytes, priority: opts.priority });
   // Q7: a provider that failed this kind of work here twice goes to the back (never when the chain was given explicitly)
   if (mode === 'write' && !['chain', 'provider'].includes(picked.how) && cfg.settings?.lessons !== false) {
     const d = demoteByLessons(root, picked.chain.map((c) => c.name), { role, files: [...(opts.files || []), ...taskFiles(section)], after: settings.demoteAfter ?? 2 });
@@ -504,7 +515,7 @@ async function dispatchOnce(cfg, opts) {
   // files already modified before the run (allowed with --allow-dirty): can't be credited to the worker
   // (a hand-off from a previous worker in this run inherits its changes: they count as this task's work)
   const preDirty = mode === 'write' && inRepo && !opts.inherited ? new Set(git.changedFiles(work)) : new Set();
-  let winnerText = '', lastPromptChars = 0;
+  let winnerText = '', lastPromptChars = 0, pendingUsage = null;
   // hooks and .git/config can run programs: snapshot them so whatever a worker writes there is undone
   const control = inRepo ? git.snapshotControl(work) : null;
   // conductor's git-ignored files (AGENTS.md, plans, skills): git can't see a worker's edits there, so keep a copy
@@ -637,8 +648,12 @@ async function dispatchOnce(cfg, opts) {
         break providers;
       }
       // a call stopped because another attempt won the race says nothing about this provider's speed or reliability
-      if (res.reason !== 'cancelled' && c.p.type !== 'manual') recordUsage({ provider: c.name, model: res.model || p.model || null, kind: kind === 'agent' ? 'agent' : 'chat', role, size: runSize, project: path.basename(root),
-        ok: res.ok, reason: attempt.reason, seconds: attempt.seconds, tokens: res.tokens || null, cost: attempt.cost ?? null });
+      if (res.reason !== 'cancelled' && c.p.type !== 'manual') {
+        const entry = { provider: c.name, model: res.model || p.model || null, kind: kind === 'agent' ? 'agent' : 'chat', role, size: runSize, project: path.basename(root),
+          ok: res.ok, reason: attempt.reason, seconds: attempt.seconds, tokens: res.tokens || null, cost: attempt.cost ?? null };
+        // a write worker's reply is only a success once its work passes the checks: recorded after them (below)
+        if (res.ok && mode === 'write') pendingUsage = entry; else recordUsage(entry);
+      }
       const changedDuringRead = mode === 'read' && inRepo && before !== git.stateHash(work);
       if (changedDuringRead) summary.warnings.push(`${c.name} changed files during a read-only run. Check git status.`);
 
@@ -848,6 +863,7 @@ async function dispatchOnce(cfg, opts) {
     fs.writeFileSync(dest, winnerText);
     summary.saved = rel(root, dest);
   }
+  if (pendingUsage) recordUsage({ ...pendingUsage, ...workFailure(summary) });
   summary.outcome = outcome(summary);
   if (unverifiedBlocks(summary, { allowUnverified: opts.allowUnverified || settings.allowUnverified })) summary.exitCode = EXIT_UNVERIFIED;
   writeJSON(path.join(runDir, 'summary.json'), summary);

@@ -5,7 +5,9 @@
 //   - bigger or open-ended tasks go to agents first: they find and edit files themselves, instead of an API
 //     model rewriting whole files blind;
 //   - paid API models go after free ones and agents;
-//   - a provider whose last 3 attempts all failed (not counting rate limits, which cooldowns handle) goes last.
+//   - a provider whose recent work mostly failed (< 60%, its reply or conductor's checks on it) goes after the reliable
+//     ones, and one whose last 3 attempts all failed (not counting rate limits, which cooldowns handle) goes last;
+//   - under priority speed, the fastest reliable provider goes first, before the free-first rule.
 import { readUsage } from './usage.js';
 import { providerKind, providerLocation } from './config.js';
 
@@ -79,6 +81,7 @@ export function smartOrder(entries, task) {
   const live = entries.filter((e) => !e.skip);
   const { size, why } = taskSize(task);
   const cheapFirst = size === 'small';
+  const speedFirst = task.priority === 'speed';
   const bad = unhealthy(live.map((e) => e.name));
   const group = (e) => {
     const chat = providerKind(e.p) === 'chat';
@@ -86,19 +89,28 @@ export function smartOrder(entries, task) {
     if (!chat) return cheapFirst ? 1 : 0;
     return 2; // paid or unknown-price API
   };
+  // measured on this role (and this task size when there is enough of it): a route whose recent work mostly failed
+  // (its reply, or conductor's checks on it: verify, acceptance) goes after the reliable ones, whatever its group.
+  // Being free doesn't help when the work has to be done again (B2: NVIDIA went first on every small task at 30%).
+  const stats = speedStats(live.map((e) => e.name), task.role, { size });
+  const unreliable = (e) => (stats[e.name] && stats[e.name].okRate < 0.6 ? 1 : 0);
   // small tasks: within a group, the provider that is fast AND reliable on this role goes first (measured, not
-  // assumed); big tasks keep your order, so the strongest agent you chose stays first for real work
-  const speed = cheapFirst ? speedStats(live.map((e) => e.name), task.role) : {};
+  // assumed); big tasks keep your order, so the strongest agent you chose stays first for real work. Under priority
+  // speed, the fastest reliable route goes first for any size, before the free-first rule.
+  const speed = cheapFirst || speedFirst ? stats : {};
   const secs = expectedSeconds(speed, live.map((e) => e.name));
-  const fast = (e) => (cheapFirst && Object.keys(speed).length ? secs(e.name) : Infinity);
-  const ranked = live.map((e, i) => ({ e, i, k: [bad.has(e.name) ? 1 : 0, group(e), fast(e), i] }))
-    .sort((a, b) => a.k[0] - b.k[0] || a.k[1] - b.k[1] || a.k[2] - b.k[2] || a.k[3] - b.k[3]).map((x) => x.e);
+  const fast = (e) => ((cheapFirst || speedFirst) && Object.keys(speed).length ? secs(e.name) : Infinity);
+  const key = (e, i) => (speedFirst ? [bad.has(e.name) ? 1 : 0, unreliable(e), fast(e), group(e), i] : [bad.has(e.name) ? 1 : 0, unreliable(e), group(e), fast(e), i]);
+  const ranked = live.map((e, i) => ({ e, k: key(e, i) }))
+    .sort((a, b) => { for (let j = 0; j < a.k.length; j++) if (a.k[j] !== b.k[j]) return a.k[j] - b.k[j]; return 0; }).map((x) => x.e);
   const chain = [...ranked, ...entries.filter((e) => e.skip)];
   const moved = ranked.some((e, i) => e !== live[i]);
   if (!moved) return { chain: entries, note: '' };
-  const parts = [`${size} task (${why}): ${cheapFirst ? 'free API models first' : 'agents first'}`];
+  const parts = [`${size} task (${why}): ${speedFirst ? 'priority speed: fastest reliable first' : cheapFirst ? 'free API models first' : 'agents first'}`];
   const sped = ranked.filter((e) => fast(e) !== Infinity);
   if (sped.length && ranked[0] && fast(ranked[0]) !== Infinity) parts.push(`fastest reliable first: ${sped.slice(0, 3).map((e) => (speed[e.name] ? `${e.name} ~${Math.round(speed[e.name].median)}s` : `${e.name} (new: no history yet)`)).join(', ')}`);
+  const weak = live.filter((e) => unreliable(e) && !bad.has(e.name));
+  if (weak.length) parts.push(`after the reliable ones: ${weak.map((e) => `${e.name} (${Math.round(stats[e.name].okRate * 100)}% of recent work passed)`).join(', ')}`);
   if (bad.size) parts.push(`moved last: ${[...bad.keys()].join(', ')} (failed 3 times in a row)`);
   return { chain, note: parts.join('; ') };
 }

@@ -29,7 +29,7 @@ test('small tasks go to the fast, reliable provider first; big tasks keep your o
   assert.deepEqual(small.chain.map((e) => e.name), ['fast', 'slow', 'flaky'], 'flaky is fast but fails: not first');
   assert.match(small.note, /fastest reliable first: fast ~35s, slow ~200s/);
   const big = smartOrder(entries, { role: 'build', mode: 'write', body: 'x', files: ['a.js', 'b.js', 'c.js'] });
-  assert.deepEqual(big.chain.map((e) => e.name), ['slow', 'flaky', 'fast']);
+  assert.deepEqual(big.chain.map((e) => e.name), ['slow', 'fast', 'flaky'], 'your order, but the unreliable one after the reliable ones');
 });
 
 test('batch: each task goes where it should finish soonest, at most 2 per provider; unknown providers spread evenly', () => {
@@ -61,4 +61,20 @@ test('cold start: a provider with no history counts as average, so it gets tried
   cfg.roles = { ...cfg.roles, build: ['slow', 'fast', 'fresh'] };
   const items = ['T1', 'T2', 'T3', 'T4'].map((id) => ({ id, role: 'build', files: ['src/x.js'], section: `### ${id}: x\n- **files:** \`src/x.js\`` }));
   assert.deepEqual(spreadChains(cfg, items).map((t) => t.chain[0]), ['fast', 'fast', 'fresh', 'fresh'], 'the new provider gets the work the fast one has no room for');
+});
+
+test('a route whose recent work mostly failed goes after the reliable ones, even when it is free; speed puts the fastest first', () => {
+  const chat = (name) => ({ name, p: { type: 'openai', enabled: true, baseUrl: 'https://x.test/v1', free: true } });
+  // free API route: replies, but its work failed verify 7 times in 10 (B2: NVIDIA went first on every small task)
+  usage([...Array.from({ length: 7 }, () => ['nim', false, 60, 'build', 'verify failed']), ['nim', true, 50], ['nim', true, 40], ['nim', true, 45],
+    ['codex', true, 55], ['codex', true, 50], ['codex', true, 48], ['free2', true, 90], ['free2', true, 95], ['free2', true, 100]]);
+  const task = { role: 'build', mode: 'write', body: 'x', files: ['src/a.js'] };
+  const o = smartOrder([chat('nim'), agent('codex'), chat('free2')], task);
+  assert.deepEqual(o.chain.map((e) => e.name), ['free2', 'codex', 'nim'], 'a reliable free route still goes first; the unreliable one goes last');
+  assert.match(o.note, /after the reliable ones: nim \(30% of recent work passed\)/);
+  const s = smartOrder([chat('nim'), agent('codex'), chat('free2')], { ...task, priority: 'speed' });
+  assert.deepEqual(s.chain.map((e) => e.name), ['codex', 'free2', 'nim'], 'speed: the faster agent before the slower free route');
+  assert.match(s.note, /priority speed: fastest reliable first/);
+  const big = smartOrder([chat('nim'), agent('codex')], { ...task, files: ['a.js', 'b.js', 'c.js'] });
+  assert.deepEqual(big.chain.map((e) => e.name), ['codex', 'nim']);
 });

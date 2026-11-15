@@ -28,7 +28,7 @@ export function rankSamples(rows) {
  */
 export async function runSamples(cfg, opts, n, { dispatchOnce, chooseChain, section, body, files, UsageError, race = false, controllerWorker = null }) {
   const { root, settings } = cfg;
-  const picked = chooseChain(cfg, opts.role, { provider: opts.provider, chain: opts.chain, section, body, files });
+  const picked = chooseChain(cfg, opts.role, { provider: opts.provider, chain: opts.chain, section, body, files, priority: opts.priority });
   // V9 race: only routes with no per-token price (free APIs, agents on your subscriptions), never the controller's own CLI
   const ready = picked.chain.filter((c) => !c.skip && (!race || (!c.p?.price && c.name !== controllerWorker))).map((c) => c.name);
   if (ready.length < 2) {

@@ -133,7 +133,7 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | `scopeAllow` | [] | Globs workers may change without the task listing them (lockfiles and test snapshots are always allowed) |
 | `allowScope` | false | Accept changes outside a task's `files:`. Off: the outcome is `out-of-scope` |
 | `allowUnverified` | false | Accept code no verify command checked. Off: such a run ends `unverified` with exit 4 (batch: exit 3) |
-| `smartSelect` | true | Reorder each role's chain for the task: free API models first for small tasks with listed files, agents first for larger or open-ended ones, paid APIs last, and providers that failed 3 times in a row moved to the end. Off when you pass `--chain` or `--provider` |
+| `smartSelect` | true | Reorder each role's chain for the task: free API models first for small tasks with listed files, agents first for larger or open-ended ones, paid APIs last. A provider whose recent work on that role mostly failed (under 60% passed: its reply, or conductor's checks on its work) goes after the reliable ones, and one that failed 3 times in a row goes to the end. Under priority `speed`, the fastest reliable provider goes first, before the free-first rule. Off when you pass `--chain` or `--provider` |
 | `maxReportBytes` | 8000 | `report.md` (what the controller reads) keeps only the worker's RESULT block, up to this size; the full output is saved as `report.full.md` |
 | `maxDiffBytes` | 100000 | Review diffs above this are truncated (they are compacted first: see `conductor diff`) |
 | `maxContextBytes` | 60000 | File content sent to chat-only (API) providers |

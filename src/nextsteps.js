@@ -35,6 +35,7 @@ const RULES = [
   [/^spawn error/, ({ p }) => `the program couldn't start: check \`${p?.bin || 'its command'}\` runs in a terminal, then \`conductor doctor\``],
   [/^network: (.+)/, () => 'couldn\'t reach the provider: check your connection and its base URL, then `conductor doctor --live`'],
   [/^server (5\d\d)|^server overloaded/, () => 'the provider failed on its side: nothing to fix here; conductor moved on, try it again later'],
+  [/^(acceptance check|repro|verify) failed$/, ({ name }) => `${name} replied, but its work failed conductor's checks: the next worker took it over; routing ranks ${name} lower while most of its recent work fails`],
   [/^model not available/, ({ name }) => `this model isn't served, or not to your key: conductor tried the next one; pick models that answer with \`conductor models ${name}\``],
   [/^http (4\d\d)/, ({ name }) => `the provider refused the request (often a model id that no longer exists): pick a current one with \`conductor models ${name}\``],
   [/^no model set/, ({ name }) => `set a model for ${name}: \`conductor models ${name}\` lists them`],

@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { isolateHome, makeRepo, fakeBins } from './helpers.js';
 
-isolateHome();
+const home = isolateHome();
 const { dispatch, formatSummary, clearCooldowns } = await import('../src/core.js');
 const { loadConfig } = await import('../src/config.js');
 
@@ -59,4 +59,19 @@ test('the hand-off tells the next worker to fix the test, and it does', async ()
   const s = await run(dir, ['sus-badtest', 'sus-good'], { escalate: true });
   assert.deepEqual([s.winner, s.outcome], ['sus-good', 'done']);
   assert.match(fs.readFileSync(process.env.SUS_PROMPT, 'utf8'), /These tests are probably wrong: compare each expected value/);
+});
+
+test('the usage log counts work that fails conductor\'s checks as a failure, not the reply alone', async () => {
+  clearCooldowns();
+  const log = () => fs.readFileSync(path.join(home, 'usage.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  const before = fs.existsSync(path.join(home, 'usage.jsonl')) ? log().filter((e) => e.provider === 'sus-badcode').length : 0;
+  await run(repo().dir, ['sus-badcode']);
+  const bad = log().filter((e) => e.provider === 'sus-badcode').at(-1);
+  assert.equal(bad.ok, false, 'the worker replied, but its code is wrong');
+  assert.equal(bad.reason, 'acceptance check failed');
+  assert.equal(log().filter((e) => e.provider === 'sus-badcode').length, before + 1, 'one entry per attempt');
+  await run(repo().dir, ['sus-good']);
+  const good = log().filter((e) => e.provider === 'sus-good').at(-1);
+  assert.equal(good.ok, true);
+  assert.equal(good.reason, 'ok');
 });

@@ -83,24 +83,24 @@ export function planBatch(cfg, { planPath, tasks, role, allowOpenQuestions, allo
  * provider in that role's chain, and keeps the rest of the chain as its fallback. A task the plan or a route
  * assigns to a provider keeps that choice.
  */
-export function spreadChains(cfg, items, { provider } = {}) {
+export function spreadChains(cfg, items, { provider, priority } = {}) {
   const seen = {};
   return items.map((t) => {
     if (!provider) {
-      const own = chooseChain(cfg, t.role, { section: t.section || '', body: t.section || '', files: t.files || [] });
+      const own = chooseChain(cfg, t.role, { section: t.section || '', body: t.section || '', files: t.files || [], priority });
       if (own.how === 'plan' || own.how === 'route') return { ...t, chain: own.chain.map((c) => c.name), route: own.note };
     }
     if (provider) return { ...t, chain: resolveChain(cfg, t.role, { provider }).map((c) => c.name) };
     // this task's own order (the selector puts fast, reliable providers first for small tasks), then spread: at most
     // maxParallelPerProvider tasks start on one provider, so a wave isn't stacked on one slow agent and its quota
-    const ordered = chooseChain(cfg, t.role, { section: t.section || '', body: t.section || '', files: t.files || [] }).chain;
+    const ordered = chooseChain(cfg, t.role, { section: t.section || '', body: t.section || '', files: t.files || [], priority }).chain;
     const names = ordered.map((c) => c.name);
     const ready = ordered.filter((c) => !c.skip).map((c) => c.name);
     if (!ready.length) return { ...t, chain: names };
     // the provider expected to finish this task soonest: its measured median time, plus half of it again for every
     // task it already has (they share its quota and machine). A provider with no history counts as average (so a new
     // or newly working one gets tasks and gets measured); a measured, unreliable one goes last
-    const cap = cfg.settings?.maxParallelPerProvider ?? (cfg.settings?.priority === 'speed' ? 3 : 2);
+    const cap = cfg.settings?.maxParallelPerProvider ?? ((priority || cfg.settings?.priority) === 'speed' ? 3 : 2);
     const size = taskSize({ role: t.role, mode: 'write', body: t.section || '', files: t.files || [] }).size;
     const secs = expectedSeconds(speedStats(ready, t.role, { size }), ready);
     const eta = (n) => secs(n) * (1 + 0.5 * (seen[n] || 0));
@@ -183,7 +183,7 @@ export async function runBatch(cfg, { planPath, tasks, role, provider, concurren
   merge = merge || all; // --all schedules by depends, which needs each task merged before its dependents start
   if (merge) assertCleanCheckout(cfg.root);
   const { items, warnings } = planBatch(cfg, { planPath, tasks, role, allowOpenQuestions, allowWeakPlan, all, merge });
-  const work = spreadChains(cfg, items, { provider });
+  const work = spreadChains(cfg, items, { provider, priority });
   const limit = Math.max(1, Math.min(Number(concurrency) || 4, work.length));
   const results = new Array(work.length);
   const prio = priority || cfg.settings?.priority || 'balanced';
