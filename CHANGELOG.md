@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **Fixed: the batch's live table named the losing worker in a race.** A task's race attempts (and a hedge) report on the same row, so the row showed whichever worker started last, and kept showing it while the winner's work was merged and verified (found while recording the launch GIF: T1 read `antigravity-cli` until the end while Codex had won). The row now follows each attempt, shows `racing (2)` as the worker while they run (a name with `+1` didn't fit the column), switches to the winner on `race-won` / `hedge-won`, ignores the stopped loser's events, and a stopped attempt reads `stopped: other won` instead of `failed: cancelled`. Piped output gains a `won the race` line.
+- **Fixed: a hedge blamed the task's first-choice worker.** The hedge message and the summary's `hedged:` line said "<first choice> was slow" even when that worker had already failed and another had taken the task over (seen in a demo: Antigravity was out of quota, Codex took T2 and was the slow one, and the line read "antigravity-cli was slow"). They now name the worker(s) running when the hedge starts ("codex-cli and nvidia-nim were slow" when a race was running).
+
 ## 0.11.0 (2026-11-15)
 
 ### Speed: priority, merging and the whole plan in one call

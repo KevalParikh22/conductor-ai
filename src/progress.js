@@ -11,7 +11,7 @@ export function stepText(e) {
     start: `starting${e.provider ? ` (first choice: ${e.provider})` : ''}`, base: 'checking the starting commit', try: `${e.provider} is working`,
     wait: `waiting for ${e.provider} (one task at a time on it)`, verify: 'running verify', checks: 'running the acceptance checks',
     repro: 'running the repro', isolate: 'checking the code alone against the original tests', review: 'independent review',
-    escalate: `${e.provider} takes over ${e.from}'s work`, repair: `asking ${e.provider} once more`, hedge: `${e.from} is slow: ${e.provider} also tries it`, merge: `merging ${e.branch}`,
+    escalate: `${e.provider} takes over ${e.from}'s work`, repair: `asking ${e.provider} once more`, hedge: `${e.from} ${String(e.from).includes(' and ') ? 'are' : 'is'} slow: ${e.provider} also tries it`, merge: `merging ${e.branch}`,
   }[e.type] || null;
 }
 
@@ -40,9 +40,38 @@ export function runProgress({ stream = process.stderr, prefix = 'conductor', now
   };
 }
 
+/**
+ * Which worker a batch row names. A task can have several attempts at once (a race's samples, a hedge), and their
+ * events all arrive on the same row: without this, the worker that started last was shown even after another won.
+ * Attempts are keyed by race sample, or by provider when untagged (a hedge, or the next provider after a failure).
+ */
+function rowWorkers() {
+  const active = new Map(); // key → provider, in start order
+  let winner = null, winSample = null, last = '';
+  const key = (e) => (e.sample ? `s${e.sample}` : `p:${e.provider}`);
+  return {
+    /** false: the event is from an attempt that already lost, so the row ignores it */
+    take(e) {
+      if (winSample != null && e.sample && e.sample !== winSample) return false;
+      if (e.type === 'try' && e.provider) { if (!e.sample) active.delete(key(e)); active.set(key(e), e.provider); last = e.provider; }
+      else if ((e.type === 'fail' || e.type === 'skip') && e.provider) active.delete(key(e));
+      else if (e.type === 'escalate' && e.from) active.delete(`p:${e.from}`);
+      else if (e.type === 'race-won') { winner = e.provider; winSample = e.sample ?? null; }
+      else if (e.type === 'hedge-won') winner = e.provider;
+      return true;
+    },
+    racing: () => (winner ? 0 : new Set(active.values()).size),
+    shown() {
+      if (winner) return winner;
+      const names = [...new Set(active.values())];
+      return names.length > 1 ? `racing (${names.length})` : names[0] || last; // racing: the state names who did what; nothing running: the last one tried
+    },
+  };
+}
+
 /** A live table for a batch: one row per task with its state, worker and time. → { event(e), stop() } */
 export function batchProgress(tasks, { stream = process.stderr, now = () => Date.now(), tty = !!stream.isTTY, columns = () => stream.columns || 80 } = {}) {
-  const rows = new Map(tasks.map((t) => [t, { state: 'queued', worker: '', since: null, limit: 0, end: null }]));
+  const rows = new Map(tasks.map((t) => [t, { state: 'queued', worker: '', since: null, limit: 0, end: null, workers: rowWorkers() }]));
   let lines = 0, frame = 0, timer = null;
   const render = () => {
     if (!tty) return;
@@ -61,13 +90,18 @@ export function batchProgress(tasks, { stream = process.stderr, now = () => Date
       if (!r) return;
       if (!tty) {
         // not a terminal: the plain lines batch has always printed
-        const m = { start: `starting (first choice: ${e.provider})`, wait: `waiting for ${e.provider} (one task at a time on it)…`, try: `trying ${e.provider}…`, fail: `${e.provider} failed: ${e.reason}`, ok: `${e.provider} finished`, verify: 'running verify…', base: 'checking the starting commit…', escalate: `verify failed: handing ${e.from}'s work to ${e.provider}…`, repair: `${e.provider} sent no files: asking once more…`, hedge: `${e.from} is slow: second attempt on ${e.provider}…`, 'hedge-won': `${e.provider} won`, done: 'done' }[e.type];
+        const m = { start: `starting (first choice: ${e.provider})`, wait: `waiting for ${e.provider} (one task at a time on it)…`, try: `trying ${e.provider}…`, fail: `${e.provider} failed: ${e.reason}`, ok: `${e.provider} finished`, verify: 'running verify…', base: 'checking the starting commit…', escalate: `verify failed: handing ${e.from}'s work to ${e.provider}…`, repair: `${e.provider} sent no files: asking once more…`, hedge: `${e.from} ${String(e.from).includes(' and ') ? 'are' : 'is'} slow: second attempt on ${e.provider}…`, 'hedge-won': `${e.provider} won`, 'race-won': `${e.provider} won the race`, done: 'done' }[e.type];
         if (m) stream.write(`conductor [${e.task}]: ${m}\n`);
         return;
       }
       if (r.since == null) r.since = now();
-      if (e.type === 'try') { r.worker = e.provider; r.limit = e.limitMs || 0; }
-      if (e.type === 'fail') r.state = `${e.provider} failed: ${e.reason}`;
+      if (!r.workers.take(e)) return; // a race attempt that lost: its "cancelled" and later steps aren't this task's
+      r.worker = r.workers.shown();
+      if (e.type === 'try') r.limit = e.limitMs || 0;
+      if (e.type === 'try' && r.workers.racing() > 1) r.state = `${r.workers.racing()} workers racing`;
+      else if (e.type === 'race-won' || e.type === 'hedge-won') r.state = `${e.provider} won`;
+      else if (e.type === 'fail' && /cancel/i.test(e.reason || '')) r.state = `${e.provider} stopped: other won`;
+      else if (e.type === 'fail') r.state = `${e.provider} failed: ${e.reason}`;
       else if (e.type === 'ok') r.state = `${e.provider} finished`;
       else if (e.type === 'done') { r.end = now(); r.ok = e.outcome ? e.outcome === 'done' : true; r.state = e.outcome || 'done'; }
       else { const t = stepText(e); if (t) r.state = t; }

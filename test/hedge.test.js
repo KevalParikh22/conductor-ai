@@ -113,3 +113,27 @@ test('re-hedge: the first hedge takes the only idle route; a route expected to b
   assert.deepEqual(listWorktrees(dir).map((x) => x.id).sort(), ['T1', 'T2-h2', 'T3']);
   fs.rmSync(USAGE_FILE(), { force: true });
 });
+
+test('a hedge names the worker that is actually slow, not the first choice that already failed', async () => {
+  clearCooldowns(); log('hedge4.log');
+  // q-a fails at once (quota), so T2 moves on to q-b, which is slow in T2's worktree; the hedge goes to q-c
+  const ok = (slowIn) => `let p='';process.stdin.on('data',d=>p+=d).on('end',()=>{const f=require('path').basename(process.cwd());const id=f.replace(/-h\\d*$/,'');
+    setTimeout(()=>{const o=args[args.indexOf('-o')+1];fs.mkdirSync('src',{recursive:true});fs.writeFileSync('src/'+id+'.js','export default 1;\\n');
+    fs.writeFileSync(o,'## RESULT: DONE\\n## Files changed\\n- src/'+id+'.js\\n## Checks run\\n- none\\n## Acceptance\\n- [x] 1. exists — evidence: src/'+id+'.js:1\\n');
+    fs.appendFileSync(process.env.HEDGE_LOG,f+'\\n');},f===${JSON.stringify(slowIn)}?20000:200);});`;
+  fakeBins({ 'q-a': "console.error('Error: RESOURCE_EXHAUSTED quota exceeded'); process.exit(1);", 'q-b': ok('T2'), 'q-c': ok('none') });
+  const pin = (id, p) => task(id).replace('- **role:** build', `- **role:** build\n- **provider:** ${p}`);
+  const { dir } = makeRepo({ files: { 'docs/plan/p.md': `# Plan\n## Open questions\n- [x] none\n## Tasks\n${pin('T1', 'q-c')}\n${task('T2')}`, 'src/.keep': '' } });
+  const cfg = loadConfig(dir);
+  cfg.providers = Object.fromEntries(['q-a', 'q-b', 'q-c'].map((b) => [b, { type: 'cli', preset: 'codex', enabled: true, bin: b, free: true }]));
+  cfg.roles = { ...cfg.roles, build: ['q-a', 'q-b', 'q-c'] };
+  cfg.settings = { ...cfg.settings, autoReview: false, verify: '', hedgeAfterSec: 0.5, hedgeCheckMs: 100 };
+  const events = [];
+  const b = await runBatch(cfg, { planPath: 'docs/plan/p.md', tasks: ['T1', 'T2'], allowUnverified: true, onEvent: (e) => events.push(e) });
+  const h = b.results.find((r) => r.task === 'T2').summary.hedged;
+  assert.ok(h, `T2 was hedged; events: ${JSON.stringify(events.filter((e) => e.task === 'T2').map((e) => [e.type, e.provider, e.from]))}`);
+  assert.equal(h.from, 'q-b', 'q-b was the slow one; q-a had already failed');
+  assert.equal(h.won, 'q-c');
+  assert.deepEqual(events.filter((e) => e.type === 'hedge').map((e) => e.from), ['q-b']);
+  assert.match(formatBatch(b), /hedged: q-b was slow, so q-c \(after \d+ s\) also tried it; q-c won/);
+});

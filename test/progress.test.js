@@ -63,3 +63,52 @@ test('a batch when piped: the plain lines batch always printed', () => {
   b.stop();
   assert.equal(s.out, 'conductor [T1]: starting (first choice: good)\nconductor [T1]: trying good…\nconductor [T1]: done\n');
 });
+
+test('a batch race: the row names the worker that won, not the one that started last, and ignores the loser', () => {
+  const s = stream(true); let t = 0;
+  const b = batchProgress(['T1'], { stream: s, now: () => t });
+  b.event({ task: 'T1', type: 'start', provider: 'codex-cli' });
+  b.event({ task: 'T1', type: 'try', provider: 'codex-cli', sample: 1 });
+  b.event({ task: 'T1', type: 'try', provider: 'antigravity-cli', sample: 2 });
+  const racing = plain(s.out.split('\x1b[1F').at(-1)).trim();
+  assert.match(racing, /2 workers racing +racing \(2\)/);
+  t = 30_000; b.event({ task: 'T1', type: 'verify', sample: 1 });
+  b.event({ task: 'T1', type: 'race-won', provider: 'codex-cli', sample: 1 });
+  b.event({ task: 'T1', type: 'fail', provider: 'antigravity-cli', reason: 'cancelled', sample: 2 }); // the loser, stopped
+  b.event({ task: 'T1', type: 'merge', branch: 'conductor/T1-s1' });
+  b.event({ task: 'T1', type: 'verify' });
+  t = 34_000; b.event({ task: 'T1', type: 'done', outcome: 'done' });
+  b.stop();
+  const out = plain(s.out);
+  assert.ok(!/merging conductor\/T1-s1 +antigravity-cli/.test(out), 'never shows the loser while merging');
+  assert.match(out, /merging conductor\/T1-s1 +codex-cli/);
+  assert.match(plain(s.out.split('\x1b[1F').at(-1)).trim(), /^✓ T1 +done +codex-cli +0:34$/);
+  assert.ok(!out.includes('antigravity-cli failed'), "the loser's cancel isn't shown as a failure");
+});
+
+test('a batch hedge: the slow attempt stopping reads as stopped, and the row ends on the winner', () => {
+  const s = stream(true); let t = 0;
+  const b = batchProgress(['T2'], { stream: s, now: () => t });
+  b.event({ task: 'T2', type: 'try', provider: 'antigravity-cli' });
+  t = 46_000; b.event({ task: 'T2', type: 'hedge', provider: 'nvidia-nim', from: 'antigravity-cli' });
+  b.event({ task: 'T2', type: 'try', provider: 'nvidia-nim' });
+  t = 80_000; b.event({ task: 'T2', type: 'ok', provider: 'nvidia-nim' });
+  b.event({ task: 'T2', type: 'fail', provider: 'antigravity-cli', reason: 'cancelled' });
+  let row = plain(s.out.split('\x1b[1F').at(-1)).trim();
+  assert.match(row, /antigravity-cli stopped: other won +nvidia-nim/);
+  b.event({ task: 'T2', type: 'hedge-won', provider: 'nvidia-nim' });
+  b.event({ task: 'T2', type: 'done', outcome: 'done' });
+  b.stop();
+  row = plain(s.out.split('\x1b[1F').at(-1)).trim();
+  assert.match(row, /^✓ T2 +done +nvidia-nim +1:20$/);
+});
+
+test('a batch row after a failure names the provider that took over', () => {
+  const s = stream(true);
+  const b = batchProgress(['T3'], { stream: s, now: () => 0 });
+  b.event({ task: 'T3', type: 'try', provider: 'kilo-free' });
+  b.event({ task: 'T3', type: 'fail', provider: 'kilo-free', reason: 'quota' });
+  b.event({ task: 'T3', type: 'try', provider: 'opencode' });
+  b.stop();
+  assert.match(plain(s.out.split('\x1b[1F').at(-1)).trim(), /opencode is working +opencode/);
+});

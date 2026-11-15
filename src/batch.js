@@ -218,7 +218,9 @@ export async function runBatch(cfg, { planPath, tasks, role, provider, concurren
       const best = free.reduce((x, y) => (secs(y) < secs(x) ? y : x));
       // the first hedge goes to the fastest idle route; another only to one clearly faster than every route trying
       const trying = r.tries.filter((x) => !x.result).flatMap(working).map((n) => secs(n));
-      if (r.tries.length === 1 || secs(best) * faster <= Math.min(...trying)) r.startHedge(best);
+      // the message names the worker(s) actually working now: after a quota failure or a hand-off that's not the first choice
+      const slow = [...new Set(r.tries.filter((x) => !x.result).flatMap(working))].join(' and ');
+      if (r.tries.length === 1 || secs(best) * faster <= Math.min(...trying)) r.startHedge(best, slow);
     }
   }, Number(cfg.settings?.hedgeCheckMs ?? 2000));
   monitor?.unref?.();
@@ -237,8 +239,9 @@ export async function runBatch(cfg, { planPath, tasks, role, provider, concurren
       wake();
     };
     launch(t.chain[0], { chain: t.chain }, t.id);
-    r.startHedge = (to) => {
-      emit({ type: 'hedge', provider: to, from: r.primary });
+    r.startHedge = (to, from = r.primary) => {
+      r.hedgeFrom ??= from; // the summary names who was slow when the first hedge started
+      emit({ type: 'hedge', provider: to, from });
       launch(to, { chain: [to], noReview: true, noEscalate: true, race: false }, `${t.id}-h${r.tries.length > 1 ? r.tries.length : ''}`);
     };
     const passed = (x) => !!x.result?.s && outcome(x.result.s) === 'done';
@@ -260,7 +263,7 @@ export async function runBatch(cfg, { planPath, tasks, role, provider, concurren
       // a loser's worktree: its own id, or the one its run ended in (a race attempt's T4-s1)
       for (const x of r.tries) if (x !== win) for (const id of new Set([x.wtId, x.result?.s?.worktree?.id].filter(Boolean))) { try { removeWorktree(cfg.root, id, { force: true }); } catch { /* already gone */ } }
       const hedges = r.tries.slice(1);
-      if (win.result.s) win.result.s.hedged = { from: r.primary, to: hedges.map((x) => x.provider).join(', '), won: win.result.s.winner || win.provider, afterSec: Math.round((hedges[0].at - r.start) / 1000),
+      if (win.result.s) win.result.s.hedged = { from: r.hedgeFrom || r.primary, to: hedges.map((x) => x.provider).join(', '), won: win.result.s.winner || win.provider, afterSec: Math.round((hedges[0].at - r.start) / 1000),
         tries: hedges.map((x) => ({ provider: x.provider, afterSec: Math.round((x.at - r.start) / 1000) })) };
       emit({ type: 'hedge-won', provider: win.result.s?.winner || win.provider });
     }
@@ -373,7 +376,7 @@ export function formatBatch(b) {
     const rv = s.review;
     if (rv?.skipped) L.push(`         review: not done (${rv.skipped})`);
     else if (rv?.reviewer) L.push(`         review: ${rv.reviewer}: ${rv.verdict || 'no verdict'}, ${rv.findings.length} finding(s) (advisory${rv.report ? `; ${rv.report}` : ''})`);
-    if (s.hedged) L.push(`         hedged: ${s.hedged.from} was slow, so ${(s.hedged.tries || [{ provider: s.hedged.to, afterSec: s.hedged.afterSec }]).map((x) => `${x.provider} (after ${x.afterSec} s)`).join(', then ')} also tried it; ${s.hedged.won} won`);
+    if (s.hedged) L.push(`         hedged: ${s.hedged.from} ${s.hedged.from.includes(' and ') ? 'were' : 'was'} slow, so ${(s.hedged.tries || [{ provider: s.hedged.to, afterSec: s.hedged.afterSec }]).map((x) => `${x.provider} (after ${x.afterSec} s)`).join(', then ')} also tried it; ${s.hedged.won} won`);
     for (const w of s.warnings) L.push(`         WARNING: ${w}`);
   }
   L.push(`result:    ${b.merge ? `${b.merged}/${b.results.length} merged · ` : ''}${b.ok} done, ${b.partial ? `${b.partial} partial, ` : ''}${b.outOfScope ? `${b.outOfScope} out of scope, ` : ''}${b.unverified ? `${b.unverified} unverified, ` : ''}${b.failed} failed${b.blocked ? `, ${b.blocked} not started` : ''}`);
