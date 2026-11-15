@@ -13,7 +13,10 @@ jobs:
       - uses: actions/setup-node@v5
         with: { node-version: "${{ matrix.node }}" }
       - run: git config --global user.email ci@example.com && git config --global user.name ci
-      - run: npm test
+      - run: npm test 2>&1 | tee test-output.txt; exit ${PIPESTATUS[0]}
+        shell: bash
+      - if: failure()
+        run: node scripts/ci-annotate.mjs test-output.txt
         shell: bash
   plugin:
     # the Claude Code plugin and marketplace manifests, checked by Claude Code itself (offline, no login needed)
