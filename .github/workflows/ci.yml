@@ -14,7 +14,7 @@ jobs:
         with: { node-version: "${{ matrix.node }}" }
       - run: git config --global user.email ci@example.com && git config --global user.name ci && git config --global core.autocrlf false
         shell: bash
-      - run: npm test 2>&1 | tee test-output.txt; exit ${PIPESTATUS[0]}
+      - run: npm test -- --test-reporter=tap 2>&1 | tee test-output.txt; exit ${PIPESTATUS[0]}
         shell: bash
       - if: failure()
         run: node scripts/ci-annotate.mjs test-output.txt
