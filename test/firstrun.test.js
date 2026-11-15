@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { isolateHome, makeRepo, fakeBins } from './helpers.js';
+import { fileURLToPath } from 'node:url';
 
 const home = isolateHome();
 fakeBins({ claude: 'console.log("x")', codex: 'console.log("x")' });
@@ -16,7 +17,7 @@ const { wantProviders, ROUTE_TEMPLATES, resolveTemplate } = await import('../src
 const { controllerWorker } = await import('../src/presets.js');
 const { modelSizeB } = await import('../src/models.js');
 const { detectLocal } = await import('../src/local.js');
-const bin = new URL('../bin/conductor.js', import.meta.url).pathname;
+const bin = fileURLToPath(new URL('../bin/conductor.js', import.meta.url));
 
 test('setup never turns on the controller\'s own CLI as a worker', () => {
   const { dir } = makeRepo();

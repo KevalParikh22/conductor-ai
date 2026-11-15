@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { isolateHome, makeRepo, fakeBins } from './helpers.js';
+import { fileURLToPath } from 'node:url';
 
 isolateHome();
 fakeBins({ 'agent-a': `console.log('## RESULT: DONE\\n## Files changed\\n- (none)\\n## Notes\\n- ok');` });
@@ -83,12 +84,12 @@ test('compact diff: whitespace ignored, lockfiles hidden, new files included, lo
 
   git('add', '-A'); git('commit', '-qm', 'work'); git('switch', '-qc', 'conductor/T1');
   fs.writeFileSync(path.join(dir, 'b.js'), 'b\n'); git('add', '-A'); git('commit', '-qm', 'T1'); git('switch', '-q', 'feat/x');
-  const out = execFileSync(process.execPath, [new URL('../bin/conductor.js', import.meta.url).pathname, 'diff', 'conductor/T1'], { cwd: dir }).toString();
+  const out = execFileSync(process.execPath, [fileURLToPath(new URL('../bin/conductor.js', import.meta.url)), 'diff', 'conductor/T1'], { cwd: dir }).toString();
   assert.match(out, /1 file changed, \+1 -0 \(HEAD\.\.\.conductor\/T1\)/);
 });
 
 test('help: short by default, everything with help all', () => {
-  const bin = new URL('../bin/conductor.js', import.meta.url).pathname;
+  const bin = fileURLToPath(new URL('../bin/conductor.js', import.meta.url));
   const short = execFileSync(process.execPath, [bin, '--help']).toString();
   const all = execFileSync(process.execPath, [bin, 'help', 'all']).toString();
   assert.ok(short.split('\n').length < 25, 'short help fits on one screen');

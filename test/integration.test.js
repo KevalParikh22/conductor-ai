@@ -6,11 +6,12 @@ import path from 'node:path';
 import os from 'node:os';
 import { spawn } from 'node:child_process';
 import { isolateHome, makeRepo } from './helpers.js';
+import { fileURLToPath } from 'node:url';
 
 const home = isolateHome();
 const { initProject, codexHasConductor } = await import('../src/init.js');
 const { createUiServer } = await import('../src/ui/server.js');
-const BIN = new URL('../bin/conductor.js', import.meta.url).pathname;
+const BIN = fileURLToPath(new URL('../bin/conductor.js', import.meta.url));
 
 test('init (claude-code) adds files, preserves user content, and is idempotent', () => {
   const { dir } = makeRepo({ files: { 'CLAUDE.md': '# My rules\nkeep me\n', 'AGENTS.md': '# Existing agents file\n' } });

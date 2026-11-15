@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { isolateHome, makeRepo, fakeBins, PLAN } from './helpers.js';
+import { fileURLToPath } from 'node:url';
 
 isolateHome();
 // writes first.txt on a fresh task; on a continued one, checks it can see the earlier work and writes fix.txt
@@ -69,7 +70,7 @@ test('continue without a worktree says how to start one; conductor retry runs it
   const { dir, cfg } = setup();
   await assert.rejects(dispatch(cfg, { role: 'build', planPath: 'docs/plan.md', taskId: 'T1', continue: true, note: 'x' }), /no worktree for "T1"/);
   await dispatch(cfg, { role: 'build', planPath: 'docs/plan.md', taskId: 'T1', worktree: true, chain: ['agent-w'] });
-  const bin = new URL('../bin/conductor.js', import.meta.url).pathname;
+  const bin = fileURLToPath(new URL('../bin/conductor.js', import.meta.url));
   const run = (...a) => execFileSync(process.execPath, [bin, ...a], { cwd: dir, env: process.env }).toString();
   assert.throws(() => run('retry', 'T1'), /needs --note/);
   const out = run('retry', 'T1', '--note', 'use sum not add');

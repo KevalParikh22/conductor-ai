@@ -110,7 +110,7 @@ export async function checkEvals({ ids, dir } = {}) {
     const problems = [];
     const work = fs.mkdtempSync(path.join(os.tmpdir(), `conductor-evalcheck-${task.id}-`));
     try {
-      const plan = fs.readFileSync(path.join(task.dir, 'plan.md'), 'utf8');
+      const plan = fs.readFileSync(path.join(task.dir, 'plan.md'), 'utf8').replace(/\r\n?/g, '\n');
       for (const r of checkPlan(plan, { verifyCmd: 'npm test' })) for (const p of r.problems) problems.push(`plan ${r.id}: ${p}`);
       prepareEval(task, work);
       if ((await scoreEval(task, work)).pass) problems.push('already passes on the starting project: the task tests nothing');

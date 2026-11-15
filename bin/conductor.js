@@ -23,7 +23,7 @@ import { doctorData } from '../src/doctor.js';
 import { listFreeModels, listProviderModels } from '../src/models.js';
 import { CLI_PRESETS, ROLES, CONTROLLERS, controllerWorker } from '../src/presets.js';
 import { VERSION } from '../src/version.js';
-import { which, keyValue, untilText, wrapForTerminal, copyToClipboard } from '../src/util.js';
+import { which, rel, keyValue, untilText, wrapForTerminal, copyToClipboard } from '../src/util.js';
 import { usageReport, formatUsage, recordSaving } from '../src/usage.js';
 import { listRuns, readRun, formatRuns, runDetail, runGates, formatGates } from '../src/runs.js';
 import { CATALOG, CATEGORIES, urlFields } from '../src/catalog.js';
@@ -467,7 +467,7 @@ async function main() {
       }
       if (sub === 'new') {
         const f = newRule(root, o._[1] || '', { description: o.description || '', paths: o.paths || '' });
-        console.log(`created ${path.relative(root, f)}: write the rule, then run conductor rules sync`); return 0;
+        console.log(`created ${rel(root, f)}: write the rule, then run conductor rules sync`); return 0;
       }
       if (sub === 'sync') {
         const lines = syncControllerFiles(root, controller);

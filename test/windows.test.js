@@ -41,3 +41,14 @@ test('another .bat goes through cmd.exe with every metacharacter escaped; an .ex
   fs.writeFileSync(exe, '');
   assert.deepEqual(winCommand(exe, ['-p', 'x']), { file: exe, args: ['-p', 'x'], opts: {} });
 });
+
+test('a plan saved with Windows line endings (CRLF) reads the same as one with LF', async () => {
+  const { extractTask, extractSection, openQuestions } = await import('../src/plan.js');
+  const { checkPlan } = await import('../src/plancheck.js');
+  const lf = '# Plan\n\n## Open questions\n- [ ] which db?\n\n## Tasks\n\n### T1: add\n- **role:** build\n- **files:** `src/add.js`\n- **verify:** `npm test`\n- **acceptance:**\n  - [ ] `add(2, 3)` returns `5`\n';
+  const crlf = lf.replace(/\n/g, '\r\n');
+  assert.equal(extractTask(crlf, 'T1'), extractTask(lf, 'T1'));
+  assert.equal(extractSection(crlf, 'Open questions'), extractSection(lf, 'Open questions'));
+  assert.deepEqual(openQuestions(crlf), ['which db?']);
+  assert.deepEqual(checkPlan(crlf, { verifyCmd: 'npm test' }), checkPlan(lf, { verifyCmd: 'npm test' }));
+});

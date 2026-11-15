@@ -10,6 +10,7 @@ import { testProvider, testPermissions } from './providers.js';
 import { checkControllerFiles, allControllers, controllerErrors } from './controllers.js';
 import { which, keyValue, untilText } from './util.js';
 import { getCooldowns } from './cooldowns.js';
+import { fileURLToPath } from 'node:url';
 
 /** → { results: [{ name, kind, ok, status, next, permissions, readOnlyEnforced, ... }], errs, ctrlIssues, problems } */
 export async function doctorData(cfg, { live = false } = {}) {
@@ -72,7 +73,7 @@ export async function doctorData(cfg, { live = false } = {}) {
  * `@conductor-oss/conductor-cli`, the `conductor-cli` package); with both installed, the last one installed wins.
  * → { ok: true } | { ok: false, path, problem, fix } | { missing: true }
  */
-export function conductorCommandCheck(ownBin = new URL('../bin/conductor.js', import.meta.url).pathname) {
+export function conductorCommandCheck(ownBin = fileURLToPath(new URL('../bin/conductor.js', import.meta.url))) {
   const found = which('conductor');
   if (!found) return { missing: true };
   let real = found, own = ownBin;

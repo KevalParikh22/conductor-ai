@@ -160,7 +160,8 @@ export function timestamp() {
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
 }
 
-export function rel(root, p) { return path.relative(root, p) || '.'; }
+/** A path relative to root, with / on every OS (Windows file APIs and git accept it; output and tests read the same). */
+export function rel(root, p) { return path.relative(root, p).split(path.sep).join('/') || '.'; }
 
 // "YOUR_API_KEY", "<key>", "sk-xxxx", "changeme"…: copied examples, not keys
 const PLACEHOLDER_KEY = /^(your[_-]|<.*>$|sk-x{3,}$|x{4,}$|changeme$|todo$|placeholder|replace[_-]?me)/i;

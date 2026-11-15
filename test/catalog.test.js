@@ -6,6 +6,7 @@ import path from 'node:path';
 import http from 'node:http';
 import { execFileSync } from 'node:child_process';
 import { isolateHome, makeRepo } from './helpers.js';
+import { fileURLToPath } from 'node:url';
 
 const home = isolateHome();
 const { CATALOG, CATEGORIES, BUILTIN_ALIASES, urlFields } = await import('../src/catalog.js');
@@ -114,7 +115,7 @@ test('URL placeholders must be filled', () => {
 
 test('CLI: providers lists the catalog; keys set reads stdin; add --yes without a key explains what to do', () => {
   const { dir } = makeRepo();
-  const bin = new URL('../bin/conductor.js', import.meta.url).pathname;
+  const bin = fileURLToPath(new URL('../bin/conductor.js', import.meta.url));
   const run = (args, input) => execFileSync(process.execPath, [bin, ...args], { cwd: dir, input, env: { ...process.env, CONDUCTOR_HOME: home }, stdio: ['pipe', 'pipe', 'pipe'] }).toString();
   const list = run(['providers', '--json']);
   assert.equal(JSON.parse(list).length, Object.keys(CATALOG).length);

@@ -316,7 +316,7 @@ async function dispatchOnce(cfg, opts) {
   if (opts.planPath) {
     const planAbs = path.resolve(root, opts.planPath);
     if (!fs.existsSync(planAbs)) throw new UsageError(`plan not found: ${opts.planPath}`);
-    planText = fs.readFileSync(planAbs, 'utf8');
+    planText = fs.readFileSync(planAbs, 'utf8').replace(/\r\n?/g, '\n');
   }
   if (role === 'review') {
     if (!inRepo) throw new UsageError('review needs a git repo');

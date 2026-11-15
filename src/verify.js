@@ -6,7 +6,7 @@ import { run, which, SECRET_VARS } from './util.js';
 export function detectVerify(root, settings = {}) {
   if (settings.verify) return settings.verify;
   try {
-    const agents = fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8');
+    const agents = fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8').replace(/\r\n?/g, '\n');
     const m = agents.match(/^\s*-\s*\*\*Verify[^\n]*?`([^`]+)`/m);
     if (m && !m[1].trim().startsWith('<')) return m[1].trim();
   } catch { /* no AGENTS.md */ }

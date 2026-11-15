@@ -5,12 +5,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { isolateHome, makeRepo } from './helpers.js';
+import { fileURLToPath } from 'node:url';
 
 isolateHome();
 const { ROUTE_TEMPLATES, resolveTemplate, addTemplates, starterIds, wantProviders, matchRoute, routeErrors } = await import('../src/routing.js');
 const { DEFAULT_CONFIG } = await import('../src/presets.js');
 const P = DEFAULT_CONFIG.providers;
-const root = new URL('..', import.meta.url).pathname;
+const root = fileURLToPath(new URL('..', import.meta.url));
 
 test('every template resolves to enabled providers of the right kind and passes validation', () => {
   for (const t of ROUTE_TEMPLATES) {

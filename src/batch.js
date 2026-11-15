@@ -21,7 +21,7 @@ const field = (section, name) => (section.match(new RegExp(`\\*\\*${name}:\\*\\*
 export function planBatch(cfg, { planPath, tasks, role, allowOpenQuestions, allowWeakPlan, all, merge }) {
   const planAbs = path.resolve(cfg.root, planPath || '');
   if (!planPath || !fs.existsSync(planAbs)) throw new UsageError(`plan not found: ${planPath || '(none given)'}`);
-  const planText = fs.readFileSync(planAbs, 'utf8');
+  const planText = fs.readFileSync(planAbs, 'utf8').replace(/\r\n?/g, '\n');
   const skipped = [];
   if (all) {
     // S3: every task a worker can do; controller and read-only tasks are left to the controller

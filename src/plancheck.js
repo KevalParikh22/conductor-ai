@@ -57,6 +57,7 @@ export function checkTask(section, { verifyCmd = '', maxFiles = 4 } = {}) {
 
 /** Every task in a plan (or just `ids`) with its problems. */
 export function checkPlan(planText, { ids, verifyCmd, maxFiles } = {}) {
+  planText = String(planText ?? '').replace(/\r\n?/g, '\n'); // Windows line endings (CRLF) read like LF
   return (ids?.length ? ids : planTaskIds(planText)).map((id) => {
     const section = extractTask(planText, id);
     if (!section) return { id, title: '', role: '', problems: ['not found in the plan'] };
@@ -113,6 +114,7 @@ export function readAcceptance(text, criteria) {
  * → [{ fn, param, error, rule, message }] (warnings: they don't stop a task)
  */
 export function planWarnings(planText) {
+  planText = String(planText ?? '').replace(/\r\n?/g, '\n'); // Windows line endings (CRLF) read like LF
   const notes = String(planText);
   const general = notes.match(/wrong type[^.\n]{0,20}?(?:→|->|=>|:|throws?|gives?|is an?)\s*`?(TypeError)`?/i);
   if (!general) return [];

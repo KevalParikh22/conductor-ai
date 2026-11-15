@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { isolateHome, makeRepo, fakeBins, PLAN } from './helpers.js';
+import { fileURLToPath } from 'node:url';
 
 const home = isolateHome();
 fakeBins({
@@ -18,7 +19,7 @@ const { readBlock } = await import('../src/localfiles.js');
 const { listSkills, newSkill, setSkillOn, syncSkills, skillsForTask, skillMatches, removeSkill, addSkill, parseSkill } = await import('../src/skills.js');
 const { dispatch, clearCooldowns } = await import('../src/core.js');
 const { loadConfig } = await import('../src/config.js');
-const bin = new URL('../bin/conductor.js', import.meta.url).pathname;
+const bin = fileURLToPath(new URL('../bin/conductor.js', import.meta.url));
 
 test('init keeps conductor files out of git: creates .gitignore, lists only files it created, --share removes the block', () => {
   const { dir, git } = makeRepo();

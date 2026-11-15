@@ -3,6 +3,7 @@
 
 // ---------------- plan parsing ----------------
 export function extractTask(planText, taskId) {
+  planText = String(planText ?? '').replace(/\r\n?/g, '\n'); // Windows line endings (CRLF) read like LF
   const lines = planText.split('\n');
   const head = new RegExp(`^(#{2,4})\\s+${taskId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![0-9A-Za-z])`);
   const start = lines.findIndex((l) => head.test(l));
@@ -21,6 +22,7 @@ export function extractTask(planText, taskId) {
  * unchanged when the task isn't found.
  */
 export function setTaskStatus(planText, taskId, value) {
+  planText = String(planText ?? '').replace(/\r\n?/g, '\n'); // Windows line endings (CRLF) read like LF
   const lines = planText.split('\n');
   const head = new RegExp(`^(#{2,4})\\s+${taskId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![0-9A-Za-z])`);
   const start = lines.findIndex((l) => head.test(l));
@@ -39,6 +41,7 @@ export function setTaskStatus(planText, taskId, value) {
 }
 
 export function extractSection(planText, title) {
+  planText = String(planText ?? '').replace(/\r\n?/g, '\n'); // Windows line endings (CRLF) read like LF
   const m = planText.match(new RegExp(`^##\\s+${title}[^\\n]*\\n([\\s\\S]*?)(?=^##\\s|$(?![\\s\\S]))`, 'mi'));
   return m ? m[1].trim() : '';
 }

@@ -4,8 +4,9 @@
 // state, roadmaps, logs or secrets. test/package.test.js runs this, so CI fails before a bad package is published.
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
-const root = new URL('..', import.meta.url).pathname;
+const root = fileURLToPath(new URL('..', import.meta.url));
 export const DENY = [
   [/^test\//, 'tests'], [/^bench\//, 'the benchmark'], [/^evals\/[^/]+\/solution\//, 'eval reference solutions (only `eval check` uses them)'],
   [/(^|\/)docs\/plan\//, 'plans'], [/(^|\/)\.conductor\//, "conductor's own state"], [/^(ROADMAP|PRODUCT_PLAN|LAUNCH_PLAN|ALPHA_READINESS|UX_REVIEW|RELEASE_NOTES)/, 'internal planning notes'],

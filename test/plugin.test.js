@@ -4,10 +4,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { isolateHome } from './helpers.js';
+import { fileURLToPath } from 'node:url';
 
 isolateHome();
 const { commandSkills } = await import('../src/init.js');
-const root = new URL('..', import.meta.url).pathname;
+const root = fileURLToPath(new URL('..', import.meta.url));
 const json = (f) => JSON.parse(fs.readFileSync(path.join(root, f), 'utf8'));
 
 test('plugin skills match the command templates (run: node scripts/gen-plugin.mjs)', () => {

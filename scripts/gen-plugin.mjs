@@ -3,8 +3,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { commandSkills } from '../src/init.js';
+import { fileURLToPath } from 'node:url';
 
-const root = new URL('..', import.meta.url).pathname;
+const root = fileURLToPath(new URL('..', import.meta.url));
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 
 const skillsDir = path.join(root, 'skills');
