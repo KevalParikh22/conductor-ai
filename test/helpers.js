@@ -32,6 +32,8 @@ export function fakeBins(scripts) {
     const p = path.join(bin, name);
     fs.writeFileSync(p, `#!/usr/bin/env node\nconst fs=require('fs');const args=process.argv.slice(2);\n${body}\n`);
     fs.chmodSync(p, 0o755);
+    // Windows runs neither shebangs nor files without an extension: a .cmd shim, like npm's own
+    if (process.platform === 'win32') fs.writeFileSync(`${p}.cmd`, `@node "%~dp0\\${name}" %*\r\n`);
   }
   process.env.PATH = `${bin}${path.delimiter}${process.env.PATH}`;
   return bin;
