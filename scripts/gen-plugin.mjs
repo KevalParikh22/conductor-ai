@@ -15,8 +15,10 @@ for (const s of commandSkills({ plugin: true })) {
   fs.writeFileSync(path.join(skillsDir, s.name, 'SKILL.md'), s.content);
 }
 
-const manifestFile = path.join(root, '.claude-plugin', 'plugin.json');
-const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
-manifest.version = pkg.version;
-fs.writeFileSync(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
+for (const dir of ['.claude-plugin', '.antigravity-plugin']) {
+  const manifestFile = path.join(root, dir, 'plugin.json');
+  const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+  manifest.version = pkg.version;
+  fs.writeFileSync(manifestFile, JSON.stringify(manifest, null, 2) + '\n');
+}
 console.log(`plugin: ${commandSkills().length} skills, version ${pkg.version}`);

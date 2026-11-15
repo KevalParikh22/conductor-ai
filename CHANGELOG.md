@@ -1,23 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.11.0 (2026-11-15)
 
-- **Windows support, tested in CI.** The tests now run on Windows (Node 20, 22, 24) next to Linux and macOS, and found real bugs, all fixed:
-  - npm-installed CLIs (Codex, OpenCode, Copilot) are `.cmd` shims, which Node can't start: conductor now runs the shim's script with node directly, so prompt text never passes through `cmd.exe`. Other `.cmd`/`.bat` files go through `cmd.exe` with their arguments escaped.
-  - Verify and repro lines with quotes (`node -e "…"`) failed: they now run in `cmd.exe` exactly as written.
-  - A plan saved with Windows line endings (CRLF) lost its acceptance criteria and open questions: plans, plan check and AGENTS.md's Verify line now read CRLF like LF.
-  - `conductor retry` couldn't find a worktree when the project path was spelled differently (`C:/x` from git, a short name like `RUNNER~1`): worktree folders now come from the native real path.
-  - `doctor` read its own path wrongly on Windows (`/D:/…`) and could call conductor "another program".
-  - Paths in messages and results use `/` on every OS.
-  - CI turns failing tests into annotations, so failures can be read without opening the log.
-- **B2 benchmark results** ([docs/BENCHMARK.md](docs/BENCHMARK.md#b2-bigger-tasks-2026-11-15)). Five multi-file tasks, three runs per condition: with conductor, Claude spent 88% less ($0.091 vs $0.753, medians), the runs were 13% faster (131 s vs 150 s) and passed 15/15 hidden tests against 14/15. Codex won every task in C; agy and OpenCode raced it and finished seconds behind.
+### Speed: priority, merging and the whole plan in one call
+
 - **Routing learns from failed work, not only failed replies (from B2).** The usage log recorded a write worker's attempt as a success as soon as it replied, before verify ran, so a free model whose code kept failing verify looked reliable: in a B2 run NVIDIA's three verify failures were logged as successes and it was picked first again. A write attempt is now recorded after conductor's checks, and counts as failed (`verify failed`, `acceptance check failed`, `repro failed`) when its work fails them (failures the starting commit already had don't count). And the selector now puts a provider whose recent work mostly failed (under 60%) after the reliable ones, whatever its group: before, it only moved within its group, so on small tasks a free API model at 30% still went before every agent. Under priority `speed`, the fastest reliable provider goes first, before the free-first rule; batch spreading and races follow the run's priority.
 - **`/conduct-run` runs the batch in the foreground.** In a B2 run the batch finished in 98 s, but Claude had started it in the background and then waited in a shell loop until the loop's 20-minute limit. The template now says: foreground, with the longest timeout the shell tool allows, and no polling.
 - **Fixed, from the multi-model B2 run: a batch hedge's stop didn't reach a race.** When a hedge won, the task's original attempt was told to stop, but if that attempt was a race (two workers at once), its workers kept running: the batch waited 314 s for a slow agy attempt, and its branch (`conductor/T4-s1`) was left behind. A race now stops all its attempts when it is stopped, and a hedge's losers are cleaned up by the worktree they actually ended in.
 - **Hedging watches the worker that is actually working.** An attempt moves on when its worker fails or hands its work on (escalation); the hedge monitor kept judging the worker it started on, so when NVIDIA's work failed verify and agy took over for 638 s, nothing hedged it onto the idle, faster Codex. The batch line now names the real winner.
-- **NVIDIA NIM works out of the box.** The preset now starts on a model that answers fast on a free key (Nemotron 3 Ultra, then MiniMax M3.1 Flash and Gemma 4 31B), is marked free (90 s limit, not 300 s; free routes can take hedges), and a model the API returns 404 for ("not found for account": listed, but not open to free keys) now falls back to the next model like a busy one. Found while setting it up: `conductor add nvidia` had picked DeepSeek V4.1 Flash, which hangs, so the test never finished.
-- **Fixed: agy wrongly marked "out of quota for the whole account".** Two model families that ran out with the same reset time counted as proof that the account was empty. But agy's Claude and GPT-OSS models share one quota while its Gemini models have their own: on 2026-11-14 conductor cooled agy down for 6 days while Gemini 3.8 Flash had 93% left. Now the account counts as empty only when every model family has been tried; until then the next family gets its turn.
-- **Workers held to the Design notes, not only the acceptance lines (from B2's T3 misses).** The build prompt (and the chat-worker protocol) now says the Design notes are the spec: every rule about the worker's files must hold, values in backticks are exact (an error `invalid price` is exactly that text), implied edge cases count (`,` is two empty fields), and each rule gets a test. `/conduct-plan` and the plan template ask for a check for every edge case and exact value, and for "exactly" where a general "contains" rule would be ambiguous. The two B2 misses were exactly these: a `,` row parsed as one field (agy), and `invalid price: 9.999` for `invalid price` (OpenCode).
 - **conductor marks merged tasks done.** After `batch --merge` / `--all`, conductor sets `status: done` on each merged task in the plan and commits it in one commit (`conductor: T1, T2 done in <plan>`; an untracked plan is just edited). `settings.markDone: false` turns it off. `/conduct-run` no longer asks the controller to do that bookkeeping, and asks for `HANDOFF.md` only when something is left. In B2's last C run the controller spent 8 extra turns on it (15 vs 7), and Claude's cost rose from $0.128 to $0.181.
 - **Smarter hedging (from B2's C run).** The second attempt at a slow task now goes to the idle route expected to be fastest for a task that size, not the next one in the chain. And when the routes trying are all slow and a route expected to be clearly faster (`hedgeFaster`, 1.5×) frees up later, it gets one more attempt (up to `hedgeMax`, 3 in all). In B2, T3 sat on OpenCode for 192 s while its hedge went to agy (slow too) and Codex became free at ~116 s unused.
 - **`/conduct-run` is one call (S5).** The controller now checks the plan, makes sure the checkout is clean, runs `conductor batch --plan <plan> --all` once, and reads one summary, instead of running wave after wave and merging turn by turn. It handles only what conductor couldn't: retries, conflicts, a failing verify on the merged code, review findings, controller tasks. `--all` skips tasks already `status: done`, so running it again picks up what is left.
@@ -27,60 +17,26 @@
 - **Priority: save, balanced or speed (S0).** `settings.priority`, `--priority` on `run` and `batch`, and `priority` in MCP `conductor_run`/`conductor_batch`. Speed costs tokens, so you choose: `save` never starts a second attempt (and ignores `settings.race`); `balanced` (the default) starts one only on free API routes and local models; `speed` races small tasks, hedges onto any route without a per-token price (subscription agents spend their own quota) and allows 3 tasks per provider in a wave. Paid routes and the controller's own CLI never take an extra attempt. With `speed` and fewer than 2 routes that can, the batch warns. docs/CONFIGURATION.md has the table and the guidance.
 - **Hedging slow batch tasks (S1, from B2).** In B2 the wave waited 150 s for opencode while codex finished in 51–62 s. Now, once a task in a batch has finished, a task still running past 1.5× the finished tasks' median (and at least `hedgeAfterSec`, 45 s) gets a second attempt on an idle route its priority allows, in its own worktree (`<id>-h`). The first attempt that passes every check wins; the other is stopped and its worktree removed. The batch line says `hedged: … won`; the live table shows it. `settings.hedge: false` turns it off.
 - **Speed history by task size.** Routing's speed stats now use runs of the same size (small/medium/large) when there are at least 3, so a worker that is fast on small tasks is no longer assumed fast on big ones (B2 gave opencode two big tasks for this reason).
-- **Plan check catches contradicting rules (Q11, found by B2).** When a plan's Design notes send the wrong type to `TypeError` in general, but a specific rule says a value "must be an integer/number/string… (else RangeError)" without saying what a value of the wrong type does, `plan check` prints a `!` warning: name the function and the parameter, and say which rule wins. B2's cart task failed its hidden test on exactly this, and conductor had reported it done. The warning also goes into the run summary of a task that calls that function, into MCP `conductor_plan_check`, and into `--json` (now `{ tasks, warnings }`); `/conduct-plan` tells the controller to fix it. Warnings don't stop a task. B2's original plan gets four warnings (qty in add() and setQty(), buy and get); the clarified plan gets none.
-- **Name-clash safeguards for the alpha.** The package installs two commands for the same program, `conductor` and `conductor-ai`. Other tools also install a `conductor` command (Conductor OSS's `@conductor-oss/conductor-cli`, the `conductor-cli` package), and with both installed the last one wins: `conductor doctor` now warns when `conductor` on your PATH is another program, and says to use `conductor-ai`. The README says conductor-ai is not affiliated with Conductor (conductor.build) or Conductor OSS (Orkes).
-- **Free web chats, by hand (W1).** `--provider manual` writes a run's whole prompt (task, design notes, files, the reply format) to the run folder, copies it to the clipboard when the machine can, and waits (exit 5, outcome `waiting`). `conductor import <run> <file|->` replays your answer through every check like any worker's: file blocks applied with the protected-file rules, verify, acceptance checks, scope; the waiting run then points at the new one (`answered`). Also in MCP (`conductor_import`) and the UI (a run page card with Copy prompt and a paste box). `conductor import --research <file>` files a deep-research report into `docs/research/`. A per-chat `maxPromptChars` caps the prompt; over it, the run stops rather than falling back to another worker's quota. conductor never opens a chat, holds cookies or logs in (decided 2026-11-11).
-- **Fixed: `loadConfig` shared the built-in defaults,** so a caller changing a config's settings or a provider changed them for every later load in the same process (the UI and MCP servers). It now returns a fresh copy. Found while testing W1.
-- **Worker prompt wording:** "run by an orchestrator (the coding agent the user works in)", no longer "usually Claude".
-- **MCP: run reports as resources.** The MCP server now offers resources: `conductor://runs/latest` and `conductor://runs/<id>` for the 20 most recent runs (newest first), each a markdown page with the run's summary, the checklist that decides "done", and the worker's report; `resources/templates/list` gives `conductor://runs/{id}`. A controller (or its user, in clients that show resources) can open a run like a file instead of calling a tool.
-- **`conductor demo`:** see conductor work end to end without touching your projects. It makes a throwaway project (a tiny Node library and a plan with 2 independent tasks), hands both tasks to your workers in parallel (each in its own worktree, every check applied, with the live table), merges what passed, runs the project's tests, and removes everything unless you pass `--keep`. Live with OpenCode's free model: both tasks done and merged, 15 tests passing, 25 s.
-- **UI: Overview, Roles and Settings.** Overview now shows why work failed (this project's runs not done, by cause, and failed worker attempts everywhere) and the first-try accept rate by week for the last 6 weeks, against the 70% alpha gate. Roles shows one role at a time in tabs, each tab with its first provider. Settings are in minutes and KB (the config keeps seconds and bytes).
-- **Live progress in the terminal.** `conductor run` keeps its event lines and adds one status line at the bottom: a spinner, the current step (worker, verify, checks, repro, review) and the time spent against the worker's limit (`codex-cli is working · 3:12 of 20:00`). `conductor batch` shows a table with one row per task (state, worker, time) redrawn in place, then the summary. Piped output, `--json` and MCP keep the plain lines exactly as before.
-- **Idle limit per agent.** Codex is stopped after 10 minutes without output (its `--json` mode prints an event for every step, so silence that long means it hangs) and the next provider runs; agents that print only at the end (agy) keep no idle limit. A provider's `idleTimeoutMin` (`0` = never) and the global `idleTimeoutSec` still win.
-- **UX checklist run (15 of 18 checks; the other 3 need a clean Claude Code, VS Code and Copilot).** Fixed what it found:
-  - **Lost run:** two runs of one task started in the same second shared a run folder, so one was lost (also possible with `--samples` and race mode). Each run now gets its own folder; an exact run id still finds its run.
-  - **Python Verify:** detected only when `pytest` was on the global PATH. Now the project venv, a pytest config (`pyproject.toml`, `pytest.ini`, `setup.cfg`, `tox.ini`, `conftest.py`) or a `tests/` folder gives `pytest` (or `python -m pytest`).
-  - **Local model not installed:** adding Ollama (UI gallery or `conductor add`) set a model the server didn't have, without a word. It now switches to an installed model of a usable size, or says what to pull.
-  - **doctor vs status:** a provider cooling down after a rate limit was ✗ in `status` and ready in `doctor`. Both now show `~ cooling down until … (reason)` with `conductor cooldown --clear <name>`, and the UI shows an amber "cooling down" pill.
-  - **Fresh install:** optional API keys, a project not set up yet and agents you don't use were shown in red on API keys and Setup; red is now only for what conductor needs (git, Node).
-  - **80 columns:** on a terminal, long lines wrap at words and continue under their text column (help, tables, status); piped output and `--json` are unchanged.
-  - **Typos:** `lessons`, `stats`, `guard`, `rules`, `eval` and `plan` now get a suggestion; a tie names both (`runz` → run or runs); a swapped pair of letters counts as one edit (`stauts`).
-  - **Phone width:** the rule library on Roles and folder paths on Skills widened the page; they wrap now.
-  - `worker: x ((default))` → `worker: x (its default model)`.
-  - **CI:** a `plugin` job runs `claude plugin validate .` (passes locally with Claude Code 2.1.317).
-- **B2 benchmark tasks are ready** (`bench/b2/`): five bigger, multi-file tasks on a bookshop library (cart with stock rules, a discount engine, CSV product import with an error report, an order state machine with a refund window, checkout totals that need the cart and discounts), specified to the cent, with hidden tests written before any run and a reference solution. `node bench/run.mjs check --suite b2` proves each task fails on the start and passes on the solution; the plan passes `conductor plan check`. `bench/run.mjs` takes `--suite pilot|b2`. Not run yet: it needs Claude quota.
-- **Local models that don't fail silently (V13).** Measured on Ollama 0.40: a model runs with a 4,096-token window unless told otherwise (the model itself supported 262,144), and a longer prompt is cut without an error: 59,000 characters reached the model as 2,050 tokens, status 200.
-  - **Window check:** before a local chat call conductor asks the server for the window the model really runs with (Ollama `/api/show` and `/api/ps`, loading the model first if needed, which also keeps it loaded for 10 minutes; LM Studio `/api/v0/models`). A prompt that won't fit is not sent: the attempt fails with `context too small: …` and a fix (`OLLAMA_CONTEXT_LENGTH=16384`, or a Modelfile with `num_ctx`; the LM Studio load setting), and the next route runs.
-  - **Cut detection:** when the server counts far fewer prompt tokens than were sent, the run warns that the prompt was cut (any server, window known or not).
-  - **Smaller prompt for local models:** no project map, a shorter AGENTS.md and context pack, at most 20 KB of files (`localPromptProfile: false` keeps the full one).
-  - **One call at a time per local server**, from any number of parallel tasks (a provider's own `maxParallel` wins).
-  - **`doctor --live`** shows each local model's window, with the fix when it is under 8,192 tokens. A provider's `location` setting overrides the guess from its address.
-- **Each step of a run is timed (V12).** The run record has `timings` (seconds for context, base, guard, verify, checks, repro, isolate, review); the summary shows a `time:` line, and the checklist (`conductor runs show`, the run page) shows each check's time. Measured on eval tasks: the checks take 0.1–0.2 s each and the workers 9–75 s per attempt (95%+ of a run); the project map and context pack take 10–75 ms, and base verify is already cached per commit, so nothing else was worth caching.
-- **`src/core.js` split by concern (V12):** 1,129 → 784 lines; plan parsing, outcomes, reply files and evidence, the summary text and cooldowns moved unchanged into their own files and are re-exported from `core.js`, so no importer changed.
-- **A clean npm package (V10).** The eval reference solutions (used only by `conductor eval check`, which now says to run it from a clone) are no longer published: 147 files instead of 163; the hidden tests and mutants that score `eval run` still ship. `scripts/check-package.mjs` runs `npm pack --dry-run` and fails on anything outside package.json `files` or anything for development only (tests, the benchmark, solutions, plans, conductor state, roadmaps, logs, secrets); a test runs it in every CI job.
-- **Any controller, not just Claude (V11).** The README, package description and `conductor --help` now say "your coding agent plans and reviews" and name all four controllers. The quick start has one row per controller (Claude Code, Codex CLI, Antigravity CLI, OpenCode, or your own via `conductor controller add`) with its setup command and how to start, so a Codex-only or Antigravity-only user doesn't read Claude steps.
 - **Race mode (V9, opt-in).** `--race` (or `settings.race` for small write tasks) starts the two fastest routes that have no per-token price (free APIs, agents on your subscriptions; never a paid API or the controller's own CLI) in their own worktrees. The first attempt that passes every check (verify, acceptance checks, scope, guard) wins; the other is stopped at once: its process group is killed and its API call aborted. A fast but wrong attempt doesn't win. It saves waiting, not tokens. Live: OpenCode passed 3/3 checks in 17 s and kilo-free was stopped. Cancelled calls are left out of the speed stats; the summary shows `race:` with the winner and what was stopped.
 - **A free API call can no longer hang a task.** In an eval, one call to a free route stayed open for 1 h 40 min after its abort fired (a stalled TLS connection). Every API call and model-list request now has a hard deadline (its time limit + 5 s) and returns `timeout`, so conductor moves on even if `fetch` never settles.
-- **Controllers as data (V6).**
-  - **One entry per controller** (`CONTROLLERS` in `src/presets.js`) says where it reads its instructions, commands, skills, rules and reviewer subagent, how it registers MCP, and its hook file. Each format names one writer in `src/controllers.js` or `src/guard.js`. `init`, `rules sync`, the commit guard, skill sync and the doctor checks now all read the entries instead of checking controller names.
-  - **No behaviour change:** for all four controllers, the 98 files `init`, `rules sync` and `guard on` write are byte-for-byte the same as before.
-  - **Add your own:** `conductor controller add <name> --like <existing>` copies the formats of a controller that reads the same files (most read AGENTS.md and `.agents/skills`). It is stored under `controllers` in your config; `conductor controller list | check`, and `doctor` reports an entry that names a format conductor can't write. A tool with a new format still needs its writer and a real test.
-  - **[docs/CONTROLLERS.md](docs/CONTROLLERS.md)** is generated from the entries; a test keeps it in step, and another checks every generated file is kept out of git.
-- **One feature set in the CLI, MCP and UI (V3).**
-  - **One registry** (`src/surfaces.js`) lists every action and where it lives. An action left out of a surface says why (secrets never pass through a model; a controller can't switch off its own guard; long evals run in the terminal). A test checks it against the real CLI commands, MCP tools and UI routes, so a new feature can't land in one surface and be forgotten in the others. [docs/SURFACES.md](docs/SURFACES.md) is generated from it.
-  - **MCP gained** `conductor_stats` (quality, failure causes, usage), `conductor_doctor` (with `live`), `conductor_rules`, and remove/promote in `conductor_lessons`.
-  - **The UI gained** a **Lessons & rules** page (add, remove, promote; lessons seen 3+ times are highlighted), and on Overview the first-try accept rate with the alpha gate, and the commit guard with an on/off switch.
-  - **Shared code:** doctor's checks moved to `src/doctor.js` and guard switching to `switchGuards`, so the CLI, MCP and UI do exactly the same thing.
+- **Faster plans: routing by measured speed.**
+  - **Speed-aware order:** for small tasks, the selector orders workers of the same kind by their measured median time on that role, among those that succeed at least 60% of the time. Big tasks keep your order.
+  - **Batch spreads a wave** by expected finish time, with at most `maxParallelPerProvider` (2) tasks per provider.
+  - **Hang cool-down:** a free route that times out twice cools down (`hangCooldownMin`, 15).
+  - **Review only when needed:** `/conduct-run` skips the extra end-of-plan review when every task passed its checks the first time.
+  - **Pilot C:** 623 s → **137 s**, with the same 6/6 and the same Claude cost ([docs/BENCHMARK.md](docs/BENCHMARK.md)).
+  - **No cold start:** a provider with no history yet (a new one, or a fresh account) counts as average for its group (the median of the measured ones), not last, so it gets tried and its speed gets measured. A measured provider that fails often still goes last.
+
+### Quality: no proof, no "done"
+
+- **Workers held to the Design notes, not only the acceptance lines (from B2's T3 misses).** The build prompt (and the chat-worker protocol) now says the Design notes are the spec: every rule about the worker's files must hold, values in backticks are exact (an error `invalid price` is exactly that text), implied edge cases count (`,` is two empty fields), and each rule gets a test. `/conduct-plan` and the plan template ask for a check for every edge case and exact value, and for "exactly" where a general "contains" rule would be ambiguous. The two B2 misses were exactly these: a `,` row parsed as one field (agy), and `invalid price: 9.999` for `invalid price` (OpenCode).
+- **Plan check catches contradicting rules (Q11, found by B2).** When a plan's Design notes send the wrong type to `TypeError` in general, but a specific rule says a value "must be an integer/number/string… (else RangeError)" without saying what a value of the wrong type does, `plan check` prints a `!` warning: name the function and the parameter, and say which rule wins. B2's cart task failed its hidden test on exactly this, and conductor had reported it done. The warning also goes into the run summary of a task that calls that function, into MCP `conductor_plan_check`, and into `--json` (now `{ tasks, warnings }`); `/conduct-plan` tells the controller to fix it. Warnings don't stop a task. B2's original plan gets four warnings (qty in add() and setQty(), buy and get); the clarified plan gets none.
+- **Worker prompt wording:** "run by an orchestrator (the coding agent the user works in)", no longer "usually Claude".
 - **Lessons you can check (V1).**
   - **Resolved, not held against forever:** when a provider passes a kind of work in an area where it failed before, its earlier failures there are marked resolved and stop moving it to the back of the chain. The guidance stays in prompts, because it is still true for the project.
   - **Offered as rules:** a lesson seen 3 times shows a `promote?:` line in the run summary and `[promote?]` in `conductor lessons`, with the command. Promoting stays the user's call.
   - **Cleaner lessons (found by the first A/B):** a module that fails to load made every acceptance check fail with the same error, and that was saved as a wrong-value lesson; it is now one `load` lesson with the error. A worker whose work was handed on now gets the concrete failed check as its lesson, not the empty "its acceptance checks failed".
   - **A/B in the eval:** `conductor eval run --lessons <file>` carries lessons from one run to the next, task by task (each eval task is a fresh repo, so they were lost before); `--no-lessons` is the control. The report shows which tasks had lessons in their prompt and how the same tasks did in the compared run.
-- **Antigravity (agy) under pressure (V8).** Checked against agy 1.5.8 with a real quota.
-  - **Real reset times:** a rate limit now cools a provider down until the time it reports ("Resets in 118h3m13s", "try again in 30s", "retry after 120 seconds"), capped at a week, instead of 30 minutes every time. Cooldowns that end on another day show the date.
-  - **Another model family on quota:** agy's model families have separate quotas, so when its Gemini quota is used up conductor tries its Claude or GPT-OSS models (from `agy models`, cached for a day) before giving up. Live: Gemini out of quota for 46 h → `claude-sonnet-4-6` did the task. When two models report the same reset time, the quota is the account's: conductor stops trying models and cools agy down until then.
-  - **One agy task at a time** by default (`maxParallel: 1`, any provider can set its own): batch spreads past it, and calls from parallel tasks wait their turn.
-  - **Permission check in `doctor --live`:** each agent that answers is asked to run `npm test` in a throwaway repo. A refusal is reported with the exact fix (`settings.allowCommands`).
 - **"Done" means validated, and every run has its own page (V4).**
   - **A checklist per run** (`src/rungates.js`): plan gate, worker, code guard, acceptance answered, acceptance checks, verify, scope and repro, each with pass / fail / waived / skipped / missing and its evidence (command, numbers, files, log path). The starting-commit verify and the independent review are shown as information.
   - **The rule:** a run is `done` only when every required check passed or was waived on purpose. A test runs over 4,000 combinations of results to prove the outcome and the checklist always agree, so the UI can't show done for a run whose verify didn't run.
@@ -91,38 +47,8 @@
   - **Where it shows:** `fix:` lines in the run summary (so MCP replies too), in `conductor runs`, and on the UI's Runs page. A failed attempt's tooltip shows its reason and step.
   - **When nothing won,** every provider gets its line. **When another worker won,** only problems that stay until someone acts (install, key, auth, refused command, disabled, wrong model) are shown.
   - **New table:** `src/nextsteps.js`. A test scans `src/` for reason strings and fails if one has no step.
-- **Worker token counts for Codex and OpenCode.** Both used to show 0, so `conductor usage`, `conductor stats` and the benchmark only knew agy's share.
-  - **Codex** now runs with `--json`; the tokens come from its `turn.completed` events, summed over turns (reasoning counts as output). The answer still comes from `-o`.
-  - **OpenCode** now runs with `--format json`, which gives the answer and the session id but no tokens. conductor then reads them with `opencode session export --standalone <id>` (about 0.6 s; cache reads and writes count as input).
-  - **Failed attempts keep their token counts too** (timeouts, exit codes, empty output).
-  - Older CLIs that print plain text still work: the output is used as before, without token counts.
-
-- **Faster plans: routing by measured speed.**
-  - **Speed-aware order:** for small tasks, the selector orders workers of the same kind by their measured median time on that role, among those that succeed at least 60% of the time. Big tasks keep your order.
-  - **Batch spreads a wave** by expected finish time, with at most `maxParallelPerProvider` (2) tasks per provider.
-  - **Hang cool-down:** a free route that times out twice cools down (`hangCooldownMin`, 15).
-  - **Review only when needed:** `/conduct-run` skips the extra end-of-plan review when every task passed its checks the first time.
-  - **Pilot C:** 623 s → **137 s**, with the same 6/6 and the same Claude cost ([docs/BENCHMARK.md](docs/BENCHMARK.md)).
-  - **No cold start:** a provider with no history yet (a new one, or a fresh account) counts as average for its group (the median of the measured ones), not last, so it gets tried and its speed gets measured. A measured provider that fails often still goes last.
 - **Fix:** a worker report mentioning `Math.ceil` or `user.name` no longer counts as a changed file. A dotted word counts only with a real file extension, or when it exists.
-- **`conductor stats`: is it delivering?** Shows, for this project's write tasks:
-  - how many were accepted **on the first try** (done, one worker, no hand-off or retry);
-  - how many were done in the end, and where the rest ended;
-  - fallbacks, hand-offs and retries;
-  - worker tokens, cost and minutes, and the context kept out;
-  - the **alpha gate**: at least 70% accepted first try over at least 10 write tasks.
-
-  `--failures` still lists the causes.
-- **First pilot results ([docs/BENCHMARK.md](docs/BENCHMARK.md)).** Six tasks, hidden tests, Claude Code on Sonnet. With conductor, Claude used **56% less** (72% fewer tokens) and the result was equally correct (6/6 in both). On tasks this small it was **5.8× slower**, because the workers take minutes where Claude takes seconds. It's labelled a pilot: one repo, one run each.
-- **Pilot benchmark harness (`bench/`).** Six tasks in a small Node library with hidden tests and a reference solution. `node bench/run.mjs check | A | C` compares Claude Code alone with Claude Code as conductor's controller, measuring Claude's tokens and cost from `claude -p --output-format json`.
 - **Fix: the export check held a task to other tasks' exports.** The plan's Design notes describe every module, and the check read all of them, so a pagination task was told to export `slugify`. Only Design-notes lines that mention the task's own files count now. Found by the pilot's dry run.
-- **Guard hooks (opt-in): no commit while verify fails.**
-  - `conductor guard on` (or `init --guards`) installs a hook in the controller. While the last `conductor verify` in this checkout failed, the controller's `git commit` is blocked, with the reason and what to do: fix it and `conductor verify` again, or `conductor guard allow` for a one-time exception.
-  - Verify results from `conductor verify`, the MCP verify tool and runs in the main checkout are recorded for this. On Claude Code, Stop also shows a reminder of task branches waiting for review.
-  - **Claude Code:** `.claude/settings.local.json`, your personal settings, not the team's. **Antigravity:** `.agents/hooks.json`.
-  - Checked with real runs: both tools blocked the commit and passed conductor's reason to the model, and normal commands kept running.
-  - In agy, an empty hook answer denies the command, so the guard answers "ask" for everything else; that defers to agy's own permission rules, which a hook can never loosen. Codex is not supported yet: its project hooks need a trusted project and approval in `/hooks`.
-  - `conductor guard [status] | on | off | allow`. Your own hooks in those files are kept, and a file with invalid JSON is never overwritten.
 - **The edit guard checks exports.**
   - For JavaScript and TypeScript `build` and `fix` tasks, a function or class the acceptance checks call (`slugify(…)`, `new LRUCache(…)`), or that the plan says to export ("exporting `toQuery(params)`"), must be exported **by that name**.
   - An `export default` or an unexported function doesn't count, because `import { slugify }` would still fail.
@@ -133,20 +59,6 @@
   - Agents get it compact: callers grouped per file with line numbers, plus a project map of the task's area. Chat models get the actual calling code lines (imports left out, source before tests), since they can't open files.
   - `contextPack: false` turns it off; `contextPackBytes` (4000) caps it.
 - **Per-provider prompt addition:** `providers.<name>.promptExtra` adds a note to that provider's prompts only, for guidance a small or free model needs. It goes before the recited acceptance criteria, which stay last.
-- **Each controller gets its files in its own format.**
-  - **Project rules:** write a rule once in `.conductor/rules/<name>.md`, optionally for certain `paths`. conductor writes it where each controller reads it:
-    - Claude Code: `.claude/rules/`, with `paths:`.
-    - Antigravity: `.agents/rules/`, with `trigger: glob` or `always_on`, since agy silently drops a rule with the wrong frontmatter.
-    - Codex and OpenCode: a block in AGENTS.md.
-    - Workers get the rules matching their files in their prompt.
-  - **`conductor-reviewer` subagent:** reviews a worker's diff against its plan task in a fresh context, so the controller saves its own. Formats: `.claude/agents/`, `.agents/agents/`, `.codex/agents/*.toml`, `.opencode/agents/` (OpenCode 2 permissions: edits and shell denied except `conductor diff` and git reads). Checked with the real CLIs: agy lists it, OpenCode runs it, and Codex reads the rules.
-  - **`conductor doctor`** now checks the files controllers read:
-    - Antigravity rule frontmatter (a bad `trigger` is silently ignored by agy);
-    - skill descriptions;
-    - AGENTS.md size limits (Codex reads 32 KiB);
-    - JSON configs;
-    - whether Codex trusts the project, without which it ignores `.codex/`.
-  - **Commands:** `conductor rules [list] | new <name> [--paths] | sync`. `init` writes the rules and the reviewer for its controller, and keeps them out of git.
 - **Lessons: the team remembers.**
   - conductor keeps what earlier work taught in this project. That covers every failure it diagnoses (failed acceptance check, function under the wrong name, wrong test, out-of-scope edits, missing regression test, syntax error, no files in a reply) and every `--note` the controller writes on a retry.
   - Later work in the same folder and role gets up to 5 matching lessons in its prompt.
@@ -180,7 +92,6 @@
   - A function the plan calls that no file exports is a failed check. Lines that use helpers the plan never defines are skipped, never guessed.
   - When every check passes but verify fails, the summary hints that the failing test may itself be wrong.
   - Applies to `build` and `fix` tasks on JavaScript files for now. `runAcceptance: false` turns it off. `conductor eval check` also runs each task's checks against its reference solution.
-- **Eval: unreachable providers don't count.** A task where no model could be reached (DNS, offline) is an `error`, left out of the pass rate and the verdicts, instead of looking like a failure conductor caught.
 - **Failed verify comes with a fix brief.** A failing verify is condensed into what a worker needs: the failing tests, the error (e.g. `-1 !== 5`) and where (`test/add.test.js:2`). It is shown in the summary as `why:` and written to be pasted into `--note` (node:test, pytest, PHPUnit and similar output).
 - **Work that fails verify is handed on once.** Instead of stopping, conductor gives the work to the next provider in the chain with the brief. In a normal run that worker fixes it in the same checkout; in a worktree it continues on the task branch. Every attempt stays in the summary (`handed on: X's work failed verify → Y took it over`). There is no hand-off when the failures were already there before the worker started.
   - `escalateRounds` (1) sets how many hand-offs; `escalate: false`, `--no-escalate` or MCP `no_escalate` turns it off.
@@ -192,12 +103,6 @@
   - Changed files are syntax-checked: JavaScript (`node --check`), JSON, PHP (`php -l`) and Python, whichever is available.
   - **Contract check:** a function or class the task names in a code span (`` `toQuery(…)` ``, `` `new LRUCache(2)` ``) must be defined somewhere in the project after the change. The eval baseline caught a worker that "finished" under a name of its own while its own tests passed.
   - A rejected attempt is stashed and the next model or provider runs. `syntaxCheck: false` and `contractCheck: false` turn the checks off.
-- **`conductor eval`: measure conductor itself.**
-  - 10 tasks in `evals/` (bug fixes, features, test-writing), each with a starting project, a plan, hidden tests the worker never sees and a reference solution. Test-writing tasks are scored by planted bugs the worker's tests must catch.
-  - `conductor eval run [--tasks …] [--provider p | --chain a,b] [--label x] [--compare last]` runs them the way a user would, scores each against the hidden tests and reports pass rate, cost, and conductor's verdict against reality ("done" and right, **"done" but wrong**, caught, false alarm). Results are saved in `~/.config/conductor/evals/`.
-  - `conductor eval check` proves every task is fair with no LLM: it fails on the starting project and passes with the reference solution. It runs in CI.
-- **`conductor stats --failures`** groups failed attempts and runs by cause, biggest first, so the top cause is fixed first.
-- **Tests and verify run in a clean environment** (`NODE_TEST_CONTEXT` removed), so a project's `node --test` can't misreport when conductor itself runs under a test runner.
 - **Plan check: vague tasks never reach a worker.**
   - `conductor plan check <plan>` (and the MCP tool `conductor_plan_check`) lists each task as ready or not, with exactly what is missing. The same check runs before `run` and `batch` hand out a task.
   - A write task needs: `files:`, acceptance criteria a check can confirm (not "works" or "done"), a verify command (the task's or the project's), and at most `maxTaskFiles` (4) files besides tests.
@@ -212,18 +117,99 @@
 - **Scope gate.**
   - When a task lists `files:`, changes to other files make the outcome **out-of-scope**, listing them. Tests of the listed files, lockfiles and snapshots are always fine; `scopeAllow` adds globs.
   - `--allow-scope` (MCP `allow_scope`, setting `allowScope`) accepts it. A batch counts out-of-scope tasks separately and doesn't treat them as done.
-- **Antigravity: refused actions are no longer missed.**
-  - In headless mode, agy exits 0 and reports `SUCCESS` even when it was refused an action it needed (for example a shell command without an allow rule). conductor now runs it with `--output-format json` and reads the `denied_actions` list (checked against agy 1.5.3).
-  - Refused with no answer: the attempt fails with `denied: command (add an allow rule …)` and the next provider runs. Refused but answered: the answer is kept, with a warning that it may have skipped steps such as running tests.
-  - A non-`SUCCESS` status fails the attempt. Older agy versions without JSON output still work as before.
-  - agy runs now record real token counts.
-- **Codex and OpenCode flags checked against their current versions** (Codex 0.166, OpenCode 2.0.32). No retired Codex flags are used. OpenCode 2 converts conductor's permission rules and MCP entry correctly; tests now lock the rule order that OpenCode 2's "last match wins" depends on.
 - **No proof, no "done".**
   - Code a worker writes counts as done only when the verify command ran and passed.
   - Without a verify command, the outcome is the new **unverified**, and `conductor run` exits with **4**. A batch counts it separately (`?`) and exits 3.
   - `--no-verify`, `--allow-unverified` (or the `allowUnverified` setting) accept it on purpose; the outcome still says unverified.
   - `conductor init --verify "<cmd>"` sets the Verify line in AGENTS.md, and `init` warns when the project has no verify command.
   - The Runs page, `conductor runs` and the MCP tools show it.
+
+### Workers, providers and Windows
+
+- **Windows support, tested in CI.** The tests now run on Windows (Node 20, 22, 24) next to Linux and macOS, and found real bugs, all fixed:
+  - npm-installed CLIs (Codex, OpenCode, Copilot) are `.cmd` shims, which Node can't start: conductor now runs the shim's script with node directly, so prompt text never passes through `cmd.exe`. Other `.cmd`/`.bat` files go through `cmd.exe` with their arguments escaped.
+  - Verify and repro lines with quotes (`node -e "…"`) failed: they now run in `cmd.exe` exactly as written.
+  - A plan saved with Windows line endings (CRLF) lost its acceptance criteria and open questions: plans, plan check and AGENTS.md's Verify line now read CRLF like LF.
+  - `conductor retry` couldn't find a worktree when the project path was spelled differently (`C:/x` from git, a short name like `RUNNER~1`): worktree folders now come from the native real path.
+  - `doctor` read its own path wrongly on Windows (`/D:/…`) and could call conductor "another program".
+  - Paths in messages and results use `/` on every OS.
+  - CI turns failing tests into annotations, so failures can be read without opening the log.
+- **NVIDIA NIM works out of the box.** The preset now starts on a model that answers fast on a free key (Nemotron 3 Ultra, then MiniMax M3.1 Flash and Gemma 4 31B), is marked free (90 s limit, not 300 s; free routes can take hedges), and a model the API returns 404 for ("not found for account": listed, but not open to free keys) now falls back to the next model like a busy one. Found while setting it up: `conductor add nvidia` had picked DeepSeek V4.1 Flash, which hangs, so the test never finished.
+- **Fixed: agy wrongly marked "out of quota for the whole account".** Two model families that ran out with the same reset time counted as proof that the account was empty. But agy's Claude and GPT-OSS models share one quota while its Gemini models have their own: on 2026-11-14 conductor cooled agy down for 6 days while Gemini 3.8 Flash had 93% left. Now the account counts as empty only when every model family has been tried; until then the next family gets its turn.
+- **Fixed: `loadConfig` shared the built-in defaults,** so a caller changing a config's settings or a provider changed them for every later load in the same process (the UI and MCP servers). It now returns a fresh copy. Found while testing W1.
+- **Idle limit per agent.** Codex is stopped after 10 minutes without output (its `--json` mode prints an event for every step, so silence that long means it hangs) and the next provider runs; agents that print only at the end (agy) keep no idle limit. A provider's `idleTimeoutMin` (`0` = never) and the global `idleTimeoutSec` still win.
+- **Local models that don't fail silently (V13).** Measured on Ollama 0.40: a model runs with a 4,096-token window unless told otherwise (the model itself supported 262,144), and a longer prompt is cut without an error: 59,000 characters reached the model as 2,050 tokens, status 200.
+  - **Window check:** before a local chat call conductor asks the server for the window the model really runs with (Ollama `/api/show` and `/api/ps`, loading the model first if needed, which also keeps it loaded for 10 minutes; LM Studio `/api/v0/models`). A prompt that won't fit is not sent: the attempt fails with `context too small: …` and a fix (`OLLAMA_CONTEXT_LENGTH=16384`, or a Modelfile with `num_ctx`; the LM Studio load setting), and the next route runs.
+  - **Cut detection:** when the server counts far fewer prompt tokens than were sent, the run warns that the prompt was cut (any server, window known or not).
+  - **Smaller prompt for local models:** no project map, a shorter AGENTS.md and context pack, at most 20 KB of files (`localPromptProfile: false` keeps the full one).
+  - **One call at a time per local server**, from any number of parallel tasks (a provider's own `maxParallel` wins).
+  - **`doctor --live`** shows each local model's window, with the fix when it is under 8,192 tokens. A provider's `location` setting overrides the guess from its address.
+- **Antigravity (agy) under pressure (V8).** Checked against agy 1.5.8 with a real quota.
+  - **Real reset times:** a rate limit now cools a provider down until the time it reports ("Resets in 118h3m13s", "try again in 30s", "retry after 120 seconds"), capped at a week, instead of 30 minutes every time. Cooldowns that end on another day show the date.
+  - **Another model family on quota:** agy's model families have separate quotas, so when its Gemini quota is used up conductor tries its Claude or GPT-OSS models (from `agy models`, cached for a day) before giving up. Live: Gemini out of quota for 46 h → `claude-sonnet-4-6` did the task. When two models report the same reset time, the quota is the account's: conductor stops trying models and cools agy down until then.
+  - **One agy task at a time** by default (`maxParallel: 1`, any provider can set its own): batch spreads past it, and calls from parallel tasks wait their turn.
+  - **Permission check in `doctor --live`:** each agent that answers is asked to run `npm test` in a throwaway repo. A refusal is reported with the exact fix (`settings.allowCommands`).
+- **Tests and verify run in a clean environment** (`NODE_TEST_CONTEXT` removed), so a project's `node --test` can't misreport when conductor itself runs under a test runner.
+- **Antigravity: refused actions are no longer missed.**
+  - In headless mode, agy exits 0 and reports `SUCCESS` even when it was refused an action it needed (for example a shell command without an allow rule). conductor now runs it with `--output-format json` and reads the `denied_actions` list (checked against agy 1.5.3).
+  - Refused with no answer: the attempt fails with `denied: command (add an allow rule …)` and the next provider runs. Refused but answered: the answer is kept, with a warning that it may have skipped steps such as running tests.
+  - A non-`SUCCESS` status fails the attempt. Older agy versions without JSON output still work as before.
+  - agy runs now record real token counts.
+- **Codex and OpenCode flags checked against their current versions** (Codex 0.166, OpenCode 2.0.32). No retired Codex flags are used. OpenCode 2 converts conductor's permission rules and MCP entry correctly; tests now lock the rule order that OpenCode 2's "last match wins" depends on.
+
+### Controllers, MCP, UI and CLI
+
+- **Name-clash safeguards for the alpha.** The package installs two commands for the same program, `conductor` and `conductor-ai`. Other tools also install a `conductor` command (Conductor OSS's `@conductor-oss/conductor-cli`, the `conductor-cli` package), and with both installed the last one wins: `conductor doctor` now warns when `conductor` on your PATH is another program, and says to use `conductor-ai`. The README says conductor-ai is not affiliated with Conductor (conductor.build) or Conductor OSS (Orkes).
+- **Free web chats, by hand (W1).** `--provider manual` writes a run's whole prompt (task, design notes, files, the reply format) to the run folder, copies it to the clipboard when the machine can, and waits (exit 5, outcome `waiting`). `conductor import <run> <file|->` replays your answer through every check like any worker's: file blocks applied with the protected-file rules, verify, acceptance checks, scope; the waiting run then points at the new one (`answered`). Also in MCP (`conductor_import`) and the UI (a run page card with Copy prompt and a paste box). `conductor import --research <file>` files a deep-research report into `docs/research/`. A per-chat `maxPromptChars` caps the prompt; over it, the run stops rather than falling back to another worker's quota. conductor never opens a chat, holds cookies or logs in (decided 2026-11-11).
+- **MCP: run reports as resources.** The MCP server now offers resources: `conductor://runs/latest` and `conductor://runs/<id>` for the 20 most recent runs (newest first), each a markdown page with the run's summary, the checklist that decides "done", and the worker's report; `resources/templates/list` gives `conductor://runs/{id}`. A controller (or its user, in clients that show resources) can open a run like a file instead of calling a tool.
+- **`conductor demo`:** see conductor work end to end without touching your projects. It makes a throwaway project (a tiny Node library and a plan with 2 independent tasks), hands both tasks to your workers in parallel (each in its own worktree, every check applied, with the live table), merges what passed, runs the project's tests, and removes everything unless you pass `--keep`. Live with OpenCode's free model: both tasks done and merged, 15 tests passing, 25 s.
+- **UI: Overview, Roles and Settings.** Overview now shows why work failed (this project's runs not done, by cause, and failed worker attempts everywhere) and the first-try accept rate by week for the last 6 weeks, against the 70% alpha gate. Roles shows one role at a time in tabs, each tab with its first provider. Settings are in minutes and KB (the config keeps seconds and bytes).
+- **Live progress in the terminal.** `conductor run` keeps its event lines and adds one status line at the bottom: a spinner, the current step (worker, verify, checks, repro, review) and the time spent against the worker's limit (`codex-cli is working · 3:12 of 20:00`). `conductor batch` shows a table with one row per task (state, worker, time) redrawn in place, then the summary. Piped output, `--json` and MCP keep the plain lines exactly as before.
+- **UX checklist run (15 of 18 checks; the other 3 need a clean Claude Code, VS Code and Copilot).** Fixed what it found:
+  - **Lost run:** two runs of one task started in the same second shared a run folder, so one was lost (also possible with `--samples` and race mode). Each run now gets its own folder; an exact run id still finds its run.
+  - **Python Verify:** detected only when `pytest` was on the global PATH. Now the project venv, a pytest config (`pyproject.toml`, `pytest.ini`, `setup.cfg`, `tox.ini`, `conftest.py`) or a `tests/` folder gives `pytest` (or `python -m pytest`).
+  - **Local model not installed:** adding Ollama (UI gallery or `conductor add`) set a model the server didn't have, without a word. It now switches to an installed model of a usable size, or says what to pull.
+  - **doctor vs status:** a provider cooling down after a rate limit was ✗ in `status` and ready in `doctor`. Both now show `~ cooling down until … (reason)` with `conductor cooldown --clear <name>`, and the UI shows an amber "cooling down" pill.
+  - **Fresh install:** optional API keys, a project not set up yet and agents you don't use were shown in red on API keys and Setup; red is now only for what conductor needs (git, Node).
+  - **80 columns:** on a terminal, long lines wrap at words and continue under their text column (help, tables, status); piped output and `--json` are unchanged.
+  - **Typos:** `lessons`, `stats`, `guard`, `rules`, `eval` and `plan` now get a suggestion; a tie names both (`runz` → run or runs); a swapped pair of letters counts as one edit (`stauts`).
+  - **Phone width:** the rule library on Roles and folder paths on Skills widened the page; they wrap now.
+  - `worker: x ((default))` → `worker: x (its default model)`.
+  - **CI:** a `plugin` job runs `claude plugin validate .` (passes locally with Claude Code 2.1.317).
+- **`src/core.js` split by concern (V12):** 1,129 → 784 lines; plan parsing, outcomes, reply files and evidence, the summary text and cooldowns moved unchanged into their own files and are re-exported from `core.js`, so no importer changed.
+- **A clean npm package (V10).** The eval reference solutions (used only by `conductor eval check`, which now says to run it from a clone) are no longer published: 147 files instead of 163; the hidden tests and mutants that score `eval run` still ship. `scripts/check-package.mjs` runs `npm pack --dry-run` and fails on anything outside package.json `files` or anything for development only (tests, the benchmark, solutions, plans, conductor state, roadmaps, logs, secrets); a test runs it in every CI job.
+- **Any controller, not just Claude (V11).** The README, package description and `conductor --help` now say "your coding agent plans and reviews" and name all four controllers. The quick start has one row per controller (Claude Code, Codex CLI, Antigravity CLI, OpenCode, or your own via `conductor controller add`) with its setup command and how to start, so a Codex-only or Antigravity-only user doesn't read Claude steps.
+- **Controllers as data (V6).**
+  - **One entry per controller** (`CONTROLLERS` in `src/presets.js`) says where it reads its instructions, commands, skills, rules and reviewer subagent, how it registers MCP, and its hook file. Each format names one writer in `src/controllers.js` or `src/guard.js`. `init`, `rules sync`, the commit guard, skill sync and the doctor checks now all read the entries instead of checking controller names.
+  - **No behaviour change:** for all four controllers, the 98 files `init`, `rules sync` and `guard on` write are byte-for-byte the same as before.
+  - **Add your own:** `conductor controller add <name> --like <existing>` copies the formats of a controller that reads the same files (most read AGENTS.md and `.agents/skills`). It is stored under `controllers` in your config; `conductor controller list | check`, and `doctor` reports an entry that names a format conductor can't write. A tool with a new format still needs its writer and a real test.
+  - **[docs/CONTROLLERS.md](docs/CONTROLLERS.md)** is generated from the entries; a test keeps it in step, and another checks every generated file is kept out of git.
+- **One feature set in the CLI, MCP and UI (V3).**
+  - **One registry** (`src/surfaces.js`) lists every action and where it lives. An action left out of a surface says why (secrets never pass through a model; a controller can't switch off its own guard; long evals run in the terminal). A test checks it against the real CLI commands, MCP tools and UI routes, so a new feature can't land in one surface and be forgotten in the others. [docs/SURFACES.md](docs/SURFACES.md) is generated from it.
+  - **MCP gained** `conductor_stats` (quality, failure causes, usage), `conductor_doctor` (with `live`), `conductor_rules`, and remove/promote in `conductor_lessons`.
+  - **The UI gained** a **Lessons & rules** page (add, remove, promote; lessons seen 3+ times are highlighted), and on Overview the first-try accept rate with the alpha gate, and the commit guard with an on/off switch.
+  - **Shared code:** doctor's checks moved to `src/doctor.js` and guard switching to `switchGuards`, so the CLI, MCP and UI do exactly the same thing.
+- **Guard hooks (opt-in): no commit while verify fails.**
+  - `conductor guard on` (or `init --guards`) installs a hook in the controller. While the last `conductor verify` in this checkout failed, the controller's `git commit` is blocked, with the reason and what to do: fix it and `conductor verify` again, or `conductor guard allow` for a one-time exception.
+  - Verify results from `conductor verify`, the MCP verify tool and runs in the main checkout are recorded for this. On Claude Code, Stop also shows a reminder of task branches waiting for review.
+  - **Claude Code:** `.claude/settings.local.json`, your personal settings, not the team's. **Antigravity:** `.agents/hooks.json`.
+  - Checked with real runs: both tools blocked the commit and passed conductor's reason to the model, and normal commands kept running.
+  - In agy, an empty hook answer denies the command, so the guard answers "ask" for everything else; that defers to agy's own permission rules, which a hook can never loosen. Codex is not supported yet: its project hooks need a trusted project and approval in `/hooks`.
+  - `conductor guard [status] | on | off | allow`. Your own hooks in those files are kept, and a file with invalid JSON is never overwritten.
+- **Each controller gets its files in its own format.**
+  - **Project rules:** write a rule once in `.conductor/rules/<name>.md`, optionally for certain `paths`. conductor writes it where each controller reads it:
+    - Claude Code: `.claude/rules/`, with `paths:`.
+    - Antigravity: `.agents/rules/`, with `trigger: glob` or `always_on`, since agy silently drops a rule with the wrong frontmatter.
+    - Codex and OpenCode: a block in AGENTS.md.
+    - Workers get the rules matching their files in their prompt.
+  - **`conductor-reviewer` subagent:** reviews a worker's diff against its plan task in a fresh context, so the controller saves its own. Formats: `.claude/agents/`, `.agents/agents/`, `.codex/agents/*.toml`, `.opencode/agents/` (OpenCode 2 permissions: edits and shell denied except `conductor diff` and git reads). Checked with the real CLIs: agy lists it, OpenCode runs it, and Codex reads the rules.
+  - **`conductor doctor`** now checks the files controllers read:
+    - Antigravity rule frontmatter (a bad `trigger` is silently ignored by agy);
+    - skill descriptions;
+    - AGENTS.md size limits (Codex reads 32 KiB);
+    - JSON configs;
+    - whether Codex trusts the project, without which it ignores `.codex/`.
+  - **Commands:** `conductor rules [list] | new <name> [--paths] | sync`. `init` writes the rules and the reviewer for its controller, and keeps them out of git.
 - **Claude Code and Antigravity plugin.**
   - **What it brings:** in one install, the 9 `conduct-*` skills, conductor's MCP server and a startup check that says when the CLI is missing or the project isn't set up.
   - **Claude Code:** `/plugin install conductor-ai --marketplace KevalParikh22/conductor-ai`.
@@ -235,6 +221,32 @@
   - Every tool takes an optional `project` path, for controllers that start conductor outside the project.
 - **Skill headers are valid YAML.** `[--plan <file>]`-style argument hints are now quoted; Antigravity skipped that skill before.
 
+### Benchmarks and measurement
+
+- **B2 benchmark results** ([docs/BENCHMARK.md](docs/BENCHMARK.md#b2-bigger-tasks-2026-11-15)). Five multi-file tasks, three runs per condition: with conductor, Claude spent 88% less ($0.091 vs $0.753, medians), the runs were 13% faster (131 s vs 150 s) and passed 15/15 hidden tests against 14/15. Codex won every task in C; agy and OpenCode raced it and finished seconds behind.
+- **B2 benchmark tasks are ready** (`bench/b2/`): five bigger, multi-file tasks on a bookshop library (cart with stock rules, a discount engine, CSV product import with an error report, an order state machine with a refund window, checkout totals that need the cart and discounts), specified to the cent, with hidden tests written before any run and a reference solution. `node bench/run.mjs check --suite b2` proves each task fails on the start and passes on the solution; the plan passes `conductor plan check`. `bench/run.mjs` takes `--suite pilot|b2`. Not run yet: it needs Claude quota.
+- **Each step of a run is timed (V12).** The run record has `timings` (seconds for context, base, guard, verify, checks, repro, isolate, review); the summary shows a `time:` line, and the checklist (`conductor runs show`, the run page) shows each check's time. Measured on eval tasks: the checks take 0.1–0.2 s each and the workers 9–75 s per attempt (95%+ of a run); the project map and context pack take 10–75 ms, and base verify is already cached per commit, so nothing else was worth caching.
+- **Worker token counts for Codex and OpenCode.** Both used to show 0, so `conductor usage`, `conductor stats` and the benchmark only knew agy's share.
+  - **Codex** now runs with `--json`; the tokens come from its `turn.completed` events, summed over turns (reasoning counts as output). The answer still comes from `-o`.
+  - **OpenCode** now runs with `--format json`, which gives the answer and the session id but no tokens. conductor then reads them with `opencode session export --standalone <id>` (about 0.6 s; cache reads and writes count as input).
+  - **Failed attempts keep their token counts too** (timeouts, exit codes, empty output).
+  - Older CLIs that print plain text still work: the output is used as before, without token counts.
+- **`conductor stats`: is it delivering?** Shows, for this project's write tasks:
+  - how many were accepted **on the first try** (done, one worker, no hand-off or retry);
+  - how many were done in the end, and where the rest ended;
+  - fallbacks, hand-offs and retries;
+  - worker tokens, cost and minutes, and the context kept out;
+  - the **alpha gate**: at least 70% accepted first try over at least 10 write tasks.
+
+  `--failures` still lists the causes.
+- **First pilot results ([docs/BENCHMARK.md](docs/BENCHMARK.md)).** Six tasks, hidden tests, Claude Code on Sonnet. With conductor, Claude used **56% less** (72% fewer tokens) and the result was equally correct (6/6 in both). On tasks this small it was **5.8× slower**, because the workers take minutes where Claude takes seconds. It's labelled a pilot: one repo, one run each.
+- **Pilot benchmark harness (`bench/`).** Six tasks in a small Node library with hidden tests and a reference solution. `node bench/run.mjs check | A | C` compares Claude Code alone with Claude Code as conductor's controller, measuring Claude's tokens and cost from `claude -p --output-format json`.
+- **Eval: unreachable providers don't count.** A task where no model could be reached (DNS, offline) is an `error`, left out of the pass rate and the verdicts, instead of looking like a failure conductor caught.
+- **`conductor eval`: measure conductor itself.**
+  - 10 tasks in `evals/` (bug fixes, features, test-writing), each with a starting project, a plan, hidden tests the worker never sees and a reference solution. Test-writing tasks are scored by planted bugs the worker's tests must catch.
+  - `conductor eval run [--tasks …] [--provider p | --chain a,b] [--label x] [--compare last]` runs them the way a user would, scores each against the hidden tests and reports pass rate, cost, and conductor's verdict against reality ("done" and right, **"done" but wrong**, caught, false alarm). Results are saved in `~/.config/conductor/evals/`.
+  - `conductor eval check` proves every task is fair with no LLM: it fails on the starting project and passes with the reference solution. It runs in CI.
+- **`conductor stats --failures`** groups failed attempts and runs by cause, biggest first, so the top cause is fixed first.
 
 ## 0.10.0 (2026-11-08)
 

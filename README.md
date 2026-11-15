@@ -23,15 +23,17 @@
 </div>
 
 > [!NOTE]
-> **Early and moving fast (v0.10), solo-maintained.** 268 tests run in CI on Linux and macOS with Node 20, 22 and 24. The agents it drives change their CLI flags often; each one is a small preset you can override in config.
+> **Early and moving fast (v0.11, public alpha), solo-maintained.** 288 tests run in CI on Linux, macOS and Windows with Node 20, 22 and 24. The agents it drives change their CLI flags often; each one is a small preset you can override in config.
 >
 > **Not affiliated with** Conductor (conductor.build, a Mac app for parallel Claude Code agents) or Conductor OSS (Orkes, workflow orchestration). The commands `conductor` and `conductor-ai` are the same program; use `conductor-ai` if another tool already installed a `conductor` command (`conductor-ai doctor` tells you).
 
 Your best agent's quota runs out fast when it types every line, and its strength is judgement: planning, design and catching bugs. **conductor-ai** keeps the agent you work in (Claude Code, Codex CLI, Antigravity CLI or OpenCode) as the controller and quality gate, and hands the typing to Antigravity, Codex, OpenCode, free Kilo / OpenRouter / Groq / Gemini models, Kimi or local models. When one hits its limit, the next one takes over.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/KevalParikh22/conductor-ai/main/scripts/install.sh | bash
+npm install -g conductor-ai     # Node 20+; or try it first: npx conductor-ai demo
 ```
+
+**Measured, not claimed** ([benchmark](docs/BENCHMARK.md)): on five multi-file tasks, three runs each, Claude Code with conductor spent **88% less** Claude quota than Claude alone ($0.09 vs $0.75), finished **13% faster** (131 s vs 150 s) and passed **15/15** hidden tests against 14/15. Codex did the winning work there; with other workers, your numbers will differ.
 
 ### 🎯 Why conductor-ai
 
@@ -49,8 +51,8 @@ curl -fsSL https://raw.githubusercontent.com/KevalParikh22/conductor-ai/main/scr
 - **Quota-aware fallback.** A rate-limited model first falls back to the provider's next model (`fallbackModels`); when none is left, the provider cools down (honouring `Retry-After`) and the next one starts on a clean tree. A worker that runs past its time limit (20 min, or 2× a task's `eta`) is stopped with everything it started. If every provider fails, the controller does the task itself.
 - **Free first.** Default chains lean on Kilo Gateway (no key needed), OpenCode's free models, OpenRouter `:free`, Gemini API and other free tiers, so your paid quota goes to planning and review.
 - **Every agent under its own rules.** Each CLI gets permission rules for that run: write roles edit only the project and can't push; read roles can't edit; your API keys stay out of their environment. Your own CLI settings are never touched.
-- **Parallel tasks.** `conductor batch` runs independent plan tasks at the same time, each in its own git worktree and branch, spread across providers. The controller reviews and merges.
-- **Trust, but check.** Your tests and lint run after every write task, and the worker's list of changed files is compared with what git shows. Plans must answer their open questions before any task is handed out.
+- **The whole plan in one call.** `conductor batch --all` starts each task as soon as the tasks it depends on are merged, each in its own git worktree on a different provider, checks it, merges it and runs verify on the merged code. A slow task gets a second attempt on the fastest idle worker. You choose `save`, `balanced` or `speed` (`--priority`).
+- **No proof, no "done".** Your tests and lint run after every write task, acceptance criteria like `` `add(2, 3)` returns `5` `` are run as checks, a fix must make its repro pass, and the worker's changed files are compared with what git shows and with the task's scope. Plans are checked before any task is handed out.
 - **Usage and budgets.** Every run is logged with time, tokens and known cost; set a daily budget and paid APIs stop when it's reached. `conductor runs` and the Runs page show who did what.
 - **One skill library.** Write a skill once in conductor; every controller (Claude Code, Antigravity, Codex, OpenCode) loads it, and each worker gets the skills that match its task. Switch skills off per project. `conductor skills` or the Skills page.
 - **Stays out of your git.** `conductor init` puts conductor's own files in `.gitignore`. Workers still see them in their worktrees, and edits to them are undone.
@@ -112,7 +114,7 @@ flowchart LR
 ### ⚡ Quick start
 
 ```bash
-npm install -g github:KevalParikh22/conductor-ai   # Node 20+
+npm install -g conductor-ai     # Node 20+ (or the latest from GitHub: npm install -g github:KevalParikh22/conductor-ai)
 conductor setup                 # guided: finds your agents and keys, adds a free provider, tests
 cd my-app && conductor init     # rules, commands, MCP entry
 conductor add groq              # add any of 45 chat APIs: key, model, test, roles
