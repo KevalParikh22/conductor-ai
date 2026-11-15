@@ -11,7 +11,7 @@ export const PROJECT_DIRNAME = '.conductor';
 
 export function findProjectRoot(cwd = process.cwd()) {
   try {
-    return execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+    return path.resolve(execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim()); // C:/x → C:\\x on Windows
   } catch {
     // not a git repo: walk up looking for .conductor/
     let dir = path.resolve(cwd);

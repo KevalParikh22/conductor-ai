@@ -136,7 +136,7 @@ function skillsCmd(o) {
       const all = listSkills(root);
       if (o.json) { console.log(JSON.stringify(all, null, 2)); return 0; }
       if (!all.length) {
-        console.log(`No skills yet. Your library: ${globalSkillsDir()} (all projects) and ${path.relative(root, projectSkillsDir(root)) || '.'} (this project).`);
+        console.log(`No skills yet. Your library: ${globalSkillsDir()} (all projects) and ${rel(root, projectSkillsDir(root))} (this project).`);
         console.log('Make one:   conductor skills new php-conventions --description "How PHP is written here" --files "*.php"');
         console.log('Or add one: conductor skills add ./path/to/skill-folder');
         return 0;
@@ -460,7 +460,7 @@ async function main() {
       const sub = o._[0] || 'list';
       if (sub === 'list') {
         const rs = readRules(root);
-        if (!rs.length) { console.log(`No project rules yet. Add one: conductor rules new <name> [--paths "src/api/**"]  (stored in ${path.relative(root, rulesDir(root))}/)`); return 0; }
+        if (!rs.length) { console.log(`No project rules yet. Add one: conductor rules new <name> [--paths "src/api/**"]  (stored in ${rel(root, rulesDir(root))}/)`); return 0; }
         for (const r of rs) console.log(`${r.name.padEnd(24)} ${(r.paths.join(', ') || 'all files').padEnd(30)} ${r.description}`);
         console.log(`\n${rs.length} rule(s), written for ${ctrl(controller)?.label || controller} by: conductor rules sync. Workers get the ones matching their files.`);
         return 0;

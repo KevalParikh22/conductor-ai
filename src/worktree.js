@@ -24,8 +24,9 @@ function git(cwd, args, { allowFail = false } = {}) {
 
 /** Worktrees live outside the repo, so test runners and file watchers in the main checkout never see them. */
 export function worktreesDir(root) {
-  const real = fs.realpathSync(root);
-  const id = crypto.createHash('sha1').update(real).digest('hex').slice(0, 8);
+  // native: the same folder gives the same id however it was named (Windows short names like RUNNER~1, / or \\, case)
+  const real = fs.realpathSync.native(root);
+  const id = crypto.createHash('sha1').update(process.platform === 'win32' ? real.toLowerCase() : real).digest('hex').slice(0, 8);
   return path.join(GLOBAL_DIR, 'worktrees', `${path.basename(real)}-${id}`);
 }
 

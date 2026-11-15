@@ -94,7 +94,7 @@ export function scopeCheck(changed, listed, { allow = [] } = {}) {
 }
 
 // ---------------- edit guard (H6) ----------------
-import { which, run } from './util.js';
+import { which, run, runShell } from './util.js';
 import os from 'node:os';
 
 /**
@@ -233,8 +233,7 @@ export const TEST_FILE = /(^|\/)(tests?|__tests__|spec)\/|[._-](test|spec)\.[a-z
 /** Run a repro command in `dir`; → { status: PASS|FAIL, tail }. */
 export async function runRepro(dir, cmd, logFile, timeoutMs = 300_000) {
   const env = { ...process.env }; delete env.NODE_TEST_CONTEXT;
-  const shell = process.platform === 'win32' ? ['cmd', ['/c', cmd]] : ['bash', ['-c', cmd]];
-  const r = await run(shell[0], shell[1], { cwd: dir, env, timeoutMs });
+  const r = await runShell(cmd, { cwd: dir, env, timeoutMs });
   if (logFile) fs.writeFileSync(logFile, `$ ${cmd}\n--- exit ${r.code}\n${r.stdout}\n${r.stderr}`);
   return { status: r.code === 0 ? 'PASS' : 'FAIL', tail: `${r.stdout}\n${r.stderr}`.trim().split('\n').slice(-15).join('\n') };
 }

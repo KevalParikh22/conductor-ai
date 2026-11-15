@@ -32,7 +32,7 @@ const cfgFor = (dir, settings = {}) => {
   const cfg = loadConfig(dir);
   cfg.providers = Object.fromEntries(['m-a', 'm-b'].map((b) => [b, { type: 'cli', preset: 'codex', enabled: true, bin: b, free: true }]));
   cfg.roles = { ...cfg.roles, build: ['m-a', 'm-b'] };
-  cfg.settings = { ...cfg.settings, autoReview: false, verify: 'true', hedge: false, ...settings };
+  cfg.settings = { ...cfg.settings, autoReview: false, verify: 'node -e 0', hedge: false, ...settings };
   return cfg;
 };
 const repo = (planText) => makeRepo({ files: { 'docs/plan/p.md': planText, 'src/.keep': '' } });
@@ -82,7 +82,7 @@ test('batch --merge: a failing verify on the merged code keeps that merge, says 
   clearCooldowns();
   const { dir } = repo(plan(task('T1'), task('T2', 'T1')));
   // passes in T1's worktree (no merge commits there), fails on the branch once T1 is merged
-  const b = await runBatch(cfgFor(dir, { verify: 'test -z "$(git log --merges --oneline)"' }), { planPath: 'docs/plan/p.md', tasks: ['T1', 'T2'], merge: true });
+  const b = await runBatch(cfgFor(dir, { verify: `node -e "process.exit(require('child_process').execSync('git log --merges --oneline').toString().trim() ? 1 : 0)"` }), { planPath: 'docs/plan/p.md', tasks: ['T1', 'T2'], merge: true });
   assert.equal(b.exitCode, 3);
   assert.equal(b.results[0].merge.status, 'verify-failed');
   assert.ok(b.results[1].blocked);

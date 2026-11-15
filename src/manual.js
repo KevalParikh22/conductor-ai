@@ -45,5 +45,5 @@ export function importResearch(root, file, save) {
   } else text = fs.readFileSync(file, 'utf8');
   fs.mkdirSync(path.dirname(dest), { recursive: true });
   fs.writeFileSync(dest, `<!-- imported by conductor from ${path.basename(file)} on ${new Date().toISOString().slice(0, 10)}: a web chat's research, check it before relying on it -->\n${text.trimEnd()}\n`);
-  return path.relative(root, dest);
+  return path.relative(root, dest).split(path.sep).join('/');
 }

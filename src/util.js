@@ -76,6 +76,15 @@ export function winCommand(cmd, args) {
   return { file: process.env.ComSpec || 'cmd.exe', args: ['/d', '/s', '/c', `"${full.replace(CMD_META, '^$1')} ${args.map(cmdArg).join(' ')}"`], opts: { windowsVerbatimArguments: true } };
 }
 
+/**
+ * A shell command line (verify, repro): bash -c on macOS and Linux; on Windows cmd.exe /d /s /c "<line>", passed as
+ * written. Node's own quoting turns the line's quotes into \" (which cmd.exe doesn't read), so node -e "…" failed.
+ */
+export function runShell(line, opts = {}) {
+  if (process.platform !== 'win32') return run('bash', ['-c', line], opts);
+  return run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `"${line}"`], { ...opts, verbatim: true });
+}
+
 // Worker processes still running: killed with their whole process group if conductor itself is stopped.
 const live = new Set();
 function onSignal(sig) {
@@ -98,12 +107,12 @@ function untrack(kill) {
  * idleTimeoutMs stops it when it prints nothing for that long.
  * @returns {Promise<{code:number|null, stdout:string, stderr:string, timedOut:boolean, idle?:boolean, error?:string}>}
  */
-export function run(cmd, args, { cwd, input, timeoutMs = 0, idleTimeoutMs = 0, env, onData, signal } = {}) {
+export function run(cmd, args, { cwd, input, timeoutMs = 0, idleTimeoutMs = 0, env, onData, signal, verbatim = false } = {}) {
   return new Promise((resolve) => {
     let child;
     const group = process.platform !== 'win32';
     try {
-      const w = process.platform === 'win32' ? winCommand(cmd, args) : { file: cmd, args, opts: {} };
+      const w = process.platform === 'win32' && !verbatim ? winCommand(cmd, args) : { file: cmd, args, opts: verbatim ? { windowsVerbatimArguments: true } : {} };
       child = spawn(w.file, w.args, { cwd, env: env || process.env, stdio: ['pipe', 'pipe', 'pipe'], detached: group, ...w.opts });
     } catch (e) {
       resolve({ code: null, stdout: '', stderr: String(e), timedOut: false, error: String(e) });

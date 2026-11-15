@@ -152,7 +152,7 @@ export function createUiServer({ cwd = process.cwd(), token = crypto.randomBytes
         }
         case 'POST /api/lessons/remove': return removeLesson(root, String(body.id || '')) ? send(200, lessonsState(root)) : send(404, { error: 'no such lesson' });
         case 'POST /api/lessons/promote': { const r = promoteLesson(root, String(body.id || '')); return r ? send(200, { ...lessonsState(root), bullet: r.bullet }) : send(404, { error: 'no such lesson' }); }
-        case 'GET /api/rules': return send(200, { rules: readRules(root), dir: path.relative(root, rulesDir(root)) });
+        case 'GET /api/rules': return send(200, { rules: readRules(root), dir: path.relative(root, rulesDir(root)).split(path.sep).join('/') });
         case 'GET /api/guard': return send(200, guardState(root));
         case 'POST /api/guard': {
           const controller = loadConfig(root).controller || 'claude-code';

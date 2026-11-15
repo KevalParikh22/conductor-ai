@@ -108,7 +108,7 @@ export function restoreControl(snap) {
     const was = snap.files.get(f) ?? null, cur = readOrNull(f);
     const same = was && cur ? was.data.equals(cur.data) && was.mode === cur.mode : was === cur;
     if (same) continue;
-    changed.push(path.relative(snap.root, f) || f);
+    changed.push(path.relative(snap.root, f).split(path.sep).join('/') || f);
     if (was) { fs.writeFileSync(f, was.data); fs.chmodSync(f, was.mode); } else fs.rmSync(f, { recursive: true, force: true });
   }
   return changed;

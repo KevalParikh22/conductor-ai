@@ -105,7 +105,7 @@ test('re-hedge: the first hedge takes the only idle route; a route expected to b
   const t0 = Date.now();
   const b = await runBatch(cfg, { planPath: 'docs/plan/p.md', tasks: ['T1', 'T2', 'T3'], allowUnverified: true });
   const h = b.results.find((r) => r.task === 'T2').summary.hedged;
-  assert.ok(Date.now() - t0 < 15_000);
+  assert.ok(Date.now() - t0 < 15_000, `took ${Date.now() - t0} ms; hedged: ${JSON.stringify(h)}; log: ${fs.readFileSync(process.env.HEDGE_LOG, 'utf8').replace(/\s+/g, ' ')}`);
   assert.deepEqual(h.tries.map((x) => x.provider), ['rh-a', 'rh-c'], 'first the idle route, then the fast one once it was free');
   assert.equal(h.won, 'rh-c');
   assert.match(formatBatch(b), /hedged: rh-b was slow, so rh-a \(after \d+ s\), then rh-c \(after \d+ s\) also tried it; rh-c won/);

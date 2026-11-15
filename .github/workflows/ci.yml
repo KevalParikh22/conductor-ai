@@ -12,7 +12,8 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with: { node-version: "${{ matrix.node }}" }
-      - run: git config --global user.email ci@example.com && git config --global user.name ci
+      - run: git config --global user.email ci@example.com && git config --global user.name ci && git config --global core.autocrlf false
+        shell: bash
       - run: npm test 2>&1 | tee test-output.txt; exit ${PIPESTATUS[0]}
         shell: bash
       - if: failure()

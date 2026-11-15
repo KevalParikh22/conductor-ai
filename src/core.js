@@ -138,7 +138,7 @@ function readContextFiles(root, files, budget, extraSecret = []) {
   for (const f of [...new Set(files)]) {
     const abs = path.resolve(root, f);
     if (!abs.startsWith(path.resolve(root) + path.sep)) continue;
-    const norm = path.relative(root, abs).replaceAll('\\', '/');
+    const norm = rel(root, abs);
     if (SECRET_PATHS.some((re) => re.test(norm)) || extraSecret.some((src) => new RegExp(src).test(norm))) { out += `\n### ${f}\n(withheld: looks like a secrets file)\n`; continue; }
     let body;
     try { body = fs.readFileSync(abs, 'utf8'); } catch { out += `\n### ${f}\n(does not exist yet: new file)\n`; continue; }
@@ -690,7 +690,7 @@ async function dispatchOnce(cfg, opts) {
         if (!tryNext) setCooldown(c.name, mins, accountWide ? 'quota used up for the whole account' : 'rate limited');
         attempt.reason += ` (cooldown ${mins}m)`;
       }
-      attempt.next = nextStep(attempt.reason, { name: c.name, p: c.p, log: path.relative(root, path.join(runDir, `${c.name}${mi ? `.${mi + 1}` : ''}.log`)) });
+      attempt.next = nextStep(attempt.reason, { name: c.name, p: c.p, log: rel(root, path.join(runDir, `${c.name}${mi ? `.${mi + 1}` : ''}.log`)) });
       if (mode === 'write' && (useWorktree || !opts.allowDirty) && git.isDirty(work)) {
         if (git.stashPush(work, `conductor: failed attempt by ${c.name} ${opts.taskId || role} ${timestamp()}`)) attempt.stashed = true;
       }

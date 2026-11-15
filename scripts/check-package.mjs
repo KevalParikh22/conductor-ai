@@ -14,7 +14,7 @@ export const DENY = [
 ];
 
 export function packageFiles() {
-  const out = execFileSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+  const out = execFileSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], shell: process.platform === 'win32' }); // npm is npm.cmd there: needs a shell
   return JSON.parse(out)[0].files.map((f) => f.path);
 }
 

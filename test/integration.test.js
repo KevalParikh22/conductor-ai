@@ -170,7 +170,7 @@ test('UI server: host + token checks, config save writes a minimal diff, secrets
   try {
     assert.equal((await fetch(`${base}/api/state`)).status, 401);
     const st = await (await fetch(`${base}/api/state`, { headers: { 'x-conductor-token': 'tok' } })).json();
-    assert.equal(st.root, fs.realpathSync(dir));
+    assert.equal(fs.realpathSync.native(st.root), fs.realpathSync.native(dir));
     const eff = st.effective; eff.roles.build = ['codex-cli', 'opencode'];
     const put = await fetch(`${base}/api/config`, { method: 'PUT', headers: { 'x-conductor-token': 'tok', 'content-type': 'application/json' }, body: JSON.stringify({ scope: 'project', effective: eff }) });
     assert.equal(put.status, 200);
