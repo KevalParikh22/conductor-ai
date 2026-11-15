@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **Windows support, tested in CI.** The tests now run on Windows (Node 20, 22, 24) next to Linux and macOS, and found real bugs, all fixed:
+  - npm-installed CLIs (Codex, OpenCode, Copilot) are `.cmd` shims, which Node can't start: conductor now runs the shim's script with node directly, so prompt text never passes through `cmd.exe`. Other `.cmd`/`.bat` files go through `cmd.exe` with their arguments escaped.
+  - Verify and repro lines with quotes (`node -e "…"`) failed: they now run in `cmd.exe` exactly as written.
+  - A plan saved with Windows line endings (CRLF) lost its acceptance criteria and open questions: plans, plan check and AGENTS.md's Verify line now read CRLF like LF.
+  - `conductor retry` couldn't find a worktree when the project path was spelled differently (`C:/x` from git, a short name like `RUNNER~1`): worktree folders now come from the native real path.
+  - `doctor` read its own path wrongly on Windows (`/D:/…`) and could call conductor "another program".
+  - Paths in messages and results use `/` on every OS.
+  - CI turns failing tests into annotations, so failures can be read without opening the log.
 - **B2 benchmark results** ([docs/BENCHMARK.md](docs/BENCHMARK.md#b2-bigger-tasks-2026-11-15)). Five multi-file tasks, three runs per condition: with conductor, Claude spent 88% less ($0.091 vs $0.753, medians), the runs were 13% faster (131 s vs 150 s) and passed 15/15 hidden tests against 14/15. Codex won every task in C; agy and OpenCode raced it and finished seconds behind.
 - **Routing learns from failed work, not only failed replies (from B2).** The usage log recorded a write worker's attempt as a success as soon as it replied, before verify ran, so a free model whose code kept failing verify looked reliable: in a B2 run NVIDIA's three verify failures were logged as successes and it was picked first again. A write attempt is now recorded after conductor's checks, and counts as failed (`verify failed`, `acceptance check failed`, `repro failed`) when its work fails them (failures the starting commit already had don't count). And the selector now puts a provider whose recent work mostly failed (under 60%) after the reliable ones, whatever its group: before, it only moved within its group, so on small tasks a free API model at 30% still went before every agent. Under priority `speed`, the fastest reliable provider goes first, before the free-first rule; batch spreading and races follow the run's priority.
 - **`/conduct-run` runs the batch in the foreground.** In a B2 run the batch finished in 98 s, but Claude had started it in the background and then waited in a shell loop until the loop's 20-minute limit. The template now says: foreground, with the longest timeout the shell tool allows, and no polling.
