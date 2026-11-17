@@ -134,6 +134,7 @@ td, th { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line
 th { font-size: 12px; color: var(--muted); font-weight: 600; }
 .savebar { position: sticky; bottom: 0; background: var(--panel); border-top: 1px solid var(--line); padding: 10px 20px; display: none; align-items: center; gap: 10px; flex-wrap: wrap; z-index: 5; }
 .savebar.show { display: flex; }
+#offline { position: fixed; left: 50%; top: 12px; transform: translateX(-50%); z-index: 11; max-width: min(640px, calc(100vw - 32px)); background: var(--bad-soft); color: var(--bad); border: 1px solid var(--bad); padding: 10px 14px; border-radius: 8px; font-size: 13px; }
 #toast { position: fixed; right: 16px; bottom: 70px; background: var(--text); color: var(--bg); padding: 9px 14px; border-radius: 8px; opacity: 0; transition: .2s; pointer-events: none; max-width: 80vw; z-index: 10; }
 #toast.show { opacity: 1; }
 .err { background: var(--bad-soft); color: var(--bad); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; }
@@ -181,6 +182,7 @@ body { overflow-x: hidden; }
   <button class="btn" id="discard">Discard</button>
   <button class="btn primary" id="save">Save</button>
 </div>
+<div id="offline" role="alert" hidden><b>conductor ui has stopped.</b> Nothing you change here is saved. Run <code>conductor ui</code> again in a terminal and open the new link it prints.</div>
 <div id="toast" role="status"></div>
 <script>
 const TOKEN = new URLSearchParams(location.hash.slice(1)).get('t') || '';
@@ -245,12 +247,18 @@ $('#theme').onclick = () => {
   try { localStorage.setItem('conductor-theme', next); } catch {}
 };
 
+// the browser says only "Failed to fetch" when the page can't reach its server: say what that means here
+const OFFLINE = 'Can\'t reach conductor ui: its server has stopped (the terminal that ran `conductor ui` was closed, or it was stopped). Run `conductor ui` again and use the new link. Nothing was saved.';
 async function api(method, path, body) {
-  const r = await fetch(path, { method, headers: { 'content-type': 'application/json', 'x-conductor-token': TOKEN }, body: body ? JSON.stringify(body) : undefined });
+  let r;
+  try { r = await fetch(path, { method, headers: { 'content-type': 'application/json', 'x-conductor-token': TOKEN }, body: body ? JSON.stringify(body) : undefined }); }
+  catch { offline(true); throw new Error(OFFLINE); }
+  offline(false);
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error || r.statusText);
   return j;
 }
+function offline(on) { const b = $('#offline'); if (b) b.hidden = !on; }
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2600); }
 function markDirty() { dirty = true; $('#savebar').classList.add('show'); $('#savewhere').textContent = ' → ' + ($('#scope').value === 'global' ? 'global config (all projects)' : 'this project'); }
 function load(state) { S = state; W = clone(S.effective); dirty = false; $('#savebar').classList.remove('show'); $('#proj').textContent = S.root; render(); }
@@ -353,7 +361,7 @@ function gallery() {
       ${c.free ? `<p class="note"><b>Free:</b> ${esc(c.free.replace(/^Free:\s*/i, ''))}</p>` : ''}
       ${c.privacy ? `<p class="note warn">${esc(c.privacy)}</p>` : ''}
       ${open ? `<div class="fields" style="margin-top:6px">
-          ${c.apiKeyEnv && !c.apiKeyOptional && !c.keySet ? `<div><label class="f">${esc(c.apiKeyEnv)} · <a href="${esc(c.keyUrl)}" target="_blank" rel="noopener">get a key</a></label><input type="password" id="g-key" placeholder="paste key" autocomplete="off"></div>` : `<div class="note">${c.apiKeyEnv && !c.apiKeyOptional ? `${esc(c.apiKeyEnv)} is set.` : c.apiKeyEnv ? 'No key needed to start.' : 'No key needed.'}</div>`}
+          ${c.apiKeyEnv && !c.keySet ? `<div><label class="f">${esc(c.apiKeyEnv)}${c.apiKeyOptional ? ' (optional: higher limits)' : ''} · <a href="${esc(c.keyUrl)}" target="_blank" rel="noopener">get a key</a></label><input type="password" id="g-key" placeholder="${c.apiKeyOptional ? 'optional: paste key' : 'paste key'}" autocomplete="off"></div>` : `<div class="note">${c.apiKeyEnv ? `${esc(c.apiKeyEnv)} is set.` : 'No key needed.'}</div>`}
           ${c.fields.map((f) => `<div><label class="f">${esc(f.replaceAll('_', ' ').toLowerCase())}</label><input type="text" data-gfield="${esc(f)}"></div>`).join('')}
         </div><div class="row" style="margin-top:8px"><button class="btn primary small" data-gsave="${esc(c.id)}">Add and enable</button><button class="btn small" data-gclose>Cancel</button>
           <span class="note">Saved to ${$('#scope')?.value === 'project' ? 'this project' : 'global config'}; added to the docs, test, review and ask roles. The key goes to the secrets file.</span></div>`

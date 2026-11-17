@@ -116,6 +116,8 @@ export function validateConfig(cfg) {
     if (!['cli', 'openai', 'anthropic', 'manual'].includes(p.type)) errors.push(`provider ${name}: unknown type "${p.type}"`);
     if (p.type === 'cli' && !CLI_PRESETS[p.preset] && !(p.bin && p.write)) errors.push(`provider ${name}: unknown preset "${p.preset}" (or give bin + write/read args)`);
     if (p.type !== 'cli' && p.type !== 'manual' && !p.baseUrl) errors.push(`provider ${name}: baseUrl is required`);
+    // never echo the value: it is often the key itself, pasted into the wrong field
+    if (p.apiKeyEnv && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(String(p.apiKeyEnv))) errors.push(`provider ${name}: "API key env var" takes the name of a variable (like KILO_API_KEY), not the key itself. Paste the key on the API keys page, or run: conductor keys set <NAME>`);
     if (p.fallbackModels !== undefined && !(Array.isArray(p.fallbackModels) && p.fallbackModels.every((m) => typeof m === 'string'))) errors.push(`provider ${name}: fallbackModels must be a list of model names`);
     for (const k of ['timeoutMin', 'idleTimeoutMin']) if (p[k] !== undefined && !(Number(p[k]) > 0 || (k === 'idleTimeoutMin' && Number(p[k]) === 0))) errors.push(`provider ${name}: ${k} must be a number of minutes`);
   }

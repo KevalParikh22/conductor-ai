@@ -124,3 +124,20 @@ test('tokens saved: trimmed reports are counted per run and in the usage report'
   assert.equal(u.savings.controller, u.savings.by.diff + u.savings.by.report);
   assert.ok(!u.rows.some((r) => r.provider === undefined), 'savings are not counted as a provider');
 });
+
+test('a key pasted into "API key env var" is refused, and the error never repeats it', () => {
+  const cfg = loadConfig(makeRepo().dir);
+  cfg.providers['kilo-free'] = { ...cfg.providers['kilo-free'], apiKeyEnv: 'sk-kilo-1234567890abcdef' };
+  const errs = validateConfig(cfg);
+  const e = errs.find((x) => /kilo-free: "API key env var" takes the name of a variable/.test(x));
+  assert.ok(e, errs.join('\n'));
+  assert.ok(!e.includes('sk-kilo'), 'the pasted key is not echoed');
+  cfg.providers['kilo-free'].apiKeyEnv = 'KILO_API_KEY';
+  assert.ok(!validateConfig(cfg).some((x) => /API key env var/.test(x)));
+});
+
+test('UI: a request the server never answers says the server stopped, not "Failed to fetch"', () => {
+  const html = fs.readFileSync(new URL('../src/ui/index.html', import.meta.url), 'utf8');
+  assert.match(html, /<div id="offline" role="alert" hidden>/);
+  assert.match(html, /catch \{ offline\(true\); throw new Error\(OFFLINE\); \}/);
+});

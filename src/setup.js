@@ -23,7 +23,7 @@ export function catalogStatus(cfg) {
     return {
       id, name, label: e.label, category: e.category, categoryLabel: CATEGORIES[e.category], about: e.about, free: e.free, privacy: e.privacy,
       keyUrl: e.keyUrl, docsUrl: e.docsUrl, apiKeyEnv: e.apiKeyEnv, apiKeyOptional: !!e.apiKeyOptional, fields: urlFields(e), model: e.model,
-      keySet: !e.apiKeyEnv || !!e.apiKeyOptional || !!keyValue(e.apiKeyEnv), added: !!p, enabled: !!p?.enabled,
+      keySet: !e.apiKeyEnv || !!keyValue(e.apiKeyEnv), added: !!p, enabled: !!p?.enabled,
     };
   });
 }

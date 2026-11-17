@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **UI: "Failed to fetch" now says what happened.** When the `conductor ui` server has stopped (its terminal was closed), every save failed with the browser's bare "Failed to fetch", so saving an API key looked broken. The page now shows a banner and says the server stopped, nothing was saved, and to run `conductor ui` again.
+- **A key pasted into "API key env var" is refused.** That field takes a variable's name (like `KILO_API_KEY`); a key typed there would have been saved into the config file. Saving the config now fails with a message that says where the key goes (API keys page, or `conductor keys set <NAME>`), and the message never repeats the value.
+- **Add provider: an optional key field** for providers that work without a key but take one for higher limits (Kilo, OVHcloud).
 - **Fixed: the batch's live table named the losing worker in a race.** A task's race attempts (and a hedge) report on the same row, so the row showed whichever worker started last, and kept showing it while the winner's work was merged and verified (found while recording the launch GIF: T1 read `antigravity-cli` until the end while Codex had won). The row now follows each attempt, shows `racing (2)` as the worker while they run (a name with `+1` didn't fit the column), switches to the winner on `race-won` / `hedge-won`, ignores the stopped loser's events, and a stopped attempt reads `stopped: other won` instead of `failed: cancelled`. Piped output gains a `won the race` line.
 - **Fixed: a hedge blamed the task's first-choice worker.** The hedge message and the summary's `hedged:` line said "<first choice> was slow" even when that worker had already failed and another had taken the task over (seen in a demo: Antigravity was out of quota, Codex took T2 and was the slow one, and the line read "antigravity-cli was slow"). They now name the worker(s) running when the hedge starts ("codex-cli and nvidia-nim were slow" when a race was running).
 
