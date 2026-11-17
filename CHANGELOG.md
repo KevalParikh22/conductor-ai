@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **UI: saving an API key no longer opens the password manager.** Key fields were password fields, so the browser (and 1Password, Bitwarden, LastPass) offered to save each key as a website login. They are now masked text fields that password managers ignore.
 - **UI: "Failed to fetch" now says what happened.** When the `conductor ui` server has stopped (its terminal was closed), every save failed with the browser's bare "Failed to fetch", so saving an API key looked broken. The page now shows a banner and says the server stopped, nothing was saved, and to run `conductor ui` again.
 - **A key pasted into "API key env var" is refused.** That field takes a variable's name (like `KILO_API_KEY`); a key typed there would have been saved into the config file. Saving the config now fails with a message that says where the key goes (API keys page, or `conductor keys set <NAME>`), and the message never repeats the value.
 - **Add provider: an optional key field** for providers that work without a key but take one for higher limits (Kilo, OVHcloud).

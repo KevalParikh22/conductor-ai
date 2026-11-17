@@ -134,6 +134,8 @@ td, th { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line
 th { font-size: 12px; color: var(--muted); font-weight: 600; }
 .savebar { position: sticky; bottom: 0; background: var(--panel); border-top: 1px solid var(--line); padding: 10px 20px; display: none; align-items: center; gap: 10px; flex-wrap: wrap; z-index: 5; }
 .savebar.show { display: flex; }
+/* API keys: masked text, not type=password, so browsers and password managers don't offer to save them as a login */
+input.secret { -webkit-text-security: disc; text-security: disc; font-family: var(--mono, ui-monospace, monospace); }
 #offline { position: fixed; left: 50%; top: 12px; transform: translateX(-50%); z-index: 11; max-width: min(640px, calc(100vw - 32px)); background: var(--bad-soft); color: var(--bad); border: 1px solid var(--bad); padding: 10px 14px; border-radius: 8px; font-size: 13px; }
 #toast { position: fixed; right: 16px; bottom: 70px; background: var(--text); color: var(--bg); padding: 9px 14px; border-radius: 8px; opacity: 0; transition: .2s; pointer-events: none; max-width: 80vw; z-index: 10; }
 #toast.show { opacity: 1; }
@@ -150,7 +152,7 @@ th { font-size: 12px; color: var(--muted); font-weight: 600; }
   .bar { padding: 10px 16px; gap: 8px; } .bar label[for=scope] { display: none; } #scope { max-width: 150px; font-size: 13px; padding: 4px 6px; }
   .proj { max-width: 100%; order: 5; flex-basis: 100%; }
   table { display: block; overflow-x: auto; }
-  td input[type=password] { min-width: 140px; }
+  td input.secret { min-width: 140px; }
 }
 .sub .mono, td.mono, .note .mono, p .mono { word-break: break-all; } /* long paths and patterns wrap instead of widening the page */
 body { overflow-x: hidden; }
@@ -361,7 +363,7 @@ function gallery() {
       ${c.free ? `<p class="note"><b>Free:</b> ${esc(c.free.replace(/^Free:\s*/i, ''))}</p>` : ''}
       ${c.privacy ? `<p class="note warn">${esc(c.privacy)}</p>` : ''}
       ${open ? `<div class="fields" style="margin-top:6px">
-          ${c.apiKeyEnv && !c.keySet ? `<div><label class="f">${esc(c.apiKeyEnv)}${c.apiKeyOptional ? ' (optional: higher limits)' : ''} · <a href="${esc(c.keyUrl)}" target="_blank" rel="noopener">get a key</a></label><input type="password" id="g-key" placeholder="${c.apiKeyOptional ? 'optional: paste key' : 'paste key'}" autocomplete="off"></div>` : `<div class="note">${c.apiKeyEnv ? `${esc(c.apiKeyEnv)} is set.` : 'No key needed.'}</div>`}
+          ${c.apiKeyEnv && !c.keySet ? `<div><label class="f">${esc(c.apiKeyEnv)}${c.apiKeyOptional ? ' (optional: higher limits)' : ''} · <a href="${esc(c.keyUrl)}" target="_blank" rel="noopener">get a key</a></label><input type="text" class="secret" autocomplete="off" spellcheck="false" autocapitalize="off" data-1p-ignore data-lpignore="true" data-bwignore="true" data-form-type="other" id="g-key" placeholder="${c.apiKeyOptional ? 'optional: paste key' : 'paste key'}"></div>` : `<div class="note">${c.apiKeyEnv ? `${esc(c.apiKeyEnv)} is set.` : 'No key needed.'}</div>`}
           ${c.fields.map((f) => `<div><label class="f">${esc(f.replaceAll('_', ' ').toLowerCase())}</label><input type="text" data-gfield="${esc(f)}"></div>`).join('')}
         </div><div class="row" style="margin-top:8px"><button class="btn primary small" data-gsave="${esc(c.id)}">Add and enable</button><button class="btn small" data-gclose>Cancel</button>
           <span class="note">Saved to ${$('#scope')?.value === 'project' ? 'this project' : 'global config'}; added to the docs, test, review and ask roles. The key goes to the secrets file.</span></div>`
@@ -588,7 +590,7 @@ const views = {
     return `<div class="head"><h1>API keys</h1><p class="sub">Saved in <span class="mono">${esc(S.paths.secrets)}</span> (only you can read it), never in config or git. Real environment variables win. Showing keys that are set or used by an enabled provider.</p></div>
     <div class="card"><table><tr><th>Variable</th><th>Status</th><th>Used by</th><th style="width:38%">Set / replace</th></tr>
     ${keys.map((k) => `<tr><td class="mono">${esc(k.name)}</td><td>${k.set ? `<span class="pill ok">set ${esc(k.hint)}</span> <span class="note">${esc(k.source)}</span>` : '<span class="pill" title="Optional: only the providers that use this key need it">not set</span>'}</td><td class="note">${esc(k.usedBy.join(', ') || '-')}</td>
-      <td><div class="row" style="flex-wrap:nowrap"><input type="password" data-key="${esc(k.name)}" placeholder="paste key" autocomplete="off"><button class="btn small" data-savekey="${esc(k.name)}">Save</button>${k.source === 'secrets file' ? `<button class="btn small" data-delkey="${esc(k.name)}">Remove</button>` : ''}</div></td></tr>`).join('')}
+      <td><div class="row" style="flex-wrap:nowrap"><input type="text" class="secret" autocomplete="off" spellcheck="false" autocapitalize="off" data-1p-ignore data-lpignore="true" data-bwignore="true" data-form-type="other" data-key="${esc(k.name)}" placeholder="paste key"><button class="btn small" data-savekey="${esc(k.name)}">Save</button>${k.source === 'secrets file' ? `<button class="btn small" data-delkey="${esc(k.name)}">Remove</button>` : ''}</div></td></tr>`).join('')}
     </table></div>
     <p class="note">Need a key? Each provider's guide links to where you get one: <b>Providers → Add provider</b> (filter <b>Free</b>), or <span class="mono">conductor providers --free</span>. kilo-free and OVHcloud work without one.</p>`;
   },

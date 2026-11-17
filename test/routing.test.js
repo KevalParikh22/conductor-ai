@@ -141,3 +141,10 @@ test('UI: a request the server never answers says the server stopped, not "Faile
   assert.match(html, /<div id="offline" role="alert" hidden>/);
   assert.match(html, /catch \{ offline\(true\); throw new Error\(OFFLINE\); \}/);
 });
+
+test('UI: API key fields are masked text, not password fields, so password managers do not offer to save them', () => {
+  const html = fs.readFileSync(new URL('../src/ui/index.html', import.meta.url), 'utf8');
+  assert.ok(!/type="password"/.test(html));
+  assert.equal((html.match(/class="secret" autocomplete="off"[^>]*data-1p-ignore data-lpignore="true" data-bwignore="true"/g) || []).length, 2);
+  assert.match(html, /input\.secret \{ -webkit-text-security: disc/);
+});
