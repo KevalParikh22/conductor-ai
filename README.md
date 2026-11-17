@@ -268,7 +268,7 @@ Exit codes: `0` ok · `2` usage or unsafe repo state · `3` every provider faile
 - 🧩 **New agent or provider:** use the provider request template, or send a PR (most are one preset in `src/presets.js` or one entry in `src/catalog.js`). See [CONTRIBUTING.md](CONTRIBUTING.md).
 - 🔒 **Security problems:** report them privately as described in [SECURITY.md](SECURITY.md).
 
-MIT licensed.
+The core is **MIT licensed**, and stays MIT. Paid team and hosted add-ons may come later under their own licence (FSL); they never take a free feature away. Contributions: see [CONTRIBUTING.md](CONTRIBUTING.md#licensing-of-contributions).
 
 <div align="center">
 <br>
