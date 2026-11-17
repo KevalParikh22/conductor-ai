@@ -143,7 +143,7 @@ The sequence:
 | 2 | `conductor init` (or `--controller antigravity`, `codex-cli`, `opencode`) | Writes the rules file, the controller's commands or skills, the MCP entry, the plan template, and **adds conductor's files to `.gitignore`** (section 9). Detects your Verify command. Syncs your skills |
 | 3 | Check `AGENTS.md` | The **Verify** line was detected (e.g. `npm run test`, `vendor/bin/phpunit`); correct it if needed. Fill in section 1: stack, folders, conventions |
 | 4 | `conductor route --add starter` | Routing starter set: security and database work to your strongest agent; docs and small edits to free models |
-| 5 | Register MCP if your controller needs it | Antigravity: `agy mcp add conductor conductor mcp`. Codex: `codex mcp add conductor -- conductor mcp`. Once per machine; init tells you when it's missing |
+| 5 | Register MCP if your controller needs it | Antigravity: `agy mcp add conductor conductor-ai mcp`. Codex: `codex mcp add conductor -- conductor-ai mcp`. Once per machine; init tells you when it's missing |
 | 6 | `conductor doctor --live` | Everything ready? |
 | 7 | `git add .gitignore && git commit -m "conductor: ignore local files"` | conductor's own files stay out of git; only `.gitignore` changes |
 
@@ -191,8 +191,8 @@ In your controller, inside the project:
 | Controller | Commands | conductor's MCP tools | One-time step |
 |---|---|---|---|
 | **Claude Code** | `/conduct-*` in `.claude/commands` (or the plugin's skills) | from `.mcp.json` or the plugin | Approve the "conductor" server when Claude asks, or install the plugin |
-| **Antigravity** (Gemini) | `conduct-*` skills in `.agents/skills` (or the plugin's skills) | only from agy's own config or a plugin | Install the plugin (section 3), or `agy mcp add conductor conductor mcp` |
-| **Codex** | `conduct-*` skills in `.agents/skills` | only from `~/.codex/config.toml` | `codex mcp add conductor -- conductor mcp` |
+| **Antigravity** (Gemini) | `conduct-*` skills in `.agents/skills` (or the plugin's skills) | only from agy's own config or a plugin | Install the plugin (section 3), or `agy mcp add conductor conductor-ai mcp` |
+| **Codex** | `conduct-*` skills in `.agents/skills` | only from `~/.codex/config.toml` | `codex mcp add conductor -- conductor-ai mcp` |
 | **OpenCode** | `conduct-*` skills in `.agents/skills` | from `opencode.json` | none |
 
 **To switch a project's controller:**

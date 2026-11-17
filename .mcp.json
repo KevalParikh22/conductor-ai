@@ -1,5 +1,5 @@
 {
   "mcpServers": {
-    "conductor": { "command": "conductor", "args": ["mcp"] }
+    "conductor": { "command": "conductor-ai", "args": ["mcp"] }
   }
 }

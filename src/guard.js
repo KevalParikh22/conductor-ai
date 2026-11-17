@@ -75,7 +75,7 @@ export function runHook(kind, input, root) {
 }
 
 // ---------------- install ----------------
-const OURS = (h) => /\bconductor\s+hook\b/.test(h?.command || '');
+const OURS = (h) => /\bconductor(-ai)?\s+hook\b/.test(h?.command || '');
 const readJson = (f) => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return null; } };
 
 // V6: from the controller registry: the controllers with a tested hook format (src/presets.js CONTROLLERS[…].hooks)
@@ -99,13 +99,13 @@ export function setGuards(root, controller, on) {
       if (!data.hooks[ev].length) delete data.hooks[ev];
     }
     if (on) {
-      (data.hooks.PreToolUse ||= []).push({ matcher: 'Bash', hooks: [{ type: 'command', command: 'conductor hook claude-pretool' }] });
-      (data.hooks.Stop ||= []).push({ hooks: [{ type: 'command', command: 'conductor hook claude-stop' }] });
+      (data.hooks.PreToolUse ||= []).push({ matcher: 'Bash', hooks: [{ type: 'command', command: 'conductor-ai hook claude-pretool' }] });
+      (data.hooks.Stop ||= []).push({ hooks: [{ type: 'command', command: 'conductor-ai hook claude-stop' }] });
     }
     if (!Object.keys(data.hooks).length) delete data.hooks;
   } else {
     delete data['conductor-guard'];
-    if (on) data['conductor-guard'] = { PreToolUse: [{ matcher: 'run_command', hooks: [{ type: 'command', command: 'conductor hook agy-pretool', timeout: 10 }] }] };
+    if (on) data['conductor-guard'] = { PreToolUse: [{ matcher: 'run_command', hooks: [{ type: 'command', command: 'conductor-ai hook agy-pretool', timeout: 10 }] }] };
   }
   const after = JSON.stringify(data);
   if (after === before) return { file: rel, changed: false };
@@ -119,7 +119,7 @@ export function guardsOn(root, controller) {
   if (!h) return false;
   const d = readJson(path.join(root, h.file));
   if (!d) return false;
-  return h.format === 'claude-settings' ? JSON.stringify(d.hooks || {}).includes('conductor hook') : !!d['conductor-guard'];
+  return h.format === 'claude-settings' ? /conductor(-ai)? hook/.test(JSON.stringify(d.hooks || {})) : !!d['conductor-guard'];
 }
 
 /** guard on/off as the CLI and UI do it: the hook file is kept out of git like conductor's other local files. */

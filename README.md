@@ -125,8 +125,8 @@ Then set it up for the agent you work in (`conductor init --controller <name>` w
 | Your controller | Set up | Then, in it |
 |---|---|---|
 | **Claude Code** | `conductor init` (or the plugin: `/plugin install conductor-ai --marketplace KevalParikh22/conductor-ai`) | `/conduct-plan add password reset by email`, then `/conduct-run docs/plan/password-reset.md` |
-| **Codex CLI** | `conductor init --controller codex-cli`, then once: `codex mcp add conductor -- conductor mcp` | "Use the conduct-plan skill to plan password reset by email", then "use conduct-run on docs/plan/password-reset.md" |
-| **Antigravity CLI** | `conductor init --controller antigravity` (or `agy plugin install "$(npm root -g)/conductor-ai"`), then once: `agy mcp add conductor conductor mcp` | the same `conduct-plan` and `conduct-run` skills |
+| **Codex CLI** | `conductor init --controller codex-cli`, then once: `codex mcp add conductor -- conductor-ai mcp` | "Use the conduct-plan skill to plan password reset by email", then "use conduct-run on docs/plan/password-reset.md" |
+| **Antigravity CLI** | `conductor init --controller antigravity` (or `agy plugin install "$(npm root -g)/conductor-ai"`), then once: `agy mcp add conductor conductor-ai mcp` | the same `conduct-plan` and `conduct-run` skills |
 | **OpenCode** | `conductor init --controller opencode` (the MCP entry goes in `opencode.json`) | the same `conduct-plan` and `conduct-run` skills |
 | **Another agent** | `conductor controller add <name> --like <one above>` | see [Controllers](docs/CONTROLLERS.md) |
 
@@ -149,8 +149,8 @@ Free API providers need no install: `kilo-free` works without a key; add more wi
 <br>
 
 ```bash
-conductor init --controller antigravity   # GEMINI.md + skills in .agents/skills; then once: agy mcp add conductor conductor mcp
-conductor init --controller codex-cli     # AGENTS.md + skills in .agents/skills; then once: codex mcp add conductor -- conductor mcp
+conductor init --controller antigravity   # GEMINI.md + skills in .agents/skills; then once: agy mcp add conductor conductor-ai mcp
+conductor init --controller codex-cli     # AGENTS.md + skills in .agents/skills; then once: codex mcp add conductor -- conductor-ai mcp
 conductor init --controller opencode      # AGENTS.md + skills in .agents/skills + opencode.json MCP entry
 ```
 

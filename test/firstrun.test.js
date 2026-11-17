@@ -177,7 +177,7 @@ test('switching to Antigravity says how to register conductor with agy, unless i
   const { dir } = makeRepo();
   const r = initProject(dir, { controller: 'antigravity' });
   assert.ok(fs.existsSync(path.join(dir, '.agents/skills/conduct-plan/SKILL.md')), 'skills written where agy reads them');
-  assert.ok(r.notes.some((n) => /agy mcp add conductor conductor mcp/.test(n)) || agyHasConductor(), 'register hint unless already registered');
+  assert.ok(r.notes.some((n) => /agy mcp add conductor conductor-ai mcp/.test(n)) || agyHasConductor(), 'register hint unless already registered');
 });
 
 test('UI: picking a controller is a project action, not part of Save (Save to global used to be silently overridden)', () => {

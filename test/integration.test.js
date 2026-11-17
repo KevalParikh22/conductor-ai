@@ -21,7 +21,7 @@ test('init (claude-code) adds files, preserves user content, and is idempotent',
   assert.match(claude, /@AGENTS\.md/);
   assert.match(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), /# Existing agents file[\s\S]*conductor:rules:start/);
   assert.ok(fs.existsSync(path.join(dir, '.claude/commands/conduct-run.md')));
-  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, '.mcp.json'), 'utf8')).mcpServers.conductor, { command: 'conductor', args: ['mcp'] });
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, '.mcp.json'), 'utf8')).mcpServers.conductor, { command: 'conductor-ai', args: ['mcp'] });
   assert.match(fs.readFileSync(path.join(dir, 'GEMINI.md'), 'utf8'), /@\.\/AGENTS\.md/);
   const second = initProject(dir, { controller: 'claude-code' });
   assert.ok(second.lines.every((l) => /kept/.test(l)), 'second run changes nothing:\n' + second.lines.join('\n'));
@@ -33,7 +33,7 @@ test('init writes .vscode/mcp.json when asked or when .vscode/ exists, and keeps
   initProject(plain, { controller: 'claude-code' });
   assert.ok(!fs.existsSync(path.join(plain, '.vscode/mcp.json')), 'no .vscode folder, not asked: nothing written');
   initProject(plain, { controller: 'claude-code', vscode: true });
-  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(plain, '.vscode/mcp.json'), 'utf8')).servers.conductor, { type: 'stdio', command: 'conductor', args: ['mcp'] });
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(plain, '.vscode/mcp.json'), 'utf8')).servers.conductor, { type: 'stdio', command: 'conductor-ai', args: ['mcp'] });
   const { dir } = makeRepo({ files: { '.vscode/mcp.json': JSON.stringify({ servers: { other: { type: 'stdio', command: 'x' } } }) } });
   initProject(dir, { controller: 'opencode' });
   const servers = JSON.parse(fs.readFileSync(path.join(dir, '.vscode/mcp.json'), 'utf8')).servers;
@@ -51,7 +51,7 @@ test('init (antigravity) writes skills, MCP config and a controller-only GEMINI.
   const skill = fs.readFileSync(path.join(dir, '.agents/skills/conduct-plan/SKILL.md'), 'utf8');
   assert.match(skill, /^---\nname: conduct-plan\ndescription: "/);
   assert.doesNotMatch(skill, /\$ARGUMENTS/);
-  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, '.agents/mcp_config.json'), 'utf8')).mcpServers.conductor, { command: 'conductor', args: ['mcp'] });
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, '.agents/mcp_config.json'), 'utf8')).mcpServers.conductor, { command: 'conductor-ai', args: ['mcp'] });
   const gemini = fs.readFileSync(path.join(dir, 'GEMINI.md'), 'utf8');
   assert.match(gemini, /Antigravity CLI only/);
   assert.match(gemini, /Workers: ignore this section/);
@@ -62,7 +62,7 @@ test('init (codex-cli) keeps the controller section conditional in AGENTS.md', (
   const { dir } = makeRepo();
   const r = initProject(dir, { controller: 'codex-cli' });
   assert.match(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), /Workers: ignore this section/);
-  assert.ok(r.notes.some((n) => n.includes('codex mcp add conductor -- conductor mcp')) || codexHasConductor(), 'register hint unless already registered');
+  assert.ok(r.notes.some((n) => n.includes('codex mcp add conductor -- conductor-ai mcp')) || codexHasConductor(), 'register hint unless already registered');
   assert.ok(fs.existsSync(path.join(dir, '.agents/skills/conduct-plan/SKILL.md')), 'Codex reads skills from .agents/skills');
   assert.ok(!fs.existsSync(path.join(dir, '.conductor/commands')), 'no prompts in a folder no tool reads');
 });
@@ -71,7 +71,7 @@ test('init (opencode) writes skills where OpenCode reads them, plus its MCP entr
   const { dir } = makeRepo();
   initProject(dir, { controller: 'opencode' });
   assert.ok(fs.existsSync(path.join(dir, '.agents/skills/conduct-run/SKILL.md')));
-  assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'opencode.json'), 'utf8')).mcp.conductor.command.join(' '), 'conductor mcp');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'opencode.json'), 'utf8')).mcp.conductor.command.join(' '), 'conductor-ai mcp');
 });
 
 test('codexHasConductor reads ~/.codex/config.toml', () => {
@@ -193,4 +193,17 @@ test('UI server: host + token checks, config save writes a minimal diff, secrets
     });
     assert.equal(evil, 403);
   } finally { ui.server.close(); }
+});
+
+test('init moves an MCP entry an older init wrote (conductor mcp) to conductor-ai; one you changed is kept', () => {
+  const { dir } = makeRepo();
+  fs.writeFileSync(path.join(dir, '.mcp.json'), JSON.stringify({ mcpServers: { conductor: { command: 'conductor', args: ['mcp'] }, other: { command: 'x' } } }));
+  initProject(dir, { controller: 'claude-code' });
+  const d = JSON.parse(fs.readFileSync(path.join(dir, '.mcp.json'), 'utf8'));
+  assert.deepEqual(d.mcpServers.conductor, { command: 'conductor-ai', args: ['mcp'] });
+  assert.deepEqual(d.mcpServers.other, { command: 'x' }, 'other servers untouched');
+  const own = makeRepo().dir;
+  fs.writeFileSync(path.join(own, '.mcp.json'), JSON.stringify({ mcpServers: { conductor: { command: '/opt/bin/conductor', args: ['mcp'] } } }));
+  initProject(own, { controller: 'claude-code' });
+  assert.equal(JSON.parse(fs.readFileSync(path.join(own, '.mcp.json'), 'utf8')).mcpServers.conductor.command, '/opt/bin/conductor', 'your own entry is kept');
 });

@@ -145,16 +145,19 @@ export function initProject(root, { controller = 'claude-code', mcp = true, vsco
 
   // 4. MCP registration (optional second interface next to the CLI)
   if (mcp) {
-    const server = { command: 'conductor', args: ['mcp'] };
+    // conductor-ai, not conductor: other tools install a `conductor` command too (Conductor OSS); conductor-ai is only ours.
+    // An entry an older init wrote (`conductor mcp`) is moved to the new name; one you changed yourself is kept.
+    const server = { command: 'conductor-ai', args: ['mcp'] };
+    const old = (e) => e && e.command === 'conductor' && JSON.stringify(e.args) === '["mcp"]';
     const m = def.mcp || {};
-    if (m.format === 'mcpServers') mergeJsonFile(root, m.file, (d) => { d.mcpServers ||= {}; d.mcpServers.conductor ||= server; }, log);
-    if (m.format === 'opencode') mergeJsonFile(root, m.file, (d) => { d.$schema ||= 'https://opencode.ai/config.json'; d.mcp ||= {}; d.mcp.conductor ||= { type: 'local', command: ['conductor', 'mcp'], enabled: true }; }, log);
+    if (m.format === 'mcpServers') mergeJsonFile(root, m.file, (d) => { d.mcpServers ||= {}; if (old(d.mcpServers.conductor)) d.mcpServers.conductor = { ...d.mcpServers.conductor, ...server }; d.mcpServers.conductor ||= server; }, log);
+    if (m.format === 'opencode') mergeJsonFile(root, m.file, (d) => { d.$schema ||= 'https://opencode.ai/config.json'; d.mcp ||= {}; if (d.mcp.conductor?.command?.join?.(' ') === 'conductor mcp') d.mcp.conductor.command = ['conductor-ai', 'mcp']; d.mcp.conductor ||= { type: 'local', command: ['conductor-ai', 'mcp'], enabled: true }; }, log);
     // agy CLI reads MCP servers only from its own config (agy mcp add), not from the project: say how, don't edit it for the user
-    if (m.register === 'agy' && !agyHasConductor()) notes.push('Antigravity: agy loads MCP servers from its own config, not from this project. Register conductor once (for all projects):\n    agy mcp add conductor conductor mcp\n  Then check with: agy mcp list');
+    if (m.register === 'agy' && !agyHasConductor()) notes.push('Antigravity: agy loads MCP servers from its own config, not from this project. Register conductor once (for all projects):\n    agy mcp add conductor conductor-ai mcp\n  Then check with: agy mcp list');
     // Codex reads MCP servers only from ~/.codex/config.toml: say how, don't edit it for the user
-    if (m.register === 'codex' && !codexHasConductor()) notes.push('Codex: Codex loads MCP servers from ~/.codex/config.toml, not from this project. Register conductor once (for all projects):\n    codex mcp add conductor -- conductor mcp\n  Then check with: codex mcp list');
+    if (m.register === 'codex' && !codexHasConductor()) notes.push('Codex: Codex loads MCP servers from ~/.codex/config.toml, not from this project. Register conductor once (for all projects):\n    codex mcp add conductor -- conductor-ai mcp\n  Then check with: codex mcp list');
     // VS Code (Copilot agent mode and other MCP extensions) reads .vscode/mcp.json: on request, or when the project already has a .vscode folder
-    if (vscode ?? fs.existsSync(path.join(root, '.vscode'))) mergeJsonFile(root, '.vscode/mcp.json', (d) => { d.servers ||= {}; d.servers.conductor ||= { type: 'stdio', ...server }; }, log);
+    if (vscode ?? fs.existsSync(path.join(root, '.vscode'))) mergeJsonFile(root, '.vscode/mcp.json', (d) => { d.servers ||= {}; if (old(d.servers.conductor)) d.servers.conductor = { ...d.servers.conductor, ...server }; d.servers.conductor ||= { type: 'stdio', ...server }; }, log);
   }
 
   // 5. Project state
