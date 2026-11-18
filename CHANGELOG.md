@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.11.2 (2026-11-18)
 
 Soft-launch limits: newer and experimental features stay available but are off or marked.
 
