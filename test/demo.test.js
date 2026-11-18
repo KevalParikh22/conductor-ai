@@ -58,3 +58,14 @@ test('demo without a coding agent: falls back to the free API models that are re
   // nothing ready at all: an empty list, so the demo says to run conductor setup
   assert.deepEqual(demoFallback({ roles: { build: ['agent'] }, providers: { agent: providers.agent, nokey: providers.nokey } }), []);
 });
+
+test('soft-launch defaults: beta agents are marked and not turned on by setup, the web bridge is off, paid APIs stop at $2 a day', async () => {
+  const { CLI_PRESETS, DEFAULT_CONFIG } = await import('../src/presets.js');
+  const { enableDetected } = await import('../src/setup.js');
+  assert.deepEqual(Object.keys(CLI_PRESETS).filter((k) => CLI_PRESETS[k].beta).sort(), ['aider', 'copilot', 'goose', 'grok', 'kimi', 'kiro']);
+  assert.equal(DEFAULT_CONFIG.providers.manual.enabled, false);
+  assert.equal(DEFAULT_CONFIG.settings.dailyBudgetUSD, 2);
+  const root = tmpdir('conductor-setup-');
+  const on = enableDetected(root, { agents: [{ name: 'goose', installed: true, enabled: false, beta: true }, { name: 'codex-cli', installed: true, enabled: false }], keys: [] });
+  assert.deepEqual(on, ['codex-cli']);
+});

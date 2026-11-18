@@ -104,9 +104,9 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | `repoMapBytes` | 6000 | Size of the project map chat models get |
 | `localPromptProfile` | true | Models on this machine get a smaller prompt: no project map, a shorter AGENTS.md and context pack, at most 20 KB of files |
 | `localContextCheck` | true | Ask a local server (Ollama, LM Studio) for the window the model runs with, and don't send a prompt that won't fit: a local server cuts it without an error |
-| `race` | false | Race mode for small write tasks: the 2 fastest routes with no per-token price start together, the first to pass every check wins, the other is stopped. Saves waiting, not tokens. `--race` / `--no-race` per run |
+| `race` | false | **Experimental.** Race mode for small write tasks: the 2 fastest routes with no per-token price start together, the first to pass every check wins, the other is stopped. Saves waiting, not tokens. `--race` / `--no-race` per run |
 | `raceWidth` | 2 | How many attempts a race starts |
-| `priority` | `balanced` | Tokens against time, for every run and batch: `save`, `balanced` or `speed` (see **Priority** below). `--priority` per run |
+| `priority` | `balanced` | Tokens against time, for every run and batch: `save`, `balanced` or `speed` (**experimental**; see **Priority** below). `--priority` per run |
 | `hedgeAfterSec` | 45 | In a batch, a task running at least this long, and past 1.5× the median time of the tasks already finished, may get a second attempt (hedging). Only under `balanced` and `speed` |
 | `hedgeMax` | 3 | Most attempts at one task, the original included |
 | `hedgeFaster` | 1.5 | After the first hedge, another starts only on a route expected to be this many times faster than every route already trying (by its measured median for tasks of this size) |
@@ -138,7 +138,7 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | `maxDiffBytes` | 100000 | Review diffs above this are truncated (they are compacted first: see `conductor diff`) |
 | `maxContextBytes` | 60000 | File content sent to chat-only (API) providers |
 | `quotaPattern` | (regex) | Output that counts as a rate-limit error for CLIs |
-| `dailyBudgetUSD` | 0 | Daily cap on known API spend across all providers. 0 = no cap. Providers over budget are skipped like cooled-down ones; free ones never count |
+| `dailyBudgetUSD` | 2 | Daily cap on known API spend across all providers, in $. 0 = no cap. Providers over budget are skipped like cooled-down ones; free ones never count |
 
 ## Skills
 
@@ -232,6 +232,8 @@ Each run leaves `.conductor/runs/<time>-<role>[-task]/` in the project: the task
 Shared across projects in `~/.config/conductor/state.json`. See it with `conductor cooldown` and clear it with `conductor cooldown --clear [name]` (or from the UI Overview).
 
 ## Priority: tokens or time
+
+> `save` and `balanced` are stable. `speed` is **experimental** in the alpha: it works, but how it spends tokens may change.
 
 Speed costs tokens: a second attempt at the same task finishes sooner, but both attempts spend. Pick what you are short of.
 

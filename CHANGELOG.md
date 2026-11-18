@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+Soft-launch limits: newer and experimental features stay available but are off or marked.
+
+- **Beta agents stay off until you turn them on.** `conductor setup` turned on every agent CLI it found, so a machine with Goose (no permission control) or Copilot got them as workers without asking. Copilot CLI, Grok Build, Kiro, Aider, Goose and Kimi are now marked beta: setup lists them as "beta, left off", `doctor` and the UI show `beta`, and you turn one on in `conductor ui` → Providers.
+- **Paid APIs stop at $2 a day by default** (`settings.dailyBudgetUSD`, was 0 = no cap). Free routes and agents on your subscriptions never count. Set 0 for no cap, or another amount, in `conductor ui` → Settings.
+- **The web chat bridge is off by default and marked experimental.** `--provider manual` while it is off stops with a message, instead of handing the task to another worker.
+- **Experimental features have their own section in `conductor help all`:** `--priority speed`, `--race`, `--samples`, `conductor eval`, `conductor controller add` and `conductor import`. They work as before; docs/CONFIGURATION.md marks them too.
+
 ## 0.11.1 (2026-11-18)
 
 The first release on npm: `npm install -g conductor-ai`, or try it with `npx conductor-ai demo`.

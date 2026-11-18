@@ -132,6 +132,7 @@ export const CLI_PRESETS = {
   },
   kimi: {
     label: 'Kimi Code CLI',
+    beta: true, // newer: not turned on by setup, marked beta in doctor and the UI
     bin: 'kimi',
     write: ['{modelArgs}', '-p', '{prompt}'],
     read: ['{modelArgs}', '-p', '{prompt}'],
@@ -166,6 +167,7 @@ export const CLI_PRESETS = {
   },
   copilot: {
     label: 'GitHub Copilot CLI',
+    beta: true, // newer: not turned on by setup, marked beta in doctor and the UI
     bin: 'copilot',
     // -p runs one prompt and exits; -s prints only the answer. Deny rules beat --allow-all-tools. File tools are
     // limited to the working folder (plus temp, plus --add-dir for conductor's prompt folder in worktree runs).
@@ -189,6 +191,7 @@ export const CLI_PRESETS = {
   },
   aider: {
     label: 'Aider',
+    beta: true, // newer: not turned on by setup, marked beta in doctor and the UI
     bin: 'aider',
     // one message from a file, then exit. Aider commits after every edit by default: turned off, conductor
     // decides about commits. It also loads the repo's .env by default: pointed at an empty file instead.
@@ -212,6 +215,7 @@ export const CLI_PRESETS = {
   },
   grok: {
     label: 'Grok Build (xAI)',
+    beta: true, // newer: not turned on by setup, marked beta in doctor and the UI
     bin: 'grok',
     // official xAI CLI. --sandbox is enforced by the kernel for grok and every command it starts (Landlock/bwrap
     // on Linux, Seatbelt on macOS). strict: writes only in the project and temp, child network blocked on Linux.
@@ -233,6 +237,7 @@ export const CLI_PRESETS = {
   },
   kiro: {
     label: 'Kiro CLI',
+    beta: true, // newer: not turned on by setup, marked beta in doctor and the UI
     bin: 'kiro-cli',
     // headless: anything that would ask is denied. Read mode trusts only the read and search tools.
     // Write mode trusts all tools but runs commands in Kiro's sandbox (no network); --sandbox makes the run fail
@@ -252,6 +257,7 @@ export const CLI_PRESETS = {
   },
   goose: {
     label: 'Goose',
+    beta: true, // newer: not turned on by setup, marked beta in doctor and the UI
     bin: 'goose',
     // write: GOOSE_MODE=auto is fully autonomous and goose has no per-command or path rules, so it is not contained.
     // read: GOOSE_MODE=chat has no tools at all, so it cannot edit; conductor inlines the project context instead.
@@ -281,7 +287,7 @@ export const DEFAULT_PROVIDERS = {
   'claude-cli': { type: 'cli', preset: 'claude', enabled: false, model: '', notes: 'Claude as a worker (spends Claude quota).' },
   // W1: you paste the prompt into any web chat (DeepSeek, Kimi, Qwen, Gemini, ChatGPT…) and import the answer. Never
   // automated: no cookies, no browser, no logins. In no role chain: name it (--provider manual) when you want it.
-  'manual': { type: 'manual', enabled: true, model: 'web chat', maxPromptChars: 100_000, notes: 'You paste the prompt into a web chat yourself, then: conductor import <run> <answer file>. Add your own (e.g. "deepseek-web") with a lower maxPromptChars for a chat with a smaller limit.' },
+  'manual': { type: 'manual', enabled: false, model: 'web chat', maxPromptChars: 100_000, notes: 'You paste the prompt into a web chat yourself, then: conductor import <run> <answer file>. Add your own (e.g. "deepseek-web") with a lower maxPromptChars for a chat with a smaller limit.' },
   'copilot-cli': { type: 'cli', preset: 'copilot', enabled: false, model: '', notes: 'GitHub Copilot as a worker (uses your Copilot plan).' },
   'grok-cli': { type: 'cli', preset: 'grok', enabled: false, model: '', notes: 'xAI Grok Build: OS-sandboxed agent. Uses your grok login or XAI_API_KEY.' },
   'kiro-cli': { type: 'cli', preset: 'kiro', enabled: false, model: '', notes: 'AWS Kiro: sandboxed commands; uses your Kiro login or KIRO_API_KEY.' },
@@ -379,7 +385,7 @@ export const DEFAULT_SETTINGS = {
   autoVerify: true,
   checkBase: true, // run verify on the starting commit first (cached per commit), so old failures aren't blamed on a worker
   scopeAllow: [], // files workers may change without the task listing them (globs), besides lockfiles and snapshots
-  dailyBudgetUSD: 0, // 0 = no cap; counts API providers that have a `price` set
+  dailyBudgetUSD: 2, // paid API spend per day, in $; 0 = no cap; counts API providers that have a `price` set
   cooldownMinutes: 30,
   maxDiffBytes: 100000,
   freeApiTimeoutSec: 90, // free API routes (Kilo, OpenRouter free…): give up sooner, they sometimes hang

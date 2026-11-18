@@ -562,7 +562,7 @@ const views = {
         : `<span class="status bad" title="${esc(s.reason)}"><span class="dot"></span>${esc(s.reason)}</span>`;
       return `<div class="prow ${open ? 'open' : ''}"><div class="prow-main">
         <label class="switch" title="Enable"><input type="checkbox" data-en="${esc(n)}" ${p.enabled ? 'checked' : ''}><span></span></label>
-        <div class="prow-name"><span class="kind" title="${l.replace('-', ' ')}">${icon(l === 'local-agent' ? 'agent' : l === 'local-model' ? 'chip' : 'cloud')}</span><b>${esc(n)}</b>${status}${p.model ? `<span class="prow-model">${esc(p.model)}</span>` : ''}</div>
+        <div class="prow-name"><span class="kind" title="${l.replace('-', ' ')}">${icon(l === 'local-agent' ? 'agent' : l === 'local-model' ? 'chip' : 'cloud')}</span><b>${esc(n)}</b>${S.presets[p.preset]?.beta ? '<span class="pill" title="Newer agent: works, less tested. Off until you turn it on.">beta</span>' : p.type === 'manual' ? '<span class="pill" title="The web chat bridge: you paste the prompt into a web chat yourself">experimental</span>' : ''}${status}${p.model ? `<span class="prow-model">${esc(p.model)}</span>` : ''}</div>
         <div class="row" style="gap:4px"><button class="btn small ghost" data-test="${esc(n)}" title="Send a one-word test prompt">${icon('test')} Test</button><button class="btn icon ghost small" data-popen="${esc(n)}" aria-label="Details" aria-expanded="${open}">${icon('chev').replace('class="i"', 'class="i chev"')}</button></div>
       </div><div class="prow-body" ${open ? '' : 'hidden'}>
         ${p.notes ? `<div class="note">${esc(p.notes)}</div>` : ''}
@@ -609,7 +609,7 @@ const views = {
       ${num('cooldownMinutes', 'Cooldown after rate limit (minutes)', "Rate-limited providers are skipped this long (or for the provider's Retry-After)")}
       ${num('maxDiffBytes', 'Max review diff (KB)', 'Larger diffs are cut for review', 1000)}
       ${num('maxContextBytes', 'Max file context for API models (KB)', 'File content sent to chat-only providers', 1000)}
-      ${num('dailyBudgetUSD', 'Daily budget for paid APIs ($)', '0 = no cap. Counts API providers with a price set; free ones never count')}
+      ${num('dailyBudgetUSD', 'Daily budget for paid APIs ($)', 'Default $2. 0 = no cap. Counts API providers with a price set; free ones never count')}
       <div><label class="f">Verify command</label><input type="text" data-sets="verify" value="${esc(st.verify)}" placeholder="auto: AGENTS.md Verify line, then npm/composer/pytest/cargo/go"><div class="note">Must pass before a task counts as done.${!st.verify && S.status.verify ? ` Detected now: <span class="mono">${esc(S.status.verify)}</span>` : ''}</div></div>
       <div><label class="f">Protected branches</label><input type="text" data-setl="protectedBranches" value="${esc((st.protectedBranches || []).join(', '))}"><div class="note">Workers never write on these</div></div>
       </div><div style="margin-top:12px;display:grid;gap:6px">${chk('smartSelect', 'Smart selector: try the cheapest capable provider first (free API models for small tasks, agents for big ones)')}${chk('requireCleanTree', 'Require a clean git tree before write roles (enables safe stash-on-failure)')}${chk('autoVerify', 'Run verify automatically after each write task')}</div></div>`;

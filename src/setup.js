@@ -182,18 +182,19 @@ export function detect(cfg) {
   const own = controllerWorker(cfg.controller);
   const agents = Object.entries(cfg.providers).filter(([, p]) => p.type === 'cli')
     .map(([name, p]) => ({ name, label: CLI_PRESETS[p.preset]?.label || name, installed: !!which({ ...(CLI_PRESETS[p.preset] || {}), ...p }.bin), enabled: !!p.enabled,
+      ...(CLI_PRESETS[p.preset]?.beta ? { beta: true } : {}),
       ...(name === own ? { controller: true } : {}) }));
   const keys = Object.entries(CATALOG).filter(([, e]) => e.apiKeyEnv && keyValue(e.apiKeyEnv))
     .map(([id, e]) => ({ id, name: providerNameFor(cfg, id), label: e.label, env: e.apiKeyEnv, enabled: !!cfg.providers[providerNameFor(cfg, id)]?.enabled }));
   return { agents, keys };
 }
 
-/** Enable installed agents and providers whose keys are set. Returns the names it turned on. */
+/** Enable installed agents (not beta ones: the user turns those on) and providers whose keys are set. Returns the names it turned on. */
 export function enableDetected(root, found) {
   const on = [];
   const data = readScope('global', root);
   data.providers ||= {};
-  for (const a of found.agents) if (a.installed && !a.enabled && !a.controller) { data.providers[a.name] = { ...(data.providers[a.name] || {}), enabled: true }; on.push(a.name); }
+  for (const a of found.agents) if (a.installed && !a.enabled && !a.controller && !a.beta) { data.providers[a.name] = { ...(data.providers[a.name] || {}), enabled: true }; on.push(a.name); }
   if (on.length) writeScope('global', root, data);
   for (const k of found.keys) if (!k.enabled) { addProvider(root, k.id); on.push(k.name); }
   return on;

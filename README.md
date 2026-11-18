@@ -53,7 +53,7 @@ npm install -g conductor-ai     # Node 20+; or try it first: npx conductor-ai de
 - **Every agent under its own rules.** Each CLI gets permission rules for that run: write roles edit only the project and can't push; read roles can't edit; your API keys stay out of their environment. Your own CLI settings are never touched.
 - **The whole plan in one call.** `conductor batch --all` starts each task as soon as the tasks it depends on are merged, each in its own git worktree on a different provider, checks it, merges it and runs verify on the merged code. A slow task gets a second attempt on the fastest idle worker. You choose `save`, `balanced` or `speed` (`--priority`).
 - **No proof, no "done".** Your tests and lint run after every write task, acceptance criteria like `` `add(2, 3)` returns `5` `` are run as checks, a fix must make its repro pass, and the worker's changed files are compared with what git shows and with the task's scope. Plans are checked before any task is handed out.
-- **Usage and budgets.** Every run is logged with time, tokens and known cost; set a daily budget and paid APIs stop when it's reached. `conductor runs` and the Runs page show who did what.
+- **Usage and budgets.** Every run is logged with time, tokens and known cost; paid APIs stop at a daily budget ($2 by default; change it in `conductor ui` → Settings). `conductor runs` and the Runs page show who did what.
 - **One skill library.** Write a skill once in conductor; every controller (Claude Code, Antigravity, Codex, OpenCode) loads it, and each worker gets the skills that match its task. Switch skills off per project. `conductor skills` or the Skills page.
 - **Stays out of your git.** `conductor init` puts conductor's own files in `.gitignore`. Workers still see them in their worktrees, and edits to them are undone.
 - **Works everywhere.** Install once, `conductor init` in any repo. CLI and MCP server. Settings page in the browser. Zero dependencies, no telemetry.
@@ -196,7 +196,7 @@ For every agent: no `git push`, `commit`, `reset`, `checkout`, `rebase`, `stash`
 
 | | Built in |
 |---|---|
-| **Local agents** | Antigravity CLI · Codex CLI · OpenCode · GitHub Copilot CLI · Grok Build · Kiro · Aider · Goose · Kimi CLI · Claude Code · any CLI you add |
+| **Local agents** | Antigravity CLI · Codex CLI · OpenCode · Claude Code · any CLI you add. **Beta** (off until you turn them on): GitHub Copilot CLI · Grok Build · Kiro · Aider · Goose · Kimi CLI |
 | **Free APIs** | Kilo Gateway and OVHcloud (no key) · OpenRouter `:free` · Gemini API · Groq · Cerebras · Cohere trial · NVIDIA NIM · Hugging Face credits |
 | **Gateways** | OpenRouter · Requesty · Vercel AI Gateway · Hugging Face · Cloudflare Workers AI · Poe · AI/ML API |
 | **Model makers** | OpenAI · Claude API · Gemini · xAI · Mistral · DeepSeek · Kimi · Qwen · GLM · MiniMax |

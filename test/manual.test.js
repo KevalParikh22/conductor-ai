@@ -6,7 +6,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { isolateHome, makeRepo, tmpdir } from './helpers.js';
 
-isolateHome();
+const home = isolateHome();
+// the web bridge is experimental and off by default: these tests turn it on, as a user would in conductor ui
+fs.writeFileSync(path.join(home, "config.json"), JSON.stringify({ version: 1, providers: { manual: { enabled: true } } }));
 const { dispatch, formatSummary, outcome, EXIT_WAITING } = await import('../src/core.js');
 const { loadConfig } = await import('../src/config.js');
 const { importAnswer, importResearch, ImportError } = await import('../src/manual.js');
@@ -105,4 +107,10 @@ test('loadConfig returns a fresh copy: changing one config never changes the nex
   assert.notEqual(b.settings.timeoutSec, 1);
   assert.notEqual(b.providers['kilo-free'].model, 'changed');
   assert.ok(!b.roles.build.includes('x'));
+});
+
+test('--provider manual while the bridge is off is refused, not handed to another worker', async () => {
+  const cfg = loadConfig(repo().dir);
+  cfg.providers.manual = { ...cfg.providers.manual, enabled: false };
+  await assert.rejects(dispatch(cfg, { role: 'build', provider: 'manual', planPath: 'docs/plan/p.md', taskId: 'T1' }), /web chat bridge, experimental\) is off/);
 });

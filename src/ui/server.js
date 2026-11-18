@@ -69,7 +69,7 @@ function stateFor(root) {
     builtinProviders: Object.keys(DEFAULT_CONFIG.providers),
     status: statusData(cfg), secrets: secretsState(cfg), cooldowns: getCooldowns(), errors: validateConfig(cfg),
     controllerPreset: cfg.providers[controllerWorker(cfg.controller)]?.preset || null, // the controller's own CLI: never suggested as a worker
-    presets: Object.fromEntries(Object.entries(CLI_PRESETS).map(([k, v]) => [k, { label: v.label, bin: v.bin, install: v.install, login: v.login, docs: v.docs, permissions: v.permissions || null, takesModel: !!v.modelArgs?.length, installed: !!which(v.bin) }])),
+    presets: Object.fromEntries(Object.entries(CLI_PRESETS).map(([k, v]) => [k, { label: v.label, bin: v.bin, install: v.install, login: v.login, docs: v.docs, permissions: v.permissions || null, takesModel: !!v.modelArgs?.length, installed: !!which(v.bin), beta: !!v.beta }])),
     roles: ROLES, controllers: allControllers(root), catalog: catalogStatus(cfg),
     env: { node: process.version, platform: os.platform(), conductorOnPath: !!which('conductor'), git: !!which('git') },
   };

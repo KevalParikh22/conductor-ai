@@ -84,10 +84,7 @@ Work (normally called by the controller)
      --worktree [--replace]      run in its own checkout on branch conductor/<id> and commit there
      --continue                  keep working in the task's existing worktree (same worker by default; add --note)
      --timeout 45m               stop a worker after this and try the next (default: settings.timeoutSec, or 2× the task eta)
-     --samples N                 run N attempts on different providers in parallel and keep the best (by checks, not opinion)
-     --race / --no-race          start the 2 fastest free routes together; the first to pass every check wins, the other stops (settings.race: small tasks)
-     --priority save|balanced|speed   tokens against time (default: settings.priority, balanced). speed races small tasks and,
-                                 in a batch, gives slow tasks a second attempt; it spends more tokens. See docs/CONFIGURATION.md
+     --priority save|balanced    tokens against time (default: settings.priority, balanced). See docs/CONFIGURATION.md
      --review / --no-review      force or skip the independent review (default: only for risky work)
      --no-verify --no-escalate --allow-no-repro --allow-unverified --allow-scope --allow-weak-plan --allow-dirty --allow-open-questions --json
                                  exit 4 = the worker wrote code but no verify command proved it (--allow-unverified accepts it)
@@ -99,11 +96,8 @@ Work (normally called by the controller)
   conductor route "task" [--role r] [--files a,b] | --plan f --task T1   which providers would take a task, and why
   conductor route --rules | --templates | --add starter|<id,id> | --rm <n> [--global]   list, add or remove routing rules
   conductor plan check <file> [--task T1,T2]   is each task ready for a worker? (files, checkable acceptance, verify, size)
-  conductor eval [list] | check | run [--tasks a,b] [--provider p | --chain a,b] [--samples N] [--label x] [--compare last|<file>] [--keep] [--lessons <file> | --no-lessons]
-                                       measure conductor on fixed tasks with hidden tests (check = prove the tasks are fair, no LLM)
   conductor stats [--failures] [--days 30]   first-try accept rate and the alpha gate; --failures: why work fails, biggest cause first
   conductor rules [list] | new <name> [--paths "src/api/**"] | sync   project rules, written in each controller's own format
-  conductor controller [list] | add <name> --like <existing> | check   controllers as data: add one that reads the same formats
   conductor guard [status] | on | off | allow   block the controller's git commit while the last verify failed (Claude Code, Antigravity)
   conductor lessons [list] | add "text" [--files a,b] [--role r] | rm <id> | promote <id>   what earlier work taught (in later prompts and routing)
   conductor verify                     run the project's verify command
@@ -112,8 +106,6 @@ Work (normally called by the controller)
   conductor worktree [list] | rm <id>|--all [--force]
 
 Inspect
-  conductor import <run> [file | -]      your answer from a web chat for a run with --provider manual (applied and checked like any worker's)
-  conductor import --research <file> [--save docs/research/x.md]   file a web chat's research report into the project
   conductor runs [--limit 20] [--json] | runs show <run>
   conductor usage [--days 7] [--json]  runs, tokens and cost per provider
   conductor status [--json]            providers, chains and repo state
@@ -121,6 +113,18 @@ Inspect
   conductor cooldown [--clear [name]]  rate-limit cooldowns
   conductor config path                config file locations
   conductor mcp                        run as an MCP server (stdio)
+
+Experimental (works, may change; not covered by the alpha's promises)
+  run/batch --priority speed           races small tasks and gives slow batch tasks a second attempt; spends more tokens
+  run --race / --no-race               the 2 fastest free routes together; the first to pass every check wins (settings.race)
+  run --samples N                      N attempts on different providers in parallel, keep the best by checks
+  conductor eval [list] | check | run [--tasks a,b] [--provider p | --chain a,b] [--samples N] [--label x] [--compare last|<file>] [--keep] [--lessons <file> | --no-lessons]
+                                       measure conductor on fixed tasks with hidden tests (check = prove the tasks are fair, no LLM)
+  conductor controller [list] | add <name> --like <existing> | check   controllers as data: add one that reads the same formats
+  conductor import <run> [file | -]    web chat bridge: your answer from a web chat for a run with --provider manual
+                                       (the manual provider is off by default: turn it on in conductor ui)
+  conductor import --research <file> [--save docs/research/x.md]   file a web chat's research report into the project
+  Beta agents (off until you turn them on): Copilot CLI, Grok Build, Kiro, Aider, Goose, Kimi
 
 Exit codes: 0 ok · 2 usage/unsafe state · 3 every provider failed (controller takes over) · 4 unverified · 5 waiting for your answer (--provider manual)`;
 
@@ -737,7 +741,8 @@ async function doctor(o) {
   console.log(`project: ${cfg.root}\n`);
   for (const n of cfg.notices || []) console.log(`! ${n}`);
   for (const r of results) {
-    console.log(`${r.optional ? '○' : r.cooling ? '~' : r.ok ? '✓' : '✗'} ${r.name.padEnd(16)} ${r.optional || r.cooling ? r.status : r.ok && !o.live ? 'ready (use --live to test a real call)' : r.status}${r.sample ? `: ${r.sample}` : ''}`);
+    const beta = CLI_PRESETS[cfg.providers[r.name]?.preset]?.beta ? ' (beta)' : '';
+    console.log(`${r.optional ? '○' : r.cooling ? '~' : r.ok ? '✓' : '✗'} ${(r.name + beta).padEnd(16)} ${r.optional || r.cooling ? r.status : r.ok && !o.live ? 'ready (use --live to test a real call)' : r.status}${r.sample ? `: ${r.sample}` : ''}`);
     if (r.next) console.log(`    next: ${r.next}`);
     if (r.permissions && o.details) {
       console.log(`    write: ${r.permissions.write || 'unknown (custom CLI): check its own permission settings'}`);
@@ -773,7 +778,9 @@ async function setup(o) {
   console.log(`API keys found:   ${found.keys.length ? found.keys.map((k) => `${k.label} (${k.env})`).join(', ') : 'none yet'}`);
   const own = installed.find((a) => a.controller && !a.enabled);
   if (own) console.log(`                  ${own.name} stays off: it is your controller, and work sent to it would spend the quota conductor saves (turn it on in conductor ui only as a last resort)`);
-  const off = [...installed.filter((a) => !a.enabled && !a.controller), ...found.keys.filter((k) => !k.enabled)];
+  const beta = installed.filter((a) => a.beta && !a.enabled && !a.controller);
+  if (beta.length) console.log(`                  beta, left off: ${beta.map((a) => a.name).join(', ')} (newer agents: turn one on in conductor ui → Providers)`);
+  const off = [...installed.filter((a) => !a.enabled && !a.controller && !a.beta), ...found.keys.filter((k) => !k.enabled)];
   if (off.length && (!ask || await confirm(`Enable ${off.map((x) => x.name).join(', ')}?`))) console.log(`✓ enabled: ${enableDetected(root, found).join(', ')}`);
 
   const local = await detectLocal();

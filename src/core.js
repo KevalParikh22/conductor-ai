@@ -291,6 +291,9 @@ async function dispatchOnce(cfg, opts) {
     // the same worker fixes its own work unless another one is named
     if (!opts.provider && !opts.chain?.length && prior?.winner && cfg.providers[prior.winner]) opts = { ...opts, provider: prior.winner };
   }
+  { const mp = cfg.providers[opts.provider];
+    // the web bridge is experimental and off by default: asking for it should not quietly hand the task to another worker
+    if (mp?.type === 'manual' && !mp.enabled) throw new UsageError(`"${opts.provider}" (the web chat bridge, experimental) is off: turn it on in conductor ui → Providers, then run this again`); }
   if (useWorktree && mode !== 'write') throw new UsageError(`--worktree is for write roles (build, fix, test, docs); ${role} is read-only and can already run in parallel`);
   const preWarnings = [];
 
