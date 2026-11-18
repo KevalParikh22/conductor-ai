@@ -3,7 +3,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { DEFAULT_CONFIG, CLI_PRESETS, ROLES } from './presets.js';
 import { routeErrors } from './routing.js';
-import { GLOBAL_DIR, readJSON, writeJSON, deepMerge, loadEnvFile, which, isPlainObject, SECRET_VARS, keyValue } from './util.js';
+import { GLOBAL_DIR, readJSON, writeJSON, deepMerge, deepDiff, loadEnvFile, which, isPlainObject, SECRET_VARS, keyValue } from './util.js';
 
 export const GLOBAL_CONFIG = path.join(GLOBAL_DIR, 'config.json');
 export const GLOBAL_SECRETS = path.join(GLOBAL_DIR, 'secrets.env');
@@ -67,6 +67,8 @@ export function loadConfig(root = findProjectRoot()) {
   // provider would otherwise change the defaults for every later load in the same process (the UI and MCP servers)
   let cfg = deepMerge(structuredClone(DEFAULT_CONFIG), global);
   cfg = deepMerge(cfg, project);
+  // routing rules add up: this project's rules first (the first match wins, so they win a conflict), then global ones
+  cfg.routes = mergeRoutes(project.routes, global.routes);
   cfg.notices = dropRetired(cfg);
   cfg.root = root;
   cfg.sources = {
@@ -96,6 +98,41 @@ function dropRetired(cfg) {
     cfg.controller = RETIRED_CONTROLLERS[cfg.controller];
   }
   return notices;
+}
+
+const key = (r) => JSON.stringify(r);
+function mergeRoutes(first = [], then = []) {
+  const seen = new Set((first || []).map(key));
+  return [...(first || []), ...(then || []).filter((r) => !seen.has(key(r)))];
+}
+
+// settings and roles: project over global, key by key; routing rules: both lists, the project's first
+const strip = (c) => { const x = { ...c }; delete x.root; delete x.sources; delete x.notices; return x; };
+/** Paths (a.b.c) set in both objects: a global change there doesn't apply in this project. */
+function overlaps(changes, other, at = '') {
+  const out = [];
+  for (const [k, v] of Object.entries(changes || {})) {
+    if (!(k in (other || {}))) continue;
+    if (isPlainObject(v) && isPlainObject(other[k])) out.push(...overlaps(v, other[k], `${at}${k}.`));
+    else out.push(`${at}${k}`);
+  }
+  return out;
+}
+/**
+ * The UI edits the effective config (defaults + global + project). Saving writes only what was changed there into
+ * the chosen file. → { data: the new file, shadowed: changed paths the project file overrides (global saves) }
+ */
+export function scopeSave(scope, root, eff) {
+  const changes = deepDiff(strip(loadConfig(root)), strip(eff));
+  const other = readScope(scope === 'global' ? 'project' : 'global', root);
+  const { routes, version, ...rest } = changes;
+  const data = deepMerge(readScope(scope, root), rest);
+  if (routes !== undefined) {
+    // rules the other file holds stay there; this file keeps the rest of the page's list
+    const theirs = new Set((other.routes || []).map(key));
+    data.routes = (eff.routes || []).filter((r) => !theirs.has(key(r)));
+  }
+  return { data: { ...data, version: 1 }, shadowed: scope === 'global' ? overlaps(rest, other) : [] };
 }
 
 export function readScope(scope, root) {

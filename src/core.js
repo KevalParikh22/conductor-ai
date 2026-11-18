@@ -765,7 +765,7 @@ async function dispatchOnce(cfg, opts) {
       // in a worktree, other parallel tasks' work is missing, so the task's own verify line from the plan is preferred
       summary.verify = await timed('verify', () => runVerify(work, verifySettings, path.join(runDir, 'verify.log')));
       if (verifySettings !== settings) summary.verify.scope = 'task';
-      if (!useWorktree) recordVerify(root, summary.verify); // the commit guard follows the main checkout's latest verify
+      if (!useWorktree) recordVerify(root, summary.verify); // the push guard follows the main checkout's latest verify
       if (summary.verify.status === 'FAIL' && summary.base?.status === 'FAIL') {
         summary.verify.baseFailed = true;
         let after = ''; try { after = fs.readFileSync(summary.verify.log, 'utf8'); } catch { /* no log */ }

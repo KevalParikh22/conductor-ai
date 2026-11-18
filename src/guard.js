@@ -1,6 +1,7 @@
 // Q8b: guard hooks (opt-in). What must always hold is enforced by code, not asked of the model:
-//   - the controller's `git commit` is blocked while the last `conductor verify` in this checkout failed
-//     (`conductor verify` again until it passes, or `conductor guard allow` for a deliberate exception);
+//   - the controller's `git push` is blocked while the last `conductor verify` in this checkout failed (commits stay
+//     allowed: they are local and cheap to fix; a push is what reaches others). `conductor verify` again until it
+//     passes, or `conductor guard allow` for a deliberate exception;
 //   - on Stop, Claude Code shows a reminder of conductor task branches still waiting for review.
 // Formats were checked against the real tools:
 //   Claude Code  .claude/settings.local.json  PreToolUse matcher "Bash": exit 2 + stderr blocks; Stop: {systemMessage}
@@ -29,22 +30,23 @@ export function recordVerify(root, { status, cmd = '' }) {
   fs.writeFileSync(stateFile(root), JSON.stringify({ status, cmd, head: head(root), at: new Date().toISOString() }));
 }
 
-/** A one-time exception: allow commits on the current HEAD even though verify failed. */
+/** A one-time exception: allow pushing the current HEAD even though verify failed. */
 export function allowCommit(root) {
   const st = readVerifyState(root) || {};
   fs.mkdirSync(path.dirname(stateFile(root)), { recursive: true });
   fs.writeFileSync(stateFile(root), JSON.stringify({ ...st, allowedHead: head(root) }));
 }
 
+export const isPush = (cmd) => /(^\s*|[;&|(]\s*)git(\s+-[\w-]+(=\S+|\s+\S+)?)*\s+push(?=$|[\s;&|)])/.test(String(cmd || ''));
 export const isCommit = (cmd) => /(^\s*|[;&|(]\s*)git(\s+-[\w-]+(=\S+|\s+\S+)?)*\s+commit(?=$|[\s;&|)])/.test(String(cmd || ''));
 
-/** Why a commit must wait, or null. */
-export function commitBlock(root) {
+/** Why a push must wait, or null. A commit made since doesn't count: only a verify that passes (or allow) does. */
+export function pushBlock(root) {
   const st = readVerifyState(root);
   if (!st || st.status !== 'FAIL') return null;
   const h = head(root);
-  if (!h || st.head !== h || st.allowedHead === h) return null; // a new commit since, or allowed once
-  return `conductor: the last verify failed${st.cmd ? ` (\`${st.cmd}\`)` : ''}, so this commit is blocked. Fix the failures and run \`conductor verify\` (a pass unblocks it), or run \`conductor guard allow\` to commit anyway.`;
+  if (!h || st.allowedHead === h) return null; // allowed once for this commit
+  return `conductor: the last verify failed${st.cmd ? ` (\`${st.cmd}\`)` : ''}, so this push is blocked (committing is fine). Fix the failures and run \`conductor verify\` (a pass unblocks it), or run \`conductor guard allow\` to push this commit anyway.`;
 }
 
 /** Conductor task branches still waiting for review, for a Stop reminder; '' when there are none. */
@@ -59,7 +61,7 @@ export function stopReminder(root) {
 export function runHook(kind, input, root) {
   if (kind === 'claude-pretool') {
     const cmd = input?.tool_input?.command;
-    const why = isCommit(cmd) ? commitBlock(root) : null;
+    const why = isPush(cmd) ? pushBlock(root) : null;
     return why ? { stdout: '', stderr: why, code: 2 } : { stdout: '', stderr: '', code: 0 };
   }
   if (kind === 'claude-stop') {
@@ -68,7 +70,7 @@ export function runHook(kind, input, root) {
   }
   if (kind === 'agy-pretool') {
     const cmd = input?.toolCall?.args?.CommandLine;
-    const why = isCommit(cmd) ? commitBlock(root) : null;
+    const why = isPush(cmd) ? pushBlock(root) : null;
     return { stdout: JSON.stringify(why ? { decision: 'deny', reason: why } : { decision: 'ask' }), stderr: '', code: 0 };
   }
   return { stdout: '', stderr: `conductor: unknown hook "${kind}"`, code: 1 };

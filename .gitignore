@@ -6,3 +6,21 @@ node_modules/
 
 # local test material: benchmark runs, eval history, notes (only published results go in bench/results)
 lab/
+
+# >>> conductor: local files, not committed (conductor init --share keeps them in git)
+.conductor/
+docs/plan/
+.claude/commands/conduct-*
+.agents/skills/conduct-*/
+.claude/rules/conductor-*
+.agents/rules/conductor-*
+.claude/agents/conductor-*
+.agents/agents/conductor-*
+.codex/agents/conductor-*
+.opencode/agents/conductor-*
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+HANDOFF.md
+docs/architecture.md
+# <<< conductor

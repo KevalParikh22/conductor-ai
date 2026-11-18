@@ -98,7 +98,7 @@ Work (normally called by the controller)
   conductor plan check <file> [--task T1,T2]   is each task ready for a worker? (files, checkable acceptance, verify, size)
   conductor stats [--failures] [--days 30]   first-try accept rate and the alpha gate; --failures: why work fails, biggest cause first
   conductor rules [list] | new <name> [--paths "src/api/**"] | sync   project rules, written in each controller's own format
-  conductor guard [status] | on | off | allow   block the controller's git commit while the last verify failed (Claude Code, Antigravity)
+  conductor guard [status] | on | off | allow   block the controller's git push while the last verify failed; commits stay allowed (Claude Code, Antigravity)
   conductor lessons [list] | add "text" [--files a,b] [--role r] | rm <id> | promote <id>   what earlier work taught (in later prompts and routing)
   conductor verify                     run the project's verify command
   conductor skills [list] | new <name> | add <path> | on|off <name> | rm <name> | sync   one skill library for every controller and worker
@@ -617,7 +617,7 @@ async function main() {
     case 'verify': {
       const cfg = loadConfig();
       const v = await runVerify(cfg.root, cfg.settings);
-      recordVerify(cfg.root, v); // the commit guard (conductor guard) reads this
+      recordVerify(cfg.root, v); // the push guard (conductor guard) reads this
       console.log(`verify: ${v.status}${v.cmd ? ` (${v.cmd})` : ''}${v.note ? `, ${v.note}` : ''}`);
       if (v.tail) console.log(v.tail);
       return v.status === 'FAIL' ? 1 : 0;

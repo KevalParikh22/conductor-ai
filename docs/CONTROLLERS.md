@@ -4,7 +4,7 @@ Generated from `CONTROLLERS` in `src/presets.js` by `node scripts/gen-controller
 
 The controller is the tool you talk to (it plans and reviews); conductor writes its files in the format each one reads.
 
-| Controller | Instructions | Commands | Skills | Rules | Reviewer subagent | MCP | Commit guard |
+| Controller | Instructions | Commands | Skills | Rules | Reviewer subagent | MCP | Push guard |
 |---|---|---|---|---|---|---|---|
 | **Claude Code** (`claude-code`) | `CLAUDE.md` imports `@AGENTS.md` | commands in `.claude/commands` | `.claude/skills` | `.claude/rules` (claude) | `.claude/agents/conductor-reviewer.md` | `.mcp.json` | `.claude/settings.local.json` |
 | **Antigravity CLI** (`antigravity`) | `GEMINI.md` imports `@./AGENTS.md` | skills in `.agents/skills` | `.agents/skills` | `.agents/rules` (agy) | `.agents/agents/conductor-reviewer.md` | `.agents/mcp_config.json` | `.agents/hooks.json` |
@@ -28,7 +28,7 @@ It is stored under `controllers` in your config (`--project` for this project on
 - rules: `claude`, `agy`, or `{ "block": "AGENTS.md" }`
 - reviewer: `claude`, `agy`, `codex-toml`, `opencode`
 - mcp: `mcpServers`, `opencode`, or a `register` note for tools that keep MCP servers in their own config
-- hooks (the commit guard): `claude-settings`, `agy-hooks`
+- hooks (the push guard): `claude-settings`, `agy-hooks`
 - commands: as `commands` or `skills`
 
 A tool that reads a format not listed here needs its writer in `src/controllers.js` (or `src/guard.js` for hooks), and a test against the real tool before conductor claims it works: hook and permission formats are where tools differ most.

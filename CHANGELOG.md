@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- **Fixed: "Save to Global" copied this project's settings into every project.** The UI sent the whole effective config (defaults + global + this project), and a global save stored all of it, so a value set only for this project became global. Now only what you changed on the page goes to the file you picked. A key set in both files: the project wins. A key set only globally applies to every project. When a global change doesn't apply here because this project overrides it, the save says so.
+- **Routing rules add up.** A project's rules used to replace the global ones; now both apply, the project's first (the first match wins, so a project rule wins a conflict). Each file keeps its own rules when you save.
+- **The guard blocks push, not commit.** `conductor guard on` used to block the controller's `git commit` while the last `conductor verify` failed. Commits are local and easy to fix, so they are allowed now; `git push` is blocked instead, until a verify passes (a new commit alone doesn't lift it) or `conductor guard allow` lets this commit through once. The UI calls it "Push guard".
+
 ## 0.11.2 (2026-11-18)
 
 Soft-launch limits: newer and experimental features stay available but are off or marked.

@@ -321,7 +321,7 @@ export const DEFAULT_ROLES = {
 /** Who plans, reviews and commits. `conductor init` writes the matching instruction files. */
 /**
  * V6: every controller as data: where it reads instructions, commands, skills, rules and its reviewer subagent, how it
- * registers MCP servers, and its hook file (the commit guard). Each `format` names a writer in src/controllers.js
+ * registers MCP servers, and its hook file (the push guard). Each `format` names a writer in src/controllers.js
  * (or src/guard.js for hooks), so a new controller that reads the same formats is a data entry: add one with
  * `conductor controller add <name> --like <one of these>`. A new format still needs its writer and a real test.
  * Checked against each tool (2026-11): Claude Code 2.1, Antigravity CLI 1.5, Codex CLI 0.16x, OpenCode 2.0.

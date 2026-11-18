@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { loadConfig, findProjectRoot, readScope, writeScope, validateConfig, GLOBAL_CONFIG, GLOBAL_SECRETS, GLOBAL_SECRETS as SECRETS, projectConfigPath, loadSecrets, writeSecrets } from '../config.js';
+import { loadConfig, findProjectRoot, readScope, writeScope, scopeSave, validateConfig, GLOBAL_CONFIG, GLOBAL_SECRETS, GLOBAL_SECRETS as SECRETS, projectConfigPath, loadSecrets, writeSecrets } from '../config.js';
 import { DEFAULT_CONFIG, CLI_PRESETS, ROLES, CONTROLLERS, controllerWorker } from '../presets.js';
 import { statusData } from '../status.js';
 import { listRuns, runDetail } from '../runs.js';
@@ -29,15 +29,7 @@ import { VERSION } from '../version.js';
 import * as git from '../git.js';
 
 /** Minimal override: only what differs from `base`. */
-export function deepDiff(base, eff) {
-  const out = {};
-  for (const [k, v] of Object.entries(eff || {})) {
-    const b = base?.[k];
-    if (isPlainObject(v) && isPlainObject(b)) { const d = deepDiff(b, v); if (Object.keys(d).length) out[k] = d; }
-    else if (JSON.stringify(v) !== JSON.stringify(b)) out[k] = v;
-  }
-  return out;
-}
+export { deepDiff } from '../util.js';
 
 function secretsState(cfg) {
   const fileVars = loadEnvFile(SECRETS);
@@ -122,16 +114,17 @@ export function createUiServer({ cwd = process.cwd(), token = crypto.randomBytes
         case 'GET /api/state': return send(200, stateFor(root));
         case 'PUT /api/config': {
           const scope = body.scope === 'global' ? 'global' : 'project';
-          const base = scope === 'global' ? DEFAULT_CONFIG : deepMerge(DEFAULT_CONFIG, readScope('global', root));
           const eff = body.effective || {};
-          const errors = validateConfig({ ...deepMerge(base, eff) });
+          const errors = validateConfig({ ...deepMerge(DEFAULT_CONFIG, eff) });
           if (errors.length) return send(400, { error: errors.join('; ') });
-          const diff = deepDiff(base, eff);
+          // only what was changed on the page goes to the chosen file: saving to global no longer copies this
+          // project's own overrides into every project, and saving to the project doesn't freeze global values here
+          const { data, shadowed } = scopeSave(scope, root, eff);
           // keep the controller pinned in the project file once a project is initialised
-          if (scope === 'project') diff.controller = eff.controller || readScope('project', root).controller || base.controller;
+          if (scope === 'project') data.controller = data.controller || eff.controller || loadConfig(root).controller;
           if (scope === 'global') setupGlobal();
-          writeScope(scope, root, { version: 1, ...diff });
-          return send(200, stateFor(root));
+          writeScope(scope, root, data);
+          return send(200, { ...stateFor(root), shadowed });
         }
         case 'POST /api/test': {
           const cfg = loadConfig(root);

@@ -215,7 +215,7 @@ export function controllersMarkdown() {
   const c = (v) => (v ? `\`${v}\`` : '—');
   const L = ['# Controllers', '', 'Generated from `CONTROLLERS` in `src/presets.js` by `node scripts/gen-controller-docs.mjs`; a test keeps it in step.', '',
     'The controller is the tool you talk to (it plans and reviews); conductor writes its files in the format each one reads.', '',
-    '| Controller | Instructions | Commands | Skills | Rules | Reviewer subagent | MCP | Commit guard |', '|---|---|---|---|---|---|---|---|'];
+    '| Controller | Instructions | Commands | Skills | Rules | Reviewer subagent | MCP | Push guard |', '|---|---|---|---|---|---|---|---|'];
   for (const [n, d] of Object.entries(CONTROLLERS)) {
     L.push(`| **${d.label}** (\`${n}\`) | ${c(d.file)}${d.import ? ` imports ${c(d.import)}` : ''} | ${d.commands ? `${d.commands.as} in ${c(d.commands.dir)}` : '—'} | ${c(d.skills)} | ${d.rules?.dir ? `${c(d.rules.dir)} (${d.rules.format})` : d.rules?.block ? `a block in ${c(d.rules.block)}` : '—'} | ${d.reviewer ? `${c(d.reviewer.file)}` : '—'} | ${d.mcp?.file ? c(d.mcp.file) : d.mcp?.register ? `register once with \`${d.mcp.register} mcp add …\`` : '—'} | ${d.hooks ? c(d.hooks.file) : 'not yet'} |`);
   }
@@ -227,7 +227,7 @@ export function controllersMarkdown() {
     `- rules: ${Object.keys(RULE_FORMATS).map((x) => `\`${x}\``).join(', ')}, or \`{ "block": "AGENTS.md" }\``,
     `- reviewer: ${Object.keys(REVIEWER_FORMATS).map((x) => `\`${x}\``).join(', ')}`,
     `- mcp: ${MCP_FORMATS.map((x) => `\`${x}\``).join(', ')}, or a \`register\` note for tools that keep MCP servers in their own config`,
-    `- hooks (the commit guard): ${HOOK_FORMATS.map((x) => `\`${x}\``).join(', ')}`,
+    `- hooks (the push guard): ${HOOK_FORMATS.map((x) => `\`${x}\``).join(', ')}`,
     `- commands: as ${COMMAND_KINDS.map((x) => `\`${x}\``).join(' or ')}`, '',
     'A tool that reads a format not listed here needs its writer in `src/controllers.js` (or `src/guard.js` for hooks), and a test against the real tool before conductor claims it works: hook and permission formats are where tools differ most.', '');
   return L.join('\n');

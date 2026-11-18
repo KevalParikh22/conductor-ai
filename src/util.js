@@ -25,6 +25,17 @@ export function deepMerge(base, over) {
   return out;
 }
 
+/** What changed from base to eff: changed leaves only; an array counts as one value. */
+export function deepDiff(base, eff) {
+  const out = {};
+  for (const [k, v] of Object.entries(eff || {})) {
+    const b = base?.[k];
+    if (isPlainObject(v) && isPlainObject(b)) { const d = deepDiff(b, v); if (Object.keys(d).length) out[k] = d; }
+    else if (JSON.stringify(v) !== JSON.stringify(b)) out[k] = v;
+  }
+  return out;
+}
+
 /** Names of the variables conductor loaded from its secret files (kept away from CLI workers). */
 export const SECRET_VARS = new Set();
 

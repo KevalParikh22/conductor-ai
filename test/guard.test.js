@@ -15,19 +15,23 @@ test('commit detection: git commit in any position of a shell line, nothing else
   for (const c of ['git status', 'echo git commit', 'git commit-tree x', 'gitcommit', '', undefined]) assert.equal(G.isCommit(c), false, String(c));
 });
 
-test('a failed verify blocks commits on that HEAD only; a pass, a new commit or allow lifts it', () => {
+test('push detection: git push in any position of a shell line, nothing else', () => {
+  for (const c of ['git push', 'git push origin main', 'cd a && git push --force-with-lease', 'git -C sub push', 'x; git push']) assert.equal(G.isPush(c), true, c);
+  for (const c of ['git commit -m push', 'echo git push', 'git pushx', '', undefined]) assert.equal(G.isPush(c), false, String(c));
+});
+
+test('a failed verify blocks pushes (not commits) until a verify passes or allow is used for this commit', () => {
   const { dir, git } = makeRepo();
-  assert.equal(G.commitBlock(dir), null, 'nothing recorded');
+  assert.equal(G.pushBlock(dir), null, 'nothing recorded');
   G.recordVerify(dir, { status: 'FAIL', cmd: 'npm test' });
-  assert.match(G.commitBlock(dir), /the last verify failed \(`npm test`\), so this commit is blocked/);
+  assert.match(G.pushBlock(dir), /the last verify failed \(`npm test`\), so this push is blocked \(committing is fine\)/);
+  assert.equal(G.runHook('claude-pretool', { tool_input: { command: 'git commit -m x' } }, dir).code, 0, 'commits are allowed');
   G.allowCommit(dir);
-  assert.equal(G.commitBlock(dir), null, 'allowed once on this HEAD');
-  G.recordVerify(dir, { status: 'FAIL', cmd: 'npm test' });
-  assert.ok(G.commitBlock(dir), 'a new failure blocks again');
+  assert.equal(G.pushBlock(dir), null, 'allowed once for this commit');
   git('commit', '-q', '--allow-empty', '-m', 'next');
-  assert.equal(G.commitBlock(dir), null, 'a different HEAD: that failure was about older code');
+  assert.ok(G.pushBlock(dir), 'a new commit is not proof: still blocked until verify passes');
   G.recordVerify(dir, { status: 'PASS', cmd: 'npm test' });
-  assert.equal(G.commitBlock(dir), null);
+  assert.equal(G.pushBlock(dir), null);
   G.recordVerify(dir, { status: 'SKIPPED' });
   assert.equal(G.readVerifyState(dir).status, 'PASS', 'SKIPPED is not recorded');
 });
@@ -35,12 +39,12 @@ test('a failed verify blocks commits on that HEAD only; a pass, a new commit or 
 test('hook answers: Claude exit 2 + reason; agy deny + reason, and "ask" (never {}) otherwise', () => {
   const { dir } = makeRepo();
   G.recordVerify(dir, { status: 'FAIL', cmd: 'npm test' });
-  const c = G.runHook('claude-pretool', { tool_name: 'Bash', tool_input: { command: 'git commit -m x' } }, dir);
+  const c = G.runHook('claude-pretool', { tool_name: 'Bash', tool_input: { command: 'git push origin main' } }, dir);
   assert.deepEqual([c.code, c.stdout], [2, '']);
-  assert.match(c.stderr, /commit is blocked/);
+  assert.match(c.stderr, /push is blocked/);
   assert.deepEqual(G.runHook('claude-pretool', { tool_input: { command: 'npm test' } }, dir), { stdout: '', stderr: '', code: 0 });
-  const a = JSON.parse(G.runHook('agy-pretool', { toolCall: { name: 'run_command', args: { CommandLine: 'git commit -m x' } } }, dir).stdout);
-  assert.equal(a.decision, 'deny'); assert.match(a.reason, /commit is blocked/);
+  const a = JSON.parse(G.runHook('agy-pretool', { toolCall: { name: 'run_command', args: { CommandLine: 'git push' } } }, dir).stdout);
+  assert.equal(a.decision, 'deny'); assert.match(a.reason, /push is blocked/);
   assert.deepEqual(JSON.parse(G.runHook('agy-pretool', { toolCall: { args: { CommandLine: 'ls' } } }, dir).stdout), { decision: 'ask' }, 'agy denies on {}: "ask" defers to its own rules');
 });
 
