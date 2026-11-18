@@ -41,7 +41,7 @@ test('the registry matches the code: CLI commands, MCP tools and UI routes exist
   // every UI route belongs to an action: its first path segment matches an action's route
   const seg = (r) => r.split(' ')[1].split('/')[2];
   const covered = new Set(ACTIONS.filter((a) => typeof a.ui === 'string').map((a) => seg(a.ui)));
-  const helpers = ['config', 'state', 'init', 'test', 'route-templates', 'models', 'secrets', 'cooldowns', 'providers', 'provider-models', 'local', 'skills', 'runs', 'run']; // setup screens and their sub-steps
+  const helpers = ['config', 'state', 'init', 'test', 'route-templates', 'models', 'secrets', 'cooldowns', 'providers', 'provider-models', 'local', 'skills', 'runs', 'run', 'whatsnew']; // setup screens and their sub-steps; whatsnew is the UI's bell panel (CHANGELOG), not an action
   for (const r of routes) assert.ok(covered.has(seg(r)) || helpers.includes(seg(r)), `UI route ${r} is not in src/surfaces.js`);
 });
 

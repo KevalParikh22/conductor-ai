@@ -14,6 +14,8 @@
   --local: #0e7490; --local-soft: #e3f5f8; --cloud: #7c3aed; --cloud-soft: #f1ebfe;
   --radius: 10px; --shadow: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.08);
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* data: URIs can't read CSS variables, so each theme names its own chevron and tick */
+  --chev: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235d6573' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); --tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E"); --ctl-h: 38px;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -21,6 +23,7 @@
     --accent: #818cf8; --accent-ink: #0f1115; --accent-soft: #23264a;
     --ok: #4ade80; --ok-soft: #12291b; --bad: #f87171; --bad-soft: #2d1515; --warn: #fbbf24; --warn-soft: #2b2110;
     --local: #22d3ee; --local-soft: #0c2a30; --cloud: #c4b5fd; --cloud-soft: #241a3d; --shadow: none;
+    --chev: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239aa3b2' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); --tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230f1115' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E");
   }
 }
 :root[data-theme="dark"] {
@@ -28,44 +31,80 @@
   --accent: #818cf8; --accent-ink: #0f1115; --accent-soft: #23264a;
   --ok: #4ade80; --ok-soft: #12291b; --bad: #f87171; --bad-soft: #2d1515; --warn: #fbbf24; --warn-soft: #2b2110;
   --local: #22d3ee; --local-soft: #0c2a30; --cloud: #c4b5fd; --cloud-soft: #241a3d; --shadow: none;
+  --chev: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239aa3b2' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E"); --tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230f1115' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E");
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-code, .mono { font-family: var(--mono); font-size: 12.5px; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+code, .mono { font-family: var(--mono); font-size: 13.5px; }
 a { color: var(--accent); }
 header { position: sticky; top: 0; z-index: 5; background: var(--panel); border-bottom: 1px solid var(--line); }
-.bar { display: flex; align-items: center; gap: 12px; padding: 10px 20px; flex-wrap: wrap; }
-.brand { font-weight: 700; font-size: 16px; letter-spacing: -.01em; display: flex; align-items: center; gap: 8px; }
+.bar { display: flex; align-items: center; gap: 12px; padding: 10px 24px; flex-wrap: wrap; max-width: 1440px; margin: 0 auto; }
+.brand { font-weight: 700; font-size: 18px; letter-spacing: -.01em; display: flex; align-items: center; gap: 8px; color: var(--text); text-decoration: none; border-radius: 8px; padding: 2px 4px; }
+.brand:hover { color: var(--accent); }
 .brand svg { color: var(--accent); }
-.proj { color: var(--muted); font-family: var(--mono); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 46ch; }
+.proj { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+.proj b { font-family: var(--mono); font-size: 13.5px; font-weight: 600; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 32ch; padding: 3px 8px; background: var(--panel-2); border-radius: 6px; cursor: default; }
+.scopebox { display: inline-flex; align-items: center; gap: 6px; }
+.help { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--line); color: var(--muted); font-size: 11.5px; font-weight: 700; font-style: normal; cursor: help; flex: none; line-height: 1; }
+.help:hover { color: var(--accent); border-color: var(--accent); }
+.bell { position: relative; } .bell .bdot { position: absolute; top: 4px; right: 5px; width: 8px; height: 8px; border-radius: 50%; background: var(--bad); border: 2px solid var(--panel); }
+#npanel { position: fixed; top: 60px; right: max(16px, calc((100vw - 1440px) / 2 + 16px)); width: min(420px, calc(100vw - 32px)); max-height: min(70vh, 600px); overflow-y: auto; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 10px 30px rgba(16,24,40,.18); z-index: 9; padding: 14px 16px; }
+#npanel h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 4px 0 8px; }
+#npanel ul { margin: 0 0 12px; padding-left: 18px; } #npanel li { margin: 4px 0; font-size: 14px; }
+#npanel .ver { font-weight: 600; margin: 10px 0 2px; }
+#npanel .notice { background: var(--warn-soft); color: var(--warn); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; font-size: 14px; }
 .spacer { flex: 1; }
-.layout { display: grid; grid-template-columns: 184px minmax(0, 1fr); gap: 0; max-width: 1200px; margin: 0 auto; }
-nav { padding: 16px 12px; position: sticky; top: 57px; align-self: start; }
-nav button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: none; border: 0; color: var(--muted); padding: 8px 12px; border-radius: 8px; font: inherit; cursor: pointer; }
+.layout { display: grid; grid-template-columns: 224px minmax(0, 1fr); gap: 0; max-width: 1440px; margin: 0 auto; }
+nav { padding: 18px 12px; position: sticky; top: 61px; align-self: start; }
+nav button { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; background: none; border: 0; color: var(--muted); padding: 10px 14px; border-radius: 9px; font: inherit; font-size: 15px; cursor: pointer; margin-bottom: 2px; }
+nav button svg.i { width: 18px; height: 18px; }
 nav button:hover { background: var(--panel-2); color: var(--text); }
 nav button.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
-main { padding: 20px; min-width: 0; }
-h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: -.01em; }
-h2 { font-size: 15px; margin: 0 0 10px; }
-.sub { color: var(--muted); margin: 0 0 18px; }
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px; margin-bottom: 14px; }
-.grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
-.stat .n { font-size: 26px; font-weight: 700; }
-.stat .l { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
-.btn { border: 1px solid var(--line); background: var(--panel); color: var(--text); padding: 6px 12px; border-radius: 8px; font: inherit; cursor: pointer; white-space: nowrap; }
+main { padding: 22px 28px 28px; min-width: 0; }
+h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -.015em; }
+h2 { font-size: 17.5px; margin: 0 0 12px; letter-spacing: -.005em; }
+h3.sec { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 22px 0 10px; }
+.sub { color: var(--muted); margin: 0 0 18px; font-size: 15.5px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px 20px; margin-bottom: 16px; }
+.grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+.grid > .card { margin-bottom: 0; } .grid { margin-bottom: 16px; }
+.stat .n { font-size: 30px; font-weight: 700; }
+.stat .l { color: var(--muted); font-size: 12.5px; text-transform: uppercase; letter-spacing: .04em; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--text); padding: 0 14px; min-height: var(--ctl-h); border-radius: 8px; font: inherit; cursor: pointer; white-space: nowrap; text-decoration: none; }
 .btn:hover { background: var(--panel-2); }
+.btn:focus-visible, .chip:focus-visible, nav button:focus-visible, .brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
-.btn.small { padding: 3px 8px; font-size: 12px; }
-.btn.icon { padding: 3px 7px; }
+.btn.small { padding: 0 10px; min-height: 30px; font-size: 13px; }
+.btn.icon { padding: 0 8px; }
 .btn:disabled { opacity: .45; cursor: default; }
 .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
 .mini { border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: var(--panel-2); }
 .mini .note { display: block; margin-top: 6px; }
-input[type=text], input[type=search], input[type=password], input[type=number], select, textarea { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; font: inherit; width: 100%; min-width: 0; }
+input[type=text], input[type=search], input[type=number], select, textarea { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 0 11px; font: inherit; width: 100%; min-width: 0; }
+input[type=text], input[type=search], input[type=number], select { height: var(--ctl-h); }
+textarea { padding: 8px 11px; }
 input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-label.f { display: block; font-size: 12px; color: var(--muted); margin-bottom: 3px; }
+/* the native select arrow differs per browser and ignores the theme: draw our own */
+select { appearance: none; -webkit-appearance: none; background-image: var(--chev); background-repeat: no-repeat; background-position: right 10px center; background-size: 16px; padding-right: 34px; cursor: pointer; }
+select:hover, input[type=text]:hover, input[type=search]:hover, input[type=number]:hover, textarea:hover { border-color: var(--muted); }
+/* native spinners are tiny and unthemed; .num adds − / + buttons instead */
+input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.num { display: flex; align-items: stretch; max-width: 220px; }
+.num input { border-radius: 0; text-align: center; border-left: 0; border-right: 0; }
+.num button { width: 38px; flex: none; border: 1px solid var(--line); background: var(--panel-2); color: var(--text); font: inherit; font-size: 18px; cursor: pointer; line-height: 1; }
+.num button:first-child { border-radius: 8px 0 0 8px; } .num button:last-child { border-radius: 0 8px 8px 0; }
+.num button:hover { background: var(--accent-soft); color: var(--accent); }
+input[type=checkbox], input[type=radio] { appearance: none; -webkit-appearance: none; width: 18px; height: 18px; margin: 0; flex: none; border: 1.5px solid var(--muted); background: var(--panel); border-radius: 5px; cursor: pointer; display: inline-grid; place-items: center; vertical-align: -3px; }
+input[type=radio] { border-radius: 50%; }
+input[type=checkbox]:checked { background: var(--accent) var(--tick) center / 14px no-repeat; border-color: var(--accent); }
+input[type=radio]:checked { border-color: var(--accent); background: radial-gradient(circle, var(--accent) 0 4px, var(--panel) 4.5px); }
+input[type=checkbox]:focus-visible, input[type=radio]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+input[type=range] { accent-color: var(--accent); width: 100%; }
+label.f { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; font-weight: 500; }
+label.chk { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; padding: 6px 0; } label.chk input { margin-top: 2px; }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; padding: 1px 8px; border-radius: 99px; background: var(--panel-2); color: var(--muted); white-space: nowrap; }
+.pill { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; padding: 1px 9px; border-radius: 99px; background: var(--panel-2); color: var(--muted); white-space: nowrap; }
 .pill.ok { background: var(--ok-soft); color: var(--ok); } .pill.bad { background: var(--bad-soft); color: var(--bad); }
 .pill.warn { background: var(--warn-soft); color: var(--warn); }
 .pill.local-agent, .pill.local-model { background: var(--local-soft); color: var(--local); } .pill.cloud-api { background: var(--cloud-soft); color: var(--cloud); }
@@ -78,61 +117,88 @@ label.f { display: block; font-size: 12px; color: var(--muted); margin-bottom: 3
 .link .nm { display: flex; gap: 8px; align-items: center; min-width: 0; white-space: nowrap; overflow: hidden; }
 .chainline { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .chainline .arrow { color: var(--muted); }
-.gal { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; margin-top: 12px; }
+.gal { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-top: 10px; }
+.galsec h3.sec { margin: 18px 0 0; display: flex; gap: 8px; align-items: baseline; } .galsec h3.sec .note { text-transform: none; letter-spacing: 0; font-weight: 400; }
 [hidden] { display: none !important; } /* layout rules like .gcard { display: flex } would otherwise show hidden elements */
 .gcard { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--panel-2); display: flex; flex-direction: column; gap: 4px; }
-.gcard.open { grid-column: 1 / -1; border-color: var(--accent); }
 .gcard .note { margin: 0; }
 .gcard .warn { color: var(--warn); }
 .chips { display: flex; gap: 6px; flex-wrap: wrap; }
-.chip { border: 1px solid var(--line); background: var(--panel); color: var(--text); border-radius: 999px; padding: 3px 10px; font: inherit; font-size: 12.5px; cursor: pointer; }
+.chip { border: 1px solid var(--line); background: var(--panel); color: var(--text); border-radius: 999px; padding: 5px 13px; font: inherit; font-size: 13.5px; cursor: pointer; }
 .chip.on { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
 svg.i { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vertical-align: -3px; }
 .btn svg.i { width: 14px; height: 14px; }
 .btn.ghost { border-color: transparent; background: none; color: var(--muted); } .btn.ghost:hover { background: var(--panel-2); color: var(--text); }
 .head { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; } .head h1 { margin: 0; } .head .sub { margin: 2px 0 0; flex-basis: 100%; }
-.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; } .seg button { border: 0; background: var(--panel); color: var(--muted); padding: 5px 12px; font: inherit; font-size: 13px; cursor: pointer; } .seg button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; } .seg button { border: 0; background: var(--panel); color: var(--muted); padding: 0 14px; min-height: var(--ctl-h); font: inherit; font-size: 14px; cursor: pointer; } .seg button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 .plist { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); margin-bottom: 14px; }
 .prow { border-bottom: 1px solid var(--line); } .prow:last-child { border-bottom: 0; }
-.prow-main { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 14px; }
-.prow-name { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; } .prow-name b { font-size: 14px; }
-.prow-model { color: var(--muted); font-family: var(--mono); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 28ch; }
-.prow-body { padding: 0 14px 14px 60px; } .prow.open { background: var(--panel-2); }
+.prow-main { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 12px 18px; }
+.prow-name { display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap; } .prow-name b { font-size: 15px; }
+.prow-model { color: var(--muted); font-family: var(--mono); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 28ch; }
+.prow-body { padding: 0 18px 16px 66px; } .prow.open { background: var(--panel-2); }
 .chev { transition: transform .15s; } .prow.open .chev { transform: rotate(180deg); }
-.kind { color: var(--muted); display: inline-flex; } .kind svg.i { width: 14px; height: 14px; }
-.roles { display: grid; gap: 14px; } .roles .card { margin: 0; max-width: 760px; }
+.kind { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 7px; flex: none; } .kind svg.i { width: 16px; height: 16px; }
+.kind.local-agent { background: var(--local-soft); color: var(--local); } .kind.cloud-api { background: var(--cloud-soft); color: var(--cloud); }
+.kind.local-model { background: var(--ok-soft); color: var(--ok); } .kind.manual { background: var(--panel-2); color: var(--muted); }
+.st { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 500; white-space: nowrap; color: var(--muted); }
+.st svg.i { width: 16px; height: 16px; } .st.ok { color: var(--ok); } .st.warn { color: var(--warn); } .st.bad { color: var(--bad); }
+.why { margin: 2px 0 10px; font-size: 13.5px; }
+.roles { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); } .roles .card { margin: 0; }
 .trend { display: flex; gap: 10px; align-items: flex-end; } .tw { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 40px; font-size: 12.5px; }
 .tbar { height: 70px; width: 22px; background: var(--panel-2); border-radius: 4px; display: flex; align-items: flex-end; overflow: hidden; }
 .tbar span { display: block; width: 100%; background: var(--muted); } .tbar span.ok { background: var(--ok); } .tbar span.low { background: var(--warn); }
 .rtabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
 .rtab { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; border: 1px solid var(--line); background: var(--panel); color: var(--text); border-radius: 8px; padding: 6px 12px; cursor: pointer; font: inherit; }
 .rtab .note { font-size: 11.5px; } .rtab.on { border-color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); }
-.status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); } .status.bad { color: var(--bad); }
 details.more > summary { cursor: pointer; color: var(--muted); font-size: 13px; list-style: none; display: flex; align-items: center; gap: 6px; } details.more > summary::-webkit-details-marker { display: none; }
 details.more[open] > summary { margin-bottom: 10px; }
 .prov { display: grid; grid-template-columns: auto 1fr; gap: 12px; }
 .prov-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .prov-head b { font-size: 14.5px; }
-.fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-top: 10px; }
-.note { color: var(--muted); font-size: 12.5px; }
-.explain { margin-top: 10px; padding: 10px 12px; border-radius: 8px; background: var(--panel-2); font-size: 13px; line-height: 1.5; }
+.fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; margin-top: 10px; }
+.note { color: var(--muted); font-size: 13.5px; }
+.explain { margin-top: 10px; padding: 12px 14px; border-radius: 8px; background: var(--panel-2); font-size: 14px; line-height: 1.55; }
+.callout { display: flex; gap: 12px; padding: 14px 16px; border-radius: var(--radius); background: var(--accent-soft); border: 1px solid var(--line); margin-bottom: 16px; }
+.callout > svg.i { color: var(--accent); width: 20px; height: 20px; margin-top: 2px; }
+.callout ul { margin: 0; padding-left: 18px; } .callout li { margin: 3px 0; }
+.pathbox { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 13.5px; background: var(--panel); border: 1px solid var(--line); border-radius: 7px; padding: 2px 4px 2px 10px; }
+/* Settings: one control per line, label left, help under the label */
+.setlist { display: grid; }
+.setrow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 340px); gap: 8px 24px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.setrow:last-child { border-bottom: 0; } .setrow:first-child { padding-top: 0; }
+.setrow .lbl { font-weight: 500; display: flex; align-items: center; gap: 8px; } .setrow .note { margin-top: 2px; }
+.cmdrow { display: grid; grid-template-columns: minmax(200px, 340px) minmax(0, 1fr); gap: 6px 18px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.cmdrow:last-child { border-bottom: 0; } .cmdrow pre.cmd { margin: 0; }
+.agents { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+.agent { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; background: var(--panel-2); display: flex; flex-direction: column; gap: 4px; }
+.agent pre.cmd { background: var(--panel); }
+.soon { text-align: center; padding: 48px 24px; } .soon > svg.i { width: 40px; height: 40px; color: var(--accent); }
+.soon p { max-width: 560px; margin: 10px auto; } .soon pre.cmd { max-width: 360px; margin: 6px auto; text-align: left; }
+dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--text); padding: 0; width: min(520px, calc(100vw - 32px)); box-shadow: 0 20px 50px rgba(16,24,40,.3); }
+dialog.wide { width: min(640px, calc(100vw - 32px)); }
+dialog::backdrop { background: rgba(10,12,16,.45); }
+.dlg-b { padding: 20px 22px; } .dlg-b h2 { margin-bottom: 6px; }
+.dlg-f { display: flex; gap: 10px; justify-content: flex-end; padding: 14px 22px; border-top: 1px solid var(--line); background: var(--panel-2); border-radius: 0 0 12px 12px; flex-wrap: wrap; }
 .explain ol { margin: 4px 0 0; padding-left: 20px; } .explain li { margin: 2px 0; }
 .lib { display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr); } .lib .item { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; min-width: 0; overflow-wrap: anywhere; }
 .lib .item .row { gap: 6px; } .lib .item .note { display: block; margin-top: 2px; }
 .switch { position: relative; width: 34px; height: 20px; flex: none; }
-.switch input { opacity: 0; width: 0; height: 0; }
+.switch input[type=checkbox] { opacity: 0; width: 0; height: 0; position: absolute; }
+.switch input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
 .switch span { position: absolute; inset: 0; background: var(--line); border-radius: 99px; cursor: pointer; transition: .15s; }
 .switch span::after { content: ""; position: absolute; width: 14px; height: 14px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .15s; }
 .switch input:checked + span { background: var(--accent); } .switch input:checked + span::after { transform: translateX(14px); }
-.ctrl { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
-.ctrl label { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; cursor: pointer; background: var(--panel); display: block; }
-.ctrl input { margin-right: 6px; } .ctrl label.sel { border-color: var(--accent); background: var(--accent-soft); }
-pre.cmd { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 8px 44px 8px 10px; margin: 6px 0; overflow-x: auto; font-family: var(--mono); font-size: 12.5px; position: relative; white-space: pre-wrap; word-break: break-all; }
-.copy { position: absolute; top: 5px; right: 5px; }
+.ctrl { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
+.ctrl label { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; cursor: pointer; background: var(--panel); display: block; }
+.ctrl input { margin-right: 8px; } .ctrl label.sel { border-color: var(--accent); background: var(--accent-soft); }
+pre.cmd { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 9px 48px 9px 12px; margin: 6px 0; overflow-x: auto; font-family: var(--mono); font-size: 13.5px; position: relative; white-space: pre-wrap; word-break: break-all; }
+.copy { position: absolute; top: 4px; right: 4px; }
+.copyi { min-height: 26px; padding: 0 6px; }
 table { width: 100%; border-collapse: collapse; }
-td, th { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
-th { font-size: 12px; color: var(--muted); font-weight: 600; }
-.savebar { position: sticky; bottom: 0; background: var(--panel); border-top: 1px solid var(--line); padding: 10px 20px; display: none; align-items: center; gap: 10px; flex-wrap: wrap; z-index: 5; }
+td, th { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+th { font-size: 12.5px; color: var(--muted); font-weight: 600; }
+.savebar { position: sticky; bottom: 0; background: var(--panel); border-top: 1px solid var(--line); padding: 10px max(24px, calc((100vw - 1440px) / 2 + 24px)); display: none; align-items: center; gap: 10px; flex-wrap: wrap; z-index: 5; }
 .savebar.show { display: flex; }
 /* API keys: masked text, not type=password, so browsers and password managers don't offer to save them as a login */
 input.secret { -webkit-text-security: disc; text-security: disc; font-family: var(--mono, ui-monospace, monospace); }
@@ -149,8 +215,15 @@ input.secret { -webkit-text-security: disc; text-security: disc; font-family: va
   nav button { width: auto; white-space: nowrap; padding: 6px 10px; }
   .prow-body { padding-left: 14px; } .prow-model { display: none; }
   main { padding: 16px; }
-  .bar { padding: 10px 16px; gap: 8px; } .bar label[for=scope] { display: none; } #scope { max-width: 150px; font-size: 13px; padding: 4px 6px; }
-  .proj { max-width: 100%; order: 5; flex-basis: 100%; }
+  h1 { font-size: 22px; }
+  .bar { padding: 10px 16px; gap: 8px; } .bar label[for=scope] { display: none; } #scope { max-width: 116px; font-size: 14px; height: 34px; }
+  /* one header row on a phone: a title tooltip can't be hovered on touch anyway */
+  .brand { font-size: 16px; } .bar { gap: 6px; } .bar .btn.icon { min-height: 32px; padding: 0 6px; } .scopebox .help { display: none; }
+  .proj { order: 5; flex-basis: 100%; } .proj b { max-width: calc(100vw - 80px); }
+  .roles { grid-template-columns: 1fr; }
+  .setrow, .cmdrow { grid-template-columns: 1fr; }
+  .num { max-width: none; }
+  #npanel { top: 100px; }
   table { display: block; overflow-x: auto; }
   td input.secret { min-width: 140px; }
 }
@@ -161,17 +234,19 @@ body { overflow-x: hidden; }
 <body>
 <header>
   <div class="bar">
-    <div class="brand">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 20 L14 6"/><circle cx="16" cy="4.5" r="2"/><path d="M3 12h3M18 12h3M12 18v3"/></svg>
+    <a class="brand" href="#" id="brand" title="Overview">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 20 L14 6"/><circle cx="16" cy="4.5" r="2"/><path d="M3 12h3M18 12h3M12 18v3"/></svg>
       conductor
-    </div>
+    </a>
     <span class="proj" id="proj"></span>
     <span class="spacer"></span>
-    <label class="note" for="scope">Save to</label>
+    <span class="scopebox"><label class="note" for="scope">Save to</label>
     <select id="scope" style="width:auto">
       <option value="global">Global (all projects)</option>
       <option value="project">This project only</option>
     </select>
+    <i class="help" tabindex="0" title="Global: applies to every project on this machine.&#10;This project: overrides global, for this project only.&#10;A setting in both: this project's value wins.&#10;Routing rules add up: this project's run first, then the global ones." aria-label="About Save to: global applies to every project; this project overrides global here only; routing rules from both apply, this project's first.">?</i></span>
+    <button class="btn icon ghost bell" id="bell" title="Notifications" aria-label="Notifications" aria-expanded="false" aria-controls="npanel"></button>
     <button class="btn icon ghost" id="theme" title="Toggle theme" aria-label="Toggle theme"></button>
   </div>
 </header>
@@ -184,13 +259,17 @@ body { overflow-x: hidden; }
   <button class="btn" id="discard">Discard</button>
   <button class="btn primary" id="save">Save</button>
 </div>
+<div id="npanel" role="dialog" aria-label="Notifications" hidden></div>
+<dialog id="confirm" aria-labelledby="cf-title"><div class="dlg-b"><h2 id="cf-title">Save changes?</h2><div id="cf-body"></div></div>
+  <div class="dlg-f"><button class="btn" id="cf-cancel">Cancel</button><button class="btn primary" id="cf-save">Save</button></div></dialog>
 <div id="offline" role="alert" hidden><b>conductor ui has stopped.</b> Nothing you change here is saved. Run <code>conductor ui</code> again in a terminal and open the new link it prints.</div>
 <div id="toast" role="status"></div>
 <script>
 const TOKEN = new URLSearchParams(location.hash.slice(1)).get('t') || '';
 // the open page lives in the address (#t=…&p=roles), so a reload or a shared link opens the same page
-function pageFromHash() { const p = new URLSearchParams(location.hash.slice(1)).get('p'); return ['overview', 'runs', 'roles', 'providers', 'skills', 'lessons', 'keys', 'settings', 'setup'].includes(p) ? p : 'overview'; }
+function pageFromHash() { const p = new URLSearchParams(location.hash.slice(1)).get('p'); return ['overview', 'runs', 'roles', 'routing', 'providers', 'skills', 'lessons', 'keys', 'settings', 'setup'].includes(p) ? p : 'overview'; }
 function go(page) {
+  togglePanel(false);
   if (page === tab && !runOpen) return render();
   tab = page;
   const h = new URLSearchParams(location.hash.slice(1)); h.set('p', page); h.delete('run'); runOpen = null; runDet = null;
@@ -202,7 +281,13 @@ addEventListener('popstate', () => { tab = pageFromHash(); const r = new URLSear
 const ICONS = {
   overview: 'M3 13h8V3H3zM13 21h8V11h-8zM3 21h8v-6H3zM13 3v6h8V3z',
   runs: 'M22 12h-4l-3 8L9 4l-3 8H2',
-  roles: 'M6 3v12M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 9a9 9 0 0 1-9 9',
+  roles: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8',
+  routing: 'M6 3v12M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 9a9 9 0 0 1-9 9',
+  server: 'M2 3h20v8H2zM2 13h20v8H2zM6 7h.01M6 17h.01', manual: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
+  ok: 'M22 11.1V12a10 10 0 1 1-5.9-9.1M22 4L12 14l-3-3', warn: 'M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01',
+  bad: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM15 9l-6 6M9 9l6 6', off: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM8 12h8',
+  info: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 16v-4M12 8h.01', lock: 'M5 11h14v10H5zM7 11V7a5 5 0 0 1 10 0v4',
+  bell: 'M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0',
   providers: 'M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0zM12 18v4',
   keys: 'M15.5 7.5l3 3M21 2l-9.6 9.6M14 9l7-7M7.5 21a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11z',
   settings: 'M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6',
@@ -216,11 +301,10 @@ const ICONS = {
   moon: 'M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z', skills: 'M13 2L3 14h9l-1 8 10-12h-9l1-8z', copy: 'M9 9h11v11H9zM5 15H4V4h11v1',
 };
 const icon = (n, t = '') => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true"${t ? ` title="${t}"` : ''}><path d="${ICONS[n]}"/></svg>`;
-const TABS = [['overview', 'Overview'], ['runs', 'Runs'], ['roles', 'Roles'], ['providers', 'Providers'], ['skills', 'Skills'], ['lessons', 'Lessons & rules'], ['keys', 'API keys'], ['settings', 'Settings'], ['setup', 'Setup']];
+// Lessons & rules has no nav item; #p=lessons still opens it
+const TABS = [['overview', 'Overview'], ['runs', 'Runs'], ['roles', 'Roles'], ['routing', 'Routing rules'], ['providers', 'Providers'], ['skills', 'Skills'], ['keys', 'API keys'], ['settings', 'Settings'], ['setup', 'Setup']];
 let S = null, W = null, tab = pageFromHash(), dirty = false, freeModels = null, runsData = null, gOpen = null, gFilter = { q: '', cat: 'all' };
 let rPreview = null; // routing preview result
-let rTab = null; // the role shown on the Roles page (tabs)
-const roleTab = () => (rTab && W.roles[rTab] ? rTab : Object.keys(W.roles)[0]);
 let runOpen = new URLSearchParams(location.hash.slice(1)).get('run'), runDet = null; // the run page (#p=runs&run=<id>)
 let ctrlPick = null; // controller picked in Settings but not applied yet (a project action, not part of Save)
 let rtLib = null, rtLibKey = '', rtLibOpen = null; // rule library, resolved against the current (unsaved) providers
@@ -228,7 +312,7 @@ const ROUTING_GUIDE = 'https://github.com/KevalParikh22/conductor-ai/blob/main/d
 function loadRtLib() {
   const key = JSON.stringify([Object.keys(W.providers).filter((n) => W.providers[n].enabled), (W.routes || []).map((r) => r.from)]);
   if (key === rtLibKey) return; rtLibKey = key;
-  api('POST', '/api/route-templates', { providers: W.providers, routes: W.routes || [] }).then((d) => { rtLib = d.templates; if (tab === 'roles') render(); }, () => {});
+  api('POST', '/api/route-templates', { providers: W.providers, routes: W.routes || [] }).then((d) => { rtLib = d.templates; if (tab === 'routing') render(); }, () => {});
 }
 let localInfo = null, localAt = 0; // local model servers, refreshed at most every 30s
 function loadLocal() { if (Date.now() - localAt < 30000) return; localAt = Date.now(); api('GET', '/api/local').then((d) => { localInfo = d.local; if (tab === 'providers' || tab === 'setup') render(); }, () => {}); }
@@ -242,7 +326,7 @@ const clone = (x) => JSON.parse(JSON.stringify(x));
 try { const t = localStorage.getItem('conductor-theme'); if (t) document.documentElement.dataset.theme = t; } catch {}
 const curTheme = () => document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
 const themeIcon = () => { $('#theme').innerHTML = icon(curTheme() === 'dark' ? 'sun' : 'moon'); };
-themeIcon();
+themeIcon(); bellIcon();
 $('#theme').onclick = () => {
   const next = curTheme() === 'dark' ? 'light' : 'dark';
   document.documentElement.dataset.theme = next; themeIcon();
@@ -261,14 +345,61 @@ async function api(method, path, body) {
   return j;
 }
 function offline(on) { const b = $('#offline'); if (b) b.hidden = !on; }
-function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2600); }
-function markDirty() { dirty = true; $('#savebar').classList.add('show'); $('#savewhere').textContent = ' → ' + ($('#scope').value === 'global' ? 'global config (all projects)' : 'this project'); }
-function load(state) { S = state; W = clone(S.effective); dirty = false; $('#savebar').classList.remove('show'); $('#proj').textContent = S.root; render(); }
-
-$('#save').onclick = async () => {
-  try { load(await api('PUT', '/api/config', { scope: $('#scope').value, effective: W })); toast('Saved'); }
-  catch (e) { toast('Not saved: ' + e.message); }
+function toast(msg, ms = 2600) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), ms); }
+const scopeText = () => ($('#scope').value === 'global' ? 'global config (all projects)' : 'this project');
+function markDirty() { dirty = true; $('#savebar').classList.add('show'); $('#savewhere').textContent = ' → ' + scopeText(); }
+// the full path is long and mostly the same prefix: show the folder, keep the path in the tooltip and the copy button
+const baseName = (p) => String(p || '').replace(/[\\/]+$/, '').split(/[\\/]/).pop() || p;
+const tilde = (p) => (S?.env?.home && p.startsWith(S.env.home) ? '~' + p.slice(S.env.home.length) : p);
+function load(state) {
+  S = state; W = clone(S.effective); dirty = false; $('#savebar').classList.remove('show');
+  $('#proj').innerHTML = `<b title="${esc(S.root)}">${esc(baseName(S.root))}</b><button class="btn icon ghost copyi" data-copy="${esc(S.root)}" data-copied="Path copied" title="Copy the full path" aria-label="Copy the project path">${icon('copy')}</button>`;
+  bellIcon(); render();
+}
+// leaf paths that differ, for the confirm dialog ("3 changes")
+function changedPaths(a, b, pre = '') {
+  const obj = (x) => x && typeof x === 'object' && !Array.isArray(x);
+  if (obj(a) && obj(b)) return [...new Set([...Object.keys(a), ...Object.keys(b)])].flatMap((k) => changedPaths(a[k], b[k], pre ? `${pre}.${k}` : k));
+  return JSON.stringify(a) === JSON.stringify(b) ? [] : [pre];
+}
+$('#save').onclick = () => {
+  const ch = changedPaths(W, S.effective), g = $('#scope').value === 'global';
+  $('#cf-body').innerHTML = `<p>${ch.length ? `<b>${ch.length} change${ch.length === 1 ? '' : 's'}</b>` : 'Your changes'} will be saved to <b>${g ? 'global config' : 'this project'}</b>.</p>
+    <p class="note">${g ? 'Applies to every project on this machine, except where a project sets its own value.' : `Applies only to <b>${esc(baseName(S.root))}</b> and overrides global here.`} Change it with <b>Save to</b> at the top.</p>
+    ${ch.length ? `<p class="note mono" style="max-height:120px;overflow:auto">${ch.slice(0, 12).map(esc).join('<br>')}${ch.length > 12 ? '<br>…' : ''}</p>` : ''}
+    <p class="note mono">${esc(tilde(g ? S.paths.global : S.paths.project))}</p>`;
+  $('#cf-save').textContent = g ? 'Save globally' : 'Save to this project';
+  $('#confirm').showModal(); $('#cf-save').focus();
 };
+$('#cf-cancel').onclick = () => $('#confirm').close();
+$('#cf-save').onclick = async () => {
+  const scope = $('#scope').value; $('#confirm').close();
+  try {
+    const r = await api('PUT', '/api/config', { scope, effective: W }); load(r);
+    if (scope === 'global' && r.shadowed?.length) toast(`Saved globally. This project overrides: ${r.shadowed.join(', ')}`, 7000);
+    else toast(scope === 'global' ? 'Saved globally' : 'Saved to this project');
+  } catch (e) { toast('Not saved: ' + e.message); }
+};
+$('#brand').onclick = (e) => { e.preventDefault(); go('overview'); };
+
+// notifications: config notices (retired providers, a removed controller) and the newest CHANGELOG entries
+let whatsNew = null;
+function bellIcon() { $('#bell').innerHTML = icon('bell') + (S?.notices?.length ? '<span class="bdot" aria-hidden="true"></span>' : ''); $('#bell').title = S?.notices?.length ? `Notifications (${S.notices.length})` : 'Notifications'; }
+function renderPanel() {
+  const n = S?.notices || [], secs = whatsNew?.sections || [];
+  $('#npanel').innerHTML = `${n.length ? `<h3>Needs attention</h3>${n.map((x) => `<div class="notice">${esc(x)}</div>`).join('')}` : ''}
+    ${secs.length ? `<h3>What's new</h3>${secs.map((s) => `<div class="ver">${esc(s.heading)}</div><ul>${s.items.map((i) => `<li>${esc(i)}</li>`).join('')}</ul>`).join('')}` : ''}
+    ${!n.length && !secs.length ? `<p class="note">${whatsNew ? 'No notifications yet.' : 'Loading…'}</p>` : ''}`;
+}
+function togglePanel(open) {
+  const p = $('#npanel'); p.hidden = !open; $('#bell').setAttribute('aria-expanded', String(open));
+  if (!open) return;
+  renderPanel();
+  if (!whatsNew) api('GET', '/api/whatsnew').then((d) => { whatsNew = d; renderPanel(); }, () => { whatsNew = { sections: [] }; renderPanel(); });
+}
+$('#bell').onclick = (e) => { e.stopPropagation(); togglePanel($('#npanel').hidden); };
+document.addEventListener('click', (e) => { if (!$('#npanel').hidden && !$('#npanel').contains(e.target)) togglePanel(false); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#npanel').hidden) { togglePanel(false); $('#bell').focus(); } });
 $('#discard').onclick = () => load(S);
 $('#scope').onchange = () => { if (dirty) markDirty(); try { localStorage.setItem('conductor-scope', $('#scope').value); } catch {} };
 
@@ -277,19 +408,33 @@ function renderNav() {
   $('#nav').querySelectorAll('button').forEach((b) => b.onclick = () => go(b.dataset.tab));
 }
 function provStatus(name) { return S.status.providers.find((p) => p.name === name) || { ready: false, reason: 'unknown' }; }
-function locPill(p) { const l = p.location || 'cloud-api'; return `<span class="pill ${l}">${{ 'local-agent': 'local agent', 'local-model': 'local model', 'cloud-api': 'cloud API', manual: 'you, in a web chat' }[l] || l}</span>`; }
-function readyPill(name) { const st = provStatus(name); const w = W.providers[name]; if (w && !w.enabled) return '<span class="pill">disabled</span>'; if (st.optional) return '<span class="pill">optional: add key</span>'; if (st.cooling) return `<span class="pill warn" title="${esc(st.reason)}">cooling down</span>`; return st.ready ? '<span class="pill ok">ready</span>' : `<span class="pill bad">${esc(st.reason)}</span>`; }
 // short status for tight rows; the full reason is in the title
 const shortReason = (r) => /not set/.test(r) ? 'no key' : /not installed/.test(r) ? 'not installed' : r.length > 22 ? r.slice(0, 20) + '…' : r;
+// three kinds of worker, three icons: a CLI agent, a cloud API, a model served on this machine
+const LOC_LABEL = { 'local-agent': 'local agent (CLI)', 'local-model': 'local model', 'cloud-api': 'cloud API', manual: 'you, in a web chat' };
+const LOC_ICON = { 'local-agent': 'agent', 'local-model': 'server', 'cloud-api': 'cloud', manual: 'manual' };
+const locOf = (n) => provStatus(n).location || (W.providers[n]?.type === 'cli' ? 'local-agent' : 'cloud-api');
+const kindIcon = (n) => { const l = locOf(n); return `<span class="kind ${l}" title="${esc(LOC_LABEL[l] || l)}">${icon(LOC_ICON[l] || 'cloud')}</span>`; };
+// compact status: an icon and a word or two; the full reason is in the tooltip and in the open row
+function statusOf(n) {
+  const p = W.providers[n], s = provStatus(n);
+  if (!p) return { cls: 'bad', label: 'unknown', why: 'Not in your config' };
+  if (!p.enabled) return { cls: '', ic: 'off', label: 'off', why: 'Switched off' };
+  if (s.cooling) return { cls: 'warn', label: 'cooling down', why: s.reason };
+  if (s.optional) return { cls: 'warn', label: 'add key', why: s.reason };
+  if (s.ready) return { cls: 'ok', label: 'ready', why: 'Ready' };
+  return { cls: 'bad', label: shortReason(s.reason || 'not ready'), why: s.reason || 'not ready' };
+}
+const statusTag = (n) => { const x = statusOf(n); return `<span class="st ${x.cls}" title="${esc(x.why)}">${icon(x.ic || x.cls)}${esc(x.label)}</span>`; };
 function copyBtn(text) { return `<button class="btn small copy" data-copy="${esc(text)}" title="Copy">${icon('copy')}</button>`; }
 function cmd(text) { return `<pre class="cmd">${esc(text)}${copyBtn(text)}</pre>`; }
-function bindCopy() { document.querySelectorAll('[data-copy]').forEach((b) => b.onclick = () => { navigator.clipboard?.writeText(b.dataset.copy).then(() => toast('Copied'), () => toast('Copy failed')); }); }
+function bindCopy() { document.querySelectorAll('[data-copy]').forEach((b) => b.onclick = () => { navigator.clipboard?.writeText(b.dataset.copy).then(() => toast(b.dataset.copied || 'Copied'), () => toast('Copy failed')); }); }
+// a copy button for a value shown shortened (paths): copies the full value
+function copyIcon(text, done = 'Copied', label = 'Copy') { return `<button class="btn icon ghost copyi" data-copy="${esc(text)}" data-copied="${esc(done)}" title="${esc(label)}" aria-label="${esc(label)}">${icon('copy')}</button>`; }
 
-let skillsData = null, skillEdit = null, skillNew = false; // skills page: library, the skill open in the editor, new-skill form
 let lessonsData = null, rulesData = null, statsData = null, guardData = null; // V3: same actions as the CLI and MCP
 function loadLessons() { Promise.all([api('GET', '/api/lessons'), api('GET', '/api/rules')]).then(([l, r]) => { lessonsData = l; rulesData = r; if (tab === 'lessons') render(); }, (e) => toast(e.message)); }
 function loadOverviewExtras() { Promise.all([api('GET', '/api/stats'), api('GET', '/api/guard')]).then(([st, g]) => { statsData = st; guardData = g; if (tab === 'overview') render(); }, () => { statsData = statsData || {}; guardData = guardData || {}; }); }
-function loadSkills() { api('GET', '/api/skills').then((d) => { skillsData = d; if (tab === 'skills') render(); }, (e) => toast(e.message)); }
 function loadRuns() { api('GET', '/api/runs').then((d) => { runsData = d; if (tab === 'runs') render(); }, (e) => toast(e.message)); }
 // keep the Runs page current while it is open (runs started from the terminal show up on their own)
 setInterval(() => { if (tab === 'runs' && !runOpen && document.visibilityState === 'visible') loadRuns(); }, 5000);
@@ -355,85 +500,80 @@ const GCATS = [['all', 'All'], ['free', 'Free'], ['aggregator', 'Gateways'], ['f
 const gMatch = (c) => (gFilter.cat === 'all' || c.category === gFilter.cat || (gFilter.cat === 'free' && !!c.free))
   && (!gFilter.q || `${c.id} ${c.label} ${c.about} ${c.free || ''}`.toLowerCase().includes(gFilter.q.toLowerCase()));
 function gallery() {
-  const card = (c) => { const open = gOpen === c.id;
-    return `<div class="gcard ${open ? 'open' : ''}" data-gid="${esc(c.id)}" ${gMatch(c) ? '' : 'hidden'}>
+  const card = (c) => `<div class="gcard" data-gid="${esc(c.id)}" ${gMatch(c) ? '' : 'hidden'}>
       <div class="prov-head"><b>${esc(c.label)}</b>${c.enabled ? '<span class="pill ok">on</span>' : c.added ? '<span class="pill">off</span>' : ''}<span class="spacer"></span>
         <a class="note" href="${GUIDE(c.id)}" target="_blank" rel="noopener">guide</a></div>
       <p class="note">${esc(c.about)}</p>
       ${c.free ? `<p class="note"><b>Free:</b> ${esc(c.free.replace(/^Free:\s*/i, ''))}</p>` : ''}
       ${c.privacy ? `<p class="note warn">${esc(c.privacy)}</p>` : ''}
-      ${open ? `<div class="fields" style="margin-top:6px">
-          ${c.apiKeyEnv && !c.keySet ? `<div><label class="f">${esc(c.apiKeyEnv)}${c.apiKeyOptional ? ' (optional: higher limits)' : ''} · <a href="${esc(c.keyUrl)}" target="_blank" rel="noopener">get a key</a></label><input type="text" class="secret" autocomplete="off" spellcheck="false" autocapitalize="off" data-1p-ignore data-lpignore="true" data-bwignore="true" data-form-type="other" id="g-key" placeholder="${c.apiKeyOptional ? 'optional: paste key' : 'paste key'}"></div>` : `<div class="note">${c.apiKeyEnv ? `${esc(c.apiKeyEnv)} is set.` : 'No key needed.'}</div>`}
-          ${c.fields.map((f) => `<div><label class="f">${esc(f.replaceAll('_', ' ').toLowerCase())}</label><input type="text" data-gfield="${esc(f)}"></div>`).join('')}
-        </div><div class="row" style="margin-top:8px"><button class="btn primary small" data-gsave="${esc(c.id)}">Add and enable</button><button class="btn small" data-gclose>Cancel</button>
-          <span class="note">Saved to ${$('#scope')?.value === 'project' ? 'this project' : 'global config'}; added to the docs, test, review and ask roles. The key goes to the secrets file.</span></div>`
-        : `<div class="row" style="margin-top:4px">${c.enabled ? '<span class="note">Added: see your list.</span>' : `<button class="btn small" data-gadd="${esc(c.id)}">${c.added ? 'Enable' : 'Add'}</button>`}</div>`}
-    </div>`; };
+      <div class="row" style="margin-top:auto;padding-top:4px">${c.enabled ? '<span class="note">On: see Your providers.</span>' : `<button class="btn small" data-gadd="${esc(c.id)}">${c.added ? 'Enable' : 'Add'}</button>`}</div>
+    </div>`;
+  // added first, then what runs on this machine, then everything else: one heading each instead of one long grid
+  const secs = [['added', 'Added', 'already in your config', (c) => c.added],
+    ['local', 'Local models', 'run on this machine; nothing leaves it', (c) => !c.added && c.category === 'local'],
+    ['catalog', 'Catalog', 'cloud APIs, gateways and model makers', (c) => !c.added && c.category !== 'local']];
+  const open = gOpen && S.catalog.find((c) => c.id === gOpen);
   return `<div class="card"><h2>Add a provider <span class="note">${S.catalog.length} available, ${S.catalog.filter((c) => c.free).length} with a free tier</span></h2>
-    <div class="row" style="gap:10px;flex-wrap:wrap"><input type="search" id="g-q" placeholder="Search: groq, coding, free…" value="${esc(gFilter.q)}" style="max-width:260px">
-      <div class="chips">${GCATS.map(([k, l]) => `<button class="chip ${gFilter.cat === k ? 'on' : ''}" data-gcat="${k}">${l}</button>`).join('')}</div><span class="note" id="g-count">${S.catalog.filter(gMatch).length} shown</span></div>
-    <div class="gal">${S.catalog.map(card).join('')}</div>
-    <p class="note" id="g-none" ${S.catalog.some(gMatch) ? 'hidden' : ''}>Nothing matches. Any OpenAI-compatible endpoint works: add it as a custom provider below.</p>
-    <details class="more" style="margin-top:12px"><summary>${icon('plus')} Custom provider (any OpenAI-compatible endpoint or another CLI agent)</summary>
-      <div class="fields"><div><label class="f">Name</label><input type="text" id="np-name" placeholder="e.g. company-gateway"></div>
-      <div><label class="f">Type</label><select id="np-type"><option value="openai">OpenAI-compatible API</option><option value="anthropic">Anthropic API</option><option value="cli">CLI agent</option></select></div>
-      <div><label class="f">Base URL / CLI preset</label><input type="text" id="np-base" placeholder="https://api.example.com/v1  or  codex, grok, aider…"></div>
-      <div><label class="f">API key env var</label><input type="text" id="np-key" placeholder="EXAMPLE_API_KEY"></div>
-      <div><label class="f">Model</label><input type="text" id="np-model"></div></div>
-      <div class="row" style="margin-top:10px"><button class="btn" id="np-add">Add</button></div></details></div>`;
+    <div class="row" style="gap:10px;flex-wrap:wrap"><input type="search" id="g-q" placeholder="Search: groq, coding, free…" value="${esc(gFilter.q)}" style="max-width:280px" aria-label="Search providers">
+      <div class="chips">${GCATS.map(([k, l]) => `<button class="chip ${gFilter.cat === k ? 'on' : ''}" data-gcat="${k}" aria-pressed="${gFilter.cat === k}">${l}</button>`).join('')}</div><span class="note" id="g-count">${S.catalog.filter(gMatch).length} shown</span></div>
+    ${secs.map(([k, l, d, f]) => { const list = S.catalog.filter(f); return list.length ? `<div class="galsec" data-gsec="${k}" ${list.some(gMatch) ? '' : 'hidden'}><h3 class="sec">${l} <span class="note">${d}</span></h3><div class="gal">${list.map(card).join('')}</div></div>` : ''; }).join('')}
+    <p class="note" id="g-none" style="margin-top:12px" ${S.catalog.some(gMatch) ? 'hidden' : ''}>Nothing matches. Any OpenAI-compatible endpoint works: add it as a custom provider below.</p>
+    <details class="more" style="margin-top:16px"><summary>${icon('plus')} Custom provider (any OpenAI-compatible endpoint or another CLI agent)</summary>
+      <div class="fields"><div><label class="f" for="np-name">Name</label><input type="text" id="np-name" placeholder="e.g. company-gateway"></div>
+      <div><label class="f" for="np-type">Type</label><select id="np-type"><option value="openai">OpenAI-compatible API</option><option value="anthropic">Anthropic API</option><option value="cli">CLI agent</option></select></div>
+      <div><label class="f" for="np-base">Base URL / CLI preset</label><input type="text" id="np-base" placeholder="https://api.example.com/v1  or  codex, grok, aider…"></div>
+      <div><label class="f" for="np-key">API key env var</label><input type="text" id="np-key" placeholder="EXAMPLE_API_KEY"></div>
+      <div><label class="f" for="np-model">Model</label><input type="text" id="np-model"></div></div>
+      <div class="row" style="margin-top:10px"><button class="btn" id="np-add">Add</button></div></details></div>
+    ${open ? addDialog(open) : ''}`;
+}
+// the add form opens in a dialog, so the card grid never reflows around it
+function addDialog(c) {
+  return `<dialog id="g-dlg" class="wide" aria-labelledby="g-dlg-t"><div class="dlg-b">
+      <div class="prov-head"><h2 id="g-dlg-t" style="margin:0">${c.added ? 'Enable' : 'Add'} ${esc(c.label)}</h2><span class="spacer"></span><a class="note" href="${GUIDE(c.id)}" target="_blank" rel="noopener">guide</a></div>
+      <p class="note">${esc(c.about)}</p>
+      ${c.free ? `<p class="note"><b>Free:</b> ${esc(c.free.replace(/^Free:\s*/i, ''))}</p>` : ''}
+      ${c.privacy ? `<p class="note" style="color:var(--warn)">${esc(c.privacy)}</p>` : ''}
+      <div class="fields" style="grid-template-columns:1fr">
+        ${c.apiKeyEnv && !c.keySet ? `<div><label class="f" for="g-key">${esc(c.apiKeyEnv)}${c.apiKeyOptional ? ' (optional: higher limits)' : ''} · <a href="${esc(c.keyUrl)}" target="_blank" rel="noopener">get a key</a></label><input type="text" class="secret" autocomplete="off" spellcheck="false" autocapitalize="off" data-1p-ignore data-lpignore="true" data-bwignore="true" data-form-type="other" id="g-key" placeholder="${c.apiKeyOptional ? 'optional: paste key' : 'paste key'}"></div>` : `<div class="note">${c.apiKeyEnv ? `${esc(c.apiKeyEnv)} is set.` : 'No key needed.'}</div>`}
+        ${c.fields.map((f) => `<div><label class="f">${esc(f.replaceAll('_', ' ').toLowerCase())}</label><input type="text" data-gfield="${esc(f)}"></div>`).join('')}
+      </div>
+      <p class="note" style="margin-top:12px">Saved to ${$('#scope')?.value === 'project' ? 'this project' : 'global config'} and added to the docs, test, review and ask roles. The key goes to the secrets file, not the config.</p></div>
+    <div class="dlg-f"><button class="btn" data-gclose>Cancel</button><button class="btn primary" data-gsave="${esc(c.id)}">Add and enable</button></div></dialog>`;
 }
 // local model servers found on this machine: one line each, with Enable when there is a chat model
 function localBanner() {
   loadLocal();
   const seen = (localInfo || []).filter((l) => l.running || l.installed);
   if (!seen.length) return '';
-  return `<div class="card"><div class="row"><h2 style="margin:0">${icon('chip')} Local models</h2><span class="note">Free and private: nothing leaves this machine.</span></div>
+  return `<h3 class="sec">Local models on this machine</h3><div class="card"><p class="note" style="margin:0">Free and private: nothing leaves this machine.</p>
     ${seen.map((l) => { const name = Object.entries(W.providers).find(([, p]) => p.catalog === l.id)?.[0] || l.id; const p = W.providers[name]; const on = p?.enabled && l.models.includes(p.model);
-      return `<div class="row" style="margin-top:8px"><span class="dot ${l.running ? 'ok' : ''}"></span><b>${esc(l.label)}</b>
+      return `<div class="row" style="margin-top:10px"><span class="kind local-model">${icon('server')}</span><b>${esc(l.label)}</b>
         <span class="note">${l.running ? `${l.models.length} model${l.models.length === 1 ? '' : 's'}${l.best ? ` · best for code: <span class="mono">${esc(l.best)}</span>` : ''}` : 'installed, not running'}</span><span class="spacer"></span>
         ${on ? `<span class="pill ok">on · ${esc(p.model)}</span>` : l.running && l.best ? `<button class="btn small primary" data-local="${esc(l.id)}|${esc(l.best)}">Enable</button>` : ''}</div>
-        ${l.next ? `<div class="note" style="margin-left:16px">${esc(l.next.split(': ')[0])}: ${cmd(l.next.split(': ').slice(1).join(': '))}</div>` : ''}`; }).join('')}</div>`;
+        ${l.next ? `<div class="note" style="margin-left:38px">${esc(l.next.split(': ')[0])}: ${cmd(l.next.split(': ').slice(1).join(': '))}</div>` : ''}`; }).join('')}</div>`;
 }
 
 function applyGalleryFilter() {
   document.querySelectorAll('[data-gid]').forEach((el) => { el.hidden = !gMatch(S.catalog.find((c) => c.id === el.dataset.gid)); });
-  document.querySelectorAll('[data-gcat]').forEach((b) => b.classList.toggle('on', b.dataset.gcat === gFilter.cat));
+  document.querySelectorAll('[data-gsec]').forEach((el) => { el.hidden = !el.querySelector('.gcard:not([hidden])'); });
+  document.querySelectorAll('[data-gcat]').forEach((b) => { b.classList.toggle('on', b.dataset.gcat === gFilter.cat); b.setAttribute('aria-pressed', String(b.dataset.gcat === gFilter.cat)); });
   const none = $('#g-none'); if (none) none.hidden = S.catalog.some(gMatch);
   const n = $('#g-count'); if (n) n.textContent = `${S.catalog.filter(gMatch).length} shown`;
 }
 
 const views = {
   skills() {
-    if (!skillsData) { loadSkills(); return '<div class="head"><h1>Skills</h1><p class="sub">Loading…</p></div>'; }
-    const { skills, dirs } = skillsData;
-    const when = (s) => ['roles', 'files', 'text'].filter((k) => s.when?.[k]).map((k) => `${k} <span class="mono">${esc(s.when[k])}</span>`).join(' · ') || 'every task';
-    const on = skills.filter((s) => s.on).length;
-    return `<div class="head"><h1>Skills</h1><span class="spacer"></span><button class="btn ${skillNew ? '' : 'primary'}" id="sk-newbtn">${icon(skillNew ? 'x' : 'plus')} ${skillNew ? 'Close' : 'New skill'}</button>
-        <p class="sub">One skill library for every controller and worker. Global skills apply to all projects; switch any off for this one. Active skills are copied into <span class="mono">.claude/skills</span> and <span class="mono">.agents/skills</span> (Claude Code, Antigravity, Codex, OpenCode load them), and each worker gets the ones that match its task.</p></div>
-      ${skillNew ? `<div class="card"><h2>New skill</h2><div class="fields" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr))">
-          <div><label class="f">Name</label><input type="text" id="sk-name" placeholder="php-conventions"></div>
-          <div><label class="f">Available in</label><select id="sk-scope"><option value="global">All projects</option><option value="project">This project only</option></select></div>
-          <div style="grid-column:span 2"><label class="f">Description (when to use it)</label><input type="text" id="sk-desc" placeholder="How PHP modules are written in this codebase"></div>
-          <div><label class="f">Workers: files (glob)</label><input type="text" id="sk-files" placeholder="*.php, app/code/**"></div>
-          <div><label class="f">Workers: roles</label><input type="text" id="sk-roles" placeholder="build, fix"></div>
-          <div><label class="f">Workers: task text (regex)</label><input type="text" id="sk-text" placeholder="checkout|payment"></div></div>
-        <div class="row" style="margin-top:10px"><button class="btn primary" id="sk-create">${icon('plus')} Create</button><span class="note">Leave the worker fields empty to give it to every task. Same as <span class="mono">conductor skills new &lt;name&gt; --files … --roles …</span></span></div></div>` : ''}
-      <div class="card"><div class="row"><h2 style="margin:0">Library</h2><span class="note">${on} of ${skills.length} on for this project</span><span class="spacer"></span><button class="btn small" id="sk-sync" title="conductor skills sync">Sync now</button></div>
-        ${skills.length ? `<div class="plist" style="margin-top:10px">${skills.map((s) => `<div class="prow ${skillEdit === s.name ? 'open' : ''}"><div class="prow-main">
-            <label class="switch" title="${s.on ? 'On' : 'Off'} for this project (conductor skills ${s.on ? 'off' : 'on'} ${esc(s.name)})"><input type="checkbox" data-skon="${esc(s.name)}" ${s.on ? 'checked' : ''}><span></span></label>
-            <div class="prow-name">${icon('skills')}<b>${esc(s.name)}</b><span class="pill">${s.scope === 'global' ? 'all projects' : 'this project'}${s.overrides ? ' · overrides global' : ''}</span><span class="note">${esc(s.description)}</span></div>
-            <div class="row" style="gap:4px"><button class="btn small ghost" data-skedit="${esc(s.name)}">${skillEdit === s.name ? 'Close' : 'Edit'}</button></div></div>
-          <div class="prow-body" ${skillEdit === s.name ? '' : 'hidden'}><div class="note">Workers: ${when(s)} · file: <span class="mono">${esc(s.file)}</span></div>
-            <textarea id="sk-text-${esc(s.name)}" rows="14" style="width:100%;margin-top:8px;font-family:var(--mono);font-size:12.5px">${esc(s.text)}</textarea>
-            <div class="row" style="margin-top:8px"><button class="btn small primary" data-sksave="${esc(s.name)}">Save</button><button class="btn small" data-skrm="${esc(s.name)}|${s.scope}">Remove from library</button></div></div></div>`).join('')}</div>`
-          : `<p class="note" style="margin-top:8px">No skills yet. Create one above, or put a folder with a SKILL.md in <span class="mono">${esc(dirs.global)}</span> (all projects) or <span class="mono">${esc(dirs.project)}</span> (this project).</p>`}
-        <p class="note" style="margin-top:10px">Library folders: all projects <span class="mono">${esc(dirs.global)}</span> · this project <span class="mono">${esc(dirs.project)}</span>. Terminal: <span class="mono">conductor skills</span>.</p></div>`;
+    return `<div class="head"><h1>Skills</h1><p class="sub">One skill library for your controller and every worker.</p></div>
+    <div class="card soon">${icon('skills')}<h2>Coming soon</h2>
+      <p>This page will let you browse, write and switch skills on per project, and choose which workers get each one by role, files or task text.</p>
+      <p class="note">It works today in the terminal:</p>${cmd('conductor skills')}</div>`;
   },
   lessons() {
     if (!lessonsData || !rulesData) { loadLessons(); return '<div class="head"><h1>Lessons &amp; rules</h1><p class="sub">Loading…</p></div>'; }
     const ls = lessonsData.lessons;
     const kind = (l) => l.source === 'auto' ? l.kind : l.source;
-    return `<div class="head"><h1>Lessons &amp; rules</h1><p class="sub">What earlier work here taught (failures conductor diagnosed, your notes), and the project's rules. Same as <span class="mono">conductor lessons</span> and <span class="mono">conductor rules</span>.</p></div>
+    return `<div class="head"><h1>Lessons &amp; rules</h1><p class="sub">What earlier work here taught and the project's rules, the same as <span class="mono">conductor lessons</span> and <span class="mono">conductor rules</span>.</p></div>
     <div class="card"><h2>Add a lesson</h2><div class="row"><input id="ls-text" placeholder="e.g. Use the existing date helpers in src/lib" style="flex:1"><input id="ls-files" placeholder="files or folders (optional)" style="width:220px"><button class="btn primary" id="ls-add">${icon('plus')} Add</button></div>
       <p class="note">Matching lessons go into later workers' prompts. A provider with 2+ unresolved failures on one kind of work moves to the back until it passes that work here again.</p></div>
     <div class="card"><h2>Lessons</h2>${ls.length ? `<table><tr><th>Lesson</th><th>Kind</th><th>Provider</th><th>Seen</th><th></th></tr>${ls.map((l) => `<tr>
@@ -460,7 +600,7 @@ const views = {
       answered: '<span class="pill" title="Your answer was imported as a new run">answered</span>',
     }[r.state] || '<span class="pill bad">failed</span>');
     const verify = (v) => !v ? '–' : `<span class="pill ${v === 'PASS' ? 'ok' : v === 'FAIL' ? 'bad' : ''}">${esc(v)}</span>`;
-    return `<div class="head"><h1>Runs</h1><p class="sub">Work handed out in this project, newest first; updates every few seconds (<span class="mono">conductor runs</span> in the terminal).</p></div>
+    return `<div class="head"><h1>Runs</h1><p class="sub">Work handed out in this project, newest first, refreshed every few seconds (<span class="mono">conductor runs</span> in the terminal).</p></div>
     <div class="grid">
       <div class="card stat"><div class="l">Runs (last ${usage.days} days, all projects)</div><div class="n">${usage.rows.reduce((t, r) => t + r.runs, 0)}</div></div>
       <div class="card stat"><div class="l" title="Estimated from characters (about 4 per token) kept out of each model's context. Not measured Claude usage.">Context kept out (estimate)</div><div class="n">${usage.savings?.total ? `~${usage.savings.total.toLocaleString()}` : '<span class="note" style="font-size:16px">none yet</span>'}</div><div class="note">${usage.savings?.total ? `controller ~${usage.savings.controller.toLocaleString()} · workers ~${usage.savings.workers.toLocaleString()}${usage.savings.freeRuns ? ` · ${usage.savings.freeRuns} task${usage.savings.freeRuns === 1 ? '' : 's'} moved to free models` : ''}` : 'compact diffs, trimmed reports and free-model picks'}</div></div>
@@ -482,16 +622,17 @@ const views = {
     const st = S.status; const ready = st.providers.filter((p) => p.ready).length; const enabled = st.providers.filter((p) => p.enabled).length;
     const optional = st.providers.filter((p) => p.enabled && p.optional).length;
     const cds = Object.entries(S.cooldowns);
-    return `<div class="head"><h1>Overview</h1><p class="sub">${esc(S.controllers[W.controller]?.label || W.controller)} plans and reviews; the providers below do the work, in fallback order.</p></div>
+    return `<div class="head"><h1>Overview</h1><p class="sub">This project at a glance: who plans, who does the work, and how recent work went.</p></div>
     ${S.errors.length ? `<div class="err">Config problems: ${S.errors.map(esc).join('; ')}</div>` : ''}
     <div class="grid">
-      <div class="card stat"><div class="l">Controller</div><div class="n" style="font-size:18px">${esc(S.controllers[W.controller]?.label || W.controller)}</div><div class="note">Change in Settings</div></div>
+      <div class="card stat"><div class="l">Controller</div><div class="n" style="font-size:20px">${esc(S.controllers[W.controller]?.label || W.controller)}</div><div class="note">Change in <a href="#" data-goto="settings">Settings</a></div></div>
       <div class="card stat"><div class="l">Providers ready</div><div class="n">${ready}<span class="note" style="font-size:14px"> of ${enabled - optional} ready</span></div>${optional ? `<div class="note">+ ${optional} optional: add a key in <a href="#" data-goto="keys">API keys</a></div>` : ''}</div>
       <div class="card stat"><div class="l">Repo</div><div class="n" style="font-size:16px">${st.repo ? esc(st.repo.branch) : 'not a git repo'}</div><div class="note">${st.repo ? (st.repo.dirty ? 'uncommitted changes' : 'clean') + (st.repo.failedStashes ? ` · ${st.repo.failedStashes} failed-attempt stash(es)` : '') : 'write roles need git'}</div></div>
       <div class="card stat"><div class="l">Verify command</div><div class="mono" style="margin-top:6px">${esc(st.verify || 'none detected')}</div></div>
     </div>
     ${overviewExtras()}
-    <div class="card"><h2>Who does what</h2>
+    <div class="card"><div class="row"><h2 style="margin:0">Who does what</h2><span class="spacer"></span><button class="btn small" data-goto="roles">${icon('roles')} Change who does what</button></div>
+      <p class="note">The controller (${esc(S.controllers[W.controller]?.label || W.controller)}) plans, reviews and commits; workers do each role's tasks, trying the chain left to right.</p>
       <table><tr><th>Role</th><th>Fallback chain</th></tr>
       ${Object.entries(W.roles).map(([r, chain]) => `<tr><td><b>${esc(S.roles[r]?.label || r)}</b> ${S.roles[r]?.mode === 'read' ? '<span class="pill">read-only</span>' : ''}</td><td><div class="chainline">${chain.map((n, i) => `${i ? '<span class="arrow">→</span>' : ''}<span class="pill"><span class="dot ${provStatus(n).ready && W.providers[n]?.enabled ? 'ok' : provStatus(n).optional ? 'opt' : ''}" title="${esc(provStatus(n).reason || '')}"></span>${esc(n)}</span>`).join('')}</div></td></tr>`).join('')}
       </table></div>
@@ -499,26 +640,31 @@ const views = {
     ${!S.hasProjectConfig && S.inRepo ? `<div class="card"><h2>This project isn't set up yet</h2><p class="note">Add the rules file, controller commands and plan template to <span class="mono">${esc(S.root)}</span>.</p><button class="btn primary" data-goto="settings">Set up this project</button></div>` : ''}`;
   },
   roles() {
-    const names = Object.keys(W.providers);
-    const kindIcon = (n) => { const l = provStatus(n).location || (W.providers[n]?.type === 'cli' ? 'local-agent' : 'cloud-api');
-      return `<span class="kind" title="${{ 'local-agent': 'local agent', 'local-model': 'local model', 'cloud-api': 'cloud API' }[l]}">${icon(l === 'local-agent' ? 'agent' : l === 'local-model' ? 'chip' : 'cloud')}</span>`; };
-    const st = (n) => { const p = W.providers[n], s = provStatus(n);
-      if (!p) return '<span class="status bad">unknown</span>';
-      if (!p.enabled) return '<span class="status">off</span>';
-      if (s.optional) return `<span class="status opt" title="${esc(s.reason)}"><span class="dot opt"></span>add key</span>`;
-      return s.ready ? '<span class="status"><span class="dot ok"></span></span>' : `<span class="status bad" title="${esc(s.reason)}"><span class="dot"></span>${esc(shortReason(s.reason))}</span>`; };
+    const names = Object.keys(W.providers), nRules = (W.routes || []).length;
+    return `<div class="head"><h1>Roles</h1><p class="sub">Each role tries its providers top to bottom, moving on when one is rate-limited, fails or isn't installed; if all fail, the controller does the task.</p></div>
+    <div class="callout">${icon('info')}<div>Reorder with ↑ ↓, remove with ×, add from the menu under each role, then <b>Save</b>.
+      ${nRules ? `${nRules} routing rule${nRules === 1 ? '' : 's'} can put another provider first for matching tasks:` : 'To send one kind of task (SQL, docs, security) to a particular provider first, use'} <a href="#" data-goto="routing">Routing rules</a>.</div></div>
+    <div class="roles">${Object.entries(W.roles).map(([r, chain]) => `<div class="card"><div class="row"><h2 style="margin:0">${esc(S.roles[r]?.label || r)}</h2>${S.roles[r]?.mode === 'read' ? '<span class="pill">read-only</span>' : '<span class="pill warn">edits files</span>'}</div>
+      <div class="note">${esc(S.roles[r]?.description || '')}</div>
+      <div class="chain">${chain.map((n, i) => `<div class="link"><span class="idx">${i + 1}</span><span class="nm">${kindIcon(n)}<b>${esc(n)}</b>${statusTag(n)}</span>
+        <span class="row" style="gap:2px"><button class="btn icon ghost small" data-mv="${r}|${i}|-1" ${i === 0 ? 'disabled' : ''} aria-label="Move ${esc(n)} up">${icon('up')}</button><button class="btn icon ghost small" data-mv="${r}|${i}|1" ${i === chain.length - 1 ? 'disabled' : ''} aria-label="Move ${esc(n)} down">${icon('down')}</button><button class="btn icon ghost small" data-rm="${r}|${i}" aria-label="Remove ${esc(n)}">${icon('x')}</button></span></div>`).join('') || '<div class="note">No providers: the controller does this role itself.</div>'}</div>
+      <select data-addsel="${r}" style="max-width:240px" aria-label="Add a provider to ${esc(S.roles[r]?.label || r)}"><option value="">+ add provider…</option>${names.filter((n) => !chain.includes(n)).map((n) => `<option>${esc(n)}</option>`).join('')}</select></div>`).join('')}</div>`;
+  },
+  routing() {
     const routes = W.routes || [];
     loadRtLib();
     const roleOpts = (sel = '') => `<option value="">any role</option>${Object.keys(S.roles).map((r) => `<option value="${r}" ${sel === r ? 'selected' : ''}>${esc(S.roles[r].label)}</option>`).join('')}`;
     const when = (r) => [r.role && `<span class="pill">${esc(S.roles[r.role]?.label || r.role)}</span>`, r.files && `files <span class="mono">${esc([].concat(r.files).join(', '))}</span>`, r.text && `text <span class="mono">/${esc(r.text)}/</span>`].filter(Boolean).join(' + ');
-    return `<div class="head"><h1>Roles</h1><p class="sub">Each role tries its providers top to bottom; when one is rate-limited, fails or isn't installed, the next runs. If all fail, the controller does the task.</p></div>
-    <div class="card"><div class="row"><h2 style="margin:0">Routing</h2><span class="note">You decide which provider takes which kind of task.</span><span class="spacer"></span><a class="btn small ghost" href="${ROUTING_GUIDE}" target="_blank" rel="noopener">${icon('guide')} Routing guide</a></div>
-      <div class="explain"><b>How it works</b><ol>
+    return `<div class="head"><h1>Routing rules</h1><span class="spacer"></span><a class="btn small ghost" href="${ROUTING_GUIDE}" target="_blank" rel="noopener">${icon('guide')} Routing guide</a>
+      <p class="sub">Advanced: send tasks that match a file pattern, task text or role to the providers you pick, ahead of the role's own chain.</p></div>
+    <div class="card"><h2>How it works</h2><div class="explain" style="margin-top:0"><ol>
         <li>A rule matches a task by its <b>files</b> (a glob like <span class="mono">*.sql</span>), its <b>text</b> (a regex like <span class="mono">login|payment</span>) or its <b>role</b>. Every condition you fill in must hold.</li>
         <li>When a task matches, the rule's providers run <b>first</b>. The role's chain stays behind them, so a rate limit or failure still falls back.</li>
         <li>Rules are checked top to bottom and the <b>first match wins</b>: keep risky rules (security, database) at the top. A plan task's <span class="mono">provider:</span> line beats every rule; tasks no rule matches go to the smart selector.</li>
-      </ol><span class="note">Not sure where to start? Add the starter set from the rule library below, then try a task in Preview.</span></div>
-      ${routes.length ? `<table style="margin-top:8px"><tr><th>#</th><th>When</th><th>Goes to</th><th></th></tr>${routes.map((r, i) => `<tr><td class="note">${i + 1}</td><td>${when(r) || 'any task'}${r.from ? ` <span class="note">· ${esc(r.from)}</span>` : ''}</td><td><b>${esc([].concat(r.provider).join(', '))}</b></td><td style="text-align:right"><button class="btn icon ghost small" data-rtmv="${i}|-1" ${i ? '' : 'disabled'} aria-label="Move up">${icon('up')}</button><button class="btn icon ghost small" data-rtrm="${i}" aria-label="Remove">${icon('x')}</button></td></tr>`).join('')}</table>` : '<p class="note">No rules yet. Without them the smart selector orders each chain.</p>'}
+        <li>Global rules and this project's rules both apply, this project's first.</li>
+      </ol><span class="note">Not sure where to start? Add the starter set from the rule library below, then try a task in Preview.</span></div></div>
+    <div class="card"><h2>Your rules</h2>
+      ${routes.length ? `<table><tr><th>#</th><th>When</th><th>Goes to</th><th></th></tr>${routes.map((r, i) => `<tr><td class="note">${i + 1}</td><td>${when(r) || 'any task'}${r.from ? ` <span class="note">· ${esc(r.from)}</span>` : ''}</td><td><b>${esc([].concat(r.provider).join(', '))}</b></td><td style="text-align:right;white-space:nowrap"><button class="btn icon ghost small" data-rtmv="${i}|-1" ${i ? '' : 'disabled'} aria-label="Move up">${icon('up')}</button><button class="btn icon ghost small" data-rtrm="${i}" aria-label="Remove">${icon('x')}</button></td></tr>`).join('')}</table>` : '<p class="note">No rules yet. Without them the smart selector orders each chain.</p>'}
       <details class="more" id="rt-libd" style="margin-top:14px" ${(rtLibOpen ?? !routes.length) ? 'open' : ''}><summary>${icon('list')} Rule library: ${rtLib ? rtLib.length : ''} ready-made rules</summary>
         ${rtLib ? `<div class="row" style="margin-bottom:8px"><button class="btn small primary" id="rt-starter" ${rtLib.filter((t) => t.starter && !t.added && !t.missing).length ? '' : 'disabled'}>${icon('plus')} Add starter set</button><span class="note">★ rules: security, database, infrastructure, small edits, docs. Providers are filled in from the ones you have on.</span></div>
         <div class="lib">${rtLib.map((t) => `<div class="item"><div class="row"><b>${t.starter ? '★ ' : ''}${esc(t.label)}</b><span class="spacer"></span>
@@ -526,26 +672,19 @@ const views = {
           <button class="btn small ghost" data-rtedit="${esc(t.id)}" title="Copy into the form below to change it first">Customize</button></div>
           <span class="note">${esc(t.why)}</span>
           <span class="note">${when(t.route) || 'any task'} → <b>${esc([].concat(t.route.provider).join(', ') || t.want)}</b></span></div>`).join('')}</div>` : '<p class="note">Loading…</p>'}
-      </details>
-      <h3 style="margin:16px 0 0;font-size:14px">Write your own rule</h3>
-      <div class="fields" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))"><div><label class="f">Role</label><select id="rt-role">${roleOpts()}</select></div>
-        <div><label class="f">Files (glob)</label><input type="text" id="rt-files" placeholder="src/frontend/**"></div>
-        <div><label class="f">Task text (regex)</label><input type="text" id="rt-text" placeholder="migration|schema"></div>
-        <div><label class="f">Provider</label><select id="rt-prov">${Object.keys(W.providers).filter((n) => W.providers[n].enabled).map((n) => `<option>${esc(n)}</option>`).join('')}</select></div></div>
-      <div class="row" style="margin-top:10px"><button class="btn small" id="rt-add">${icon('plus')} Add rule</button><span class="note">Fill in at least one condition. <b>Files</b>: comma-separated globs, <span class="mono">**</span> spans folders and <span class="mono">*.sql</span> matches in any folder. <b>Task text</b>: a regex on the task description, case ignored. The new rule goes to the bottom; move it up with ↑. Save to keep it.</span></div>
-      <details class="more" style="margin-top:14px" ${rPreview ? 'open' : ''}><summary>${icon('test')} Preview: which providers would take a task?</summary>
-        <div class="fields" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))"><div><label class="f">Role</label><select id="pv-role">${Object.keys(S.roles).map((r) => `<option value="${r}" ${rPreview?.input?.role === r ? 'selected' : ''}>${esc(S.roles[r].label)}</option>`).join('')}</select></div>
-          <div style="grid-column:span 2"><label class="f">Task</label><input type="text" id="pv-task" placeholder="e.g. add a date picker to the booking form" value="${esc(rPreview?.input?.task || '')}"></div>
-          <div><label class="f">Files</label><input type="text" id="pv-files" placeholder="src/frontend/Booking.tsx" value="${esc(rPreview?.input?.files || '')}"></div></div>
-        <div class="row" style="margin-top:8px"><button class="btn small" id="pv-go">Preview</button>${rPreview ? `<span class="note">${esc({ plan: 'set by the plan', route: 'routing rule', selector: 'smart selector', role: "role's chain" }[rPreview.how] || rPreview.how)}${rPreview.note ? `: ${esc(rPreview.note)}` : ''}</span>` : ''}</div>
-        ${rPreview ? `<div class="chainline" style="margin-top:8px">${rPreview.chain.map((c, i) => `${i ? '<span class="arrow">→</span>' : ''}<span class="pill" title="${esc(c.skip || 'ready')}"><span class="dot ${c.skip ? '' : 'ok'}"></span>${esc(c.name)}</span>`).join('')}</div>` : ''}
       </details></div>
-    <div class="rtabs" role="tablist">${Object.entries(W.roles).map(([r, chain]) => `<button class="rtab ${r === roleTab() ? 'on' : ''}" role="tab" aria-selected="${r === roleTab()}" data-rtab="${esc(r)}">${esc(S.roles[r]?.label || r)}<span class="note">${chain[0] ? esc(chain[0]) : 'empty'}${chain.length > 1 ? ` +${chain.length - 1}` : ''}</span></button>`).join('')}</div>
-    <div class="roles">${Object.entries(W.roles).filter(([r]) => r === roleTab()).map(([r, chain]) => `<div class="card"><div class="row"><h2 style="margin:0">${esc(S.roles[r]?.label || r)}</h2>${S.roles[r]?.mode === 'read' ? '<span class="pill">read-only</span>' : '<span class="pill warn">edits files</span>'}</div>
-      <div class="note">${esc(S.roles[r]?.description || '')}</div>
-      <div class="chain">${chain.map((n, i) => `<div class="link"><span class="idx">${i + 1}</span><span class="nm">${kindIcon(n)}<b>${esc(n)}</b>${st(n)}</span>
-        <span class="row" style="gap:2px"><button class="btn icon ghost small" data-mv="${r}|${i}|-1" ${i === 0 ? 'disabled' : ''} aria-label="Move up">${icon('up')}</button><button class="btn icon ghost small" data-mv="${r}|${i}|1" ${i === chain.length - 1 ? 'disabled' : ''} aria-label="Move down">${icon('down')}</button><button class="btn icon ghost small" data-rm="${r}|${i}" aria-label="Remove">${icon('x')}</button></span></div>`).join('') || '<div class="note">No providers: the controller does this role itself.</div>'}</div>
-      <select data-addsel="${r}" style="max-width:220px"><option value="">+ add provider…</option>${names.filter((n) => !chain.includes(n)).map((n) => `<option>${esc(n)}</option>`).join('')}</select></div>`).join('')}</div>`;
+    <div class="card"><h2>Write your own rule</h2>
+      <div class="fields" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr));margin-top:0"><div><label class="f" for="rt-role">Role</label><select id="rt-role">${roleOpts()}</select></div>
+        <div><label class="f" for="rt-files">Files (glob)</label><input type="text" id="rt-files" placeholder="src/frontend/**"></div>
+        <div><label class="f" for="rt-text">Task text (regex)</label><input type="text" id="rt-text" placeholder="migration|schema"></div>
+        <div><label class="f" for="rt-prov">Provider</label><select id="rt-prov">${Object.keys(W.providers).filter((n) => W.providers[n].enabled).map((n) => `<option>${esc(n)}</option>`).join('')}</select></div></div>
+      <div class="row" style="margin-top:12px"><button class="btn small" id="rt-add">${icon('plus')} Add rule</button><span class="note">Fill in at least one condition. <b>Files</b>: comma-separated globs, <span class="mono">**</span> spans folders and <span class="mono">*.sql</span> matches in any folder. <b>Task text</b>: a regex on the task description, case ignored. The new rule goes to the bottom; move it up with ↑. Save to keep it.</span></div></div>
+    <div class="card"><h2>${icon('test')} Preview: which providers would take a task?</h2>
+        <div class="fields" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr));margin-top:0"><div><label class="f" for="pv-role">Role</label><select id="pv-role">${Object.keys(S.roles).map((r) => `<option value="${r}" ${rPreview?.input?.role === r ? 'selected' : ''}>${esc(S.roles[r].label)}</option>`).join('')}</select></div>
+          <div style="grid-column:span 2"><label class="f" for="pv-task">Task</label><input type="text" id="pv-task" placeholder="e.g. add a date picker to the booking form" value="${esc(rPreview?.input?.task || '')}"></div>
+          <div><label class="f" for="pv-files">Files</label><input type="text" id="pv-files" placeholder="src/frontend/Booking.tsx" value="${esc(rPreview?.input?.files || '')}"></div></div>
+        <div class="row" style="margin-top:10px"><button class="btn small" id="pv-go">Preview</button>${rPreview ? `<span class="note">${esc({ plan: 'set by the plan', route: 'routing rule', selector: 'smart selector', role: "role's chain" }[rPreview.how] || rPreview.how)}${rPreview.note ? `: ${esc(rPreview.note)}` : ''}</span>` : ''}</div>
+        ${rPreview ? `<div class="chainline" style="margin-top:10px">${rPreview.chain.map((c, i) => `${i ? '<span class="arrow">→</span>' : ''}<span class="pill" title="${esc(c.skip || 'ready')}"><span class="dot ${c.skip ? '' : 'ok'}"></span>${esc(c.name)}</span>`).join('')}</div>` : ''}</div>`;
   },
   providers() {
     const field = (n, k, label, ph = '', list = '') => `<div><label class="f">${label}</label><input type="text" data-pf="${esc(n)}|${k}" value="${esc([].concat(W.providers[n][k] ?? '').join(', '))}" placeholder="${esc(ph)}" ${list ? `list="${list}"` : ''}></div>`;
@@ -555,108 +694,117 @@ const views = {
     const all = Object.keys(W.providers), on = all.filter((n) => W.providers[n].enabled);
     const order = (n) => ({ 'local-agent': 0, 'cloud-api': 1, 'local-model': 2 }[provStatus(n).location] ?? 1);
     const shown = (pAll ? all : on).sort((x, y) => order(x) - order(y));
-    const row = (n) => { const p = W.providers[n], builtin = S.builtinProviders.includes(n), open = pOpen.has(n), s = provStatus(n);
-      const l = s.location || (p.type === 'cli' ? 'local-agent' : 'cloud-api');
-      const status = !p.enabled ? '<span class="status">off</span>' : s.ready ? '<span class="status"><span class="dot ok"></span>ready</span>'
-        : s.optional ? `<span class="status opt" title="${esc(s.reason)}"><span class="dot opt"></span>optional · <a href="#" data-goto="keys">add key</a></span>`
-        : `<span class="status bad" title="${esc(s.reason)}"><span class="dot"></span>${esc(s.reason)}</span>`;
+    const row = (n) => { const p = W.providers[n], builtin = S.builtinProviders.includes(n), open = pOpen.has(n), x = statusOf(n);
       return `<div class="prow ${open ? 'open' : ''}"><div class="prow-main">
-        <label class="switch" title="Enable"><input type="checkbox" data-en="${esc(n)}" ${p.enabled ? 'checked' : ''}><span></span></label>
-        <div class="prow-name"><span class="kind" title="${l.replace('-', ' ')}">${icon(l === 'local-agent' ? 'agent' : l === 'local-model' ? 'chip' : 'cloud')}</span><b>${esc(n)}</b>${S.presets[p.preset]?.beta ? '<span class="pill" title="Newer agent: works, less tested. Off until you turn it on.">beta</span>' : p.type === 'manual' ? '<span class="pill" title="The web chat bridge: you paste the prompt into a web chat yourself">experimental</span>' : ''}${status}${p.model ? `<span class="prow-model">${esc(p.model)}</span>` : ''}</div>
+        <label class="switch" title="${p.enabled ? 'On' : 'Off'}"><input type="checkbox" data-en="${esc(n)}" ${p.enabled ? 'checked' : ''} aria-label="Enable ${esc(n)}"><span></span></label>
+        <div class="prow-name">${kindIcon(n)}<b>${esc(n)}</b>${S.presets[p.preset]?.beta ? '<span class="pill" title="Newer agent: works, less tested. Off until you turn it on.">beta</span>' : p.type === 'manual' ? '<span class="pill" title="The web chat bridge: you paste the prompt into a web chat yourself">experimental</span>' : ''}${statusTag(n)}${p.model ? `<span class="prow-model">${esc(p.model)}</span>` : ''}</div>
         <div class="row" style="gap:4px"><button class="btn small ghost" data-test="${esc(n)}" title="Send a one-word test prompt">${icon('test')} Test</button><button class="btn icon ghost small" data-popen="${esc(n)}" aria-label="Details" aria-expanded="${open}">${icon('chev').replace('class="i"', 'class="i chev"')}</button></div>
       </div><div class="prow-body" ${open ? '' : 'hidden'}>
+        <div class="why"><span class="st ${x.cls}">${icon(x.ic || x.cls)}${esc(x.label)}</span> <span class="note">${esc(LOC_LABEL[locOf(n)] || '')}${x.why !== 'Ready' && x.why !== x.label ? ` · ${esc(x.why)}` : ''}</span>${x.label === 'add key' ? ` · <a href="#" data-goto="keys">add key</a>` : ''}</div>
         ${p.notes ? `<div class="note">${esc(p.notes)}</div>` : ''}
         ${p.type === 'cli' ? permNote(p) : ''}
         <div class="fields">${field(n, 'model', 'Model', p.type === 'cli' ? 'CLI default' : 'picked automatically', n.startsWith('openrouter') ? 'dl-or' : p.preset === 'opencode' ? 'dl-oc' : provModels[n] ? `dl-m-${n}` : '')}
           ${p.type !== 'cli' || S.presets[p.preset]?.takesModel ? field(n, 'fallbackModels', 'Fallback models', p.type !== 'cli' && (p.free || !p.model) ? 'found automatically' : 'comma-separated', n.startsWith('openrouter') ? 'dl-or' : p.preset === 'opencode' ? 'dl-oc' : provModels[n] ? `dl-m-${n}` : '') : ''}
           ${field(n, 'timeoutMin', 'Time limit (minutes)', p.type === 'cli' ? `default ${Math.round((W.settings.timeoutSec || 1200) / 60)}` : `default ${Math.round((W.settings.apiTimeoutSec || 300) / 60)}`)}
           ${p.type !== 'cli' ? field(n, 'baseUrl', 'Base URL') + field(n, 'apiKeyEnv', 'API key env var', 'none for local') : ''}</div>
-        <div class="note" style="margin-top:6px">When a model is rate-limited (or, for APIs, stalls), the next fallback model runs on the same provider before the chain moves on. A worker that runs past its time limit is stopped and the next provider takes over.</div>
+        <div class="note" style="margin-top:8px">When a model is rate-limited (or, for APIs, stalls), the next fallback model runs on the same provider before the chain moves on. A worker that runs past its time limit is stopped and the next provider takes over.</div>
         ${provModels[n] ? `<datalist id="dl-m-${esc(n)}">${provModels[n].map((m) => `<option value="${esc(m.id)}">${m.free ? 'free' : ''}</option>`).join('')}</datalist>` : ''}
         <div class="row" style="margin-top:10px">${p.type !== 'cli' ? `<button class="btn small" data-lm="${esc(n)}">${icon('list')} ${provModels[n] ? `${provModels[n].length} models loaded` : 'Load models'}</button>` : ''}${n.startsWith('openrouter') ? `<button class="btn small" id="loadfree">${freeModels ? `${freeModels.length} free models loaded` : 'Load free models'}</button>` : ''}${p.catalog ? `<a class="btn small" href="${GUIDE(p.catalog)}" target="_blank" rel="noopener">${icon('guide')} Guide</a>` : ''}${builtin ? '' : `<button class="btn small" data-del="${esc(n)}">Remove</button>`}</div>
-      </div><div class="note" id="test-${esc(n)}" style="padding:0 14px"></div></div>`; };
+      </div><div class="note" id="test-${esc(n)}" style="padding:0 18px"></div></div>`; };
     return `<div class="head"><h1>Providers</h1><span class="spacer"></span>
-        <div class="seg"><button data-pall="0" class="${pAll ? '' : 'on'}">Enabled (${on.length})</button><button data-pall="1" class="${pAll ? 'on' : ''}">All (${all.length})</button></div>
         <button class="btn ${pAdd ? '' : 'primary'}" id="padd">${icon(pAdd ? 'x' : 'plus')} ${pAdd ? 'Close' : 'Add provider'}</button>
-        <p class="sub">Switch providers on or off; open a row for its model, endpoint and permissions. Keys live in API keys, never in config files.</p></div>
+        <p class="sub">The workers conductor can hand tasks to: switch them on or off, and open a row for its model, endpoint and permissions.</p></div>
       <datalist id="dl-oc">${['opencode/big-pickle', 'opencode/glm-5.3-flash-free', 'opencode/deepseek-v4.1-flash-free', 'opencode/nemotron-3-ultra-free', 'opencode/mimo-v2.6-flash-free'].map((m) => `<option value="${m}">`).join('')}</datalist>
       <datalist id="dl-or"><option value="openrouter/free">${(freeModels || []).map((m) => `<option value="${esc(m.id)}">${m.tools ? 'tools · ' : ''}${m.context || ''}</option>`).join('')}</datalist>
-      ${localBanner()}
       ${pAdd ? gallery() : ''}
-      <div class="plist">${shown.map(row).join('') || '<p class="note" style="padding:14px">Nothing enabled yet. Use <b>Add provider</b>, or show all.</p>'}</div>`;
+      <div class="row" style="margin:6px 0 10px"><h3 class="sec" style="margin:0">Your providers</h3><span class="spacer"></span>
+        <span class="note" style="display:inline-flex;gap:12px;flex-wrap:wrap">${['local-agent', 'cloud-api', 'local-model'].map((l) => `<span class="row" style="gap:6px"><span class="kind ${l}">${icon(LOC_ICON[l])}</span>${LOC_LABEL[l]}</span>`).join('')}</span>
+        <div class="seg"><button data-pall="0" class="${pAll ? '' : 'on'}">Enabled (${on.length})</button><button data-pall="1" class="${pAll ? 'on' : ''}">All (${all.length})</button></div></div>
+      <div class="plist">${shown.map(row).join('') || '<p class="note" style="padding:14px">Nothing enabled yet. Use <b>Add provider</b>, or show all.</p>'}</div>
+      ${localBanner()}`;
   },
   keys() {
     const keys = S.secrets.filter((k) => k.set || k.usedBy.some((n) => W.providers[n]?.enabled));
-    return `<div class="head"><h1>API keys</h1><p class="sub">Saved in <span class="mono">${esc(S.paths.secrets)}</span> (only you can read it), never in config or git. Real environment variables win. Showing keys that are set or used by an enabled provider.</p></div>
+    return `<div class="head"><h1>API keys</h1><p class="sub">Keys for the cloud API providers you use; agents and local models don't need one.</p></div>
+    <div class="callout">${icon('lock')}<ul>
+      <li>Saved in <span class="pathbox" title="${esc(S.paths.secrets)}">${esc(tilde(S.paths.secrets))}${copyIcon(S.paths.secrets, 'Path copied', 'Copy the full path')}</span>, a file only you can read (chmod 600). Never in config files or git.</li>
+      <li>A real environment variable with the same name wins over the file.</li>
+      <li>The list shows keys that are set, or used by a provider you have on.</li></ul></div>
     <div class="card"><table><tr><th>Variable</th><th>Status</th><th>Used by</th><th style="width:38%">Set / replace</th></tr>
     ${keys.map((k) => `<tr><td class="mono">${esc(k.name)}</td><td>${k.set ? `<span class="pill ok">set ${esc(k.hint)}</span> <span class="note">${esc(k.source)}</span>` : '<span class="pill" title="Optional: only the providers that use this key need it">not set</span>'}</td><td class="note">${esc(k.usedBy.join(', ') || '-')}</td>
-      <td><div class="row" style="flex-wrap:nowrap"><input type="text" class="secret" autocomplete="off" spellcheck="false" autocapitalize="off" data-1p-ignore data-lpignore="true" data-bwignore="true" data-form-type="other" data-key="${esc(k.name)}" placeholder="paste key"><button class="btn small" data-savekey="${esc(k.name)}">Save</button>${k.source === 'secrets file' ? `<button class="btn small" data-delkey="${esc(k.name)}">Remove</button>` : ''}</div></td></tr>`).join('')}
+      <td><div class="row" style="flex-wrap:nowrap"><input type="text" class="secret" autocomplete="off" spellcheck="false" autocapitalize="off" data-1p-ignore data-lpignore="true" data-bwignore="true" data-form-type="other" data-key="${esc(k.name)}" placeholder="paste key" aria-label="${esc(k.name)}"><button class="btn small" data-savekey="${esc(k.name)}">Save</button>${k.source === 'secrets file' ? `<button class="btn small" data-delkey="${esc(k.name)}">Remove</button>` : ''}</div></td></tr>`).join('')}
     </table></div>
     <p class="note">Need a key? Each provider's guide links to where you get one: <b>Providers → Add provider</b> (filter <b>Free</b>), or <span class="mono">conductor providers --free</span>. kilo-free and OVHcloud work without one.</p>`;
   },
   settings() {
     // shown in the unit people think in (minutes, KB); saved in the unit the config uses (seconds, bytes)
-    const st = W.settings; const num = (k, l, h, factor = 1) => `<div><label class="f">${l}</label><input type="number" min="0" step="any" data-set="${k}" data-factor="${factor}" value="${esc(st[k] == null ? '' : Math.round((st[k] / factor) * 100) / 100)}"><div class="note">${h}</div></div>`;
-    const chk = (k, l) => `<label class="row"><input type="checkbox" data-setb="${k}" ${st[k] ? 'checked' : ''}> ${l}</label>`;
-    return `<div class="head"><h1>Settings</h1><p class="sub">Defaults suit most projects.</p></div>
+    const st = W.settings;
+    const row = (label, ctl, help, id = '') => `<div class="setrow"><div><label class="lbl" ${id ? `for="${id}"` : ''}>${label}</label>${help ? `<div class="note">${help}</div>` : ''}</div><div>${ctl}</div></div>`;
+    const num = (k, factor = 1, inc = 1) => `<div class="num"><button type="button" data-step="-1" tabindex="-1" aria-hidden="true">−</button><input type="number" id="s-${k}" min="0" step="any" data-set="${k}" data-factor="${factor}" data-inc="${inc}" value="${esc(st[k] == null ? '' : Math.round((st[k] / factor) * 100) / 100)}"><button type="button" data-step="1" tabindex="-1" aria-hidden="true">+</button></div>`;
+    const chk = (k, l, h) => `<label class="chk"><input type="checkbox" data-setb="${k}" ${st[k] ? 'checked' : ''}><span>${l}${h ? `<span class="note" style="display:block">${h}</span>` : ''}</span></label>`;
+    return `<div class="head"><h1>Settings</h1><p class="sub">How runs behave and what keeps your code safe; the defaults suit most projects.</p></div>
     <div class="card"><h2>Controller</h2><p class="note" style="margin-top:-4px">The agent that plans, delegates, reviews and commits. Applying writes its instruction file, <span class="mono">/conduct-*</span> commands and MCP entry into this project, keeping your own content.</p>
       ${(() => { const cur = S.effective.controller, pick = ctrlPick || cur, lbl = (k) => esc(S.controllers[k]?.label || k); return `
       <div class="ctrl">${Object.entries(S.controllers).map(([k, c]) => `<label class="${pick === k ? 'sel' : ''}"><input type="radio" name="ctrl" value="${k}" ${pick === k ? 'checked' : ''}><b>${esc(c.label)}</b><div class="note">${esc(c.file)}${k === cur ? ' · current' : ''}</div></label>`).join('')}</div>
-      <div class="row" style="margin-top:12px"><button class="btn primary" id="apply-ctrl" ${S.inRepo && pick !== cur ? '' : 'disabled'}>${pick !== cur ? `Switch this project to ${lbl(pick)}` : `${lbl(cur)} is this project's controller`}</button>`; })()}<label class="row note"><input type="checkbox" id="ctrl-mcp" checked> also register the MCP server</label>${S.inRepo ? '' : '<span class="note">Open the UI inside a git project to apply.</span>'}</div>
+      <div class="row" style="margin-top:12px"><button class="btn primary" id="apply-ctrl" ${S.inRepo && pick !== cur ? '' : 'disabled'}>${pick !== cur ? `Switch this project to ${lbl(pick)}` : `${lbl(cur)} is this project's controller`}</button>`; })()}<label class="chk note"><input type="checkbox" id="ctrl-mcp" checked> also register the MCP server</label>${S.inRepo ? '' : '<span class="note">Open the UI inside a git project to apply.</span>'}</div>
       <pre class="cmd" id="init-out" style="display:none"></pre></div>
-    <div class="card"><h2>Runs</h2><div class="fields">
-      ${num('timeoutSec', 'Time limit per attempt (minutes)', 'A worker is stopped and the next one tried (a plan task\'s eta: line can raise it)', 60)}
-      ${num('cooldownMinutes', 'Cooldown after rate limit (minutes)', "Rate-limited providers are skipped this long (or for the provider's Retry-After)")}
-      ${num('maxDiffBytes', 'Max review diff (KB)', 'Larger diffs are cut for review', 1000)}
-      ${num('maxContextBytes', 'Max file context for API models (KB)', 'File content sent to chat-only providers', 1000)}
-      ${num('dailyBudgetUSD', 'Daily budget for paid APIs ($)', 'Default $2. 0 = no cap. Counts API providers with a price set; free ones never count')}
-      <div><label class="f">Verify command</label><input type="text" data-sets="verify" value="${esc(st.verify)}" placeholder="auto: AGENTS.md Verify line, then npm/composer/pytest/cargo/go"><div class="note">Must pass before a task counts as done.${!st.verify && S.status.verify ? ` Detected now: <span class="mono">${esc(S.status.verify)}</span>` : ''}</div></div>
-      <div><label class="f">Protected branches</label><input type="text" data-setl="protectedBranches" value="${esc((st.protectedBranches || []).join(', '))}"><div class="note">Workers never write on these</div></div>
-      </div><div style="margin-top:12px;display:grid;gap:6px">${chk('smartSelect', 'Smart selector: try the cheapest capable provider first (free API models for small tasks, agents for big ones)')}${chk('requireCleanTree', 'Require a clean git tree before write roles (enables safe stash-on-failure)')}${chk('autoVerify', 'Run verify automatically after each write task')}</div></div>`;
+    <div class="card"><h2>Runs</h2><div class="setlist">
+      ${row('Time limit per attempt (minutes)', num('timeoutSec', 60), "A worker past this is stopped and the next one tried. A plan task's <span class=\"mono\">eta:</span> line can raise it.", 's-timeoutSec')}
+      ${row('Cooldown after a rate limit (minutes)', num('cooldownMinutes', 1, 5), "A rate-limited provider is skipped this long, or for the provider's Retry-After.", 's-cooldownMinutes')}
+      ${row('Daily budget for paid APIs ($)', num('dailyBudgetUSD', 1, 0.5), '0 = no cap. Counts API providers with a price set; free routes and subscription agents never count.', 's-dailyBudgetUSD')}
+      ${row('Max review diff (KB)', num('maxDiffBytes', 1000, 10), 'Larger diffs are cut before review.', 's-maxDiffBytes')}
+      ${row('Max file context for API models (KB)', num('maxContextBytes', 1000, 10), 'File content sent to chat-only providers.', 's-maxContextBytes')}
+      ${row('Verify command', `<input type="text" id="s-verify" data-sets="verify" value="${esc(st.verify)}" placeholder="auto-detected">`, `Must pass before a task counts as done. Empty: the AGENTS.md Verify line, then npm/composer/pytest/cargo/go.${!st.verify && S.status.verify ? ` Detected now: <span class="mono">${esc(S.status.verify)}</span>` : ''}`, 's-verify')}
+    </div></div>
+    <div class="card"><h2>Safety</h2><div class="setlist">
+      ${row('Protected branches', `<input type="text" id="s-pb" data-setl="protectedBranches" value="${esc((st.protectedBranches || []).join(', '))}">`, 'Workers never write on these. Comma-separated.', 's-pb')}
+      ${row('Protected paths', `<input type="text" id="s-pp" data-setl="protectedPaths" value="${esc((st.protectedPaths || []).join(', '))}" placeholder="^app/etc/env\\.php$">`, 'Regexes for files workers must never change. Comma-separated.', 's-pp')}
+      </div><div style="margin-top:10px;display:grid;gap:2px">
+      ${chk('requireCleanTree', 'Require a clean git tree before write roles (so a failed attempt can be stashed safely)')}
+      ${chk('autoVerify', 'Run verify automatically after each write task')}
+      ${chk('smartSelect', 'Smart selector: try the cheapest capable provider first (free API models for small tasks, agents for big ones)')}</div></div>
+    <div class="card"><h2>${icon('lock')} Your data</h2><ul style="margin:0;padding-left:20px;line-height:1.7">
+      <li>Everything stays on this machine: your config, API keys and run logs.</li>
+      <li>conductor has no telemetry and no account.</li>
+      <li>Prompts go only to the providers you enable. Free routes may log prompts, so keep secrets out of tasks you send them.</li></ul>
+      <p class="note" style="margin-bottom:0"><a href="https://github.com/KevalParikh22/conductor-ai/blob/main/SECURITY.md" target="_blank" rel="noopener">Security policy (SECURITY.md)</a></p></div>`;
   },
   setup() {
     const p = S.presets, sec = Object.fromEntries(S.secrets.map((x) => [x.name, x.set]));
     // red only for what conductor needs (git, Node); optional things (an agent you don't use, a project not set up yet) stay neutral
     const pill = (ok, yes, no, level = 'bad') => ok ? `<span class="pill ok">${yes}</span>` : `<span class="pill ${level}">${no}</span>`;
-    const agents = Object.values(p).filter((v) => v.installed).length;
+    const found = Object.values(p).filter((v) => v.installed);
     const freeKeys = ['OPENROUTER_API_KEY', 'OPENCODE_API_KEY', 'GEMINI_API_KEY', 'GROQ_API_KEY', 'CEREBRAS_API_KEY'].filter((n) => sec[n]).length;
-    const link = (u) => `<a href="https://${u}" target="_blank" rel="noopener">${u}</a>`;
-    return `<div class="head"><h1>Setup</h1><p class="sub">Install once per machine, run <span class="mono">conductor setup</span>, then <span class="mono">conductor init</span> in each project. kilo-free works with no key and no install. Everything in one place: <a href="https://github.com/KevalParikh22/conductor-ai/blob/main/docs/GUIDE.md" target="_blank" rel="noopener">the conductor guide</a>.</p></div>
-    <div class="card"><h2>This machine</h2><table><tr><th>Check</th><th>Status</th><th>How to fix</th></tr>
-      <tr><td>Node.js 20+</td><td>${pill(+S.env.node.slice(1).split('.')[0] >= 20, esc(S.env.node), esc(S.env.node) + ' (too old)')}</td><td class="mono">nvm install 22</td></tr>
-      <tr><td>git</td><td>${pill(S.env.git, 'installed', 'missing')}</td><td class="note">Needed for worktrees, evidence checks and rollback</td></tr>
-      <tr><td>conductor ${esc(S.version)}</td><td>${pill(S.env.conductorOnPath, 'on PATH', 'not on PATH')}</td><td class="note">${S.env.conductorOnPath ? 'Ready' : 'Add <span class="mono">$(npm prefix -g)/bin</span> to PATH'}</td></tr>
-      <tr><td>This project</td><td>${pill(S.hasProjectConfig, 'initialised', 'not set up yet', '')}</td><td class="mono">${S.hasProjectConfig ? '' : 'conductor init'}</td></tr>
-      <tr><td>Worker agents</td><td>${pill(agents, agents + ' installed', 'none installed')}</td><td class="note">Optional: free API providers work without one</td></tr>
+    const step = (c, what) => `<div class="cmdrow"><div>${what}</div>${cmd(c)}</div>`;
+    const agentCard = ([k, v]) => { const label = esc(v.label.replace(/ \(as a worker\)$/, '')), alt = /\(or: /.test(v.install) ? v.install.split(/\(or: /)[1].replace(/\)$/, '') : '';
+      return `<div class="agent"><div class="row"><b>${label}</b>${v.beta ? '<span class="pill" title="Newer agent: works, less tested">beta</span>' : ''}<span class="spacer"></span>${v.installed ? `<span class="st ok">${icon('ok')}installed</span>` : '<span class="st">not installed</span>'}</div>
+        ${k === S.controllerPreset ? '<span class="note">Your controller, so off as a worker (it would spend the quota conductor saves).</span>' : ''}
+        ${v.installed ? '' : `<span class="note">Install</span>${cmd(v.install.split(/\s+\(or: /)[0])}${alt ? `<span class="note">or: <span class="mono">${esc(alt)}</span></span>` : ''}`}
+        ${v.login ? `<span class="note">Sign in</span>${cmd(v.login.split(/\s+\(/)[0])}${/\s\(/.test(v.login) ? `<span class="note">${esc(v.login.slice(v.login.search(/\s\(/)).trim().replace(/^\(|\)$/g, ''))}</span>` : ''}` : ''}</div>`; };
+    return `<div class="head"><h1>Setup</h1><p class="sub">What this machine has, what to run next, and how to connect your coding agents and editors (<a href="https://github.com/KevalParikh22/conductor-ai/blob/main/docs/GUIDE.md" target="_blank" rel="noopener">full guide</a>).</p></div>
+    <div class="card"><h2>This system</h2><table><tr><th>Check</th><th>Status</th><th>How to fix</th></tr>
+      <tr><td>Node.js 20+</td><td>${pill(+S.env.node.slice(1).split('.')[0] >= 20, esc(S.env.node), esc(S.env.node) + ' (too old)')}</td><td class="note">${+S.env.node.slice(1).split('.')[0] >= 20 ? '' : 'Install Node 20 or newer (e.g. <span class="mono">nvm install 22</span>)'}</td></tr>
+      <tr><td>git</td><td>${pill(S.env.git, 'installed', 'missing')}</td><td class="note">Needed for worktrees, checks and rollback</td></tr>
+      <tr><td>conductor ${esc(S.version)}</td><td>${pill(S.env.conductorOnPath, 'on PATH', 'not on PATH')}</td><td class="note">${S.env.conductorOnPath ? '' : 'Add <span class="mono">$(npm prefix -g)/bin</span> to PATH'}</td></tr>
+      <tr><td>This project</td><td>${pill(S.hasProjectConfig, 'set up', 'not set up yet', '')}</td><td class="mono">${S.hasProjectConfig ? '' : 'conductor init'}</td></tr>
+      <tr><td>Coding agents</td><td>${found.length ? `<span class="pill ok">${found.length} found</span>` : '<span class="pill">none found</span>'}</td><td class="note">${found.length ? found.map((v) => esc(v.label.replace(/ \(as a worker\)$/, ''))).join(', ') : 'Optional: free API providers work without one'}</td></tr>
       <tr><td>Local models</td><td>${(() => { loadLocal(); const run = (localInfo || []).filter((l) => l.running); return !localInfo ? '<span class="pill">checking…</span>' : run.length ? `<span class="pill ok">${run.map((l) => esc(l.label)).join(', ')}</span>` : '<span class="pill">none running</span>'; })()}</td><td class="note">${(localInfo || []).find((l) => l.next)?.next ? esc((localInfo || []).find((l) => l.next).next) : 'Optional: <a href="https://ollama.com/download" target="_blank" rel="noopener">Ollama</a>, then <span class="mono">ollama pull qwen3-coder</span>'}</td></tr>
       <tr><td>Free API keys</td><td>${freeKeys ? `<span class="pill ok">${freeKeys} set</span>` : '<span class="pill">none yet</span>'}</td><td class="note">kilo-free works without a key</td></tr>
     </table></div>
-    <div class="card"><h2>Steps</h2><ol class="steps">
-      <li><b>Install conductor</b> (once per machine; run it again to update)${cmd('curl -fsSL https://raw.githubusercontent.com/KevalParikh22/conductor-ai/main/scripts/install.sh | bash')}<span class="note">Or with npm directly:</span>${cmd('npm install -g github:KevalParikh22/conductor-ai\nconductor setup')}<span class="note">If npm asks for sudo, use a Node version manager (nvm, fnm) instead.</span></li>
-      <li><b>Pick your workers.</b> Choose a free start, subscription agents, or both. Every role falls back down its chain, so you can mix them.
-        <div class="grid2" style="margin-top:10px">
-          <div class="mini"><b>Free, no install</b><ul class="note" style="margin:6px 0 0;padding-left:18px">
-            <li><b>kilo-free</b> and <b>OVHcloud</b>: no key at all</li>
-            <li><b>OpenRouter</b>, <b>Gemini</b>, <b>Groq</b>, <b>Cerebras</b>: free keys</li>
-            <li><b>Ollama</b>, <b>LM Studio</b>: local and private</li></ul>
-            <span class="note">Add any with <span class="mono">conductor add &lt;name&gt;</span> or Providers → Add provider.</span></div>
-          <div class="mini"><b>Coding agents (your subscriptions)</b><ul class="note" style="margin:6px 0 0;padding-left:0;list-style:none">
-            ${Object.entries(p).map(([k, v]) => k === S.controllerPreset
-              ? `<li>· <b>${esc(v.label.replace(/ \(as a worker\)$/, ''))}</b> <span class="note">your controller, so off as a worker (it would spend the quota conductor saves)</span></li>`
-              : `<li>${v.installed ? '✓' : '○'} <b>${esc(v.label)}</b></li>`).join('')}</ul>
-            <span class="note">Agents edit files and run tests themselves, each under its own permission rules. Install commands are below.</span></div>
-        </div></li>
-      <li><b>Add providers</b>: <span class="mono">conductor add groq</span> asks for the key, picks a model and tests it. Or use <button class="btn small" data-goto="providers">Providers → Add provider</button></li>
-      <li><b>Set up each project</b>${cmd('cd my-project\nconductor init            # controller: claude-code (default), antigravity, codex-cli, opencode')}<span class="note">init detects the Verify command from your project (e.g. <span class="mono">npm run test</span>, <span class="mono">vendor/bin/phpunit</span>) and writes it into AGENTS.md. Check it, and fill in the stack in section 1.</span></li>
-      <li><b>Check everything</b>: <span class="mono">--live</span> sends one tiny prompt to each enabled provider and shows which ones answer.${cmd('conductor doctor --live')}</li>
-      <li><b>Try a free run</b> (read-only, changes nothing):${cmd('conductor ask "What does this project do? List the main folders." --chain kilo-free')}<span class="note">Then try a small write task on a test branch: <span class="mono">conductor docs "add a usage section to README" --chain kilo-free,openrouter-free</span>. Check the result on the Runs page.</span></li>
-      <li><b>Use it from your controller.</b> In Claude Code: <span class="mono">/conduct-plan add password reset</span>, answer the plan's open questions, then <span class="mono">/conduct-run docs/plan/password-reset.md</span>. Other controllers read the same instructions from AGENTS.md or GEMINI.md.</li>
-    </ol></div>
-    <div class="card"><details class="more"><summary>${icon('chev')} <b style="color:var(--text)">Coding agents: install and sign in</b> (${Object.values(p).filter((v) => v.installed).length} of ${Object.keys(p).length} installed)</summary><table><tr><th>Agent</th><th>Status</th><th>Install</th><th>Sign in</th></tr>
-      ${Object.values(p).map((v) => `<tr><td>${esc(v.label)}</td><td>${pill(v.installed, 'installed', 'not installed', '')}</td><td>${cmd(v.install.split(/\s+\(or: /)[0])}${/\(or: /.test(v.install) ? `<span class="note">or: <span class="mono">${esc(v.install.split(/\(or: /)[1].replace(/\)$/, ''))}</span></span>` : ''}</td><td class="mono">${esc(v.login)}</td></tr>`).join('')}
-    </table><p class="note">After installing, run <span class="mono">conductor setup</span> (it turns on what it finds) or switch the agent on in Providers.</p></details></div>
-    <div class="card"><details class="more"><summary>${icon('chev')} <b style="color:var(--text)">Update or remove</b></summary>${cmd('npm install -g github:KevalParikh22/conductor-ai   # update to latest\nconductor --version\nnpm uninstall -g conductor-ai                       # remove')}<span class="note">Settings and keys stay in <span class="mono">${esc(S.paths.global.replace(/[^/\\]+$/, ''))}</span>. Delete that folder to remove them too.</span></details></div>
-`;
+    <div class="card"><h2>What to do next</h2>
+      ${step('conductor setup', '<b>Once per machine.</b> Finds your agents and keys, adds a free provider and tests it.')}
+      ${step('cd my-project\nconductor init', '<b>In each project.</b> Writes AGENTS.md, your controller\'s commands and its MCP entry, and detects the Verify command. Pick another controller with <span class="mono">--controller</span>.')}
+      ${step('conductor demo', '<b>See it work</b> on a throwaway project: two tasks handed out in parallel, merged and tested (about 2 minutes).')}
+      ${step('conductor doctor --live', '<b>Check everything.</b> <span class="mono">--live</span> sends one tiny prompt to each enabled provider.')}
+      ${step('conductor ui', '<b>Open this page</b> again later.')}
+      <p class="note" style="margin-bottom:0">Update with <span class="mono">npm install -g conductor-ai</span>; remove with <span class="mono">npm uninstall -g conductor-ai</span>. Settings and keys stay in <span class="mono">${esc(tilde(S.paths.global.replace(/[^/\\]+$/, '')))}</span>.</p></div>
+    <div class="card"><h2>Coding agents</h2><p class="note" style="margin-top:-4px">${found.length} of ${Object.keys(p).length} installed. Agents edit files and run tests themselves, each under its own permission rules. After installing one, run <span class="mono">conductor setup</span> or switch it on in <a href="#" data-goto="providers">Providers</a>.</p>
+      <div class="agents">${Object.entries(p).map(agentCard).join('')}</div></div>
+    <div class="card"><h2>MCP and editors</h2><p class="note" style="margin-top:-4px">conductor's MCP server lets your controller call <span class="mono">conductor_run</span> and the other tools directly. <span class="mono">conductor init</span> registers it for the controller you chose (Claude Code, OpenCode); the server command is:</p>
+      ${cmd('conductor-ai mcp')}
+      <div class="cmdrow"><div><b>Codex</b> <span class="note">reads MCP servers from its own config: register once for all projects</span></div>${cmd('codex mcp add conductor -- conductor-ai mcp')}</div>
+      <div class="cmdrow"><div><b>Antigravity</b> <span class="note">the same, with agy</span></div>${cmd('agy mcp add conductor conductor-ai mcp')}</div>
+      <div class="cmdrow"><div><b>VS Code</b> <span class="note">writes <span class="mono">.vscode/mcp.json</span> (also done when the project already has a .vscode folder)</span></div>${cmd('conductor init --vscode')}</div></div>`;
   },
 };
 
@@ -680,17 +828,8 @@ function bind() {
     mi.disabled = true; mi.textContent = 'Checking the answer…';
     try { const r = await api('POST', '/api/import', { run: runDet.id, text }); toast(`Imported as run ${r.run}: ${r.outcome || 'done'}`); openRun(r.run); } catch (e) { toast(e.message); mi.disabled = false; mi.textContent = 'Import the answer'; }
   };
-  const skr = async (p, body, msg) => { try { skillsData = await api('POST', p, body); render(); if (msg) toast(msg); return true; } catch (e) { toast(e.message); return false; } };
-  const skn = $('#sk-newbtn'); if (skn) skn.onclick = () => { skillNew = !skillNew; render(); };
-  const skc = $('#sk-create'); if (skc) skc.onclick = () => skr('/api/skills/new', { name: $('#sk-name').value.trim(), scope: $('#sk-scope').value, description: $('#sk-desc').value.trim(), files: $('#sk-files').value.trim(), roles: $('#sk-roles').value.trim(), text: $('#sk-text').value.trim() }, 'Skill created. Write its instructions with Edit').then((ok) => { if (ok) { skillNew = false; render(); } });
-  const sks = $('#sk-sync'); if (sks) sks.onclick = () => skr('/api/skills/sync', {}, 'Skills synced');
-  document.querySelectorAll('[data-skon]').forEach((i) => i.onchange = () => skr('/api/skills/toggle', { name: i.dataset.skon, on: i.checked }, `${i.dataset.skon} ${i.checked ? 'on' : 'off'} for this project`));
-  document.querySelectorAll('[data-skedit]').forEach((b) => b.onclick = () => { skillEdit = skillEdit === b.dataset.skedit ? null : b.dataset.skedit; render(); });
-  document.querySelectorAll('[data-sksave]').forEach((b) => b.onclick = () => skr('/api/skills/save', { name: b.dataset.sksave, text: $(`#sk-text-${b.dataset.sksave}`).value }, 'Saved and synced'));
-  document.querySelectorAll('[data-skrm]').forEach((b) => b.onclick = () => { const [name, scope] = b.dataset.skrm.split('|'); if (confirm(`Remove ${name} from the ${scope === 'global' ? 'library for all projects' : 'project library'}? This deletes its folder.`)) { skillEdit = null; skr('/api/skills/remove', { name, scope }, 'Removed'); } });
   document.querySelectorAll('[data-goto]').forEach((b) => b.onclick = (e) => { e.preventDefault(); go(b.dataset.goto); }); // links too: "#" would drop the token
   document.querySelectorAll('[data-clear]').forEach((b) => b.onclick = async () => { load(await api('POST', '/api/cooldowns/clear', { name: b.dataset.clear })); toast('Cooldown cleared'); });
-  document.querySelectorAll('[data-rtab]').forEach((b) => b.onclick = () => { rTab = b.dataset.rtab; render(); });
   document.querySelectorAll('[data-mv]').forEach((b) => b.onclick = () => { const [r, i, d] = b.dataset.mv.split('|'); const c = W.roles[r]; const j = +i + +d; [c[i], c[j]] = [c[j], c[i]]; markDirty(); render(); });
   document.querySelectorAll('[data-rm]').forEach((b) => b.onclick = () => { const [r, i] = b.dataset.rm.split('|'); W.roles[r].splice(+i, 1); markDirty(); render(); });
   document.querySelectorAll('[data-addsel]').forEach((s) => s.onchange = () => { if (s.value) { W.roles[s.dataset.addsel].push(s.value); markDirty(); render(); } });
@@ -746,10 +885,17 @@ function bind() {
   document.querySelectorAll('[data-popen]').forEach((b) => b.onclick = () => { const n = b.dataset.popen; pOpen.has(n) ? pOpen.delete(n) : pOpen.add(n); render(); });
   document.querySelectorAll('[data-pall]').forEach((b) => b.onclick = () => { pAll = b.dataset.pall === '1'; render(); });
   const pa = $('#padd'); if (pa) pa.onclick = () => { pAdd = !pAdd; gOpen = null; render(); if (pAdd) $('#g-q')?.focus(); };
-  // typing searches every category; a chip narrows the current search
-  const gq = $('#g-q'); if (gq) gq.oninput = () => { gFilter.q = gq.value; if (gFilter.q) gFilter.cat = 'all'; applyGalleryFilter(); };
+  // the search and the category chip combine; neither resets the other
+  const gq = $('#g-q'); if (gq) gq.oninput = () => { gFilter.q = gq.value; applyGalleryFilter(); };
   document.querySelectorAll('[data-gcat]').forEach((b) => b.onclick = () => { gFilter.cat = b.dataset.gcat; applyGalleryFilter(); });
-  document.querySelectorAll('[data-gadd]').forEach((b) => b.onclick = () => { gOpen = b.dataset.gadd; render(); $('#g-key')?.focus(); });
+  document.querySelectorAll('[data-gadd]').forEach((b) => b.onclick = () => { gOpen = b.dataset.gadd; render(); });
+  const gd = $('#g-dlg');
+  if (gd) {
+    if (!gd.open) gd.showModal();
+    (gd.querySelector('#g-key') || gd.querySelector('[data-gfield]') || gd.querySelector('[data-gsave]')).focus();
+    // Esc or Cancel; a re-render also removes the dialog, and then there is nothing to close
+    gd.onclose = () => { if (gOpen && gd.isConnected) { gOpen = null; render(); } };
+  }
   document.querySelectorAll('[data-gclose]').forEach((b) => b.onclick = () => { gOpen = null; render(); });
   document.querySelectorAll('[data-gsave]').forEach((b) => b.onclick = async () => {
     if (dirty) return toast('Save or discard your other changes first');
@@ -790,6 +936,10 @@ function bind() {
       const pre = $('#init-out'); pre.style.display = 'block'; pre.textContent = out; toast('Project updated');
     } catch (e) { toast(e.message); ap.disabled = false; }
   };
+  document.querySelectorAll('[data-step]').forEach((b) => b.onclick = () => {
+    const i = b.parentElement.querySelector('input'), v = Number(i.value || 0) + Number(b.dataset.step) * Number(i.dataset.inc || 1);
+    i.value = Math.max(0, Math.round(v * 100) / 100); i.dispatchEvent(new Event('input'));
+  });
   document.querySelectorAll('[data-set]').forEach((i) => i.oninput = () => { const f = Number(i.dataset.factor || 1); W.settings[i.dataset.set] = f === 1 ? Number(i.value) : Math.round(Number(i.value) * f); markDirty(); });
   document.querySelectorAll('[data-sets]').forEach((i) => i.oninput = () => { W.settings[i.dataset.sets] = i.value; markDirty(); });
   document.querySelectorAll('[data-setl]').forEach((i) => i.oninput = () => { W.settings[i.dataset.setl] = i.value.split(',').map((x) => x.trim()).filter(Boolean); markDirty(); });

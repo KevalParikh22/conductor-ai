@@ -192,7 +192,19 @@ test('UI server: host + token checks, config save writes a minimal diff, secrets
       });
     });
     assert.equal(evil, 403);
+    const wn = await (await fetch(`${base}/api/whatsnew`, { headers: { 'x-conductor-token': 'tok' } })).json();
+    assert.ok(wn.sections.length >= 1 && wn.sections.length <= 2, 'the newest CHANGELOG sections');
+    assert.ok(wn.sections.flatMap((s) => s.items).length <= 12);
+    assert.ok(wn.sections.every((s) => s.items.every((i) => !i.includes('**'))), 'plain text');
   } finally { ui.server.close(); }
+});
+
+test('whatsNew: newest sections, top-level bullets cut to their first sentence, no file → empty', async () => {
+  const { whatsNew } = await import('../src/ui/server.js');
+  const f = path.join(home, 'CHANGELOG-test.md');
+  fs.writeFileSync(f, '# Changelog\n\n## 1.2.0\n\n- **Faster.** Much more text here.\n  - nested detail\n- A [link](https://x) works. More.\n\n## 1.1.0\n\n- Old thing.\n\n## 1.0.0\n\n- Oldest.\n');
+  assert.deepEqual(whatsNew(f), { sections: [{ heading: '1.2.0', items: ['Faster.', 'A link works.'] }, { heading: '1.1.0', items: ['Old thing.'] }] });
+  assert.deepEqual(whatsNew(path.join(home, 'nope.md')), { sections: [] });
 });
 
 test('init moves an MCP entry an older init wrote (conductor mcp) to conductor-ai; one you changed is kept', () => {

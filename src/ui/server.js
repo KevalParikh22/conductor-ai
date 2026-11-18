@@ -57,14 +57,38 @@ function stateFor(root) {
     version: VERSION, root, inRepo, hasProjectConfig: fs.existsSync(projectConfigPath(root)),
     paths: { global: GLOBAL_CONFIG, secrets: GLOBAL_SECRETS, project: projectConfigPath(root) },
     effective: { controller: cfg.controller, providers: cfg.providers, roles: cfg.roles, settings: cfg.settings, routes: cfg.routes || [] },
+    notices: cfg.notices || [], // kept out of `effective`: that object is sent back on save
     bases: { global: DEFAULT_CONFIG, project: deepMerge(DEFAULT_CONFIG, globalScope) },
     builtinProviders: Object.keys(DEFAULT_CONFIG.providers),
     status: statusData(cfg), secrets: secretsState(cfg), cooldowns: getCooldowns(), errors: validateConfig(cfg),
     controllerPreset: cfg.providers[controllerWorker(cfg.controller)]?.preset || null, // the controller's own CLI: never suggested as a worker
     presets: Object.fromEntries(Object.entries(CLI_PRESETS).map(([k, v]) => [k, { label: v.label, bin: v.bin, install: v.install, login: v.login, docs: v.docs, permissions: v.permissions || null, takesModel: !!v.modelArgs?.length, installed: !!which(v.bin), beta: !!v.beta }])),
     roles: ROLES, controllers: allControllers(root), catalog: catalogStatus(cfg),
-    env: { node: process.version, platform: os.platform(), conductorOnPath: !!which('conductor'), git: !!which('git') },
+    env: { node: process.version, platform: os.platform(), conductorOnPath: !!which('conductor'), git: !!which('git'), home: os.homedir() },
   };
+}
+
+/**
+ * The newest `count` sections of CHANGELOG.md as plain text: each heading plus the first sentence of its
+ * top-level bullets, so the bell panel stays short. The file ships in the npm package (package.json "files").
+ */
+export function whatsNew(file = new URL('../../CHANGELOG.md', import.meta.url), { count = 2, maxItems = 12 } = {}) {
+  let text;
+  try { text = fs.readFileSync(file, 'utf8'); } catch { return { sections: [] }; }
+  const plain = (s) => s.replace(/\*\*|__|`/g, '').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').trim();
+  const first = (s) => { const m = plain(s).match(/^.*?[.!?](?=\s|$)/); return (m ? m[0] : plain(s)).slice(0, 200); };
+  const sections = [];
+  let cur = null, items = 0;
+  for (const line of text.split(/\r?\n/)) {
+    const h = line.match(/^## (.+)/);
+    if (h) {
+      if (sections.length >= count || items >= maxItems) break;
+      cur = { heading: plain(h[1]), items: [] }; sections.push(cur); continue;
+    }
+    const b = line.match(/^- (.+)/); // top level only: nested bullets are detail
+    if (cur && b && items < maxItems) { cur.items.push(first(b[1])); items++; }
+  }
+  return { sections: sections.filter((s) => s.items.length) };
 }
 
 function openBrowser(url) {
@@ -135,6 +159,7 @@ export function createUiServer({ cwd = process.cwd(), token = crypto.randomBytes
           finally { fs.rmSync(dir, { recursive: true, force: true }); }
         }
         // V3: the same actions as the CLI and MCP (src/surfaces.js)
+        case 'GET /api/whatsnew': return send(200, whatsNew());
         case 'GET /api/stats': return send(200, { quality: qualityStats({ root }), failures: failureStats({ root }), trend: qualityTrend({ root }) });
         case 'GET /api/lessons': return send(200, lessonsState(root));
         case 'POST /api/lessons/add': {

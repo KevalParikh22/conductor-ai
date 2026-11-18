@@ -116,10 +116,11 @@ test('CLI skills commands and addSkill', () => {
   assert.equal(parseSkill(fs.readFileSync(path.join(home, 'skills/from-folder/SKILL.md'), 'utf8')).description, 'Imported');
 });
 
-test('UI has a Skills page wired to the same API', () => {
+test('UI keeps a Skills page (coming soon, points to the CLI) and the server keeps the skills API', () => {
   const html = fs.readFileSync(new URL('../src/ui/index.html', import.meta.url), 'utf8');
   assert.match(html, /\['skills', 'Skills'\]/);
-  for (const r of ['/api/skills/toggle', '/api/skills/new', '/api/skills/save', '/api/skills/remove', '/api/skills/sync']) assert.ok(html.includes(r), r);
+  assert.match(html, /Coming soon/);
+  assert.ok(html.includes("cmd('conductor skills')"));
   const server = fs.readFileSync(new URL('../src/ui/server.js', import.meta.url), 'utf8');
   for (const r of ["'GET /api/skills'", "'POST /api/skills/toggle'"]) assert.ok(server.includes(r), r);
 });
