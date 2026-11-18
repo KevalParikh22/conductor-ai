@@ -6,7 +6,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { loadConfig } from './config.js';
+import { loadConfig, providerReadiness } from './config.js';
+import { isFree } from './selector.js';
 import { initProject } from './init.js';
 import { runBatch } from './batch.js';
 import { run } from './util.js';
@@ -65,6 +66,20 @@ export function makeDemoProject(parent = os.tmpdir()) {
   return dir;
 }
 
+const ready = (cfg, n) => cfg.providers[n] && providerReadiness(n, cfg.providers[n]).ready;
+const demoAgents = (cfg) => (cfg.roles.build || []);
+
+/**
+ * A stranger's first run (npx conductor-ai demo) has no coding agent installed, and the build chain is agents only.
+ * Then the demo hands its two tasks to the free API models that are ready (kilo-free needs no key), so it still shows
+ * conductor working. → the free routes to use, or null when an agent in the build chain is ready.
+ */
+export function demoFallback(cfg) {
+  if (demoAgents(cfg).some((n) => ready(cfg, n))) return null;
+  const order = [...new Set([...Object.values(cfg.roles).flat(), ...Object.keys(cfg.providers)])];
+  return order.filter((n) => isFree(cfg.providers[n]) && cfg.providers[n].type !== 'manual' && ready(cfg, n));
+}
+
 /**
  * Run the demo. → { dir, batch, merged: [task ids], verify: { status, output }, kept }
  * say(text) prints a step; onEvent gets batch events (the CLI shows the live table).
@@ -75,6 +90,13 @@ export async function runDemo({ keep = false, provider, say = () => {}, onEvent,
   try {
     say(`2. Both tasks go to your workers in parallel, each in its own worktree; every check runs on each`);
     const cfg = loadConfig(dir);
+    const fallback = provider ? null : demoFallback(cfg);
+    if (fallback?.length) {
+      say(`   No coding agent is ready (${demoAgents(cfg).join(', ')}), so the demo uses free API models: ${fallback.join(', ')}`);
+      cfg.roles = { ...cfg.roles, build: fallback }; // this run only: nothing is written to your config
+    } else if (fallback) {
+      say('   No coding agent and no free API model is ready. Run: conductor setup (or conductor doctor to see why)');
+    }
     const batch = await runBatch(cfg, { planPath: 'docs/plan/demo.md', tasks: ['T1', 'T2'], provider, noReview: true, replace: true, onEvent });
     const merged = [];
     for (const r of batch.results) {

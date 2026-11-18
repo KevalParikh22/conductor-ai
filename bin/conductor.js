@@ -413,7 +413,7 @@ async function main() {
       table.stop();
       // the batch summary without its "next: review, then merge" lines: the demo merged already
       console.log(`\n${formatBatch(d.batch).split('\n').filter((l, i, all) => !/^next:/.test(l) && !(/^\s/.test(l) && all.slice(0, i).reverse().find((x) => !/^\s/.test(x))?.startsWith('next:'))).join('\n')}`);
-      console.log(`\n3. Merged what passed every check: ${d.merged.length ? d.merged.join(', ') : 'nothing'} · the project's tests: ${d.verify.status}${d.verify.output ? ` (${d.verify.output})` : ''}`);
+      console.log(`\n3. Merged what passed every check: ${d.merged.length ? d.merged.join(', ') : 'nothing'} · the project's tests: ${d.verify.status}${d.verify.output ? ` (${d.verify.output})` : ''}${d.merged.length ? '' : ', but only the starting test ran'}`);
       console.log(`   ${Math.round((Date.now() - t0) / 1000)}s in total.${d.kept ? ` The project is kept: ${d.dir} (open it, or: cd ${d.dir} && conductor ui)` : ' The project is removed (--keep to look around).'}`);
       console.log('\nNext, in your own project:  conductor init   then plan with your coding agent (/conduct-plan in Claude Code).');
       return d.merged.length === 2 && d.verify.status === 'PASS' ? 0 : 3;

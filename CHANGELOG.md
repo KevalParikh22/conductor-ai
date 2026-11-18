@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.11.1 (2026-11-18)
+
+The first release on npm: `npm install -g conductor-ai`, or try it with `npx conductor-ai demo`.
 
 - **conductor-ai is the command conductor writes into your tools.** `conductor init` now registers the MCP server as `conductor-ai mcp` (Claude Code, VS Code, OpenCode, Antigravity), guard hooks run `conductor-ai hook …`, the plugins' MCP files and session hook use `conductor-ai`, and the printed `agy mcp add` / `codex mcp add` commands do too. Other tools install a `conductor` command (Conductor OSS), and the last one installed wins; `conductor-ai` is only ours. The server is still named `conductor`, so its tools keep their names. Running `conductor init` again moves an entry an older init wrote (`conductor mcp`) to the new name and leaves one you changed alone. Both commands stay installed and run the same program.
 - **UI: saving an API key no longer opens the password manager.** Key fields were password fields, so the browser (and 1Password, Bitwarden, LastPass) offered to save each key as a website login. They are now masked text fields that password managers ignore.
@@ -9,6 +11,8 @@
 - **Add provider: an optional key field** for providers that work without a key but take one for higher limits (Kilo, OVHcloud).
 - **Fixed: the batch's live table named the losing worker in a race.** A task's race attempts (and a hedge) report on the same row, so the row showed whichever worker started last, and kept showing it while the winner's work was merged and verified (found while recording the launch GIF: T1 read `antigravity-cli` until the end while Codex had won). The row now follows each attempt, shows `racing (2)` as the worker while they run (a name with `+1` didn't fit the column), switches to the winner on `race-won` / `hedge-won`, ignores the stopped loser's events, and a stopped attempt reads `stopped: other won` instead of `failed: cancelled`. Piped output gains a `won the race` line.
 - **Fixed: a hedge blamed the task's first-choice worker.** The hedge message and the summary's `hedged:` line said "<first choice> was slow" even when that worker had already failed and another had taken the task over (seen in a demo: Antigravity was out of quota, Codex took T2 and was the slow one, and the line read "antigravity-cli was slow"). They now name the worker(s) running when the hedge starts ("codex-cli and nvidia-nim were slow" when a race was running).
+- **`conductor demo` works with no coding agent installed.** The demo's tasks are build tasks, and the build chain is agents only (Antigravity, Codex, OpenCode), so on a machine without one both tasks failed with "not installed". Found by running the packed release with `npx` in an empty home. The demo now hands them to the free API models that are ready (kilo-free needs no key) and says so; your config is not changed. With nothing ready at all it says to run `conductor setup`, and when nothing was merged the closing line says only the starting test ran.
+- **Licensing written down.** The core stays MIT. CONTRIBUTING.md now says contributions come in under MIT, may also be used in conductor-ai add-ons, and are signed off with `git commit -s`.
 
 ## 0.11.0 (2026-11-15)
 

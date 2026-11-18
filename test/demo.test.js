@@ -6,7 +6,7 @@ import path from 'node:path';
 import { isolateHome, fakeBins, tmpdir } from './helpers.js';
 
 const home = isolateHome();
-const { runDemo, DEMO_PLAN } = await import('../src/demo.js');
+const { runDemo, DEMO_PLAN, demoFallback } = await import('../src/demo.js');
 const { checkPlan } = await import('../src/plancheck.js');
 
 // a fake worker that solves whichever demo task it is given, with a test
@@ -42,4 +42,19 @@ test('demo: both tasks run in parallel, pass every check, merge, the tests pass,
 test('demo --keep leaves the project, with both helpers merged', async () => {
   const d = await runDemo({ provider: 'good', keep: true, parent: tmpdir('conductor-demo-parent-') });
   assert.ok(fs.existsSync(path.join(d.dir, 'src', 'titleCase.js')) && fs.existsSync(path.join(d.dir, 'src', 'truncate.js')));
+});
+
+test('demo without a coding agent: falls back to the free API models that are ready, never paid or unready ones', () => {
+  const providers = {
+    agent: { type: 'cli', preset: 'codex', enabled: true, bin: 'no-such-agent-bin' },
+    freeapi: { type: 'openai', baseUrl: 'https://free.example', free: true, enabled: true },
+    paid: { type: 'openai', baseUrl: 'https://paid.example', enabled: true },
+    nokey: { type: 'openai', baseUrl: 'https://z.example', free: true, apiKeyEnv: 'NO_SUCH_KEY_XYZ', enabled: true },
+    off: { type: 'openai', baseUrl: 'https://off.example', free: true, enabled: false },
+  };
+  assert.deepEqual(demoFallback({ roles: { build: ['agent'], test: ['freeapi', 'paid'] }, providers }), ['freeapi']);
+  // an agent that is installed keeps the normal build chain
+  assert.equal(demoFallback({ roles: { build: ['good'] }, providers: { ...providers, good: { type: 'cli', preset: 'codex', enabled: true, bin: 'demo-worker' } } }), null);
+  // nothing ready at all: an empty list, so the demo says to run conductor setup
+  assert.deepEqual(demoFallback({ roles: { build: ['agent'] }, providers: { agent: providers.agent, nokey: providers.nokey } }), []);
 });
