@@ -198,12 +198,16 @@ pre.cmd { background: var(--panel-2); border: 1px solid var(--line); border-radi
 table { width: 100%; border-collapse: collapse; }
 td, th { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
 th { font-size: 12.5px; color: var(--muted); font-weight: 600; }
-.savebar { position: sticky; bottom: 0; background: var(--panel); border-top: 1px solid var(--line); padding: 10px max(24px, calc((100vw - 1440px) / 2 + 24px)); display: none; align-items: center; gap: 10px; flex-wrap: wrap; z-index: 5; }
-.savebar.show { display: flex; }
+/* unsaved changes: a floating popup in the corner, not a bar across the page */
+.savebar { position: fixed; right: 20px; bottom: 20px; z-index: 9; width: min(380px, calc(100vw - 24px)); background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--accent); border-radius: 12px; box-shadow: 0 12px 32px rgba(16,24,40,.22), 0 2px 6px rgba(16,24,40,.12); padding: 14px 16px; display: none; flex-direction: column; gap: 10px; }
+.savebar.show { display: flex; animation: pop .18s ease-out; }
+.savebar .sb-head { display: flex; flex-direction: column; gap: 2px; } .savebar .sb-acts { display: flex; gap: 8px; justify-content: flex-end; }
+@keyframes pop { from { opacity: 0; transform: translateY(12px) scale(.98); } to { opacity: 1; transform: none; } }
+@media (max-width: 760px) { .savebar { right: 12px; left: 12px; bottom: 12px; width: auto; } }
 /* API keys: masked text, not type=password, so browsers and password managers don't offer to save them as a login */
 input.secret { -webkit-text-security: disc; text-security: disc; font-family: var(--mono, ui-monospace, monospace); }
 #offline { position: fixed; left: 50%; top: 12px; transform: translateX(-50%); z-index: 11; max-width: min(640px, calc(100vw - 32px)); background: var(--bad-soft); color: var(--bad); border: 1px solid var(--bad); padding: 10px 14px; border-radius: 8px; font-size: 13px; }
-#toast { position: fixed; right: 16px; bottom: 70px; background: var(--text); color: var(--bg); padding: 9px 14px; border-radius: 8px; opacity: 0; transition: .2s; pointer-events: none; max-width: 80vw; z-index: 10; }
+#toast { position: fixed; right: 20px; bottom: 140px; background: var(--text); color: var(--bg); padding: 9px 14px; border-radius: 8px; opacity: 0; transition: .2s; pointer-events: none; max-width: 80vw; z-index: 10; }
 #toast.show { opacity: 1; }
 .err { background: var(--bad-soft); color: var(--bad); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; }
 .steps { counter-reset: s; list-style: none; padding: 0; margin: 0; }
@@ -254,10 +258,9 @@ body { overflow-x: hidden; }
   <nav id="nav"></nav>
   <main id="main"><p class="note">Loading…</p></main>
 </div>
-<div class="savebar" id="savebar">
-  <b>Unsaved changes</b><span class="note" id="savewhere"></span><span class="spacer"></span>
-  <button class="btn" id="discard">Discard</button>
-  <button class="btn primary" id="save">Save</button>
+<div class="savebar" id="savebar" role="dialog" aria-live="polite" aria-label="Unsaved changes">
+  <div class="sb-head"><b>Unsaved changes</b><span class="note" id="savewhere"></span></div>
+  <div class="sb-acts"><button class="btn" id="discard">Discard</button><button class="btn primary" id="save">Save…</button></div>
 </div>
 <div id="npanel" role="dialog" aria-label="Notifications" hidden></div>
 <dialog id="confirm" aria-labelledby="cf-title"><div class="dlg-b"><h2 id="cf-title">Save changes?</h2><div id="cf-body"></div></div>
@@ -347,7 +350,7 @@ async function api(method, path, body) {
 function offline(on) { const b = $('#offline'); if (b) b.hidden = !on; }
 function toast(msg, ms = 2600) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), ms); }
 const scopeText = () => ($('#scope').value === 'global' ? 'global config (all projects)' : 'this project');
-function markDirty() { dirty = true; $('#savebar').classList.add('show'); $('#savewhere').textContent = ' → ' + scopeText(); }
+function markDirty() { dirty = true; $('#savebar').classList.add('show'); $('#savewhere').textContent = 'Will save to ' + scopeText(); }
 // the full path is long and mostly the same prefix: show the folder, keep the path in the tooltip and the copy button
 const baseName = (p) => String(p || '').replace(/[\\/]+$/, '').split(/[\\/]/).pop() || p;
 const tilde = (p) => (S?.env?.home && p.startsWith(S.env.home) ? '~' + p.slice(S.env.home.length) : p);
