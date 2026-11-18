@@ -69,3 +69,33 @@ test('soft-launch defaults: beta agents are marked and not turned on by setup, t
   const on = enableDetected(root, { agents: [{ name: 'goose', installed: true, enabled: false, beta: true }, { name: 'codex-cli', installed: true, enabled: false }], keys: [] });
   assert.deepEqual(on, ['codex-cli']);
 });
+
+test('demo: a task that fails its checks gets a fresh attempt, and passes on the retry', async () => {
+  const counter = path.join(tmpdir('conductor-flaky-'), 'n');
+  // the same fake worker, but its first answer to T2 is wrong (truncate never cuts)
+  fakeBins({
+    'flaky-worker': `const c=${JSON.stringify(counter)};let p='';process.stdin.on('data',d=>p+=d).on('end',()=>{const o=args[args.indexOf('-o')+1];
+      const t=(p.match(/Your task id: (T\\d)/)||[])[1];
+      const n = t==='T2' ? (fs.existsSync(c) ? 2 : (fs.writeFileSync(c,'1'), 1)) : 0;
+      const files = t==='T1'
+        ? { 'src/titleCase.js': "export function titleCase(text) { if (typeof text !== 'string') throw new TypeError('text'); return text.split(' ').map((w) => w ? w[0].toUpperCase() + w.slice(1).toLowerCase() : w).join(' '); }\\n",
+            'test/titleCase.test.js': "import { test } from 'node:test'; import assert from 'node:assert/strict'; import { titleCase } from '../src/titleCase.js'; test('t', () => assert.equal(titleCase('hello wORLD'), 'Hello World'));\\n" }
+        : { 'src/truncate.js': n===1 ? "export function truncate(text) { return text; }\\n" : "export function truncate(text, max) { if (!Number.isInteger(max) || max < 1) throw new RangeError('max'); return text.length > max ? text.slice(0, max - 1) + '…' : text; }\\n",
+            'test/truncate.test.js': "import { test } from 'node:test'; import assert from 'node:assert/strict'; import { truncate } from '../src/truncate.js'; test('t', () => assert.equal(truncate('conductor', 5), 'cond…'));\\n" };
+      for (const [f, c] of Object.entries(files)) fs.writeFileSync(f, c);
+      fs.writeFileSync(o, '## RESULT: DONE\\n## Files changed\\n' + Object.keys(files).map((f) => '- ' + f).join('\\n') + '\\n## Checks run\\n- npm test\\n## Acceptance\\n- [x] 1. ok — evidence: ' + Object.keys(files)[0] + ':1\\n- [x] 2. ok — evidence: ' + Object.keys(files)[0] + ':1\\n- [x] 3. ok — evidence: ' + Object.keys(files)[0] + ':1\\n## Notes\\n- none\\n');});`,
+  });
+  const cfgFile = path.join(home, 'config.json');
+  const saved = fs.readFileSync(cfgFile, 'utf8');
+  fs.writeFileSync(cfgFile, JSON.stringify({ version: 1, providers: { flaky: { type: 'cli', preset: 'codex', enabled: true, bin: 'flaky-worker' } }, roles: { build: ['flaky'] }, settings: { autoReview: false } }));
+  try {
+    const steps = [];
+    const d = await runDemo({ provider: 'flaky', parent: tmpdir('conductor-demo-parent-'), say: (m) => steps.push(m) });
+    assert.ok(steps.some((m) => /T2 didn't pass every check \(free models vary\): trying again, 1 of 2/.test(m)), steps.join('\n'));
+    assert.deepEqual(d.batch.results.map((r) => [r.task, r.outcome]), [['T1', 'done'], ['T2', 'done']]);
+    assert.equal(d.batch.results[1].retries, 1);
+    assert.deepEqual([d.batch.ok, d.batch.failed, d.batch.exitCode], [2, 0, 0]);
+    assert.deepEqual(d.merged, ['T1', 'T2']);
+    assert.equal(d.verify.status, 'PASS');
+  } finally { fs.writeFileSync(cfgFile, saved); }
+});

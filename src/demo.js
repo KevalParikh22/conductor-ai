@@ -80,6 +80,17 @@ export function demoFallback(cfg) {
   return order.filter((n) => isFree(cfg.providers[n]) && cfg.providers[n].type !== 'manual' && ready(cfg, n));
 }
 
+export const DEMO_RETRIES = 2;
+
+/** The first batch with the retried tasks' newest results in place, and its counts redone. */
+export function combineBatches(first, retry, round) {
+  const newer = new Map(retry.results.map((r) => [r.task, { ...r, retries: round }]));
+  const results = first.results.map((r) => newer.get(r.task) || r);
+  const n = (o) => results.filter((r) => r.outcome === o).length;
+  const ok = n('done'), partial = n('partial'), unverified = n('unverified'), outOfScope = n('out-of-scope'), blocked = results.filter((r) => r.blocked).length;
+  return { ...first, results, ok, partial, unverified, outOfScope, blocked, failed: results.length - ok - partial - unverified - outOfScope - blocked, exitCode: ok === results.length ? 0 : 3 };
+}
+
 /**
  * Run the demo. → { dir, batch, merged: [task ids], verify: { status, output }, kept }
  * say(text) prints a step; onEvent gets batch events (the CLI shows the live table).
@@ -97,7 +108,17 @@ export async function runDemo({ keep = false, provider, say = () => {}, onEvent,
     } else if (fallback) {
       say('   No coding agent and no free API model is ready. Run: conductor setup (or conductor doctor to see why)');
     }
-    const batch = await runBatch(cfg, { planPath: 'docs/plan/demo.md', tasks: ['T1', 'T2'], provider, noReview: true, replace: true, onEvent });
+    const opts = { planPath: 'docs/plan/demo.md', provider, noReview: true, replace: true, onEvent };
+    let batch = await runBatch(cfg, { ...opts, tasks: ['T1', 'T2'] });
+    // free models vary from one call to the next (a 503, a weaker fallback model, half-done work): a task that didn't
+    // pass every check gets a fresh attempt, so one bad reply doesn't fail a stranger's first look. Failed work is
+    // never merged either way.
+    for (let round = 1; round <= DEMO_RETRIES; round++) {
+      const again = batch.results.filter((r) => r.outcome !== 'done').map((r) => r.task);
+      if (!again.length) break;
+      say(`   ${again.join(' and ')} didn't pass every check (free models vary): trying again, ${round} of ${DEMO_RETRIES}`);
+      batch = combineBatches(batch, await runBatch(cfg, { ...opts, tasks: again }), round);
+    }
     const merged = [];
     for (const r of batch.results) {
       const branch = r.summary?.worktree?.commit ? r.summary.worktree.branch : null;
