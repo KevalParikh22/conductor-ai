@@ -1,6 +1,6 @@
 {
   "name": "conductor-ai",
-  "version": "0.11.2",
+  "version": "0.11.3",
   "description": "Your coding agent plans and reviews; free and cheap models write the code. Multi-LLM orchestrator with Claude Code, Codex CLI, Antigravity CLI or OpenCode as the controller and agents, 45+ APIs and local models (Ollama) as workers: quota-aware fallback, task routing, per-agent sandboxes, checks on every task and parallel worktrees.",
   "keywords": [
     "claude",

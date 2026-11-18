@@ -368,7 +368,7 @@ export function formatBatch(b) {
     const v = s.verify ? `verify ${s.verify.status}` : 'not verified';
     const c = s.worktree.commit ? `${s.worktree.commit} on ${s.worktree.branch}` : 'no changes';
     const mark = { done: '✓', partial: '⚠', 'out-of-scope': '⚠', unverified: '?', 'verify-failed': '✗' }[r.outcome] || '✓';
-    const why = r.outcome === 'partial' ? ` · ${(s.status || '').replace(/^#+\s*/, '')}` : r.outcome === 'out-of-scope' ? ` · outside its files: ${s.scope.outside.join(', ')}` : '';
+    const why = r.outcome === 'partial' ? ` · ${(s.status || '').replace(/^#+\s*/, '').trim() || 'partly done: see its report'}` : r.outcome === 'out-of-scope' ? ` · outside its files: ${s.scope.outside.join(', ')}` : '';
     L.push(`${r.task.padEnd(6)} ${mark} ${s.winner} · ${v}${s.verify?.scope === 'task' ? ' (task)' : ''} · ${c} · ${s.changed.length} file(s)${why}`);
     if (r.merge) L.push(`         ${{ merged: `merged: ${r.merge.commit}${r.merge.verify === 'PASS' ? ', verify passed on the merged code' : r.merge.verify === 'SKIPPED' ? ', no verify command' : ''}`, 'no-changes': 'nothing to merge (no changes)',
       conflict: `NOT MERGED: ${r.merge.why}. Merge it yourself: git merge --no-ff ${r.merge.branch}`, 'verify-failed': `MERGED as ${r.merge.commit}, but verify FAILED on the merged code (${r.merge.cmd}); the batch stopped. Fix it, or undo: git reset --hard HEAD~1`,

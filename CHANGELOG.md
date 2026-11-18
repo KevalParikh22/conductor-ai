@@ -1,15 +1,18 @@
 # Changelog
 
-## Unreleased
+## 0.11.3 (2026-11-18)
 
 - **Fixed: "Save to Global" copied this project's settings into every project.** The UI sent the whole effective config (defaults + global + this project), and a global save stored all of it, so a value set only for this project became global. Now only what you changed on the page goes to the file you picked. A key set in both files: the project wins. A key set only globally applies to every project. When a global change doesn't apply here because this project overrides it, the save says so.
 - **Routing rules add up.** A project's rules used to replace the global ones; now both apply, the project's first (the first match wins, so a project rule wins a conflict). Each file keeps its own rules when you save.
+- **README says which systems are tested how:** the full suite runs in CI on Linux, macOS and Windows; real use with live agents so far is on Linux.
+- **Fixed: a partly done task's batch line ended in an empty "· "** when the worker gave no status; it now says "partly done: see its report".
 - **UI rework from the alpha review.**
   - Bigger and fuller: 15px text, wider layout, less empty space; every input, select, stepper and checkbox has the same look in light and dark.
   - Header: the logo opens Overview; only the project folder name shows (full path on hover, with a copy button); a "?" explains Save to; a bell shows notices and what's new from this changelog.
   - Save asks first: a dialog shows what changes and which file it goes to. A global save says when this project overrides a value.
   - Roles is now simple chains; routing rules have their own page. Skills shows "coming soon" (`conductor skills` still works). Lessons & rules left the menu.
   - Providers: separate icons for agents, cloud APIs and local models; status is an icon with the reason on hover. Add provider keeps your filter while you search, opens each provider in a dialog (no more jumping grid), and groups Added, Local and Catalog.
+  - Unsaved changes show as a floating popup in the corner (Discard / Save…), not a bar across the page.
   - API keys shows `~/.config/...` with a copy button and a short explanation. Settings is grouped (Controller, Runs, Safety, Your data). Setup is npm-only: this system, what to do next, coding agents, MCP and editors.
 - **The guard blocks push, not commit.** `conductor guard on` used to block the controller's `git commit` while the last `conductor verify` failed. Commits are local and easy to fix, so they are allowed now; `git push` is blocked instead, until a verify passes (a new commit alone doesn't lift it) or `conductor guard allow` lets this commit through once. The UI calls it "Push guard".
 
