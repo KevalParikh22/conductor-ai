@@ -443,8 +443,14 @@ function loadRuns() { runsAt = Date.now(); api('GET', '/api/runs').then((d) => {
 // keep the Runs page current while it is open (runs started from the terminal show up on their own):
 // every 2s while a run is going, so its step stays current; every 5s otherwise; at once when you come back to the tab
 const runsShown = () => tab === 'runs' && !runOpen && document.visibilityState === 'visible';
-setInterval(() => { if (runsShown() && (runsData?.runs?.some((r) => r.state === 'running') || Date.now() - runsAt >= 5000)) loadRuns(); }, 2000);
-document.addEventListener('visibilitychange', () => { if (runsShown()) loadRuns(); });
+// the open run page too: every 2s while it runs, every 5s after (a recheck from the terminal or cron changes it)
+let runAt = 0;
+const runShown = () => tab === 'runs' && runOpen && document.visibilityState === 'visible';
+setInterval(() => {
+  if (runsShown() && (runsData?.runs?.some((r) => r.state === 'running') || Date.now() - runsAt >= 5000)) loadRuns();
+  if (runShown() && runDet && (runDet.state === 'running' || Date.now() - runAt >= 5000)) fetchRun(runOpen, { quiet: true });
+}, 2000);
+document.addEventListener('visibilitychange', () => { if (runsShown()) loadRuns(); if (runShown()) fetchRun(runOpen, { quiet: true }); });
 let recheckBusy = null; // which runs are being checked again: [] = every failed one
 async function recheck(ids = []) {
   recheckBusy = ids; render();
@@ -458,6 +464,9 @@ async function recheck(ids = []) {
   loadRuns();
 }
 const elapsed = (iso) => { const s = Math.max(0, Math.round((Date.now() - new Date(iso)) / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+// a running step's timer: ticks every second in place, so the page itself only redraws when the run's data changes
+const ticker = (iso) => `<span data-since="${esc(iso)}">${elapsed(iso)}</span>`;
+setInterval(() => document.querySelectorAll('[data-since]').forEach((el) => { el.textContent = elapsed(el.dataset.since); }), 1000);
 function openRun(id) {
   runOpen = id; runDet = null;
   const h = new URLSearchParams(location.hash.slice(1)); if (id) h.set('run', id); else h.delete('run');
@@ -465,11 +474,15 @@ function openRun(id) {
   render();
 }
 let runFetching = null;
-function fetchRun(id) {
+// quiet: a background refresh. It redraws only when something changed, and a failed one leaves the page as it is.
+function fetchRun(id, { quiet = false } = {}) {
   if (runFetching === id) return;
-  runFetching = id;
-  api('GET', `/api/run?id=${encodeURIComponent(id)}`).then((d) => { runFetching = null; if (runOpen === id) { runDet = d; if (tab === 'runs') render(); } },
-    (e) => { runFetching = null; toast(e.message); runOpen = null; render(); });
+  runFetching = id; runAt = Date.now();
+  api('GET', `/api/run?id=${encodeURIComponent(id)}`).then((d) => {
+    runFetching = null;
+    if (runOpen !== id || (quiet && JSON.stringify(d) === JSON.stringify(runDet))) return;
+    runDet = d; if (tab === 'runs') render();
+  }, (e) => { runFetching = null; if (quiet) return; toast(e.message); runOpen = null; render(); });
 }
 function overviewExtras() {
   if (!statsData || !guardData) { loadOverviewExtras(); return ''; }
@@ -493,6 +506,10 @@ function runPage() {
   const back = '<button class="btn small" id="run-back">← All runs</button>';
   if (!runDet) { fetchRun(runOpen); return `<div class="head">${back}<h1>Run</h1><p class="sub">Loading…</p></div>`; }
   const d = runDet;
+  if (d.state === 'running') return `<div class="head">${back}<h1>${esc(d.role)}${d.task ? ` · ${esc(d.task)}` : ''}</h1>
+    <p class="sub"><span class="mono">${esc(d.id)}</span> · <span class="pill warn">running</span>${d.startedAt ? ` · started ${esc(new Date(d.startedAt).toLocaleString())}` : ''}</p></div>
+    <div class="card"><h2>Now</h2><p><b>${esc(d.step || 'working')}</b> · ${ticker(d.since || d.startedAt)}${d.limitMs ? ` <span class="note">of ${Math.round(d.limitMs / 60000)} min</span>` : ''}</p>
+      <p class="note">This page follows the run. The checks, attempts, report and diff appear here when it finishes.</p></div>`;
   const det = (title, body, open = false) => body ? `<details class="card" ${open ? 'open' : ''}><summary><b>${title}</b></summary><pre class="cmd" style="max-height:480px">${esc(body)}</pre></details>` : '';
   const next = d.branch ? [`conductor-ai diff ${d.branch}`, `git merge --no-ff ${d.branch}`, `conductor-ai worktree rm ${d.worktreeId}`, `conductor-ai worktree rm ${d.worktreeId} --force`] : [];
   return `<div class="head">${back}<h1>${esc(d.role)}${d.task ? ` · ${esc(d.task)}` : ''}</h1>
@@ -611,7 +628,7 @@ const views = {
     const { runs, usage, budget } = runsData;
     const money = (n) => (n == null ? '–' : n ? `$${n.toFixed(n < 0.01 ? 4 : 2)}` : '$0');
     const result = (r) => ({
-      running: `<span class="pill warn">running</span>${r.step ? `<div class="note">${esc(r.step)} · ${elapsed(r.since)}${r.limitMs ? ` of ${Math.round(r.limitMs / 60000)} min` : ''}</div>` : ''}`,
+      running: `<span class="pill warn">running</span>${r.step ? `<div class="note">${esc(r.step)} · ${ticker(r.since)}${r.limitMs ? ` of ${Math.round(r.limitMs / 60000)} min` : ''}</div>` : ''}`,
       done: r.validated === false ? '<span class="pill warn" title="A required check did not pass">not validated</span>' : '<span class="pill ok" title="Every required check passed">done</span>',
       partial: `<span class="pill warn" title="${esc(r.status || 'the worker did only part of the task')}">partial</span>`,
       'verify-failed': '<span class="pill bad" title="The worker finished, but verify fails">verify failed</span>',
@@ -629,7 +646,7 @@ const views = {
       <div class="card stat"><div class="l">Known API cost today</div><div class="n">${money(usage.today)}</div><div class="note">${budget ? `daily budget ${money(budget)}` : 'no daily budget (Settings)'}</div></div>
     </div>
     <div class="card"><div class="row" style="margin-bottom:8px"><h2 style="margin:0">Recent runs</h2><span class="spacer"></span>${failed || recheckBusy ? `<button class="btn small" id="runs-recheck" ${recheckBusy ? 'disabled' : ''} title="For each run whose verify failed: check out the code it made and run its verify again (conductor-ai runs recheck). Use it after fixing something outside the code, like a missing package.">${recheckBusy ? 'Running verify again… (this can take a while)' : `↻ Recheck failed runs (${failed})`}</button>` : ''}</div>${runs.length ? `<table><tr><th>When</th><th>Role · task</th><th>Result</th><th>Worker</th><th>Verify</th><th>Files</th><th>Time</th></tr>
-      ${runs.map((r) => `<tr><td class="mono">${r.state === 'running' ? esc(r.startedAt ? new Date(r.startedAt).toLocaleString() : r.id) : `<a href="#" data-run="${esc(r.id)}" title="Checks, attempts, report and diff">${esc(r.startedAt ? new Date(r.startedAt).toLocaleString() : r.id)}</a>`}</td>
+      ${runs.map((r) => `<tr><td class="mono">${r.state === 'running' && !r.startedAt ? esc(r.id) : `<a href="#" data-run="${esc(r.id)}" title="Checks, attempts, report and diff">${esc(r.startedAt ? new Date(r.startedAt).toLocaleString() : r.id)}</a>`}</td>
         <td><b>${esc(r.role)}</b>${r.task ? ` · ${esc(r.task)}` : ''}${r.branch ? `<div class="note mono">${esc(r.branch)}</div>` : ''}</td>
         <td>${result(r)}</td>
         <td>${esc(r.winner || '–')}${r.why ? `<div class="note">${esc(r.why)}</div>` : ''}${r.attempts?.length > 1 ? `<div class="note">${r.attempts.map((a) => a.ok ? `${esc(a.provider)} ✓` : `<span title="${esc(a.reason + (a.next ? ' — next: ' + a.next : ''))}">${esc(a.provider)} ✗</span>`).join(' → ')}</div>` : ''}</td>
@@ -832,7 +849,11 @@ const views = {
 
 function render() {
   renderNav();
+  // a redraw (a live refresh) keeps the sections you opened open
+  const page = `${tab}|${runOpen || ''}`, same = page === render.page; render.page = page; // only within the same page
+  const was = new Map(same ? [...document.querySelectorAll('#main details > summary')].map((x) => [x.textContent, x.parentElement.open]) : []);
   $('#main').innerHTML = views[tab]();
+  if (was.size) document.querySelectorAll('#main details > summary').forEach((x) => { if (was.has(x.textContent)) x.parentElement.open = was.get(x.textContent); });
   bindCopy(); bind();
 }
 

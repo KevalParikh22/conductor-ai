@@ -56,3 +56,15 @@ test('a running run shows its current step from live.json; the UI rechecks over 
     assert.deepEqual((await r.json()).rows, [{ id: '20261120-1-build-T9', skipped: 'it is still running' }]);
   } finally { ui.server.closeAllConnections?.(); ui.server.close(); }
 });
+
+test('the run page of a running run: its step from live.json, then the full detail once it finishes', async () => {
+  const { runDetail } = await import('../src/runs.js');
+  const { dir } = makeRepo({ files: { '.gitignore': '.conductor/\n' } });
+  const d = path.join(dir, '.conductor', 'runs', '20261120-2-build-T8'); fs.mkdirSync(d, { recursive: true });
+  assert.equal(runDetail(dir, '20261120-2-build-T8'), null, 'nothing written yet');
+  fs.writeFileSync(path.join(d, 'live.json'), JSON.stringify({ role: 'build', task: 'T8', startedAt: 'a', step: 'running verify', since: 'b', limitMs: 0 }));
+  assert.deepEqual(runDetail(dir, '20261120-2-build-T8'), { id: '20261120-2-build-T8', state: 'running', role: 'build', task: 'T8', startedAt: 'a', step: 'running verify', since: 'b', limitMs: 0 });
+  assert.equal(runDetail(dir, '../x'), null);
+  fs.writeFileSync(path.join(d, 'summary.json'), JSON.stringify({ role: 'build', mode: 'write', winner: 'a', status: '## RESULT: DONE', attempts: [{ provider: 'a', ok: true }], verify: { status: 'PASS', cmd: 'true' } }));
+  assert.equal(runDetail(dir, '20261120-2-build-T8').state, 'done');
+});

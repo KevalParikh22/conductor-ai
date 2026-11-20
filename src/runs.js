@@ -93,7 +93,11 @@ const tail = (root, rel, max) => {
 /** Everything the run page shows: outcome, the checklist, attempts with next steps, report, logs, and the diff of a kept branch. */
 export function runDetail(root, id) {
   const r = readRun(root, id);
-  if (!r) return null;
+  if (!r) {
+    // still going: no summary.json until the end, only the step it is on (live.json)
+    const l = id && !/[\\/]/.test(id) ? readJSON(path.join(runsDir(root), id, 'live.json'), null) : null;
+    return l && { id, state: 'running', role: l.role, task: l.task, startedAt: l.startedAt, step: l.step, since: l.since, limitMs: l.limitMs || 0 };
+  }
   const s = r.summary;
   const gates = runGates(s);
   let diff = null;
