@@ -10,7 +10,7 @@ const allowed = pkg.files.filter((f) => !f.startsWith('!'));
 test('npm pack ships only allowed files: no tests, benchmark, eval solutions, plans, state or secrets', () => {
   const files = packageFiles();
   assert.deepEqual(packageProblems(files, allowed), []);
-  assert.ok(files.includes('bin/conductor.js') && files.includes('src/core.js'), 'the program itself is in');
+  assert.ok(files.includes('bin/conductor-ai.js') && files.includes('src/core.js'), 'the program itself is in');
   assert.ok(files.some((f) => /^evals\/[^/]+\/hidden\//.test(f)), 'eval tasks are in (conductor-ai eval run needs them)');
   assert.ok(files.some((f) => /^evals\/[^/]+\/mutants\//.test(f)), 'mutants are in (they score a task)');
   assert.ok(!files.some((f) => /\/solution\//.test(f)), 'reference solutions are not');

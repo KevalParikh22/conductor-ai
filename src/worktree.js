@@ -1,5 +1,5 @@
 // Isolated git worktrees, so several write tasks can run at the same time without touching each other.
-// Each task gets its own checkout (outside the repo) on branch conductor/<id>; the result is committed there
+// Each task gets its own checkout (outside the repo) on branch conductor-ai/<id>; the result is committed there
 // and the controller merges the branches it accepts.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -8,7 +8,8 @@ import { execFileSync } from 'node:child_process';
 import { GLOBAL_DIR } from './util.js';
 import { copyIntoWorktree } from './localfiles.js';
 
-export const BRANCH_PREFIX = 'conductor/';
+export const BRANCH_PREFIX = 'conductor-ai/';
+const LEGACY_PREFIX = 'conductor/'; // branches made before the rename still show up and can be removed
 
 // Ignored dependency folders shared into each worktree (as symlinks) so verify can run without a reinstall.
 export const DEFAULT_LINKS = ['node_modules', 'vendor', '.venv', 'venv'];
@@ -134,22 +135,23 @@ export function commitWorktree(dir, message) {
   const args = ['commit', '-q', '--no-verify', '-m', message];
   if (git(dir, args, { allowFail: true }) === null) {
     // no git identity configured: commit as conductor-ai rather than lose the work
-    git(dir, ['-c', 'user.name=conductor-ai', '-c', 'user.email=conductor@localhost', ...args]);
+    git(dir, ['-c', 'user.name=conductor-ai', '-c', 'user.email=conductor-ai@localhost', ...args]);
   }
   return git(dir, ['rev-parse', '--short', 'HEAD']).trim();
 }
 
-/** conductor/* worktrees of this repo, with how many commits each is ahead of HEAD and whether it is merged. */
+/** conductor-ai/* worktrees of this repo, with how many commits each is ahead of HEAD and whether it is merged. */
 export function listWorktrees(root) {
   const out = git(root, ['worktree', 'list', '--porcelain']) || '';
   const items = [];
   for (const block of out.split('\n\n')) {
     const dir = block.match(/^worktree (.+)$/m)?.[1];
     const ref = block.match(/^branch refs\/heads\/(.+)$/m)?.[1];
-    if (!dir || !ref?.startsWith(BRANCH_PREFIX)) continue;
+    const prefix = [BRANCH_PREFIX, LEGACY_PREFIX].find((p) => ref?.startsWith(p));
+    if (!dir || !prefix) continue;
     const ahead = Number(git(root, ['rev-list', '--count', `HEAD..${ref}`], { allowFail: true }) || 0);
     const dirty = fs.existsSync(dir) && !!(git(dir, ['status', '--porcelain'], { allowFail: true }) || '').trim();
-    items.push({ id: ref.slice(BRANCH_PREFIX.length), branch: ref, dir, ahead, merged: ahead === 0, dirty });
+    items.push({ id: ref.slice(prefix.length), branch: ref, dir, ahead, merged: ahead === 0, dirty });
   }
   return items;
 }
@@ -169,9 +171,9 @@ export function removeWorktree(root, id, { force = false } = {}) {
   const io = path.join(worktreesDir(root), '.io');
   if (fs.existsSync(io)) for (const f of fs.readdirSync(io)) if (f.startsWith(`${sid}-`)) fs.rmSync(path.join(io, f), { recursive: true, force: true });
   fs.rmSync(metaFile(root, sid), { force: true });
-  if (branchExists(root, branch)) {
-    if (git(root, ['branch', force ? '-D' : '-d', branch], { allowFail: true }) !== null) notes.push(`deleted branch ${branch}`);
-    else notes.push(`kept branch ${branch}: it has commits that are not merged (merge it, or use --force to discard)`);
+  for (const b of [branch, LEGACY_PREFIX + sid]) if (branchExists(root, b)) {
+    if (git(root, ['branch', force ? '-D' : '-d', b], { allowFail: true }) !== null) notes.push(`deleted branch ${b}`);
+    else notes.push(`kept branch ${b}: it has commits that are not merged (merge it, or use --force to discard)`);
   }
   if (!notes.length) notes.push(`nothing to remove for "${sid}"`);
   return notes;

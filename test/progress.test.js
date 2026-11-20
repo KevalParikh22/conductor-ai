@@ -75,13 +75,13 @@ test('a batch race: the row names the worker that won, not the one that started 
   t = 30_000; b.event({ task: 'T1', type: 'verify', sample: 1 });
   b.event({ task: 'T1', type: 'race-won', provider: 'codex-cli', sample: 1 });
   b.event({ task: 'T1', type: 'fail', provider: 'antigravity-cli', reason: 'cancelled', sample: 2 }); // the loser, stopped
-  b.event({ task: 'T1', type: 'merge', branch: 'conductor/T1-s1' });
+  b.event({ task: 'T1', type: 'merge', branch: 'conductor-ai/T1-s1' });
   b.event({ task: 'T1', type: 'verify' });
   t = 34_000; b.event({ task: 'T1', type: 'done', outcome: 'done' });
   b.stop();
   const out = plain(s.out);
-  assert.ok(!/merging conductor\/T1-s1 +antigravity-cli/.test(out), 'never shows the loser while merging');
-  assert.match(out, /merging conductor\/T1-s1 +codex-cli/);
+  assert.ok(!/merging conductor-ai\/T1-s1 +antigravity-cli/.test(out), 'never shows the loser while merging');
+  assert.match(out, /merging conductor-ai\/T1-s1 +codex-cli/);
   assert.match(plain(s.out.split('\x1b[1F').at(-1)).trim(), /^✓ T1 +done +codex-cli +0:34$/);
   assert.ok(!out.includes('antigravity-cli failed'), "the loser's cancel isn't shown as a failure");
 });

@@ -3,7 +3,7 @@
 Read by whichever AI is the controller (Claude Code by default; change it in `conductor-ai ui` → Controller).
 
 **Backup controller:** if the controller is out of usage, open another agent (e.g. `agy` or `codex`) in this repo and say:
-"Read HANDOFF.md and act as the controller described in .conductor/ORCHESTRATOR.md."
+"Read HANDOFF.md and act as the controller described in .conductor-ai/ORCHESTRATOR.md."
 
 ## Division of labour
 
@@ -38,15 +38,15 @@ The user can change any of this in `conductor-ai ui`.
 conductor-ai run build --plan docs/plan/<slug>.md --task T3
 ```
 - Needs a clean tree on a non-protected branch.
-- On failure or quota, the partial work is stashed (`git stash list` → `conductor: failed attempt…`) and the next provider runs. Rate-limited providers cool down automatically.
+- On failure or quota, the partial work is stashed (`git stash list` → `conductor-ai: failed attempt…`) and the next provider runs. Rate-limited providers cool down automatically.
 
 ### 2b. Run independent tasks in parallel
 ```bash
 conductor-ai batch --plan docs/plan/<slug>.md --tasks T2,T3,T4
 ```
-- Each task gets its own git worktree (a separate checkout outside the repo) on branch `conductor/<id>`. Your working tree is never touched, so your branch and tree state don't matter; the worktrees start from your last commit.
+- Each task gets its own git worktree (a separate checkout outside the repo) on branch `conductor-ai/<id>`. Your working tree is never touched, so your branch and tree state don't matter; the worktrees start from your last commit.
 - Tasks are spread across providers (T2 on the first ready `build` provider, T3 on the second, ...), each keeping the rest of the chain as fallback.
-- conductor-ai verifies and commits each result on its branch. Review with `conductor-ai diff conductor/<id>` (compact: lockfiles and whitespace left out), merge with `git merge --no-ff conductor/<id>`, then `conductor-ai worktree rm <id>`. Run `conductor-ai verify` again after merging several.
+- conductor-ai verifies and commits each result on its branch. Review with `conductor-ai diff conductor-ai/<id>` (compact: lockfiles and whitespace left out), merge with `git merge --no-ff conductor-ai/<id>`, then `conductor-ai worktree rm <id>`. Run `conductor-ai verify` again after merging several.
 - Only batch tasks that don't depend on each other and don't list the same files. conductor-ai refuses dependencies inside a batch and warns about shared files.
 - A single task can also run isolated: `conductor-ai run build --plan … --task T3 --worktree`.
 
@@ -54,7 +54,7 @@ conductor-ai batch --plan docs/plan/<slug>.md --tasks T2,T3,T4
 Read the `outcome:` line first. **OUT OF SCOPE:** check the listed files in the diff; keep them only if the task needs them. **NOT PROVEN** (verify failed before the worker started): check the new failure lines it lists. **UNVERIFIED:** run the checks yourself.
 - **Verify PASS, diff in scope, matches the plan:** `git add -A && git commit -m "<slug>: T3 <title>"`, then mark the task done.
 - **Small issue (<10 lines):** fix it yourself, run `conductor-ai verify`, commit.
-- **Bigger issue:** `git stash push -u -m "conductor: rejected T3"`, then retry once with `--provider <other> --note "<what was wrong, what to do>"`.
+- **Bigger issue:** `git stash push -u -m "conductor-ai: rejected T3"`, then retry once with `--provider <other> --note "<what was wrong, what to do>"`.
 - **Second failure or exit 3:** do it yourself. The summary's `fix:` lines say what would make each provider work next time (install, key, cooldown, allow rule); pass them on to the user rather than guessing.
 
 ### 4. Review
@@ -63,7 +63,7 @@ To check one task's work without spending your own context, ask the **conductor-
 `conductor-ai run review --plan docs/plan/<slug>.md`. Triage every finding yourself (reviewers produce false positives). Fix the real ones.
 
 ### 4b. Guards
-If `git push` is refused with "conductor: the last verify failed", don't work around it: fix the failures and run `conductor-ai verify` (a pass unblocks it). Use `conductor-ai guard allow` only when the user agrees to push failing work.
+If `git push` is refused with "conductor-ai: the last verify failed", don't work around it: fix the failures and run `conductor-ai verify` (a pass unblocks it). Use `conductor-ai guard allow` only when the user agrees to push failing work.
 
 ### 5. Handoff
 Keep `HANDOFF.md` current, especially when any tool is close to its limit.

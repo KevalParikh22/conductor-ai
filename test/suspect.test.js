@@ -61,7 +61,7 @@ test('the hand-off tells the next worker to fix the test, and it does', async ()
   assert.match(fs.readFileSync(process.env.SUS_PROMPT, 'utf8'), /These tests are probably wrong: compare each expected value/);
 });
 
-test('the usage log counts work that fails conductor\'s checks as a failure, not the reply alone', async () => {
+test('the usage log counts work that fails conductor-ai\'s checks as a failure, not the reply alone', async () => {
   clearCooldowns();
   const log = () => fs.readFileSync(path.join(home, 'usage.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
   const before = fs.existsSync(path.join(home, 'usage.jsonl')) ? log().filter((e) => e.provider === 'sus-badcode').length : 0;

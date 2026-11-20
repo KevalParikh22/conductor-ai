@@ -86,7 +86,7 @@ conductor-ai route --rm 3
 ```
 Removes rule 3.
 
-Rules are saved to the project (`.conductor/config.json`), because they depend on the project's layout. Add `--global` to save them for every project instead (`~/.conductor/config.json`).
+Rules are saved to the project (`.conductor-ai/config.json`), because they depend on the project's layout. Add `--global` to save them for every project instead (`~/.conductor-ai/config.json`).
 
 ## Writing your own rules
 
@@ -112,7 +112,7 @@ A rule is a JSON object in `routes`:
 
 A rule needs at least one of `files`, `text` or `role`. `conductor-ai doctor` and the UI flag unknown providers and broken regexes. Rules added from the library also carry `"from": "<id>"`, which conductor-ai uses to avoid adding one twice. You can delete it.
 
-A ready-made file with every library rule (using the default providers) is in [templates/routes.example.json](../templates/routes.example.json). Copy the rules you want into your project's `.conductor/config.json`.
+A ready-made file with every library rule (using the default providers) is in [templates/routes.example.json](../templates/routes.example.json). Copy the rules you want into your project's `.conductor-ai/config.json`.
 
 ## Pinning one task in a plan
 

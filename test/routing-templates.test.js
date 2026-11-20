@@ -57,10 +57,10 @@ test('starter rules match the tasks they are meant for', () => {
 
 test('CLI: --add starter, --rules, --rm, --templates write the project config', () => {
   const { dir } = makeRepo();
-  const run = (...a) => execFileSync(process.execPath, [path.join(root, 'bin/conductor.js'), 'route', ...a], { cwd: dir }).toString();
+  const run = (...a) => execFileSync(process.execPath, [path.join(root, 'bin/conductor-ai.js'), 'route', ...a], { cwd: dir }).toString();
   assert.match(run('--rules'), /No routing rules/);
   assert.match(run('--add', 'starter'), /added security/);
-  const cfg = () => JSON.parse(fs.readFileSync(path.join(dir, '.conductor/config.json'), 'utf8'));
+  const cfg = () => JSON.parse(fs.readFileSync(path.join(dir, '.conductor-ai/config.json'), 'utf8'));
   assert.equal(cfg().routes.length, 6);
   assert.match(run('--rules'), /1\. text .*\(security\)/);
   assert.match(run('--rm', '1'), /removed rule 1/);

@@ -30,7 +30,7 @@ Every CLI agent runs with permission rules that conductor-ai passes **for that r
 Rules for every agent (where the CLI supports them; the table says which do):
 - **Write roles** (`build`, `fix`, `test`, `docs`) may edit files inside the project (or its worktree) only. Nothing outside it. No `git push`, `git commit`, `git reset`, `git checkout`, `git switch`, `git rebase`, `git stash`, `git clean` or `sudo`: conductor-ai commits, and the controller merges and pushes. No permission prompts, and no "skip all permissions" flags.
 - **Read roles** (`review`, `ask`) cannot edit files. They may run read-only commands (`git diff/log/show/status/blame/grep`, `ls`, `cat`, `head`, `tail`, `wc`, `grep`, `rg`, `pwd`).
-- **Secrets:** keys conductor-ai loads from `secrets.env` or `.conductor/.env` are removed from a CLI's environment, except the ones that CLI needs itself (`passEnv`). Variables you set in your own shell are left alone.
+- **Secrets:** keys conductor-ai loads from `secrets.env` or `.conductor-ai/.env` are removed from a CLI's environment, except the ones that CLI needs itself (`passEnv`). Variables you set in your own shell are left alone.
 
 | Agent | Write roles | Read roles | Read-only enforced? |
 |---|---|---|---|
@@ -61,7 +61,7 @@ agy
 ```
 
 How conductor-ai drives it (tested with agy 1.4.11, Nov 2026):
-- `--settings '<json>'` applies conductor-ai's rules for this session only; they are never saved. The run log in `.conductor/runs/` shows the exact JSON.
+- `--settings '<json>'` applies conductor-ai's rules for this session only; they are never saved. The run log in `.conductor-ai/runs/` shows the exact JSON.
 - Deny rules use the project's **absolute path**, e.g. `write_file(/path/to/project)`. A bare `write_file(*)` also blocks agy's own working folder (`~/.gemini/antigravity-cli/brain`) and breaks the run.
 - Read roles do **not** use `--mode plan`: plan mode writes its answer to a plan file and prints only a link to it. That was the cause of agy's flaky reviews in conductor-ai 0.3.
 - When a command needs to leave the sandbox (network, files outside the project), a headless run can't approve it: agy skips it and says so in its answer, which ends up in the run report for the controller to read.

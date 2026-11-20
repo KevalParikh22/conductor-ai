@@ -9,7 +9,7 @@ export const READ_ONLY_COMMANDS = ['git diff', 'git log', 'git show', 'git statu
 // Files no worker may read (agy rules; deny read also denies write). {cwd} = the folder the worker runs in.
 // Only conductor-ai's own sensitive files, not its whole folder: task worktrees live inside that folder, and
 // denying all of it locked agy out of the very files it was asked to edit.
-const SECRET_FILE_RULES = ['read_file({cwd}/.env)', 'read_file({cwd}/.conductor/.env)', 'read_file({cwd}/auth.json)',
+const SECRET_FILE_RULES = ['read_file({cwd}/.env)', 'read_file({cwd}/.conductor-ai/.env)', 'read_file({cwd}/auth.json)',
   'read_file({cwd}/app/etc/env.php)', 'read_file({conductorHome}/secrets.env)', 'read_file({conductorHome}/config.json)',
   'read_file({conductorHome}/state.json)', 'read_file({conductorHome}/usage.jsonl)'];
 

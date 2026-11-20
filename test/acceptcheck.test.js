@@ -66,7 +66,7 @@ test('a failed check makes DONE partial; all checks passing but verify failing h
   assert.match(formatSummary(t), /hint: +every acceptance check passes, so the failing test may itself be wrong/);
 });
 
-test('a project function named like conductor\'s own helpers (check, show, inspect, out) still works', async () => {
+test('a project function named like conductor-ai\'s own helpers (check, show, inspect, out) still works', async () => {
   const { dir } = makeRepo({ files: { 'package.json': JSON.stringify({ name: 'x', type: 'module' }), 'src/h.js': 'export const check = (a, b) => a === b;\nexport const show = (x) => `<${x}>`;\nexport function inspect() { return 1; }\nexport const out = [];\n' } });
   const r = await runAcceptanceChecks(dir, ["`check('a', 'a')` returns true", "`show(1)` returns `'<1>'`", '`inspect()` returns 1'], ['src/h.js']);
   assert.deepEqual([r.passed, r.total, r.failed], [3, 3, []]);

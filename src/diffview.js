@@ -18,7 +18,7 @@ function splitFiles(raw) {
 }
 
 /**
- * opts: { range } for `git diff <range>` (e.g. "HEAD...conductor/T3"), or { base } for the working tree against
+ * opts: { range } for `git diff <range>` (e.g. "HEAD...conductor-ai/T3"), or { base } for the working tree against
  * a commit plus untracked files (default base HEAD). maxFileLines caps each file's shown lines.
  */
 export function compactDiff(root, { range, base = 'HEAD', maxFileLines = 200 } = {}) {

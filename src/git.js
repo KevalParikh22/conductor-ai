@@ -67,7 +67,7 @@ export function diffAgainst(root, base) {
 
 export const diffStat = (root) => git(root, ['diff', '--stat'], { allowFail: true }).trimEnd();
 export const failedStashCount = (root) =>
-  git(root, ['stash', 'list'], { allowFail: true }).split('\n').filter((l) => l.includes('conductor: failed attempt')).length;
+  git(root, ['stash', 'list'], { allowFail: true }).split('\n').filter((l) => /conductor(-ai)?: failed attempt/.test(l)).length;
 
 // ---------------- git control files ----------------
 // .git/config and .git/hooks can make git run programs (hooks, fsmonitor, filters, diff drivers). They are not in

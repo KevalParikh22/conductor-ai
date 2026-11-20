@@ -81,7 +81,7 @@ Work (normally called by the controller)
      --files a,b                 context files for API (chat) providers
      --base <ref> --focus "..."  review options
      --save <file>               ask: save the answer
-     --worktree [--replace]      run in its own checkout on branch conductor/<id> and commit there
+     --worktree [--replace]      run in its own checkout on branch conductor-ai/<id> and commit there
      --continue                  keep working in the task's existing worktree (same worker by default; add --note)
      --timeout 45m               stop a worker after this and try the next (default: settings.timeoutSec, or 2× the task eta)
      --priority save|balanced    tokens against time (default: settings.priority, balanced). See docs/CONFIGURATION.md
@@ -597,7 +597,7 @@ async function main() {
   2. conductor-ai ui         choose providers, models and fallback order
   3. conductor-ai doctor     check every provider is ready
   4. ${controller === 'claude-code'
-    ? 'In Claude Code: /conduct-status, then /conduct-plan <feature> (approve the "conductor" MCP server when Claude asks)'
+    ? 'In Claude Code: /conduct-status, then /conduct-plan <feature> (approve the "conductor-ai" MCP server when Claude asks)'
     : `In ${ctrl(controller).label}: use the conduct-* skills (in .agents/skills), e.g. ask it to run conduct-status, then conduct-plan <feature>`}`);
       if (!which('conductor-ai')) console.log('\nNOTE: "conductor-ai" is not on your PATH. Install globally so controllers can call it: npm install -g .');
       return 0;

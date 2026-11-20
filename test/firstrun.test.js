@@ -17,7 +17,7 @@ const { wantProviders, ROUTE_TEMPLATES, resolveTemplate } = await import('../src
 const { controllerWorker } = await import('../src/presets.js');
 const { modelSizeB } = await import('../src/models.js');
 const { detectLocal } = await import('../src/local.js');
-const bin = fileURLToPath(new URL('../bin/conductor.js', import.meta.url));
+const bin = fileURLToPath(new URL('../bin/conductor-ai.js', import.meta.url));
 
 test('setup never turns on the controller\'s own CLI as a worker', () => {
   const { dir } = makeRepo();
@@ -124,7 +124,7 @@ test('init writes the detected verify command into AGENTS.md (Node and PHP)', as
 test('runs list shows verify failures and partial results, not just "done"', async () => {
   const { listRuns } = await import('../src/runs.js');
   const { dir } = makeRepo();
-  const put = (id, s) => { const d = path.join(dir, '.conductor', 'runs', id); fs.mkdirSync(d, { recursive: true }); fs.writeFileSync(path.join(d, 'summary.json'), JSON.stringify({ role: 'build', attempts: [], ...s })); };
+  const put = (id, s) => { const d = path.join(dir, '.conductor-ai', 'runs', id); fs.mkdirSync(d, { recursive: true }); fs.writeFileSync(path.join(d, 'summary.json'), JSON.stringify({ role: 'build', attempts: [], ...s })); };
   put('20261107-000001-build', { winner: 'x', status: '## RESULT: DONE', verify: { status: 'FAIL' } });
   put('20261107-000002-build', { winner: 'x', status: '## RESULT: PARTIAL' });
   put('20261107-000003-build', { winner: 'x', status: '## RESULT: DONE', verify: { status: 'PASS' } });
@@ -172,7 +172,7 @@ test('switching to Antigravity says how to register conductor-ai with agy, unles
   assert.equal(agyHasConductor(cfgFile), false, 'missing file');
   fs.writeFileSync(cfgFile, '');
   assert.equal(agyHasConductor(cfgFile), false, 'empty file');
-  fs.writeFileSync(cfgFile, JSON.stringify({ mcpServers: { conductor: { command: 'conductor', args: ['mcp'] } } }));
+  fs.writeFileSync(cfgFile, JSON.stringify({ mcpServers: { 'conductor-ai': { command: 'conductor-ai', args: ['mcp'] } } }));
   assert.equal(agyHasConductor(cfgFile), true);
   const { dir } = makeRepo();
   const r = initProject(dir, { controller: 'antigravity' });
@@ -207,7 +207,7 @@ test('init --verify sets the Verify line; without any verify command init says r
 test('runs list shows unverified work', async () => {
   const { listRuns, formatRuns } = await import('../src/runs.js');
   const { dir } = makeRepo();
-  const d = path.join(dir, '.conductor', 'runs', '20261111-000001-build'); fs.mkdirSync(d, { recursive: true });
+  const d = path.join(dir, '.conductor-ai', 'runs', '20261111-000001-build'); fs.mkdirSync(d, { recursive: true });
   fs.writeFileSync(path.join(d, 'summary.json'), JSON.stringify({ role: 'build', mode: 'write', attempts: [], winner: 'x', status: '## RESULT: DONE', verify: { status: 'SKIPPED' }, changed: [] }));
   const rows = listRuns(dir);
   assert.equal(rows[0].state, 'unverified');

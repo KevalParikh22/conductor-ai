@@ -5,7 +5,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
 const CODE = /\.(m?js|cjs|jsx|tsx?|py|php|go|rb|java|kt|rs|cs|swift)$/i;
-const SKIP = /(^|\/)(node_modules|vendor|dist|build|coverage|\.git|\.conductor|\.claude|\.agents|\.gemini|docs\/plan)\//;
+const SKIP = /(^|\/)(node_modules|vendor|dist|build|coverage|\.git|\.conductor-ai|\.claude|\.agents|\.gemini|docs\/plan)\//;
 const SECRET = /(^|\/)(\.env[^/]*|auth\.json|secrets?\.[^/]+|env\.php|id_[a-z0-9]+|[^/]+\.pem|[^/]+\.key)$/i;
 
 // top-level definitions: export/function/class/const in JS/TS, def/class in Python, function/class in PHP, func in Go

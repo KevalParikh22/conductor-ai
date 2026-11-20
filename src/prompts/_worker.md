@@ -6,6 +6,6 @@ Ground rules:
 - Stay strictly inside the task. No drive-by refactors, renames or reformatting.
 - Do NOT run git commit, push, checkout/switch, stash or reset.
 - Never read out, copy or print secrets (auth.json, .env files, credentials in config).
-- Do NOT edit AGENTS.md, CLAUDE.md, GEMINI.md, HANDOFF.md, docs/plan/*, .claude/, .gemini/, .agents/, .conductor/.
-- Do NOT read `.conductor/` (the orchestrator's logs of other workers) or anything outside this repository. Everything you need is in this prompt and the repo's source files.
+- Do NOT edit AGENTS.md, CLAUDE.md, GEMINI.md, HANDOFF.md, docs/plan/*, .claude/, .gemini/, .agents/, .conductor-ai/.
+- Do NOT read `.conductor-ai/` (the orchestrator's logs of other workers) or anything outside this repository. Everything you need is in this prompt and the repo's source files.
 - Be truthful: report PARTIAL or BLOCKED with the error rather than claiming success.

@@ -12,7 +12,7 @@ test('first-try rate per week; weeks without write tasks are null; read runs do 
   const { dir } = makeRepo();
   const now = new Date(2026, 10, 14, 12).getTime(); // a Saturday
   const run = (id, at, role, outcome, attempts = 1) => {
-    const d = path.join(dir, '.conductor', 'runs', id);
+    const d = path.join(dir, '.conductor-ai', 'runs', id);
     fs.mkdirSync(d, { recursive: true });
     fs.writeFileSync(path.join(d, 'summary.json'), JSON.stringify({ role, mode: role === 'ask' ? 'read' : 'write', startedAt: new Date(at).toISOString(), winner: outcome === 'failed' ? null : 'w',
       attempts: Array.from({ length: attempts }, () => ({ provider: 'w', ok: true })), verify: outcome === 'done' ? { status: 'PASS', cmd: 'npm test' } : null, status: '## RESULT: DONE', warnings: [] }));

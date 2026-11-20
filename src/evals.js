@@ -50,9 +50,9 @@ export function prepareEval(task, dest) {
   fs.cpSync(path.join(task.dir, 'repo'), dest, { recursive: true });
   fs.mkdirSync(path.join(dest, 'docs', 'plan'), { recursive: true });
   fs.copyFileSync(path.join(task.dir, 'plan.md'), path.join(dest, 'docs', 'plan', 'eval.md'));
-  fs.writeFileSync(path.join(dest, '.gitignore'), 'node_modules/\n.conductor/\n');
+  fs.writeFileSync(path.join(dest, '.gitignore'), 'node_modules/\n.conductor-ai/\n');
   git(dest, 'init', '-q', '-b', 'main');
-  git(dest, 'config', 'user.email', 'eval@conductor.local'); git(dest, 'config', 'user.name', 'conductor-ai eval');
+  git(dest, 'config', 'user.email', 'eval@conductor-ai.local'); git(dest, 'config', 'user.name', 'conductor-ai eval');
   git(dest, 'add', '-A'); git(dest, 'commit', '-qm', `eval: ${task.id} start`);
   git(dest, 'switch', '-qc', `eval/${task.id}`);
   return dest;
@@ -217,7 +217,7 @@ export function summarize(results) {
   return {
     tasks: n,
     passed: count((r) => r.pass),
-    // errors (no provider reachable, broken setup) say nothing about conductor: left out of the rate
+    // errors (no provider reachable, broken setup) say nothing about conductor-ai: left out of the rate
     passRate: n - count((r) => r.outcome === 'error') ? Math.round((count((r) => r.pass) / (n - count((r) => r.outcome === 'error'))) * 100) : 0,
     // conductor-ai's verdict against the hidden truth
     rightDone: count((r) => done(r) && r.pass), // said done, really done

@@ -21,4 +21,4 @@ conductor-ai run …
 - Agent CLI and version (e.g. `agy --version`), if relevant:
 
 **Run log**
-Relevant lines from `.conductor/runs/<run>/<provider>.log`. Remove anything private (keys, paths, code) before posting.
+Relevant lines from `.conductor-ai/runs/<run>/<provider>.log`. Remove anything private (keys, paths, code) before posting.

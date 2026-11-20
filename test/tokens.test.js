@@ -82,14 +82,14 @@ test('compact diff: whitespace ignored, lockfiles hidden, new files included, lo
   assert.match(d.text, /more lines in new\.js/);
   assert.ok(d.chars < d.fullChars);
 
-  git('add', '-A'); git('commit', '-qm', 'work'); git('switch', '-qc', 'conductor/T1');
+  git('add', '-A'); git('commit', '-qm', 'work'); git('switch', '-qc', 'conductor-ai/T1');
   fs.writeFileSync(path.join(dir, 'b.js'), 'b\n'); git('add', '-A'); git('commit', '-qm', 'T1'); git('switch', '-q', 'feat/x');
-  const out = execFileSync(process.execPath, [fileURLToPath(new URL('../bin/conductor.js', import.meta.url)), 'diff', 'conductor/T1'], { cwd: dir }).toString();
-  assert.match(out, /1 file changed, \+1 -0 \(HEAD\.\.\.conductor\/T1\)/);
+  const out = execFileSync(process.execPath, [fileURLToPath(new URL('../bin/conductor-ai.js', import.meta.url)), 'diff', 'conductor-ai/T1'], { cwd: dir }).toString();
+  assert.match(out, /1 file changed, \+1 -0 \(HEAD\.\.\.conductor-ai\/T1\)/);
 });
 
 test('help: short by default, everything with help all', () => {
-  const bin = fileURLToPath(new URL('../bin/conductor.js', import.meta.url));
+  const bin = fileURLToPath(new URL('../bin/conductor-ai.js', import.meta.url));
   const short = execFileSync(process.execPath, [bin, '--help']).toString();
   const all = execFileSync(process.execPath, [bin, 'help', 'all']).toString();
   assert.ok(short.split('\n').length < 25, 'short help fits on one screen');

@@ -1,4 +1,4 @@
-// Usage and cost: every provider attempt is appended to ~/.config/conductor/usage.jsonl, so you can see
+// Usage and cost: every provider attempt is appended to ~/.config/conductor-ai/usage.jsonl, so you can see
 // where work went and cap paid spend per day. Cost is only known for API providers that report tokens and
 // have a `price` set ({ "input": $ per 1M tokens, "output": $ per 1M tokens }); free providers cost 0.
 import fs from 'node:fs';

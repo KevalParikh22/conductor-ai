@@ -6,7 +6,7 @@ import { expandBraces } from './plan.js';
 
 // Files workers must never touch (agents are told; chat output is filtered).
 const PROTECTED = [/^AGENTS\.md$/, /^CLAUDE\.md$/, /^GEMINI\.md$/, /^HANDOFF\.md$/, /^docs\/plan\//, /^\.claude\//, /^\.gemini\//, /^\.agents\//,
-  /^\.conductor\//, /^\.git\//, /^\.husky\//, /^\.githooks\//, /^\.vscode\/mcp\.json$/, /^\.mcp\.json$/, /(^|\/)node_modules\//, /(^|\/)\.env(\.|$)/, /(^|\/)auth\.json$/];
+  /^\.conductor-ai\//, /^\.git\//, /^\.husky\//, /^\.githooks\//, /^\.vscode\/mcp\.json$/, /^\.mcp\.json$/, /(^|\/)node_modules\//, /(^|\/)\.env(\.|$)/, /(^|\/)auth\.json$/];
 /** `extra`: regex strings from settings.protectedPaths (e.g. "^app/etc/env\\.php$"). */
 export const isProtected = (p, extra = []) => {
   const norm = p.replaceAll('\\', '/');

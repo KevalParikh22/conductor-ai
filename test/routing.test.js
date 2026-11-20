@@ -91,8 +91,8 @@ test('a routed task runs on its provider and the summary says why; batch keeps r
   const spread = spreadChains(cfg, items);
   assert.equal(spread[0].chain[0], 'agent-y', 'T1 matched the route');
   assert.equal(spread[1].chain[0], 'agent-y', 'T2 has a provider line');
-  const bin = fileURLToPath(new URL('../bin/conductor.js', import.meta.url));
-  fs.writeFileSync(path.join(dir, '.conductor', 'config.json'), JSON.stringify({ providers: { 'agent-x': cfg.providers['agent-x'], 'agent-y': cfg.providers['agent-y'] }, roles: { build: ['agent-x', 'agent-y'] }, routes: [{ files: 'web/**', provider: 'agent-y' }] }));
+  const bin = fileURLToPath(new URL('../bin/conductor-ai.js', import.meta.url));
+  fs.writeFileSync(path.join(dir, '.conductor-ai', 'config.json'), JSON.stringify({ providers: { 'agent-x': cfg.providers['agent-x'], 'agent-y': cfg.providers['agent-y'] }, roles: { build: ['agent-x', 'agent-y'] }, routes: [{ files: 'web/**', provider: 'agent-y' }] }));
   const out = execFileSync(process.execPath, [bin, 'route', 'add a page', '--files', 'web/x.js'], { cwd: dir, env: { ...process.env, CONDUCTOR_HOME: home } }).toString();
   assert.match(out, /routing rule: route 1/);
   assert.match(out, /1\. agent-y/);

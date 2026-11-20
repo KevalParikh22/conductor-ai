@@ -64,7 +64,7 @@ export function withCommands(settings, commands) {
 
 /**
  * Environment for a CLI worker: the user's shell environment, minus the secrets conductor-ai loaded from
- * secrets.env / .conductor/.env (except those this CLI needs, `passEnv`), plus the mode's own variables.
+ * secrets.env / .conductor-ai/.env (except those this CLI needs, `passEnv`), plus the mode's own variables.
  */
 export function workerEnv(preset, mode, cwd) {
   const env = { ...process.env };

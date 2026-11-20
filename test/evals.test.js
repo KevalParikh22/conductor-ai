@@ -17,7 +17,7 @@ test('every eval task is fair: fails on the starting project, passes with the re
   assert.deepEqual(rows.filter((r) => r.problems.length), [], 'no unfair tasks');
 });
 
-test('eval run scores against hidden tests and compares conductor\'s verdict with reality', async () => {
+test('eval run scores against hidden tests and compares conductor-ai\'s verdict with reality', async () => {
   const sol = fs.readFileSync(path.join(EVALS_DIR, 'fix-paginate/solution/src/paginate.js'), 'utf8');
   // a real fix comes with a regression test that fails on the old code (Q4)
   const REGRESSION = "import { test } from 'node:test'; import assert from 'node:assert/strict'; import { paginate } from '../src/paginate.js';\ntest('page 2', () => { assert.deepEqual(paginate([1, 2, 3, 4, 5], 2, 2), [3, 4]); });\n";
@@ -63,7 +63,7 @@ test('failure stats group attempts and runs by cause, biggest first', () => {
     .map(([provider, ok, reason]) => JSON.stringify({ ts: new Date().toISOString(), provider, ok, reason, kind: 'agent' })).join('\n');
   fs.writeFileSync(path.join(home, 'usage.jsonl'), lines + '\n');
   const { dir } = makeRepo();
-  const put = (id, s) => { const d = path.join(dir, '.conductor', 'runs', id); fs.mkdirSync(d, { recursive: true }); fs.writeFileSync(path.join(d, 'summary.json'), JSON.stringify({ role: 'build', mode: 'write', attempts: [], startedAt: new Date().toISOString(), ...s })); };
+  const put = (id, s) => { const d = path.join(dir, '.conductor-ai', 'runs', id); fs.mkdirSync(d, { recursive: true }); fs.writeFileSync(path.join(d, 'summary.json'), JSON.stringify({ role: 'build', mode: 'write', attempts: [], startedAt: new Date().toISOString(), ...s })); };
   put('20261111-000001-build', { winner: 'x', status: '## RESULT: DONE', verify: { status: 'PASS' }, acceptance: { total: 2, met: 1, answered: true, unmet: ['x'] } });
   put('20261111-000002-build', { winner: 'x', status: '## RESULT: DONE', verify: { status: 'PASS' }, acceptance: { total: 2, met: 1, answered: true, unmet: ['x'] } });
   put('20261111-000003-build', { winner: 'x', status: '## RESULT: DONE', verify: { status: 'PASS' }, scope: { outside: ['b.js'] } });

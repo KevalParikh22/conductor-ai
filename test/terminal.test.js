@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const home = isolateHome();
 const { wrapForTerminal } = await import('../src/util.js');
-const BIN = fileURLToPath(new URL('../bin/conductor.js', import.meta.url));
+const BIN = fileURLToPath(new URL('../bin/conductor-ai.js', import.meta.url));
 const cli = (args, env = {}) => spawnSync(process.execPath, [BIN, ...args], { encoding: 'utf8', env: { ...process.env, CONDUCTOR_HOME: home, NO_COLOR: '1', COLUMNS: '', ...env } });
 const longest = (text) => Math.max(...text.split('\n').map((l) => [...l].length));
 

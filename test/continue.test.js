@@ -33,8 +33,8 @@ function setup() {
     'agent-other': { type: 'cli', enabled: true, bin: 'agent-other', write: ['x'], read: ['x'] },
     'agent-broken': { type: 'cli', enabled: true, bin: 'agent-broken', write: ['x'], read: ['x'] },
   };
-  fs.mkdirSync(path.join(dir, '.conductor'), { recursive: true });
-  fs.writeFileSync(path.join(dir, '.conductor/config.json'), JSON.stringify({ providers, roles: { build: ['agent-w'], fix: ['agent-w'] }, settings: { autoVerify: false } }));
+  fs.mkdirSync(path.join(dir, '.conductor-ai'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.conductor-ai/config.json'), JSON.stringify({ providers, roles: { build: ['agent-w'], fix: ['agent-w'] }, settings: { autoVerify: false } }));
   git('add', '-A'); git('commit', '-qm', 'conductor-ai config');
   return { dir, git, cfg: loadConfig(dir) };
 }
@@ -51,8 +51,8 @@ test('continue: the same worker picks up its earlier work in the worktree, with 
   const wt = again.worktree.dir;
   assert.equal(fs.readFileSync(path.join(wt, 'fix.txt'), 'utf8'), 'rename the export to sum');
   assert.ok(fs.existsSync(path.join(wt, 'first.txt')), 'earlier work kept');
-  assert.equal(git('rev-list', '--count', 'HEAD..conductor/T1').trim(), '2', 'one commit per round');
-  assert.match(git('log', '-1', '--format=%s', 'conductor/T1'), /T1 \(continued\) by agent-w/);
+  assert.equal(git('rev-list', '--count', 'HEAD..conductor-ai/T1').trim(), '2', 'one commit per round');
+  assert.match(git('log', '-1', '--format=%s', 'conductor-ai/T1'), /T1 \(continued\) by agent-w/);
 });
 
 test('continue: a failed retry keeps the worktree and its earlier work; another provider can be named', async () => {
@@ -70,15 +70,15 @@ test('continue without a worktree says how to start one; conductor-ai retry runs
   const { dir, cfg } = setup();
   await assert.rejects(dispatch(cfg, { role: 'build', planPath: 'docs/plan.md', taskId: 'T1', continue: true, note: 'x' }), /no worktree for "T1"/);
   await dispatch(cfg, { role: 'build', planPath: 'docs/plan.md', taskId: 'T1', worktree: true, chain: ['agent-w'] });
-  const bin = fileURLToPath(new URL('../bin/conductor.js', import.meta.url));
+  const bin = fileURLToPath(new URL('../bin/conductor-ai.js', import.meta.url));
   const run = (...a) => execFileSync(process.execPath, [bin, ...a], { cwd: dir, env: process.env }).toString();
   assert.throws(() => run('retry', 'T1'), /needs --note/);
   const out = run('retry', 'T1', '--note', 'use sum not add');
   assert.match(out, /worker: +agent-w/);
-  assert.match(out, /T1 \(continued\)|on conductor\/T1/);
+  assert.match(out, /T1 \(continued\)|on conductor-ai\/T1/);
 });
 
-test('agy: only conductor\'s sensitive files are denied, not the folder its worktrees live in', () => {
+test('agy: only conductor-ai\'s sensitive files are denied, not the folder its worktrees live in', () => {
   for (const mode of ['write', 'read']) {
     const deny = CLI_PRESETS.antigravity.sessionSettings[mode].permissions.deny;
     assert.ok(!deny.includes('read_file({conductorHome})'), `${mode}: whole folder not denied`);

@@ -27,7 +27,7 @@ const SUPPORTED = ['2026-07-28', '2025-11-25', '2025-06-18', '2025-03-26', '2024
 
 const TOOLS = [
   {
-    name: 'conductor_run',
+    name: 'conductor_ai_run',
     description: 'Delegate work to a worker LLM (Gemini, Codex, OpenCode, OpenRouter free models, ...) with automatic fallback. ' +
       'Roles: build/fix/test/docs write code (need a clean git tree on a non-main branch); review/ask are read-only. ' +
       'Returns a summary: which provider did it, its RESULT/VERDICT, changed files and the verify result. Always check `git diff` yourself before committing.',
@@ -48,7 +48,7 @@ const TOOLS = [
         priority: { type: 'string', enum: ['save', 'balanced', 'speed'], description: 'Tokens against time. save: never extra attempts. balanced (default): extra attempts only on free routes. speed: races small tasks and hedges slow batch tasks on any route without a per-token price (spends more tokens/quota)' },
         allow_unverified: { type: 'boolean', description: 'accept code that no verify command checked (otherwise the outcome is "unverified")' },
         allow_scope: { type: 'boolean', description: 'accept changes to files the task does not list (otherwise the outcome is "out-of-scope")' },
-        allow_weak_plan: { type: 'boolean', description: 'hand out a plan task even though conductor_plan_check finds problems (no files, vague acceptance, no verify, too big)' },
+        allow_weak_plan: { type: 'boolean', description: 'hand out a plan task even though conductor_ai_plan_check finds problems (no files, vague acceptance, no verify, too big)' },
         no_escalate: { type: 'boolean', description: 'when verify fails, stop instead of handing the work to the next provider' },
         review: { type: 'boolean', description: 'true: always get an independent review from another model family; false: never (default: only for risky work)' },
         samples: { type: 'number', description: 'Run this many attempts on different providers in parallel and keep the best by checks (write roles; default 1)' },
@@ -56,7 +56,7 @@ const TOOLS = [
         allow_no_repro: { type: 'boolean', description: "run a fix task even though its repro command already passes (doesn't reproduce the bug)" },
         allow_open_questions: { type: 'boolean', description: 'run plan tasks even if the plan has unresolved Open questions' },
         allow_dirty: { type: 'boolean' },
-        worktree: { type: 'boolean', description: 'Write roles: run in an isolated checkout on branch conductor/<task_id> and commit there, so several tasks can run at once. Merge the branch afterwards.' },
+        worktree: { type: 'boolean', description: 'Write roles: run in an isolated checkout on branch conductor-ai/<task_id> and commit there, so several tasks can run at once. Merge the branch afterwards.' },
         replace: { type: 'boolean', description: 'With worktree: discard an existing worktree/branch for this task first' },
         continue: { type: 'boolean', description: 'Keep working in task_id\'s existing worktree instead of starting over: give a note with what to fix. The same worker runs unless provider is set' },
         timeout: { type: 'string', description: 'Stop a worker after this long and try the next one, e.g. "45m" or "2h"' },
@@ -65,9 +65,9 @@ const TOOLS = [
     },
   },
   {
-    name: 'conductor_batch',
-    description: 'Run several INDEPENDENT plan tasks in parallel, each in its own git worktree on branch conductor/<id>, spread across different providers. ' +
-      'Without merge: refuses tasks that depend on each other; review each branch with `git diff HEAD...conductor/<id>` and merge the good ones. ' +
+    name: 'conductor_ai_batch',
+    description: 'Run several INDEPENDENT plan tasks in parallel, each in its own git worktree on branch conductor-ai/<id>, spread across different providers. ' +
+      'Without merge: refuses tasks that depend on each other; review each branch with `git diff HEAD...conductor-ai/<id>` and merge the good ones. ' +
       'With all: true (the whole plan in one call): tasks start as soon as their depends are merged, conductor-ai merges each one that passed and runs verify on the merged code. Returns one line per task.',
     inputSchema: {
       type: 'object',
@@ -82,15 +82,15 @@ const TOOLS = [
         merge: { type: 'boolean', description: 'Merge each task that passed into the current branch (one at a time), run verify on the merged code, stop at the first conflict or failing verify. Needs a clean checkout' },
         no_verify: { type: 'boolean' },
         priority: { type: 'string', enum: ['save', 'balanced', 'speed'], description: 'Tokens against time. save: never extra attempts. balanced (default): extra attempts only on free routes. speed: races small tasks and hedges slow batch tasks on any route without a per-token price (spends more tokens/quota)' },
-        allow_weak_plan: { type: 'boolean', description: 'run tasks even though conductor_plan_check finds problems' },
+        allow_weak_plan: { type: 'boolean', description: 'run tasks even though conductor_ai_plan_check finds problems' },
         allow_open_questions: { type: 'boolean', description: 'run plan tasks even if the plan has unresolved Open questions' },
       },
       required: ['plan'],
     },
   },
   {
-    name: 'conductor_retry',
-    description: 'Have a worktree task\'s worker fix its own work in place: it continues in the existing worktree (branch conductor/<task_id>) with your note and commits the fix on the same branch. ' +
+    name: 'conductor_ai_retry',
+    description: 'Have a worktree task\'s worker fix its own work in place: it continues in the existing worktree (branch conductor-ai/<task_id>) with your note and commits the fix on the same branch. ' +
       'Use this instead of starting over when a task is close but wrong. The same worker runs unless provider is set.',
     inputSchema: {
       type: 'object',
@@ -105,27 +105,27 @@ const TOOLS = [
     },
   },
   {
-    name: 'conductor_diff',
+    name: 'conductor_ai_diff',
     description: 'The compact diff to review: whitespace-only changes, lockfiles and build output left out, long files cut. ' +
-      'No target = the working tree (new files included); a branch like conductor/T3 = that task\'s work; or a range A..B.',
-    inputSchema: { type: 'object', properties: { target: { type: 'string', description: 'Branch (conductor/T3) or range (A..B). Empty = working tree' }, lines: { type: 'number', description: 'Max lines per file (default 200)' } } },
+      'No target = the working tree (new files included); a branch like conductor-ai/T3 = that task\'s work; or a range A..B.',
+    inputSchema: { type: 'object', properties: { target: { type: 'string', description: 'Branch (conductor-ai/T3) or range (A..B). Empty = working tree' }, lines: { type: 'number', description: 'Max lines per file (default 200)' } } },
   },
   {
-    name: 'conductor_plan_check',
+    name: 'conductor_ai_plan_check',
     description: 'Check a plan before handing out tasks: each write task needs files, acceptance criteria that can be checked, a verify command, and a size one worker can do. conductor-ai refuses tasks that fail this.',
     inputSchema: { type: 'object', properties: { plan: { type: 'string', description: 'Plan file, e.g. docs/plan/feature.md' }, task_ids: { type: 'array', items: { type: 'string' }, description: 'Only these tasks (default: all)' } }, required: ['plan'] },
   },
   {
-    name: 'conductor_lessons',
+    name: 'conductor_ai_lessons',
     description: "What earlier work in this project taught: failures conductor-ai diagnosed and the controller's notes. They go into later workers' prompts and move providers that keep failing a kind of work to the back. Give text to add one; remove or promote (to a rule in AGENTS.md) take a lesson id: promote only when the user agrees.",
     inputSchema: { type: 'object', properties: { text: { type: 'string', description: 'Add this lesson (omit to list)' }, files: { type: 'array', items: { type: 'string' }, description: 'Files or folders it applies to' }, role: { type: 'string', enum: Object.keys(ROLES) }, remove: { type: 'string', description: 'A lesson id to remove' }, promote: { type: 'string', description: 'A lesson id to make a rule in AGENTS.md' } } },
   },
-  { name: 'conductor_stats', description: 'Quality numbers for this project: first-try accept rate, done rate, the alpha gate, why tasks failed, and runs, tokens, cost and time per provider.', inputSchema: { type: 'object', properties: { days: { type: 'number', description: 'Look back this many days (default 30)' } } } },
-  { name: 'conductor_doctor', description: 'Check every enabled provider: installed, key set, config errors, controller files. live: true also sends each a one-word prompt and checks agents can run build commands (slow: up to minutes per agent).', inputSchema: { type: 'object', properties: { live: { type: 'boolean' } } } },
-  { name: 'conductor_import', description: "W1: the user's answer from a web chat for a run that waits (started with provider manual). It goes through every check like a worker's reply. Only pass an answer the user gave you; never make one up.", inputSchema: { type: 'object', properties: { run: { type: 'string', description: 'The waiting run id' }, answer: { type: 'string', description: 'The whole answer the user pasted' } }, required: ['run', 'answer'] } },
-  { name: 'conductor_rules', description: "This project's rules (.conductor/rules): what each covers and the files it applies to. Every controller and worker gets the matching ones.", inputSchema: { type: 'object', properties: {} } },
+  { name: 'conductor_ai_stats', description: 'Quality numbers for this project: first-try accept rate, done rate, the alpha gate, why tasks failed, and runs, tokens, cost and time per provider.', inputSchema: { type: 'object', properties: { days: { type: 'number', description: 'Look back this many days (default 30)' } } } },
+  { name: 'conductor_ai_doctor', description: 'Check every enabled provider: installed, key set, config errors, controller files. live: true also sends each a one-word prompt and checks agents can run build commands (slow: up to minutes per agent).', inputSchema: { type: 'object', properties: { live: { type: 'boolean' } } } },
+  { name: 'conductor_ai_import', description: "W1: the user's answer from a web chat for a run that waits (started with provider manual). It goes through every check like a worker's reply. Only pass an answer the user gave you; never make one up.", inputSchema: { type: 'object', properties: { run: { type: 'string', description: 'The waiting run id' }, answer: { type: 'string', description: 'The whole answer the user pasted' } }, required: ['run', 'answer'] } },
+  { name: 'conductor_ai_rules', description: "This project's rules (.conductor-ai/rules): what each covers and the files it applies to. Every controller and worker gets the matching ones.", inputSchema: { type: 'object', properties: {} } },
   {
-    name: 'conductor_route',
+    name: 'conductor_ai_route',
     description: 'Preview which providers would take a task, in what order, and why (routing rule, plan line or smart selector). Nothing runs.',
     inputSchema: {
       type: 'object',
@@ -139,13 +139,13 @@ const TOOLS = [
     },
   },
   {
-    name: 'conductor_runs',
+    name: 'conductor_ai_runs',
     description: 'Recent runs in this project: who did each task, the outcome (done / partial / out of scope / unverified / verify failed / failed), verify result and files. Give run to see one run in full.',
     inputSchema: { type: 'object', properties: { run: { type: 'string', description: 'A run id (or unique prefix) to show in full' }, limit: { type: 'number', description: 'How many recent runs (default 15)' } } },
   },
-  { name: 'conductor_skills', description: 'The skill library for this project: each skill, whether it is on here, and which tasks it goes to. Skills reach workers automatically when they match.', inputSchema: { type: 'object', properties: {} } },
-  { name: 'conductor_status', description: 'Show providers (installed / key set / cooling down), role chains, controller and repo state.', inputSchema: { type: 'object', properties: {} } },
-  { name: 'conductor_verify', description: "Run the project's verify command (lint/typecheck/tests) and return the result.", inputSchema: { type: 'object', properties: {} } },
+  { name: 'conductor_ai_skills', description: 'The skill library for this project: each skill, whether it is on here, and which tasks it goes to. Skills reach workers automatically when they match.', inputSchema: { type: 'object', properties: {} } },
+  { name: 'conductor_ai_status', description: 'Show providers (installed / key set / cooling down), role chains, controller and repo state.', inputSchema: { type: 'object', properties: {} } },
+  { name: 'conductor_ai_verify', description: "Run the project's verify command (lint/typecheck/tests) and return the result.", inputSchema: { type: 'object', properties: {} } },
 ];
 // every tool takes the project folder too: controllers that register conductor-ai globally (Antigravity, Codex) may start
 // it outside the project
@@ -159,35 +159,35 @@ const text = (t, isError = false) => ({ content: [{ type: 'text', text: t }], ..
 async function callTool(name, args, startRoot) {
   const root = args.project ? findProjectRoot(path.resolve(args.project)) : startRoot;
   const cfg = loadConfig(root);
-  if (name === 'conductor_retry') {
+  if (name === 'conductor_ai_retry') {
     const m = readWorktreeMeta(root, args.task_id);
-    if (!m && !args.role) return text(`conductor-ai: no record of a worktree task "${args.task_id}". Start it with conductor_run (worktree: true) first`, true);
+    if (!m && !args.role) return text(`conductor-ai: no record of a worktree task "${args.task_id}". Start it with conductor_ai_run (worktree: true) first`, true);
     args = { ...args, role: args.role || m.role, plan: m?.plan || undefined, continue: true };
-    name = 'conductor_run';
+    name = 'conductor_ai_run';
   }
-  if (name === 'conductor_diff') {
+  if (name === 'conductor_ai_diff') {
     const t = args.target;
     const d = compactDiff(root, { ...(t ? { range: t.includes('..') ? t : `HEAD...${t}` } : {}), maxFileLines: Number(args.lines) || 200 });
     return text(d.empty ? (t ? `no changes in ${t}` : 'no changes') : `${d.text.trimEnd()}\n\n[compact: ${d.chars.toLocaleString()} of ${d.fullChars.toLocaleString()} characters of the full diff]`);
   }
-  if (name === 'conductor_plan_check') {
+  if (name === 'conductor_ai_plan_check') {
     const abs = path.resolve(root, args.plan || '');
     if (!args.plan || !fs.existsSync(abs)) return text(`conductor-ai: plan not found: ${args.plan || '(none given)'}`, true);
     const rows = checkPlan(fs.readFileSync(abs, 'utf8'), { ids: args.task_ids, verifyCmd: detectVerify(root, cfg.settings), maxFiles: cfg.settings.maxTaskFiles || 4 });
     return text(rows.length ? formatPlanCheck(args.plan, rows, planWarnings(fs.readFileSync(abs, 'utf8'))) : `no tasks found in ${args.plan}`, !rows.length || rows.some((r) => r.problems.length));
   }
-  if (name === 'conductor_lessons') {
+  if (name === 'conductor_ai_lessons') {
     if (args.remove) { const g = removeLesson(root, String(args.remove)); return g ? text(`removed ${g.id}`) : text(`conductor-ai: no lesson "${args.remove}"`, true); }
     if (args.promote) { const r = promoteLesson(root, String(args.promote)); return r ? text(`added to AGENTS.md: ${r.bullet}`) : text(`conductor-ai: no lesson "${args.promote}"`, true); }
     if (args.text) { const l = addLesson(root, { source: 'manual', text: String(args.text).slice(0, 300), role: args.role || null, files: args.files || [] }); return text(`added ${l.id}: ${l.text}`); }
     const all = readLessons(root);
     return text(all.length ? all.slice(-30).reverse().map((l) => `${l.id} ${l.source === 'auto' ? l.kind : l.source} ${l.provider || '-'} ×${l.count || 1}${l.promoted ? ' [rule]' : (l.count || 1) >= PROMOTE_AT ? ' [promote?]' : ''}${l.resolvedAt ? ' [resolved]' : ''}: ${l.text || GUIDANCE[l.kind] || ''}`).join('\n') : 'No lessons yet.');
   }
-  if (name === 'conductor_stats') {
+  if (name === 'conductor_ai_stats') {
     const days = Number(args.days) || 30;
     return text(`${formatQualityStats(qualityStats({ root, days }))}\n\n${formatFailureStats(failureStats({ root, days }))}\n\n${formatUsage(usageReport(Math.min(days, 30)), cfg.settings)}`);
   }
-  if (name === 'conductor_doctor') {
+  if (name === 'conductor_ai_doctor') {
     const d = await doctorData(cfg, { live: !!args.live });
     const L = d.results.map((r) => `${r.optional ? '○' : r.ok ? '✓' : '✗'} ${r.name}: ${r.status}${r.next ? `\n    next: ${r.next}` : ''}`);
     for (const e of d.errs) L.push(`✗ config: ${e}`);
@@ -195,17 +195,17 @@ async function callTool(name, args, startRoot) {
     L.push(d.problems ? `${d.problems} problem(s)` : 'All enabled providers look good.');
     return text(L.join('\n'), d.problems > 0);
   }
-  if (name === 'conductor_import') {
+  if (name === 'conductor_ai_import') {
     try {
       const s = await importAnswer(cfg, String(args.run || ''), args.answer, { dispatch });
       return text(formatSummary(s), s.exitCode !== 0);
     } catch (e) { if (e instanceof ImportError) return text(`conductor-ai: ${e.message}`, true); throw e; }
   }
-  if (name === 'conductor_rules') {
+  if (name === 'conductor_ai_rules') {
     const rules = readRules(root);
     return text(rules.length ? rules.map((r) => `${r.name}: ${r.description}${r.paths.length ? ` (files: ${r.paths.join(', ')})` : ' (all files)'}`).join('\n') : 'No project rules yet (conductor-ai rules new <name>).');
   }
-  if (name === 'conductor_route') {
+  if (name === 'conductor_ai_route') {
     let section = '', role = args.role;
     const files = [...(args.files || [])];
     if (args.plan && args.task_id) {
@@ -219,7 +219,7 @@ async function callTool(name, args, startRoot) {
     const how = { plan: 'set by the plan', route: 'routing rule', selector: 'smart selector', role: "role's chain" }[r.how] || r.how;
     return text(`role ${role} · ${how}${r.note ? `: ${r.note}` : ''}\n${r.chain.map((c, i) => `  ${c.skip ? '-' : `${i + 1}.`} ${c.name}${c.skip ? `  (skipped: ${c.skip})` : ''}`).join('\n')}`);
   }
-  if (name === 'conductor_runs') {
+  if (name === 'conductor_ai_runs') {
     if (args.run) {
       const r = readRun(root, args.run);
       if (!r) return text(`conductor-ai: no run "${args.run}" (or the prefix matches several)`, true);
@@ -228,18 +228,18 @@ async function callTool(name, args, startRoot) {
     }
     return text(formatRuns(listRuns(root, { limit: Number(args.limit) || 15 })));
   }
-  if (name === 'conductor_skills') {
+  if (name === 'conductor_ai_skills') {
     const all = listSkills(root);
     if (!all.length) return text('No skills yet. Make one with: conductor-ai skills new <name> (or the Skills page in conductor-ai ui).');
     return text(all.map((s) => `${s.on ? '✓' : '○'} ${s.name} (${s.scope}): ${s.description}  → workers: ${['roles', 'files', 'text'].filter((k) => s.when?.[k]).map((k) => `${k} ${s.when[k]}`).join(' · ') || 'every task'}`).join('\n'));
   }
-  if (name === 'conductor_status') return text(statusReport(cfg));
-  if (name === 'conductor_verify') {
+  if (name === 'conductor_ai_status') return text(statusReport(cfg));
+  if (name === 'conductor_ai_verify') {
     const v = await runVerify(cfg.root, cfg.settings);
     recordVerify(cfg.root, v);
     return text(`verify: ${v.status}${v.cmd ? ` (${v.cmd})` : ''}\n${v.tail || v.note || ''}`, v.status === 'FAIL');
   }
-  if (name === 'conductor_batch') {
+  if (name === 'conductor_ai_batch') {
     try {
       const b = await runBatch(cfg, {
         planPath: args.plan, tasks: args.tasks, role: args.role, provider: args.provider, concurrency: args.concurrency,
@@ -251,7 +251,7 @@ async function callTool(name, args, startRoot) {
       return text(`conductor-ai: ${e.message}`, true);
     }
   }
-  if (name === 'conductor_run') {
+  if (name === 'conductor_ai_run') {
     try {
       const s = await dispatch(cfg, {
         role: args.role, task: args.task, planPath: args.plan, taskId: args.task_id, provider: args.provider, note: args.note,
@@ -275,16 +275,16 @@ async function callTool(name, args, startRoot) {
 }
 
 // ---------------- resources: run reports ----------------
-const RUN_URI = /^conductor:\/\/runs\/(latest|[\w.-]+)$/;
+const RUN_URI = /^conductor-ai:\/\/runs\/(latest|[\w.-]+)$/;
 
-/** The recent runs as MCP resources (newest first), plus conductor://runs/latest. */
+/** The recent runs as MCP resources (newest first), plus conductor-ai://runs/latest. */
 export function listRunResources(root, { limit = 20 } = {}) {
   const runs = listRuns(root, { limit }).filter((r) => r.state !== 'running');
   const out = runs.map((r) => ({
-    uri: `conductor://runs/${r.id}`, name: `${r.role}${r.task ? ` ${r.task}` : ''}: ${r.state}`, mimeType: 'text/markdown',
+    uri: `conductor-ai://runs/${r.id}`, name: `${r.role}${r.task ? ` ${r.task}` : ''}: ${r.state}`, mimeType: 'text/markdown',
     description: `${r.startedAt ? new Date(r.startedAt).toISOString().slice(0, 16).replace('T', ' ') : r.id} · ${r.winner || 'no worker'} · verify ${r.verify || '-'}`,
   }));
-  if (runs.length) out.unshift({ uri: 'conductor://runs/latest', name: `latest run (${runs[0].id})`, mimeType: 'text/markdown', description: 'The most recent finished run in this project' });
+  if (runs.length) out.unshift({ uri: 'conductor-ai://runs/latest', name: `latest run (${runs[0].id})`, mimeType: 'text/markdown', description: 'The most recent finished run in this project' });
   return out;
 }
 
@@ -334,7 +334,7 @@ export function startMcpServer({ cwd = process.cwd() } = {}) {
         case 'tools/call': return reply(id, await callTool(params.name, params.arguments || {}, root));
         // run reports as resources: a controller (or its user) can open a run like a file, without a tool call
         case 'resources/list': return reply(id, { resources: listRunResources(root) });
-        case 'resources/templates/list': return reply(id, { resourceTemplates: [{ uriTemplate: 'conductor://runs/{id}', name: 'A conductor-ai run', description: 'One run: its summary, the checklist that decides "done", and the worker\'s report', mimeType: 'text/markdown' }] });
+        case 'resources/templates/list': return reply(id, { resourceTemplates: [{ uriTemplate: 'conductor-ai://runs/{id}', name: 'A conductor-ai run', description: 'One run: its summary, the checklist that decides "done", and the worker\'s report', mimeType: 'text/markdown' }] });
         case 'resources/read': {
           const r = readRunResource(root, String(params.uri || ''));
           if (!r) return fail(id, -32002, `resource not found: ${params.uri}`);

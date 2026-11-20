@@ -18,7 +18,7 @@ export function conductorGitDir(root) {
   if (!gitDirs.has(root)) {
     let d = null;
     try { d = execFileSync('git', ['rev-parse', '--git-common-dir'], { cwd: root, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { /* not a repo */ }
-    gitDirs.set(root, d ? path.join(path.isAbsolute(d) ? d : path.join(root, d), 'conductor') : path.join(root, PROJECT_DIRNAME));
+    gitDirs.set(root, d ? path.join(path.isAbsolute(d) ? d : path.join(root, d), 'conductor-ai') : path.join(root, PROJECT_DIRNAME));
   }
   return gitDirs.get(root);
 }
@@ -180,7 +180,7 @@ export function promoteLesson(root, id) {
   const text = l.source === 'auto' && l.kind !== 'acceptance-check' ? GUIDANCE[l.kind] : l.text;
   const file = path.join(root, 'AGENTS.md');
   let cur = ''; try { cur = fs.readFileSync(file, 'utf8'); } catch { /* new */ }
-  cur = cur.replace('## Lessons (promoted by conductor)', '## Lessons (promoted by conductor-ai)'); // older files: rename the heading, don't add a second
+  cur = cur.replace('## Lessons (promoted by conductor-ai)', '## Lessons (promoted by conductor-ai)'); // older files: rename the heading, don't add a second
   const bullet = `- ${text.replace(/\.$/, '')}.${l.dirs?.length && l.dirs[0] !== '.' ? ` (in ${l.dirs.join(', ')})` : ''}`;
   const head = '## Lessons (promoted by conductor-ai)';
   const next = cur.includes(head) ? cur.replace(head, `${head}\n${bullet}`) : `${cur.trimEnd()}${cur ? '\n\n' : ''}${head}\n${bullet}\n`;

@@ -173,7 +173,7 @@ const CHAT_REPAIR = 'Your reply had no <<<FILE blocks, so nothing was applied. Y
 /**
  * Run a role with fallback.
  * opts: role, task, planPath, taskId, provider, chain, note, files, base, focus, save, noVerify, allowUnverified, allowDirty, onEvent,
- *       worktree (run in an isolated checkout on branch conductor/<id> and commit there), worktreeId, replace,
+ *       worktree (run in an isolated checkout on branch conductor-ai/<id> and commit there), worktreeId, replace,
  *       continue (keep working in that task's existing worktree: a retry with a note, by the same worker by default)
  */
 /**
@@ -377,7 +377,7 @@ async function dispatchOnce(cfg, opts) {
   // Q7: what earlier work in this area taught (the controller's notes, diagnosed failures)
   const lessons = mode === 'write' && cfg.settings?.lessons !== false ? lessonsPrompt(root, { role, files: [...(opts.files || []), ...taskFiles(section)] }, { max: settings.lessonsInPrompt ?? 5 }) : { text: '', ids: [] };
   if (lessons.text) body += lessons.text;
-  // Q8: the project's rules (.conductor/rules) that apply to this task's files
+  // Q8: the project's rules (.conductor-ai/rules) that apply to this task's files
   const rules = mode === 'write' ? rulesPrompt(root, [...(opts.files || []), ...taskFiles(section)]) : '';
   if (rules) body += rules;
   const lessonIds = lessons.ids;
@@ -705,7 +705,7 @@ async function dispatchOnce(cfg, opts) {
       }
       attempt.next = nextStep(attempt.reason, { name: c.name, p: c.p, log: rel(root, path.join(runDir, `${c.name}${mi ? `.${mi + 1}` : ''}.log`)) });
       if (mode === 'write' && (useWorktree || !opts.allowDirty) && git.isDirty(work)) {
-        if (git.stashPush(work, `conductor: failed attempt by ${c.name} ${opts.taskId || role} ${timestamp()}`)) attempt.stashed = true;
+        if (git.stashPush(work, `conductor-ai: failed attempt by ${c.name} ${opts.taskId || role} ${timestamp()}`)) attempt.stashed = true;
       }
       summary.attempts.push(attempt);
       emit({ type: 'fail', provider: c.name, reason: attempt.reason + (tryNext ? `, trying model ${nextModel}` : '') });

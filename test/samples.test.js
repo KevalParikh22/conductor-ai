@@ -33,7 +33,7 @@ const cfgFor = (dir) => {
   for (const b of ['s-wrong', 's-long', 's-short']) cfg.providers[b] = { type: 'cli', preset: 'codex', enabled: true, bin: b };
   return cfg;
 };
-const branches = (git) => git('for-each-ref', '--format=%(refname:short)', 'refs/heads/conductor').trim();
+const branches = (git) => git('for-each-ref', '--format=%(refname:short)', 'refs/heads/conductor-ai').trim();
 
 test('ranking: done first, then checks and criteria met, then the smallest diff', () => {
   const r = rankSamples([
@@ -57,7 +57,7 @@ test('three attempts in parallel: the correct, smallest one lands in the working
   assert.equal(fs.readFileSync(path.join(dir, 'src/add.js'), 'utf8'), 'export const add = (a, b) => a + b;\n');
   assert.equal(branches(git), '', 'every attempt\'s branch is gone');
   assert.equal(s.worktree, undefined);
-  assert.match(s.appliedFrom, /^conductor\/T1-s\d$/);
+  assert.match(s.appliedFrom, /^conductor-ai\/T1-s\d$/);
   assert.match(formatSummary(s), /samples: +3 attempts, best kept: s-short done checks 1\/1 \d+ lines ← chosen/);
   assert.match(formatSummary(s), /landed: +the chosen attempt's changes are in your working tree/);
 });

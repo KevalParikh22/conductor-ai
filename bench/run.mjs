@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Pilot benchmark: Claude alone (A) vs Claude + conductor (C) on the same plan, scored by hidden tests.
+// Pilot benchmark: Claude alone (A) vs Claude + conductor-ai (C) on the same plan, scored by hidden tests.
 //
 //   node bench/run.mjs check [--suite b2]            is the suite fair? (no model: fails on the start, passes on the solution)
 //   node bench/run.mjs A [--suite b2] [--tasks T1,T2] [--model sonnet] [--max-cost 1.50]
@@ -9,7 +9,7 @@
 //
 // Every Claude call is `claude -p --output-format json`, which reports its tokens and an equivalent cost: those numbers
 // are the measurement. A runs one task at a time and stops before the next task once --max-cost is reached. C lets
-// Claude act as the controller with conductor (/conduct-run); worker usage comes from conductor's run summaries.
+// Claude act as the controller with conductor-ai (/conduct-run); worker usage comes from conductor-ai's run summaries.
 // Results go to lab/bench/<date>-[<suite>-]<condition>.json (local, not in git), with a table on stdout; add
 // --publish to also write a run to bench/results/ (committed) when docs/BENCHMARK.md reports it.
 import fs from 'node:fs';
@@ -25,7 +25,7 @@ const SUITE = opt('suite', 'pilot');
 const SUITES = { pilot: { branch: 'feat/utils' }, b2: { branch: 'feat/orders' } };
 if (!SUITES[SUITE]) { console.error(`unknown suite "${SUITE}": ${Object.keys(SUITES).join(' | ')}`); process.exit(2); }
 const PILOT = path.join(HERE, SUITE);
-const CONDUCTOR = path.join(HERE, '..', 'bin', 'conductor.js');
+const CONDUCTOR = path.join(HERE, '..', 'bin', 'conductor-ai.js');
 // the tasks are the plan's "### T<n>:" headings
 const TASKS = [...fs.readFileSync(path.join(PILOT, 'plan.md'), 'utf8').matchAll(/^### (T\d+):/gm)].map((m) => m[1]);
 const PLAN = `docs/plan/${SUITE}.md`;
@@ -35,7 +35,7 @@ const tasks = (opt('tasks', '') || TASKS.join(',')).split(',').map((t) => t.trim
 const maxCost = Number(opt('max-cost', '0')) || Infinity;
 
 const sh = (cmd, args, cwd, extra = {}) => spawnSync(cmd, args, { cwd, encoding: 'utf8', maxBuffer: 64 << 20, ...extra });
-const git = (cwd, ...a) => sh('git', ['-c', 'user.email=bench@conductor.local', '-c', 'user.name=bench', ...a], cwd);
+const git = (cwd, ...a) => sh('git', ['-c', 'user.email=bench@conductor-ai.local', '-c', 'user.name=bench', ...a], cwd);
 const cleanEnv = () => { const e = { ...process.env }; delete e.NODE_TEST_CONTEXT; return e; };
 
 function prepare() {
@@ -46,7 +46,7 @@ function prepare() {
   fs.writeFileSync(path.join(dir, '.gitignore'), 'node_modules/\n');
   git(dir, 'init', '-q', '-b', 'main');
   // a real project has a commit identity; without one every merge fails ("unable to auto-detect email")
-  sh('git', ['config', 'user.email', 'bench@conductor.local'], dir); sh('git', ['config', 'user.name', 'bench'], dir);
+  sh('git', ['config', 'user.email', 'bench@conductor-ai.local'], dir); sh('git', ['config', 'user.name', 'bench'], dir);
   git(dir, 'add', '-A'); git(dir, 'commit', '-qm', `${SUITE} start`); git(dir, 'switch', '-qc', SUITES[SUITE].branch);
   return dir;
 }
@@ -73,7 +73,7 @@ function claude(dir, prompt, allowed) {
     ok: !!j && !j.is_error, cost: j?.total_cost_usd ?? null, seconds: Math.round((Date.now() - t0) / 1000), turns: j?.num_turns ?? null,
     tokens: { input: u.input_tokens || 0, output: u.output_tokens || 0, cacheRead: u.cache_read_input_tokens || 0, cacheWrite: u.cache_creation_input_tokens || 0 },
     result: String(j?.result || r.stderr || r.stdout || '').slice(0, 4000),
-    // tool calls headless mode refused: a run that stalls on one isn't measuring conductor
+    // tool calls headless mode refused: a run that stalls on one isn't measuring conductor-ai
     denied: (j?.permission_denials || []).map((d) => ({ tool: d.tool_name, input: JSON.stringify(d.tool_input || {}).slice(0, 300) })),
   };
 }
@@ -81,7 +81,7 @@ function claude(dir, prompt, allowed) {
 const sum = (calls, k) => calls.reduce((t, c) => t + (k === 'cost' ? (c.cost || 0) : c.tokens[k]), 0);
 
 function workerUsage(dir) {
-  const runs = path.join(dir, '.conductor', 'runs');
+  const runs = path.join(dir, '.conductor-ai', 'runs');
   const out = { runs: 0, tokens: 0, cost: 0, providers: {} };
   let names = []; try { names = fs.readdirSync(runs); } catch { return out; }
   for (const n of names) {
@@ -140,26 +140,26 @@ async function main() {
       process.stderr.write(`${SUITE} A ${t}: $${(c.cost ?? 0).toFixed(4)}, ${c.seconds}s\n`);
     }
   } else if (condition === 'W') {
-    // W: conductor alone, no controller (and no Claude cost): `batch --all` runs the whole plan with the workers and
-    // merges what passed. Measures conductor's own part of C's wall-clock (workers, checks, merges, reviews).
+    // W: conductor-ai alone, no controller (and no Claude cost): `batch --all` runs the whole plan with the workers and
+    // merges what passed. Measures conductor-ai's own part of C's wall-clock (workers, checks, merges, reviews).
     sh(process.execPath, [CONDUCTOR, 'init', '--controller', 'claude-code', '--no-mcp'], dir);
-    git(dir, 'add', '-A'); git(dir, 'commit', '-qm', 'conductor init', '--allow-empty');
+    git(dir, 'add', '-A'); git(dir, 'commit', '-qm', 'conductor-ai init', '--allow-empty');
     const prio = argv.includes('--priority') ? ['--priority', argv[argv.indexOf('--priority') + 1]] : [];
     if (argv.includes('--provider')) prio.push('--provider', argv[argv.indexOf('--provider') + 1]); // W only: force one worker (to test a weak one)
     const w0 = Date.now();
     const r = sh(process.execPath, [CONDUCTOR, 'batch', '--plan', PLAN, ...(tasks.length === TASKS.length ? ['--all'] : ['--tasks', tasks.join(','), '--merge']), ...prio], dir, { env: cleanEnv(), timeout: 60 * 60_000 });
     calls.push({ task: null, ok: r.status === 0, cost: 0, seconds: Math.round((Date.now() - w0) / 1000), turns: 0, tokens: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, result: String(r.stdout || '').slice(-4000) + String(r.stderr || '').slice(-1500) });
   } else {
-    // C: conductor in the project, Claude Code as the controller, the plan fixed in advance
+    // C: conductor-ai in the project, Claude Code as the controller, the plan fixed in advance
     sh(process.execPath, [CONDUCTOR, 'init', '--controller', 'claude-code', '--no-mcp'], dir);
     // --priority: the project's setting, as a user would set it (the controller's /conduct-run doesn't pass one)
     if (argv.includes('--priority')) {
-      const f = path.join(dir, '.conductor', 'config.json'); const c = JSON.parse(fs.readFileSync(f, 'utf8'));
+      const f = path.join(dir, '.conductor-ai', 'config.json'); const c = JSON.parse(fs.readFileSync(f, 'utf8'));
       c.settings = { ...c.settings, priority: argv[argv.indexOf('--priority') + 1] }; fs.writeFileSync(f, JSON.stringify(c, null, 2) + '\n');
     }
-    git(dir, 'add', '-A'); git(dir, 'commit', '-qm', 'conductor init', '--allow-empty');
+    git(dir, 'add', '-A'); git(dir, 'commit', '-qm', 'conductor-ai init', '--allow-empty');
     const prompt = tasks.length === TASKS.length ? `/conduct-run ${PLAN}` : `/conduct-build ${PLAN} ${tasks[0]}`;
-    const c = claude(dir, prompt, ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'Bash(conductor:*)', 'Bash(git:*)', 'Bash(npm test:*)']);
+    const c = claude(dir, prompt, ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'Bash(conductor-ai:*)', 'Bash(git:*)', 'Bash(npm test:*)']);
     calls.push({ task: null, ...c });
   }
   const hidden = Object.fromEntries(Object.entries(score(dir)).filter(([t]) => tasks.includes(t)));

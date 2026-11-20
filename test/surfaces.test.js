@@ -11,7 +11,7 @@ const { createUiServer } = await import('../src/ui/server.js');
 const L = await import('../src/lessons.js');
 
 const read = (rel) => fs.readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8');
-const BIN = read('bin/conductor.js'), MCP = read('src/mcp.js'), SERVER = read('src/ui/server.js');
+const BIN = read('bin/conductor-ai.js'), MCP = read('src/mcp.js'), SERVER = read('src/ui/server.js');
 const mcpTools = [...MCP.matchAll(/name: '(conductor_\w+)'/g)].map((m) => m[1]);
 const routes = [...SERVER.matchAll(/case '((?:GET|POST|PUT|DELETE) \/api\/[\w/-]+)'/g)].map((m) => m[1]);
 const cliWord = (cli) => (cli.match(/^conductor-ai ([a-z][\w-]*)/) || [])[1];
@@ -35,7 +35,7 @@ test('the registry matches the code: CLI commands, MCP tools and UI routes exist
     if (typeof a.mcp === 'string') assert.ok(mcpTools.includes(a.mcp), `${a.id}: no MCP tool ${a.mcp}`);
     if (typeof a.ui === 'string') assert.ok(routes.includes(a.ui), `${a.id}: no UI route ${a.ui}`);
   }
-  for (const t of mcpTools) assert.ok(ACTIONS.some((a) => a.mcp === t || (t === 'conductor_retry' && a.id === 'retry')), `MCP tool ${t} is not in src/surfaces.js`);
+  for (const t of mcpTools) assert.ok(ACTIONS.some((a) => a.mcp === t || (t === 'conductor_ai_retry' && a.id === 'retry')), `MCP tool ${t} is not in src/surfaces.js`);
   const cliWords = new Set(ACTIONS.flatMap((a) => [...a.cli.matchAll(/conductor-ai ([a-z][\w-]*)/g)].map((m) => m[1])));
   for (const c of commands) assert.ok(cliWords.has(c) || CLI_INTERNAL.includes(c), `CLI command "${c}" is not in src/surfaces.js`);
   // every UI route belongs to an action: its first path segment matches an action's route
