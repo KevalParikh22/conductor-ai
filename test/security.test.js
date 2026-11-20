@@ -66,7 +66,7 @@ test('API models cannot write hook scripts and never receive secrets files as co
   assert.deepEqual(s.applied, ['src/a.js']);
 });
 
-test('verify runs without conductor API keys in its environment', async () => {
+test('verify runs without conductor-ai API keys in its environment', async () => {
   const { dir } = makeRepo();
   process.env.CONDUCTOR_TEST_KEY = 'sk-secret'; SECRET_VARS.add('CONDUCTOR_TEST_KEY');
   try {

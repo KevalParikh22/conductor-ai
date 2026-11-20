@@ -7,7 +7,7 @@ A coding agent that runs on your machine: it reads the repo, edits files and run
 | | |
 |---|---|
 | Kind | Local agent (`agy`) |
-| conductor name | `antigravity-cli` |
+| conductor-ai name | `antigravity-cli` |
 | Docs | https://antigravity.google/docs/permissions?tab=cli |
 
 ## Set up
@@ -17,14 +17,14 @@ A coding agent that runs on your machine: it reads the repo, edits files and run
    curl -fsSL https://antigravity.google/cli/install.sh | bash
    ```
 2. Sign in once: `agy   (sign in with Google once; headless runs reuse the cached login)`
-3. Enable `antigravity-cli` in `conductor ui` → Providers (or run `conductor setup`, which finds installed agents), then check it:
+3. Enable `antigravity-cli` in `conductor-ai ui` → Providers (or run `conductor-ai setup`, which finds installed agents), then check it:
    ```bash
-   conductor doctor --live
+   conductor-ai doctor --live
    ```
 
-## What it may do under conductor
+## What it may do under conductor-ai
 
 - **Write roles:** edits inside the project only; shell commands sandboxed (no network, nothing outside the project and temp folders); git push/commit/reset and sudo denied
 - **Read roles:** no file writes in the project; read-only shell commands in the sandbox
 
-conductor passes these rules on the command line for each run; your own settings for the CLI are not changed. Details: [Providers → Permissions](../PROVIDERS.md#permissions-what-each-agent-may-do).
+conductor-ai passes these rules on the command line for each run; your own settings for the CLI are not changed. Details: [Providers → Permissions](../PROVIDERS.md#permissions-what-each-agent-may-do).

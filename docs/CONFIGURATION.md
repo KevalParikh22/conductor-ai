@@ -1,6 +1,6 @@
 # Configuration
 
-The easiest way is `conductor ui`. Everything below is what the UI edits.
+The easiest way is `conductor-ai ui`. Everything below is what the UI edits.
 
 ## Where config lives
 
@@ -39,7 +39,7 @@ Merge rules: `providers` and `settings` merge field by field; each role's chain 
 
 ## Controller
 
-`claude-code` (default) · `antigravity` · `codex-cli` · `opencode`. (`gemini-cli` was removed; configs that name it switch to `antigravity`.) Change it in the UI (Controller → Apply to this project) or with `conductor init --controller <name>`. Applying writes that agent's instruction file, its `/conduct-*` commands and an MCP entry.
+`claude-code` (default) · `antigravity` · `codex-cli` · `opencode`. (`gemini-cli` was removed; configs that name it switch to `antigravity`.) Change it in the UI (Controller → Apply to this project) or with `conductor-ai init --controller <name>`. Applying writes that agent's instruction file, its `/conduct-*` commands and an MCP entry.
 
 ## Roles
 
@@ -64,14 +64,14 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | `preset` | cli | `antigravity`, `codex`, `opencode`, `kimi`, `claude` |
 | `bin`, `write`, `read`, `modelArgs`, `stdin` | cli | Override the preset's command line (see PROVIDERS.md) |
 | `env` | cli | Extra environment variables for that CLI |
-| `baseUrl` | api | e.g. `https://openrouter.ai/api/v1` (conductor adds `/chat/completions`) |
+| `baseUrl` | api | e.g. `https://openrouter.ai/api/v1` (conductor-ai adds `/chat/completions`) |
 | `apiKeyEnv` | api | Name of the env var holding the key; empty for local servers |
 | `apiKeyOptional` | api | `true` = send the key if set, but run without one too (e.g. `kilo-free`) |
 | `headers`, `maxTokens`, `temperature` | api | Optional request tuning |
 | `fallbackModels` | api, cli | Models to try on this provider, in order, when `model` is rate-limited (APIs also switch when a model stalls or answers nothing). The limited model cools down alone; the provider is skipped only when every model is. Agents need a preset that takes a model (OpenCode, Codex, Claude, Kimi, Aider…). Free and auto-picked API providers find fallbacks from their live model list when this is unset; so does Antigravity (from `agy models`, another model family first, since agy's families have separate quotas) |
 | `autoFallback` | api, agy | `false` = don't look up fallback models automatically |
 | `location` | api | `local-model` or `cloud-api`: overrides the guess from the address (e.g. a remote server reached through localhost). Local models get the smaller prompt, the window check and one call at a time per server |
-| `maxParallel` | api, cli | Most calls to this provider at once, from one conductor process; the rest wait their turn. Antigravity defaults to 1 (its quota belongs to the account). Batch also starts at most this many tasks on it |
+| `maxParallel` | api, cli | Most calls to this provider at once, from one conductor-ai process; the rest wait their turn. Antigravity defaults to 1 (its quota belongs to the account). Batch also starts at most this many tasks on it |
 | `timeoutMin` | all | Time limit for this provider, in minutes, instead of `timeoutSec` (or `apiTimeoutSec` for APIs) |
 | `idleTimeoutMin` | cli | Stop this agent when it prints nothing for this long (`0` = never). Default: 10 for Codex (it prints an event for every step), off for the others (some print only at the end) |
 | `price` | api | `{ "input": 0.3, "output": 2.5 }`: dollars per 1M tokens, used for cost and budgets. Without it, cost is shown as unknown |
@@ -95,7 +95,7 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | `requireCleanTree` | true | Write roles need a clean tree (enables stash-on-failure) |
 | `verify` | `""` | Verify command. Empty = `AGENTS.md` Verify line, then auto-detect |
 | `autoVerify` | true | Run verify after each write task |
-| `planGate` | true | Refuse plan tasks a worker can't do well: no `files:`, vague or missing acceptance, no verify command, too many files (`conductor plan check`; `--allow-weak-plan` overrides) |
+| `planGate` | true | Refuse plan tasks a worker can't do well: no `files:`, vague or missing acceptance, no verify command, too many files (`conductor-ai plan check`; `--allow-weak-plan` overrides) |
 | `maxTaskFiles` | 4 | Most files (besides tests) one task may list |
 | `requireAcceptance` | true | A DONE task must answer every acceptance criterion with evidence; otherwise the outcome is `partial` |
 | `syntaxCheck` | true | Reject a worker's attempt when a changed file has a syntax error (JS, JSON, PHP, Python) |
@@ -116,7 +116,7 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | `hangCooldownMin` | 15 | A free route that times out twice in one run cools down this long (0 = off) |
 | `contextPack` | true | Give workers the task files, where their code is used elsewhere, the verify command and the matching architecture notes before they start |
 | `contextPackBytes` | 4000 | Most characters of that pack |
-| `lessons` | true | Keep what earlier work taught (diagnosed failures, your `--note`s) for later prompts and provider order (`conductor lessons`) |
+| `lessons` | true | Keep what earlier work taught (diagnosed failures, your `--note`s) for later prompts and provider order (`conductor-ai lessons`) |
 | `lessonsInPrompt` | 5 | Most lessons added to one worker's prompt |
 | `demoteAfter` | 2 | Unresolved failures of one provider on one kind of work (same role and folder, last 30 days) before it moves to the back |
 | `demoteAfter` | 2 | Failures on the same kind of work in the same area before a provider moves to the back |
@@ -133,9 +133,9 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | `scopeAllow` | [] | Globs workers may change without the task listing them (lockfiles and test snapshots are always allowed) |
 | `allowScope` | false | Accept changes outside a task's `files:`. Off: the outcome is `out-of-scope` |
 | `allowUnverified` | false | Accept code no verify command checked. Off: such a run ends `unverified` with exit 4 (batch: exit 3) |
-| `smartSelect` | true | Reorder each role's chain for the task: free API models first for small tasks with listed files, agents first for larger or open-ended ones, paid APIs last. A provider whose recent work on that role mostly failed (under 60% passed: its reply, or conductor's checks on its work) goes after the reliable ones, and one that failed 3 times in a row goes to the end. Under priority `speed`, the fastest reliable provider goes first, before the free-first rule. Off when you pass `--chain` or `--provider` |
+| `smartSelect` | true | Reorder each role's chain for the task: free API models first for small tasks with listed files, agents first for larger or open-ended ones, paid APIs last. A provider whose recent work on that role mostly failed (under 60% passed: its reply, or conductor-ai's checks on its work) goes after the reliable ones, and one that failed 3 times in a row goes to the end. Under priority `speed`, the fastest reliable provider goes first, before the free-first rule. Off when you pass `--chain` or `--provider` |
 | `maxReportBytes` | 8000 | `report.md` (what the controller reads) keeps only the worker's RESULT block, up to this size; the full output is saved as `report.full.md` |
-| `maxDiffBytes` | 100000 | Review diffs above this are truncated (they are compacted first: see `conductor diff`) |
+| `maxDiffBytes` | 100000 | Review diffs above this are truncated (they are compacted first: see `conductor-ai diff`) |
 | `maxContextBytes` | 60000 | File content sent to chat-only (API) providers |
 | `quotaPattern` | (regex) | Output that counts as a rate-limit error for CLIs |
 | `dailyBudgetUSD` | 2 | Daily cap on known API spend across all providers, in $. 0 = no cap. Providers over budget are skipped like cooled-down ones; free ones never count |
@@ -146,7 +146,7 @@ Your skill library lives in `~/.config/conductor/skills/` (all projects) and `.c
 ```json
 { "skills": { "off": ["php-conventions"] } }
 ```
-Manage them with `conductor skills` or the Skills page in `conductor ui`. See [the guide](GUIDE.md#7-skills-one-library-for-every-controller-and-worker).
+Manage them with `conductor-ai skills` or the Skills page in `conductor-ai ui`. See [the guide](GUIDE.md#7-skills-one-library-for-every-controller-and-worker).
 
 ## Routing: which provider takes which task
 
@@ -164,16 +164,16 @@ Or set rules once, in `routes` (global or per project). The first matching rule 
   { "text": "translate|copy|wording", "role": "docs", "provider": "kilo-free" }
 ] }
 ```
-A rule matches when everything it names holds: `role`, `files` (globs; `**` spans folders, a bare `*.sql` matches anywhere) against the task's listed files, and `text` (a case-insensitive regex) against the task. Highest precedence first: `--chain`, `--provider`, the plan's `provider:` line, routes, then the smart selector. `conductor batch` keeps routed tasks on their provider instead of spreading them.
+A rule matches when everything it names holds: `role`, `files` (globs; `**` spans folders, a bare `*.sql` matches anywhere) against the task's listed files, and `text` (a case-insensitive regex) against the task. Highest precedence first: `--chain`, `--provider`, the plan's `provider:` line, routes, then the smart selector. `conductor-ai batch` keeps routed tasks on their provider instead of spreading them.
 
 Check where a task would go without running it:
 ```bash
-conductor route "add a date picker" --files src/frontend/Booking.tsx
+conductor-ai route "add a date picker" --files src/frontend/Booking.tsx
 ```
 ```bash
-conductor route --plan docs/plan/booking.md --task T3
+conductor-ai route --plan docs/plan/booking.md --task T3
 ```
-For a ready-made set, run `conductor route --add starter` (or pick from the 12 library rules with `conductor route --templates`). The [routing guide](ROUTING.md) explains every rule. In `conductor ui` → Roles → Routing you can add rules from the library, write your own and preview a task. Each run's summary shows a `route:` line, and the Runs page shows why each worker went first.
+For a ready-made set, run `conductor-ai route --add starter` (or pick from the 12 library rules with `conductor-ai route --templates`). The [routing guide](ROUTING.md) explains every rule. In `conductor-ai ui` → Roles → Routing you can add rules from the library, write your own and preview a task. Each run's summary shows a `route:` line, and the Runs page shows why each worker went first.
 
 ## Time limits and model fallback
 
@@ -183,32 +183,32 @@ A worker that runs too long is stopped, with every process it started, and the n
 - **role:** build
 - **eta:** 1h
 ```
-That task may run 2 hours (`timeoutFactor`) before conductor stops it. `--timeout 3h` sets the limit for one command. Antigravity also gets the limit as its own `--print-timeout`.
+That task may run 2 hours (`timeoutFactor`) before conductor-ai stops it. `--timeout 3h` sets the limit for one command. Antigravity also gets the limit as its own `--print-timeout`.
 
 When a model hits its rate limit, the same provider tries its next model before the chain moves on:
 ```json
 "nvidia-nim": { "model": "qwen/qwen3-coder-480b-a35b-instruct", "fallbackModels": ["moonshotai/kimi-k2-instruct"] },
 "opencode":   { "model": "opencode/big-pickle", "fallbackModels": ["opencode/glm-5.3-flash-free"] }
 ```
-Pick model ids from `conductor models <provider>`. Only the limited model cools down. Free API providers (Kilo, OpenRouter free) and providers whose model is picked automatically find fallbacks from their own model list. The run summary shows each model tried, e.g. `nvidia-nim[qwen3-coder](quota) → nvidia-nim[kimi-k2](ok)`.
+Pick model ids from `conductor-ai models <provider>`. Only the limited model cools down. Free API providers (Kilo, OpenRouter free) and providers whose model is picked automatically find fallbacks from their own model list. The run summary shows each model tried, e.g. `nvidia-nim[qwen3-coder](quota) → nvidia-nim[kimi-k2](ok)`.
 
 ## Local models
 
 Ollama, LM Studio, llama.cpp, vLLM, LocalAI, Jan and a LiteLLM proxy are found on their default ports:
 ```bash
-conductor local
+conductor-ai local
 ```
-It lists what's running, its models and the best one for coding (models under 7B are skipped: too small for coding tasks), or what to do next: start the server, or pull a first model (`ollama pull qwen3-coder`) when it only has embedding models. `conductor local --enable` turns the running ones on with that model. `conductor setup` and Providers in `conductor ui` offer the same. Local models are free and private, so the smart selector treats them like free API models.
+It lists what's running, its models and the best one for coding (models under 7B are skipped: too small for coding tasks), or what to do next: start the server, or pull a first model (`ollama pull qwen3-coder`) when it only has embedding models. `conductor-ai local --enable` turns the running ones on with that model. `conductor-ai setup` and Providers in `conductor-ai ui` offer the same. Local models are free and private, so the smart selector treats them like free API models.
 
 ## Saving tokens
 
-Your controller's context is the expensive part, so conductor keeps what it reads small:
+Your controller's context is the expensive part, so conductor-ai keeps what it reads small:
 
 - **Smart selector** (`smartSelect`). Each run's summary shows a `selector:` line when it reorders a chain, e.g. `small task (1 file): free API models first`.
-- **Compact diffs.** `conductor diff` (working tree, new files included), `conductor diff conductor/T3` (a parallel task's branch) or `conductor diff A..B`. Whitespace-only changes, lockfiles, build output and source maps are listed but not shown, with 2 lines of context and long files cut (`--lines`). It prints how much of the full diff it showed. Review workers get the same compact diff.
+- **Compact diffs.** `conductor-ai diff` (working tree, new files included), `conductor-ai diff conductor/T3` (a parallel task's branch) or `conductor-ai diff A..B`. Whitespace-only changes, lockfiles, build output and source maps are listed but not shown, with 2 lines of context and long files cut (`--lines`). It prints how much of the full diff it showed. Review workers get the same compact diff.
 - **Trimmed reports.** `report.md` starts at the worker's `## RESULT` line, so tool transcripts printed before it never reach the controller.
-- **The `/conduct-*` commands** tell the controller to read only the summary, `report.md` and `conductor diff`.
-- **What it adds up to.** Each run's summary has a `context:` line, `conductor diff` prints how much it kept out, and `conductor usage` and the Runs page total them. These are estimates of context kept out of each model (about 4 characters per token), not measured Claude usage:
+- **The `/conduct-*` commands** tell the controller to read only the summary, `report.md` and `conductor-ai diff`.
+- **What it adds up to.** Each run's summary has a `context:` line, `conductor-ai diff` prints how much it kept out, and `conductor-ai usage` and the Runs page total them. These are estimates of context kept out of each model (about 4 characters per token), not measured Claude usage:
   - **Controller tokens:** diff and report text kept out of Claude's context.
   - **Worker tokens:** compacted review diffs.
   - **Free-model picks:** tokens spent on a free model where the role's first choice wasn't free.
@@ -218,18 +218,18 @@ Your controller's context is the expensive part, so conductor keeps what it read
 Every attempt is logged to `~/.config/conductor/usage.jsonl`: provider, model, role, project, result, time and, for API providers, tokens. Cost is known when the provider reports tokens and has a `price` (or is `free`). CLI agents run on your subscriptions, so they're counted in runs and minutes, not dollars.
 
 ```bash
-conductor usage --days 7
+conductor-ai usage --days 7
 ```
 
 Set `settings.dailyBudgetUSD` (or the field on one provider) to stop paid APIs for the rest of the day once the cap is reached; the chain then moves on to free providers and CLI agents. The UI's Runs page shows today's spend against the budget.
 
 ## Run history
 
-Each run leaves `.conductor/runs/<time>-<role>[-task]/` in the project: the task, every provider's log, the winning report and `summary.json`. `conductor runs` lists them (newest first, with result, worker, verify and warnings), `conductor runs show <run>` prints one in full, and the UI's Runs page shows the same list, refreshing every few seconds.
+Each run leaves `.conductor/runs/<time>-<role>[-task]/` in the project: the task, every provider's log, the winning report and `summary.json`. `conductor-ai runs` lists them (newest first, with result, worker, verify and warnings), `conductor-ai runs show <run>` prints one in full, and the UI's Runs page shows the same list, refreshing every few seconds.
 
 ## Cooldown state
 
-Shared across projects in `~/.config/conductor/state.json`. See it with `conductor cooldown` and clear it with `conductor cooldown --clear [name]` (or from the UI Overview).
+Shared across projects in `~/.config/conductor/state.json`. See it with `conductor-ai cooldown` and clear it with `conductor-ai cooldown --clear [name]` (or from the UI Overview).
 
 ## Priority: tokens or time
 
@@ -246,15 +246,15 @@ Speed costs tokens: a second attempt at the same task finishes sooner, but both 
 | Extra tokens | none | free routes only: costs you nothing, may use their daily limits | up to about 2× on the hedged or raced tasks; subscription agents spend their own quota |
 
 **Guidance**
-- Hedging and racing need at least two fast, reliable routes. With one free model, `speed` has nothing to hedge onto; the run is the same as `balanced`. Add a second route first (`conductor add <provider>`, `conductor providers --free`).
-- Pay-per-token routes (a `price` in the provider's config) never take a hedge or a race, under any priority: conductor won't spend money to save time without you choosing that route yourself.
+- Hedging and racing need at least two fast, reliable routes. With one free model, `speed` has nothing to hedge onto; the run is the same as `balanced`. Add a second route first (`conductor-ai add <provider>`, `conductor-ai providers --free`).
+- Pay-per-token routes (a `price` in the provider's config) never take a hedge or a race, under any priority: conductor-ai won't spend money to save time without you choosing that route yourself.
 - The controller's own CLI never takes a hedge: it is what you are trying to save.
 - Hedging starts only after at least one task in the batch has finished, so there is a median to compare against. A batch of tasks that all take about as long never hedges.
 - The first hedge goes to the idle route expected to be fastest for a task this size. If that route turns out slow too and a clearly faster one frees up later, it gets another attempt (up to `hedgeMax`).
 - The losers of a hedge are stopped and their worktrees removed; the batch line shows `hedged: … won`.
 
 ```bash
-conductor batch --plan docs/plan/x.md --tasks T1,T2,T3,T4 --priority speed
+conductor-ai batch --plan docs/plan/x.md --tasks T1,T2,T3,T4 --priority speed
 ```
 
-To make it the default, set `"settings": { "priority": "save" }` in `.conductor/config.json` (this project) or the global config (`conductor config` shows where).
+To make it the default, set `"settings": { "priority": "save" }` in `.conductor/config.json` (this project) or the global config (`conductor-ai config` shows where).

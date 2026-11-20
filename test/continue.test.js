@@ -35,7 +35,7 @@ function setup() {
   };
   fs.mkdirSync(path.join(dir, '.conductor'), { recursive: true });
   fs.writeFileSync(path.join(dir, '.conductor/config.json'), JSON.stringify({ providers, roles: { build: ['agent-w'], fix: ['agent-w'] }, settings: { autoVerify: false } }));
-  git('add', '-A'); git('commit', '-qm', 'conductor config');
+  git('add', '-A'); git('commit', '-qm', 'conductor-ai config');
   return { dir, git, cfg: loadConfig(dir) };
 }
 
@@ -66,7 +66,7 @@ test('continue: a failed retry keeps the worktree and its earlier work; another 
   assert.equal(other.winner, 'agent-other');
 });
 
-test('continue without a worktree says how to start one; conductor retry runs it from the CLI', async () => {
+test('continue without a worktree says how to start one; conductor-ai retry runs it from the CLI', async () => {
   const { dir, cfg } = setup();
   await assert.rejects(dispatch(cfg, { role: 'build', planPath: 'docs/plan.md', taskId: 'T1', continue: true, note: 'x' }), /no worktree for "T1"/);
   await dispatch(cfg, { role: 'build', planPath: 'docs/plan.md', taskId: 'T1', worktree: true, chain: ['agent-w'] });

@@ -22,9 +22,9 @@ test('a run on a terminal: event lines as before, plus one status line with the 
   p.step({ type: 'verify' });
   p.stop();
   const out = plain(s.out);
-  assert.match(out, /conductor: trying codex-cli \(agent\)…\n/);
+  assert.match(out, /conductor-ai: trying codex-cli \(agent\)…\n/);
   assert.match(out, /codex-cli is working · 0:00 of 20:00/);
-  assert.match(out, /conductor: codex-cli finished\n/);
+  assert.match(out, /conductor-ai: codex-cli finished\n/);
   assert.match(out, /running verify · 0:00/);
   assert.ok(s.out.endsWith('\r\x1b[2K'), 'the status line is cleared at the end');
 });
@@ -36,7 +36,7 @@ test('a run when piped: only the plain lines, nothing redrawn', () => {
   p.line('good finished', 'attempt 2');
   p.step({ type: 'try', provider: 'good', limitMs: 1000 });
   p.stop();
-  assert.equal(s.out, 'conductor: trying good (agent)…\nconductor [attempt 2]: good finished\n');
+  assert.equal(s.out, 'conductor-ai: trying good (agent)…\nconductor-ai [attempt 2]: good finished\n');
 });
 
 test('a batch on a terminal: one row per task, redrawn in place, with worker, state and time', () => {
@@ -61,7 +61,7 @@ test('a batch when piped: the plain lines batch always printed', () => {
   b.event({ task: 'T1', type: 'try', provider: 'good' });
   b.event({ task: 'T1', type: 'done', outcome: 'done' });
   b.stop();
-  assert.equal(s.out, 'conductor [T1]: starting (first choice: good)\nconductor [T1]: trying good…\nconductor [T1]: done\n');
+  assert.equal(s.out, 'conductor-ai [T1]: starting (first choice: good)\nconductor-ai [T1]: trying good…\nconductor-ai [T1]: done\n');
 });
 
 test('a batch race: the row names the worker that won, not the one that started last, and ignores the loser', () => {

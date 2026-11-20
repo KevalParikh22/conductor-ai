@@ -64,7 +64,7 @@ function stateFor(root) {
     controllerPreset: cfg.providers[controllerWorker(cfg.controller)]?.preset || null, // the controller's own CLI: never suggested as a worker
     presets: Object.fromEntries(Object.entries(CLI_PRESETS).map(([k, v]) => [k, { label: v.label, bin: v.bin, install: v.install, login: v.login, docs: v.docs, permissions: v.permissions || null, takesModel: !!v.modelArgs?.length, installed: !!which(v.bin), beta: !!v.beta }])),
     roles: ROLES, controllers: allControllers(root), catalog: catalogStatus(cfg),
-    env: { node: process.version, platform: os.platform(), conductorOnPath: !!which('conductor'), git: !!which('git'), home: os.homedir() },
+    env: { node: process.version, platform: os.platform(), conductorOnPath: !!which('conductor-ai'), git: !!which('git'), home: os.homedir() },
   };
 }
 
@@ -123,7 +123,7 @@ export function createUiServer({ cwd = process.cwd(), token = crypto.randomBytes
       return send(200, html, 'text/html; charset=utf-8');
     }
     if (!url.pathname.startsWith('/api/')) return send(404, { error: 'not found' });
-    if (req.headers['x-conductor-token'] !== token) return send(401, { error: 'missing or wrong token: open the URL printed by `conductor ui`' });
+    if (req.headers['x-conductor-token'] !== token) return send(401, { error: 'missing or wrong token: open the URL printed by `conductor-ai ui`' });
 
     let body = {};
     if (req.method !== 'GET') {
@@ -194,7 +194,7 @@ export function createUiServer({ cwd = process.cwd(), token = crypto.randomBytes
           const r = await addProviderAuto(root, String(body.id || ''), { key: body.key || undefined, model: body.model || undefined, fields: body.fields || {}, scope: body.scope === 'project' ? 'project' : 'global' });
           return send(200, { ...stateFor(root), added: { name: r.name, model: r.provider.model, roles: r.roles, warning: r.warning } });
         }
-        // skills: the same functions as `conductor skills`; every change re-syncs the controller folders
+        // skills: the same functions as `conductor-ai skills`; every change re-syncs the controller folders
         case 'GET /api/skills': return send(200, skillsState(root));
         case 'POST /api/skills/toggle': setSkillOn(root, String(body.name), !!body.on); return send(200, skillsState(root, syncSkills(root)));
         case 'POST /api/skills/new': newSkill(root, String(body.name || ''), { scope: body.scope === 'project' ? 'project' : 'global', description: body.description, files: body.files, roles: body.roles, text: body.text }); return send(200, skillsState(root, syncSkills(root)));
@@ -263,6 +263,6 @@ export async function startUi({ port = 4545, open = true, cwd } = {}) {
     p = await ui.listen(0); // pick a free port
   }
   const url = `http://127.0.0.1:${p}/#t=${ui.token}`;
-  console.log(`conductor ui → ${url}\nproject: ${ui.root}\n(Ctrl+C to stop. The token in the URL protects the API; don't share it.)`);
+  console.log(`conductor-ai ui → ${url}\nproject: ${ui.root}\n(Ctrl+C to stop. The token in the URL protects the API; don't share it.)`);
   if (open) openBrowser(url);
 }

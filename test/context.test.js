@@ -73,7 +73,7 @@ test('both kinds of worker get the pack in their prompt, plus their own promptEx
   let s = await dispatch(cfg, { role: 'build', planPath: 'docs/plan/p.md', taskId: 'T1', chain: ['ag'], noReview: true });
   assert.equal(s.winner, 'ag');
   const ap = fs.readFileSync(process.env.CX_PROMPT, 'utf8');
-  assert.match(ap, /## Context \(gathered by conductor[\s\S]*Verify\*\* \(must pass before DONE\): `npm run test`[\s\S]*`src\/checkout\.js`: total:1,2/);
+  assert.match(ap, /## Context \(gathered by conductor-ai[\s\S]*Verify\*\* \(must pass before DONE\): `npm run test`[\s\S]*`src\/checkout\.js`: total:1,2/);
   assert.match(ap, /## Note for this model\nKeep functions under 20 lines\.\n[\s\S]*## Before you finish/, 'the extra comes before the recited criteria, which stay last');
   dir = mk();
   cfg = loadConfig(dir);

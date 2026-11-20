@@ -62,7 +62,7 @@ test('init (codex-cli) keeps the controller section conditional in AGENTS.md', (
   const { dir } = makeRepo();
   const r = initProject(dir, { controller: 'codex-cli' });
   assert.match(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), /Workers: ignore this section/);
-  assert.ok(r.notes.some((n) => n.includes('codex mcp add conductor -- conductor-ai mcp')) || codexHasConductor(), 'register hint unless already registered');
+  assert.ok(r.notes.some((n) => n.includes('codex mcp add conductor-ai -- conductor-ai mcp')) || codexHasConductor(), 'register hint unless already registered');
   assert.ok(fs.existsSync(path.join(dir, '.agents/skills/conduct-plan/SKILL.md')), 'Codex reads skills from .agents/skills');
   assert.ok(!fs.existsSync(path.join(dir, '.conductor/commands')), 'no prompts in a folder no tool reads');
 });
@@ -207,7 +207,7 @@ test('whatsNew: newest sections, top-level bullets cut to their first sentence, 
   assert.deepEqual(whatsNew(path.join(home, 'nope.md')), { sections: [] });
 });
 
-test('init moves an MCP entry an older init wrote (conductor mcp) to conductor-ai; one you changed is kept', () => {
+test('init moves an MCP entry an older init wrote (conductor-ai mcp) to conductor-ai; one you changed is kept', () => {
   const { dir } = makeRepo();
   fs.writeFileSync(path.join(dir, '.mcp.json'), JSON.stringify({ mcpServers: { conductor: { command: 'conductor', args: ['mcp'] }, other: { command: 'x' } } }));
   initProject(dir, { controller: 'claude-code' });

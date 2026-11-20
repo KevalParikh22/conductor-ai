@@ -94,7 +94,7 @@ function dropRetired(cfg) {
     notices.push(`${name}: ${RETIRED[p.preset]}. It was left out of your chains; remove it from your config to hide this message`);
   }
   if (RETIRED_CONTROLLERS[cfg.controller]) {
-    notices.push(`controller "${cfg.controller}" was removed; using "${RETIRED_CONTROLLERS[cfg.controller]}". Run: conductor init --controller ${RETIRED_CONTROLLERS[cfg.controller]}`);
+    notices.push(`controller "${cfg.controller}" was removed; using "${RETIRED_CONTROLLERS[cfg.controller]}". Run: conductor-ai init --controller ${RETIRED_CONTROLLERS[cfg.controller]}`);
     cfg.controller = RETIRED_CONTROLLERS[cfg.controller];
   }
   return notices;
@@ -154,7 +154,7 @@ export function validateConfig(cfg) {
     if (p.type === 'cli' && !CLI_PRESETS[p.preset] && !(p.bin && p.write)) errors.push(`provider ${name}: unknown preset "${p.preset}" (or give bin + write/read args)`);
     if (p.type !== 'cli' && p.type !== 'manual' && !p.baseUrl) errors.push(`provider ${name}: baseUrl is required`);
     // never echo the value: it is often the key itself, pasted into the wrong field
-    if (p.apiKeyEnv && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(String(p.apiKeyEnv))) errors.push(`provider ${name}: "API key env var" takes the name of a variable (like KILO_API_KEY), not the key itself. Paste the key on the API keys page, or run: conductor keys set <NAME>`);
+    if (p.apiKeyEnv && !/^[A-Za-z_][A-Za-z0-9_]*$/.test(String(p.apiKeyEnv))) errors.push(`provider ${name}: "API key env var" takes the name of a variable (like KILO_API_KEY), not the key itself. Paste the key on the API keys page, or run: conductor-ai keys set <NAME>`);
     if (p.fallbackModels !== undefined && !(Array.isArray(p.fallbackModels) && p.fallbackModels.every((m) => typeof m === 'string'))) errors.push(`provider ${name}: fallbackModels must be a list of model names`);
     for (const k of ['timeoutMin', 'idleTimeoutMin']) if (p[k] !== undefined && !(Number(p[k]) > 0 || (k === 'idleTimeoutMin' && Number(p[k]) === 0))) errors.push(`provider ${name}: ${k} must be a number of minutes`);
   }

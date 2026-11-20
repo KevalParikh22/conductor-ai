@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>conductor</title>
+<title>conductor-ai</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234f46e5'/%3E%3Cg fill='none' stroke='white' stroke-width='2.6' stroke-linecap='round'%3E%3Cpath d='M8 25 L19 9'/%3E%3Cpath d='M6 16h3M23 16h3M16 23v3'/%3E%3C/g%3E%3Ccircle cx='21' cy='7' r='2.6' fill='white'/%3E%3C/svg%3E">
 <meta name="theme-color" content="#4f46e5">
 <style>
@@ -240,7 +240,7 @@ body { overflow-x: hidden; }
   <div class="bar">
     <a class="brand" href="#" id="brand" title="Overview">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 20 L14 6"/><circle cx="16" cy="4.5" r="2"/><path d="M3 12h3M18 12h3M12 18v3"/></svg>
-      conductor
+      conductor-ai
     </a>
     <span class="proj" id="proj"></span>
     <span class="spacer"></span>
@@ -265,7 +265,7 @@ body { overflow-x: hidden; }
 <div id="npanel" role="dialog" aria-label="Notifications" hidden></div>
 <dialog id="confirm" aria-labelledby="cf-title"><div class="dlg-b"><h2 id="cf-title">Save changes?</h2><div id="cf-body"></div></div>
   <div class="dlg-f"><button class="btn" id="cf-cancel">Cancel</button><button class="btn primary" id="cf-save">Save</button></div></dialog>
-<div id="offline" role="alert" hidden><b>conductor ui has stopped.</b> Nothing you change here is saved. Run <code>conductor ui</code> again in a terminal and open the new link it prints.</div>
+<div id="offline" role="alert" hidden><b>conductor-ai ui has stopped.</b> Nothing you change here is saved. Run <code>conductor-ai ui</code> again in a terminal and open the new link it prints.</div>
 <div id="toast" role="status"></div>
 <script>
 const TOKEN = new URLSearchParams(location.hash.slice(1)).get('t') || '';
@@ -337,7 +337,7 @@ $('#theme').onclick = () => {
 };
 
 // the browser says only "Failed to fetch" when the page can't reach its server: say what that means here
-const OFFLINE = 'Can\'t reach conductor ui: its server has stopped (the terminal that ran `conductor ui` was closed, or it was stopped). Run `conductor ui` again and use the new link. Nothing was saved.';
+const OFFLINE = 'Can\'t reach conductor-ai ui: its server has stopped (the terminal that ran `conductor-ai ui` was closed, or it was stopped). Run `conductor-ai ui` again and use the new link. Nothing was saved.';
 async function api(method, path, body) {
   let r;
   try { r = await fetch(path, { method, headers: { 'content-type': 'application/json', 'x-conductor-token': TOKEN }, body: body ? JSON.stringify(body) : undefined }); }
@@ -457,14 +457,14 @@ function fetchRun(id) {
 function overviewExtras() {
   if (!statsData || !guardData) { loadOverviewExtras(); return ''; }
   const q = statsData.quality, g = guardData;
-  const quality = q ? `<div class="card stat"><div class="l" title="Done with one worker, no hand-off or retry (conductor stats)">Accepted first try (${q.days} days)</div><div class="n">${q.writeTasks ? `${q.firstTryRate}%` : '–'}</div><div class="note">${q.writeTasks ? `${q.firstTry} of ${q.writeTasks} write tasks · alpha gate: ${esc(q.gate)}` : 'no write tasks yet'}</div></div>` : '';
-  const guard = g.controller ? `<div class="card stat"><div class="l" title="conductor guard">Push guard</div><div class="n" style="font-size:16px">${!g.supported ? 'not available' : g.on ? 'on' : 'off'}</div><div class="note">${g.supported ? `blocks the controller's git push while the last verify failed (commits are fine) · last verify: ${g.lastVerify ? esc(g.lastVerify.status) : 'none'}` : 'only Claude Code and Antigravity'}</div>${g.supported ? `<button class="btn small" id="guard-toggle" style="margin-top:6px">${g.on ? 'Turn off' : 'Turn on'}</button>` : ''}</div>` : '';
+  const quality = q ? `<div class="card stat"><div class="l" title="Done with one worker, no hand-off or retry (conductor-ai stats)">Accepted first try (${q.days} days)</div><div class="n">${q.writeTasks ? `${q.firstTryRate}%` : '–'}</div><div class="note">${q.writeTasks ? `${q.firstTry} of ${q.writeTasks} write tasks · alpha gate: ${esc(q.gate)}` : 'no write tasks yet'}</div></div>` : '';
+  const guard = g.controller ? `<div class="card stat"><div class="l" title="conductor-ai guard">Push guard</div><div class="n" style="font-size:16px">${!g.supported ? 'not available' : g.on ? 'on' : 'off'}</div><div class="note">${g.supported ? `blocks the controller's git push while the last verify failed (commits are fine) · last verify: ${g.lastVerify ? esc(g.lastVerify.status) : 'none'}` : 'only Claude Code and Antigravity'}</div>${g.supported ? `<button class="btn small" id="guard-toggle" style="margin-top:6px">${g.on ? 'Turn off' : 'Turn on'}</button>` : ''}</div>` : '';
   // failure causes (this project's runs, then worker attempts everywhere) and the weekly first-try trend
   const f = statsData.failures || {};
   const causes = (f.causes || []).slice(0, 4), kinds = (f.attempts || []).slice(0, 3);
   const why = causes.length || kinds.length ? `<div class="card"><h2>Why work failed (${f.days} days)</h2>
     ${causes.length ? `<table><tr><th>Runs not done</th><th>How many</th></tr>${causes.map((c) => `<tr><td>${esc(c.cause)}</td><td>${c.count}</td></tr>`).join('')}</table>` : '<p class="note">Every run in this project ended done.</p>'}
-    ${kinds.length ? `<p class="note" style="margin-top:8px">Failed worker attempts (all projects): ${kinds.map((k) => `${esc(k.kind)} <b>${k.count}</b>`).join(' · ')}. Details: <span class="mono">conductor stats --failures</span></p>` : ''}</div>` : '';
+    ${kinds.length ? `<p class="note" style="margin-top:8px">Failed worker attempts (all projects): ${kinds.map((k) => `${esc(k.kind)} <b>${k.count}</b>`).join(' · ')}. Details: <span class="mono">conductor-ai stats --failures</span></p>` : ''}</div>` : '';
   const tr = statsData.trend || [];
   const trend = tr.some((w) => w.writeTasks) ? `<div class="card"><h2>Accepted first try, by week</h2><div class="trend">${tr.map((w) => `<div class="tw" title="${esc(`week of ${w.week}: ${w.writeTasks ? `${w.firstTry} of ${w.writeTasks} write tasks` : 'no write tasks'}`)}">
       <div class="tbar"><span style="height:${w.rate ?? 0}%" class="${w.rate == null ? '' : w.rate >= 70 ? 'ok' : 'low'}"></span></div><b>${w.rate == null ? '–' : `${w.rate}%`}</b><span class="note">${esc(w.week.slice(5))}</span></div>`).join('')}</div>
@@ -477,7 +477,7 @@ function runPage() {
   if (!runDet) { fetchRun(runOpen); return `<div class="head">${back}<h1>Run</h1><p class="sub">Loading…</p></div>`; }
   const d = runDet;
   const det = (title, body, open = false) => body ? `<details class="card" ${open ? 'open' : ''}><summary><b>${title}</b></summary><pre class="cmd" style="max-height:480px">${esc(body)}</pre></details>` : '';
-  const next = d.branch ? [`conductor diff ${d.branch}`, `git merge --no-ff ${d.branch}`, `conductor worktree rm ${d.worktreeId}`, `conductor worktree rm ${d.worktreeId} --force`] : [];
+  const next = d.branch ? [`conductor-ai diff ${d.branch}`, `git merge --no-ff ${d.branch}`, `conductor-ai worktree rm ${d.worktreeId}`, `conductor-ai worktree rm ${d.worktreeId} --force`] : [];
   return `<div class="head">${back}<h1>${esc(d.role)}${d.task ? ` · ${esc(d.task)}` : ''}</h1>
     <p class="sub"><span class="mono">${esc(d.id)}</span>${d.plan ? ` · plan <span class="mono">${esc(d.plan)}</span>` : ''} · ${d.validated ? '<span class="pill ok">validated: every required check passed</span>' : '<span class="pill bad">not validated</span>'} · result <b>${esc(d.state)}</b></p></div>
     <div class="card"><h2>Checks</h2><p class="note">A run counts as done only when every required check passes (or was waived on purpose). Info rows don't decide it.</p>
@@ -490,10 +490,10 @@ function runPage() {
       <td>${a.seconds != null ? `${a.seconds}s` : ''}</td><td>${a.tokens ? `${(a.tokens.input || 0).toLocaleString()} / ${(a.tokens.output || 0).toLocaleString()}` : '–'}</td>
       <td class="note">${esc(a.next || '')}</td></tr>`).join('')}</table>
       ${d.warnings.length ? d.warnings.map((w) => `<div class="note">⚠ ${esc(w)}</div>`).join('') : ''}</div>
-    ${d.waiting && !d.waiting.importedAs ? `<div class="card"><h2>Waiting for your answer</h2><p class="note">Paste this prompt (${d.waiting.chars} characters) into any web chat (DeepSeek, Kimi, Qwen, Gemini, ChatGPT…), then paste its whole answer below. conductor applies and checks it like any worker's; it never opens the chat itself.</p>
+    ${d.waiting && !d.waiting.importedAs ? `<div class="card"><h2>Waiting for your answer</h2><p class="note">Paste this prompt (${d.waiting.chars} characters) into any web chat (DeepSeek, Kimi, Qwen, Gemini, ChatGPT…), then paste its whole answer below. conductor-ai applies and checks it like any worker's; it never opens the chat itself.</p>
       <div class="row"><button class="btn small" id="mw-copy">${icon('copy')} Copy prompt</button><span class="note mono">${esc(d.waiting.prompt)}</span></div>
       <textarea id="mw-answer" rows="10" style="width:100%;margin-top:8px;font-family:var(--mono);font-size:12.5px" placeholder="Paste the chat's answer here"></textarea>
-      <div class="row" style="margin-top:8px"><button class="btn primary" id="mw-import">Import the answer</button><span class="note">Same as <span class="mono">conductor import ${esc(d.id)} answer.md</span></span></div></div>` : d.waiting?.importedAs ? `<div class="card"><h2>Answered</h2><p class="note">Your answer was imported as <a href="#" data-run="${esc(d.waiting.importedAs)}">run ${esc(d.waiting.importedAs)}</a>.</p></div>` : ''}
+      <div class="row" style="margin-top:8px"><button class="btn primary" id="mw-import">Import the answer</button><span class="note">Same as <span class="mono">conductor-ai import ${esc(d.id)} answer.md</span></span></div></div>` : d.waiting?.importedAs ? `<div class="card"><h2>Answered</h2><p class="note">Your answer was imported as <a href="#" data-run="${esc(d.waiting.importedAs)}">run ${esc(d.waiting.importedAs)}</a>.</p></div>` : ''}
     ${next.length ? `<div class="card"><h2>Next</h2><p class="note">Review the diff, then merge it, or discard the branch. Run these in the project.</p>${cmd(next[0])}${cmd(next[1])}${cmd(next[2])}<p class="note">Discard instead:</p>${cmd(next[3])}</div>` : ''}
     ${d.changed.length ? `<div class="card"><h2>Files changed</h2><div class="mono">${d.changed.map(esc).join('<br>')}</div></div>` : ''}
     ${det('Report', d.report, true)}${det('Diff', d.diff)}`;
@@ -570,22 +570,22 @@ const views = {
     return `<div class="head"><h1>Skills</h1><p class="sub">One skill library for your controller and every worker.</p></div>
     <div class="card soon">${icon('skills')}<h2>Coming soon</h2>
       <p>This page will let you browse, write and switch skills on per project, and choose which workers get each one by role, files or task text.</p>
-      <p class="note">It works today in the terminal:</p>${cmd('conductor skills')}</div>`;
+      <p class="note">It works today in the terminal:</p>${cmd('conductor-ai skills')}</div>`;
   },
   lessons() {
     if (!lessonsData || !rulesData) { loadLessons(); return '<div class="head"><h1>Lessons &amp; rules</h1><p class="sub">Loading…</p></div>'; }
     const ls = lessonsData.lessons;
     const kind = (l) => l.source === 'auto' ? l.kind : l.source;
-    return `<div class="head"><h1>Lessons &amp; rules</h1><p class="sub">What earlier work here taught and the project's rules, the same as <span class="mono">conductor lessons</span> and <span class="mono">conductor rules</span>.</p></div>
+    return `<div class="head"><h1>Lessons &amp; rules</h1><p class="sub">What earlier work here taught and the project's rules, the same as <span class="mono">conductor-ai lessons</span> and <span class="mono">conductor-ai rules</span>.</p></div>
     <div class="card"><h2>Add a lesson</h2><div class="row"><input id="ls-text" placeholder="e.g. Use the existing date helpers in src/lib" style="flex:1"><input id="ls-files" placeholder="files or folders (optional)" style="width:220px"><button class="btn primary" id="ls-add">${icon('plus')} Add</button></div>
       <p class="note">Matching lessons go into later workers' prompts. A provider with 2+ unresolved failures on one kind of work moves to the back until it passes that work here again.</p></div>
     <div class="card"><h2>Lessons</h2>${ls.length ? `<table><tr><th>Lesson</th><th>Kind</th><th>Provider</th><th>Seen</th><th></th></tr>${ls.map((l) => `<tr>
         <td>${esc(l.text)}${l.dirs?.length && l.dirs[0] !== '.' ? `<div class="note mono">${l.dirs.map(esc).join(', ')}</div>` : ''}</td>
         <td><span class="pill">${esc(kind(l))}</span>${l.promoted ? ' <span class="pill ok">rule</span>' : ''}${l.resolvedAt ? ' <span class="pill" title="The provider passed this kind of work here later">resolved</span>' : ''}</td>
         <td>${esc(l.provider || '–')}</td><td>×${l.count || 1}</td>
-        <td class="row" style="gap:4px">${!l.promoted ? `<button class="btn small ${l.promote ? 'primary' : ''}" data-lspromote="${esc(l.id)}" title="Add it to AGENTS.md as a rule for every controller and worker">${l.promote ? 'Promote (seen 3+×)' : 'Promote'}</button>` : ''}<button class="btn small ghost" data-lsrm="${esc(l.id)}">Remove</button></td></tr>`).join('')}</table>` : '<p class="note">No lessons yet. conductor records them from failed checks and from your notes on retries.</p>'}</div>
+        <td class="row" style="gap:4px">${!l.promoted ? `<button class="btn small ${l.promote ? 'primary' : ''}" data-lspromote="${esc(l.id)}" title="Add it to AGENTS.md as a rule for every controller and worker">${l.promote ? 'Promote (seen 3+×)' : 'Promote'}</button>` : ''}<button class="btn small ghost" data-lsrm="${esc(l.id)}">Remove</button></td></tr>`).join('')}</table>` : '<p class="note">No lessons yet. conductor-ai records them from failed checks and from your notes on retries.</p>'}</div>
     <div class="card"><h2>Rules</h2>${rulesData.rules.length ? `<table><tr><th>Rule</th><th>Covers</th><th>Files</th></tr>${rulesData.rules.map((r) => `<tr><td><b>${esc(r.name)}</b></td><td>${esc(r.description)}</td><td class="mono">${r.paths.length ? r.paths.map(esc).join(', ') : 'all files'}</td></tr>`).join('')}</table>` : '<p class="note">No project rules yet.</p>'}
-      <p class="note">Rules live in <span class="mono">${esc(rulesData.dir)}</span>. New rule: ${cmd('conductor rules new <name>')} Every controller gets them in its own format (<span class="mono">conductor rules sync</span>).</p></div>`;
+      <p class="note">Rules live in <span class="mono">${esc(rulesData.dir)}</span>. New rule: ${cmd('conductor-ai rules new <name>')} Every controller gets them in its own format (<span class="mono">conductor-ai rules sync</span>).</p></div>`;
   },
   runs() {
     if (runOpen) return runPage();
@@ -598,12 +598,12 @@ const views = {
       partial: `<span class="pill warn" title="${esc(r.status || 'the worker did only part of the task')}">partial</span>`,
       'verify-failed': '<span class="pill bad" title="The worker finished, but verify fails">verify failed</span>',
       'out-of-scope': `<span class="pill warn" title="${esc('Changed files the task does not list: ' + (r.outside || []).join(', '))}">out of scope</span>`,
-      unverified: '<span class="pill warn" title="The worker wrote code, but no verify ran, so nothing proves it works. Set a verify command (conductor init --verify)">unverified</span>',
+      unverified: '<span class="pill warn" title="The worker wrote code, but no verify ran, so nothing proves it works. Set a verify command (conductor-ai init --verify)">unverified</span>',
       waiting: '<span class="pill warn" title="Waiting for your answer from a web chat: open the run to copy the prompt and paste the answer">waiting for you</span>',
       answered: '<span class="pill" title="Your answer was imported as a new run">answered</span>',
     }[r.state] || '<span class="pill bad">failed</span>');
     const verify = (v) => !v ? '–' : `<span class="pill ${v === 'PASS' ? 'ok' : v === 'FAIL' ? 'bad' : ''}">${esc(v)}</span>`;
-    return `<div class="head"><h1>Runs</h1><p class="sub">Work handed out in this project, newest first, refreshed every few seconds (<span class="mono">conductor runs</span> in the terminal).</p></div>
+    return `<div class="head"><h1>Runs</h1><p class="sub">Work handed out in this project, newest first, refreshed every few seconds (<span class="mono">conductor-ai runs</span> in the terminal).</p></div>
     <div class="grid">
       <div class="card stat"><div class="l">Runs (last ${usage.days} days, all projects)</div><div class="n">${usage.rows.reduce((t, r) => t + r.runs, 0)}</div></div>
       <div class="card stat"><div class="l" title="Estimated from characters (about 4 per token) kept out of each model's context. Not measured Claude usage.">Context kept out (estimate)</div><div class="n">${usage.savings?.total ? `~${usage.savings.total.toLocaleString()}` : '<span class="note" style="font-size:16px">none yet</span>'}</div><div class="note">${usage.savings?.total ? `controller ~${usage.savings.controller.toLocaleString()} · workers ~${usage.savings.workers.toLocaleString()}${usage.savings.freeRuns ? ` · ${usage.savings.freeRuns} task${usage.savings.freeRuns === 1 ? '' : 's'} moved to free models` : ''}` : 'compact diffs, trimmed reports and free-model picks'}</div></div>
@@ -616,7 +616,7 @@ const views = {
         <td>${esc(r.winner || '–')}${r.why ? `<div class="note">${esc(r.why)}</div>` : ''}${r.attempts?.length > 1 ? `<div class="note">${r.attempts.map((a) => a.ok ? `${esc(a.provider)} ✓` : `<span title="${esc(a.reason + (a.next ? ' — next: ' + a.next : ''))}">${esc(a.provider)} ✗</span>`).join(' → ')}</div>` : ''}</td>
         <td>${verify(r.verify)}</td><td>${r.changed ?? '–'}</td><td>${r.seconds != null ? `${r.seconds}s` : ''}</td></tr>
         ${r.warnings?.length || r.fixes?.length ? `<tr><td></td><td colspan="6">${(r.warnings || []).map((w) => `<div class="note">⚠ ${esc(w)}</div>`).join('')}${(r.fixes || []).map((f) => `<div class="note"><b>Fix:</b> ${esc(f)}</div>`).join('')}</td></tr>` : ''}`).join('')}
-      </table>` : '<p class="note">No runs yet. They appear here when your controller hands out work (<span class="mono">conductor run …</span>).</p>'}</div>
+      </table>` : '<p class="note">No runs yet. They appear here when your controller hands out work (<span class="mono">conductor-ai run …</span>).</p>'}</div>
     <div class="card"><h2>Usage by provider</h2><p class="note">Last ${usage.days} days, all projects. CLI agents run on your subscriptions, so they show runs and time; API providers also show tokens and, when a price is set, cost.</p>
       ${usage.rows.length ? `<table><tr><th>Provider</th><th>Runs</th><th>Succeeded</th><th>Tokens in / out</th><th>Cost</th><th>Time</th></tr>
       ${usage.rows.map((u) => `<tr><td>${esc(u.provider)}</td><td>${u.runs}</td><td>${u.ok}</td><td>${u.input || u.output ? `${u.input.toLocaleString()} / ${u.output.toLocaleString()}` : '–'}</td><td>${u.subscription ? '<span class="note">subscription</span>' : u.cost ? money(u.cost) : u.costKnown ? '$0' : '? (no price)'}</td><td>${Math.round(u.seconds / 60)} min</td></tr>`).join('')}</table>` : '<p class="note">Nothing recorded yet.</p>'}</div>`;
@@ -716,7 +716,7 @@ const views = {
       </div><div class="note" id="test-${esc(n)}" style="padding:0 18px"></div></div>`; };
     return `<div class="head"><h1>Providers</h1><span class="spacer"></span>
         <button class="btn ${pAdd ? '' : 'primary'}" id="padd">${icon(pAdd ? 'x' : 'plus')} ${pAdd ? 'Close' : 'Add provider'}</button>
-        <p class="sub">The workers conductor can hand tasks to: switch them on or off, and open a row for its model, endpoint and permissions.</p></div>
+        <p class="sub">The workers conductor-ai can hand tasks to: switch them on or off, and open a row for its model, endpoint and permissions.</p></div>
       <datalist id="dl-oc">${['opencode/big-pickle', 'opencode/glm-5.3-flash-free', 'opencode/deepseek-v4.1-flash-free', 'opencode/nemotron-3-ultra-free', 'opencode/mimo-v2.6-flash-free'].map((m) => `<option value="${m}">`).join('')}</datalist>
       <datalist id="dl-or"><option value="openrouter/free">${(freeModels || []).map((m) => `<option value="${esc(m.id)}">${m.tools ? 'tools · ' : ''}${m.context || ''}</option>`).join('')}</datalist>
       ${pAdd ? gallery() : ''}
@@ -737,7 +737,7 @@ const views = {
     ${keys.map((k) => `<tr><td class="mono">${esc(k.name)}</td><td>${k.set ? `<span class="pill ok">set ${esc(k.hint)}</span> <span class="note">${esc(k.source)}</span>` : '<span class="pill" title="Optional: only the providers that use this key need it">not set</span>'}</td><td class="note">${esc(k.usedBy.join(', ') || '-')}</td>
       <td><div class="row" style="flex-wrap:nowrap"><input type="text" class="secret" autocomplete="off" spellcheck="false" autocapitalize="off" data-1p-ignore data-lpignore="true" data-bwignore="true" data-form-type="other" data-key="${esc(k.name)}" placeholder="paste key" aria-label="${esc(k.name)}"><button class="btn small" data-savekey="${esc(k.name)}">Save</button>${k.source === 'secrets file' ? `<button class="btn small" data-delkey="${esc(k.name)}">Remove</button>` : ''}</div></td></tr>`).join('')}
     </table></div>
-    <p class="note">Need a key? Each provider's guide links to where you get one: <b>Providers → Add provider</b> (filter <b>Free</b>), or <span class="mono">conductor providers --free</span>. kilo-free and OVHcloud work without one.</p>`;
+    <p class="note">Need a key? Each provider's guide links to where you get one: <b>Providers → Add provider</b> (filter <b>Free</b>), or <span class="mono">conductor-ai providers --free</span>. kilo-free and OVHcloud work without one.</p>`;
   },
   settings() {
     // shown in the unit people think in (minutes, KB); saved in the unit the config uses (seconds, bytes)
@@ -768,46 +768,46 @@ const views = {
       ${chk('smartSelect', 'Smart selector: try the cheapest capable provider first (free API models for small tasks, agents for big ones)')}</div></div>
     <div class="card"><h2>${icon('lock')} Your data</h2><ul style="margin:0;padding-left:20px;line-height:1.7">
       <li>Everything stays on this machine: your config, API keys and run logs.</li>
-      <li>conductor has no telemetry and no account.</li>
+      <li>conductor-ai has no telemetry and no account.</li>
       <li>Prompts go only to the providers you enable. Free routes may log prompts, so keep secrets out of tasks you send them.</li></ul>
       <p class="note" style="margin-bottom:0"><a href="https://github.com/KevalParikh22/conductor-ai/blob/main/SECURITY.md" target="_blank" rel="noopener">Security policy (SECURITY.md)</a></p></div>`;
   },
   setup() {
     const p = S.presets, sec = Object.fromEntries(S.secrets.map((x) => [x.name, x.set]));
-    // red only for what conductor needs (git, Node); optional things (an agent you don't use, a project not set up yet) stay neutral
+    // red only for what conductor-ai needs (git, Node); optional things (an agent you don't use, a project not set up yet) stay neutral
     const pill = (ok, yes, no, level = 'bad') => ok ? `<span class="pill ok">${yes}</span>` : `<span class="pill ${level}">${no}</span>`;
     const found = Object.values(p).filter((v) => v.installed);
     const freeKeys = ['OPENROUTER_API_KEY', 'OPENCODE_API_KEY', 'GEMINI_API_KEY', 'GROQ_API_KEY', 'CEREBRAS_API_KEY'].filter((n) => sec[n]).length;
     const step = (c, what) => `<div class="cmdrow"><div>${what}</div>${cmd(c)}</div>`;
     const agentCard = ([k, v]) => { const label = esc(v.label.replace(/ \(as a worker\)$/, '')), alt = /\(or: /.test(v.install) ? v.install.split(/\(or: /)[1].replace(/\)$/, '') : '';
       return `<div class="agent"><div class="row"><b>${label}</b>${v.beta ? '<span class="pill" title="Newer agent: works, less tested">beta</span>' : ''}<span class="spacer"></span>${v.installed ? `<span class="st ok">${icon('ok')}installed</span>` : '<span class="st">not installed</span>'}</div>
-        ${k === S.controllerPreset ? '<span class="note">Your controller, so off as a worker (it would spend the quota conductor saves).</span>' : ''}
+        ${k === S.controllerPreset ? '<span class="note">Your controller, so off as a worker (it would spend the quota conductor-ai saves).</span>' : ''}
         ${v.installed ? '' : `<span class="note">Install</span>${cmd(v.install.split(/\s+\(or: /)[0])}${alt ? `<span class="note">or: <span class="mono">${esc(alt)}</span></span>` : ''}`}
         ${v.login ? `<span class="note">Sign in</span>${cmd(v.login.split(/\s+\(/)[0])}${/\s\(/.test(v.login) ? `<span class="note">${esc(v.login.slice(v.login.search(/\s\(/)).trim().replace(/^\(|\)$/g, ''))}</span>` : ''}` : ''}</div>`; };
     return `<div class="head"><h1>Setup</h1><p class="sub">What this machine has, what to run next, and how to connect your coding agents and editors (<a href="https://github.com/KevalParikh22/conductor-ai/blob/main/docs/GUIDE.md" target="_blank" rel="noopener">full guide</a>).</p></div>
     <div class="card"><h2>This system</h2><table><tr><th>Check</th><th>Status</th><th>How to fix</th></tr>
       <tr><td>Node.js 20+</td><td>${pill(+S.env.node.slice(1).split('.')[0] >= 20, esc(S.env.node), esc(S.env.node) + ' (too old)')}</td><td class="note">${+S.env.node.slice(1).split('.')[0] >= 20 ? '' : 'Install Node 20 or newer (e.g. <span class="mono">nvm install 22</span>)'}</td></tr>
       <tr><td>git</td><td>${pill(S.env.git, 'installed', 'missing')}</td><td class="note">Needed for worktrees, checks and rollback</td></tr>
-      <tr><td>conductor ${esc(S.version)}</td><td>${pill(S.env.conductorOnPath, 'on PATH', 'not on PATH')}</td><td class="note">${S.env.conductorOnPath ? '' : 'Add <span class="mono">$(npm prefix -g)/bin</span> to PATH'}</td></tr>
-      <tr><td>This project</td><td>${pill(S.hasProjectConfig, 'set up', 'not set up yet', '')}</td><td class="mono">${S.hasProjectConfig ? '' : 'conductor init'}</td></tr>
+      <tr><td>conductor-ai ${esc(S.version)}</td><td>${pill(S.env.conductorOnPath, 'on PATH', 'not on PATH')}</td><td class="note">${S.env.conductorOnPath ? '' : 'Add <span class="mono">$(npm prefix -g)/bin</span> to PATH'}</td></tr>
+      <tr><td>This project</td><td>${pill(S.hasProjectConfig, 'set up', 'not set up yet', '')}</td><td class="mono">${S.hasProjectConfig ? '' : 'conductor-ai init'}</td></tr>
       <tr><td>Coding agents</td><td>${found.length ? `<span class="pill ok">${found.length} found</span>` : '<span class="pill">none found</span>'}</td><td class="note">${found.length ? found.map((v) => esc(v.label.replace(/ \(as a worker\)$/, ''))).join(', ') : 'Optional: free API providers work without one'}</td></tr>
       <tr><td>Local models</td><td>${(() => { loadLocal(); const run = (localInfo || []).filter((l) => l.running); return !localInfo ? '<span class="pill">checking…</span>' : run.length ? `<span class="pill ok">${run.map((l) => esc(l.label)).join(', ')}</span>` : '<span class="pill">none running</span>'; })()}</td><td class="note">${(localInfo || []).find((l) => l.next)?.next ? esc((localInfo || []).find((l) => l.next).next) : 'Optional: <a href="https://ollama.com/download" target="_blank" rel="noopener">Ollama</a>, then <span class="mono">ollama pull qwen3-coder</span>'}</td></tr>
       <tr><td>Free API keys</td><td>${freeKeys ? `<span class="pill ok">${freeKeys} set</span>` : '<span class="pill">none yet</span>'}</td><td class="note">kilo-free works without a key</td></tr>
     </table></div>
     <div class="card"><h2>What to do next</h2>
-      ${step('conductor setup', '<b>Once per machine.</b> Finds your agents and keys, adds a free provider and tests it.')}
-      ${step('cd my-project\nconductor init', '<b>In each project.</b> Writes AGENTS.md, your controller\'s commands and its MCP entry, and detects the Verify command. Pick another controller with <span class="mono">--controller</span>.')}
-      ${step('conductor demo', '<b>See it work</b> on a throwaway project: two tasks handed out in parallel, merged and tested (about 2 minutes).')}
-      ${step('conductor doctor --live', '<b>Check everything.</b> <span class="mono">--live</span> sends one tiny prompt to each enabled provider.')}
-      ${step('conductor ui', '<b>Open this page</b> again later.')}
+      ${step('conductor-ai setup', '<b>Once per machine.</b> Finds your agents and keys, adds a free provider and tests it.')}
+      ${step('cd my-project\nconductor-ai init', '<b>In each project.</b> Writes AGENTS.md, your controller\'s commands and its MCP entry, and detects the Verify command. Pick another controller with <span class="mono">--controller</span>.')}
+      ${step('conductor-ai demo', '<b>See it work</b> on a throwaway project: two tasks handed out in parallel, merged and tested (about 2 minutes).')}
+      ${step('conductor-ai doctor --live', '<b>Check everything.</b> <span class="mono">--live</span> sends one tiny prompt to each enabled provider.')}
+      ${step('conductor-ai ui', '<b>Open this page</b> again later.')}
       <p class="note" style="margin-bottom:0">Update with <span class="mono">npm install -g conductor-ai</span>; remove with <span class="mono">npm uninstall -g conductor-ai</span>. Settings and keys stay in <span class="mono">${esc(tilde(S.paths.global.replace(/[^/\\]+$/, '')))}</span>.</p></div>
-    <div class="card"><h2>Coding agents</h2><p class="note" style="margin-top:-4px">${found.length} of ${Object.keys(p).length} installed. Agents edit files and run tests themselves, each under its own permission rules. After installing one, run <span class="mono">conductor setup</span> or switch it on in <a href="#" data-goto="providers">Providers</a>.</p>
+    <div class="card"><h2>Coding agents</h2><p class="note" style="margin-top:-4px">${found.length} of ${Object.keys(p).length} installed. Agents edit files and run tests themselves, each under its own permission rules. After installing one, run <span class="mono">conductor-ai setup</span> or switch it on in <a href="#" data-goto="providers">Providers</a>.</p>
       <div class="agents">${Object.entries(p).map(agentCard).join('')}</div></div>
-    <div class="card"><h2>MCP and editors</h2><p class="note" style="margin-top:-4px">conductor's MCP server lets your controller call <span class="mono">conductor_run</span> and the other tools directly. <span class="mono">conductor init</span> registers it for the controller you chose (Claude Code, OpenCode); the server command is:</p>
+    <div class="card"><h2>MCP and editors</h2><p class="note" style="margin-top:-4px">conductor-ai's MCP server lets your controller call <span class="mono">conductor_run</span> and the other tools directly. <span class="mono">conductor-ai init</span> registers it for the controller you chose (Claude Code, OpenCode); the server command is:</p>
       ${cmd('conductor-ai mcp')}
-      <div class="cmdrow"><div><b>Codex</b> <span class="note">reads MCP servers from its own config: register once for all projects</span></div>${cmd('codex mcp add conductor -- conductor-ai mcp')}</div>
-      <div class="cmdrow"><div><b>Antigravity</b> <span class="note">the same, with agy</span></div>${cmd('agy mcp add conductor conductor-ai mcp')}</div>
-      <div class="cmdrow"><div><b>VS Code</b> <span class="note">writes <span class="mono">.vscode/mcp.json</span> (also done when the project already has a .vscode folder)</span></div>${cmd('conductor init --vscode')}</div></div>`;
+      <div class="cmdrow"><div><b>Codex</b> <span class="note">reads MCP servers from its own config: register once for all projects</span></div>${cmd('codex mcp add conductor-ai -- conductor-ai mcp')}</div>
+      <div class="cmdrow"><div><b>Antigravity</b> <span class="note">the same, with agy</span></div>${cmd('agy mcp add conductor-ai conductor-ai mcp')}</div>
+      <div class="cmdrow"><div><b>VS Code</b> <span class="note">writes <span class="mono">.vscode/mcp.json</span> (also done when the project already has a .vscode folder)</span></div>${cmd('conductor-ai init --vscode')}</div></div>`;
   },
 };
 
@@ -951,7 +951,7 @@ function bind() {
 
 (async () => {
   try { const sc = localStorage.getItem('conductor-scope'); if (sc) $('#scope').value = sc; } catch {}
-  if (!TOKEN) { $('#main').innerHTML = '<div class="err">Missing access token. Open the full URL printed by <span class="mono">conductor ui</span>.</div>'; return; }
+  if (!TOKEN) { $('#main').innerHTML = '<div class="err">Missing access token. Open the full URL printed by <span class="mono">conductor-ai ui</span>.</div>'; return; }
   try { const st = await api('GET', '/api/state'); if (!st.hasProjectConfig && !localStorage.getItem('conductor-scope')) $('#scope').value = 'global'; load(st); }
   catch (e) { $('#main').innerHTML = `<div class="err">${esc(e.message)}</div>`; }
 })();

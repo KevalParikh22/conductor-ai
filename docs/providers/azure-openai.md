@@ -6,34 +6,34 @@ OpenAI models in your Azure resource. The model is your deployment name.
 
 | | |
 |---|---|
-| Kind | Chat API (OpenAI-compatible): returns code that conductor applies |
+| Kind | Chat API (OpenAI-compatible): returns code that conductor-ai applies |
 | Cost | Paid, per token |
 | Key | `AZURE_OPENAI_API_KEY` from https://ai.azure.com |
 | Endpoint | `https://{RESOURCE}.openai.azure.com/openai/v1` |
-| Default model | picked automatically from the live list (coding models first); choose your own with `conductor models azure-openai --all` |
-| conductor name | `azure-openai` |
+| Default model | picked automatically from the live list (coding models first); choose your own with `conductor-ai models azure-openai --all` |
+| conductor-ai name | `azure-openai` |
 | Provider docs | https://learn.microsoft.com/en-us/azure/foundry/openai/api-version-lifecycle |
 | Checked | 2026-11 |
 
 ## Set up
 
 1. Create an API key: https://ai.azure.com
-2. Add it to conductor. It asks for the key (hidden input), resource, lets you pick a model, sends one test prompt and adds it to the `docs`, `test`, `review` and `ask` roles:
+2. Add it to conductor-ai. It asks for the key (hidden input), resource, lets you pick a model, sends one test prompt and adds it to the `docs`, `test`, `review` and `ask` roles:
    ```bash
-   conductor add azure-openai --resource <resource>
+   conductor-ai add azure-openai --resource <resource>
    ```
 3. Check it any time:
    ```bash
-   conductor doctor --live
+   conductor-ai doctor --live
    ```
 
-Or click **Add** on its card in `conductor ui` → Providers.
+Or click **Add** on its card in `conductor-ai ui` → Providers.
 
 ## Without the wizard
 
 Save the key (hidden input; or pipe it in):
 ```bash
-conductor keys set AZURE_OPENAI_API_KEY
+conductor-ai keys set AZURE_OPENAI_API_KEY
 ```
 
 Then add this to `~/.config/conductor/config.json` (all projects) or `.conductor/config.json` (one project):
@@ -50,13 +50,13 @@ Then add this to `~/.config/conductor/config.json` (all projects) or `.conductor
   }
 }
 ```
-List models: `conductor models azure-openai --all`. Put `azure-openai` in any role's chain in `conductor ui` → Roles & fallback.
+List models: `conductor-ai models azure-openai --all`. Put `azure-openai` in any role's chain in `conductor-ai ui` → Roles & fallback.
 
-The variable name only tells conductor where to find the key; the provider never sees it. To use a key you already keep under another name, set `"apiKeyEnv": "YOUR_VAR"` on `azure-openai`.
+The variable name only tells conductor-ai where to find the key; the provider never sees it. To use a key you already keep under another name, set `"apiKeyEnv": "YOUR_VAR"` on `azure-openai`.
 
 ## Troubleshooting
 
-- **401 / 403**: the key is wrong, expired, or still a placeholder. Run `conductor keys` to see where it comes from, then `conductor keys set AZURE_OPENAI_API_KEY`.
-- **404 or "model not found"**: the model id changed. Pick a current one with `conductor models azure-openai --all`.
-- **429**: rate limit. conductor puts the provider on cooldown and moves to the next one in the chain; `conductor cooldown --clear azure-openai` resets it.
-- **Empty reply**: some free routes return nothing now and then; conductor retries once, then falls back.
+- **401 / 403**: the key is wrong, expired, or still a placeholder. Run `conductor-ai keys` to see where it comes from, then `conductor-ai keys set AZURE_OPENAI_API_KEY`.
+- **404 or "model not found"**: the model id changed. Pick a current one with `conductor-ai models azure-openai --all`.
+- **429**: rate limit. conductor-ai puts the provider on cooldown and moves to the next one in the chain; `conductor-ai cooldown --clear azure-openai` resets it.
+- **Empty reply**: some free routes return nothing now and then; conductor-ai retries once, then falls back.

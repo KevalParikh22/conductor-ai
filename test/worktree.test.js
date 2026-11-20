@@ -1,4 +1,4 @@
-// Worktree runs and `conductor batch` (parallel tasks).
+// Worktree runs and `conductor-ai batch` (parallel tasks).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -72,7 +72,7 @@ test('--worktree runs on its own branch, commits there, and leaves the main chec
   assert.ok(!fs.existsSync(path.join(dir, 'src/T1.js')), 'the main checkout is not written to');
   assert.equal(fs.readFileSync(path.join(dir, 'scratch.txt'), 'utf8'), 'mine');
   assert.equal(git('show', 'conductor/T1:src/T1.js'), '// by a\n');
-  assert.match(git('log', '-1', '--format=%s', 'conductor/T1'), /conductor: T1 by agent-a \(verify PASS\)/);
+  assert.match(git('log', '-1', '--format=%s', 'conductor/T1'), /conductor-ai: T1 by agent-a \(verify PASS\)/);
   assert.equal(git('status', '--porcelain', '--', 'node_modules').trim(), '');
   assert.match(fs.readFileSync(path.join(dir, s.runDir, 'task.md'), 'utf8'), /each task writes src/, 'design notes are inlined');
 
@@ -110,7 +110,7 @@ test('batch runs independent tasks in parallel on different providers', async ()
   clearCooldowns();
   const { dir, git } = makeRepo({ files: { 'docs/plan/p.md': PLAN } });
   // parallel means the two workers were running at the same moment: compare their own start/end times, not the
-  // batch's wall clock (which grows with every check conductor adds and with a slow CI machine)
+  // batch's wall clock (which grows with every check conductor-ai adds and with a slow CI machine)
   process.env.FAKE_DELAY_MS = '1500';
   process.env.FAKE_SPANS = fs.mkdtempSync(path.join(os.tmpdir(), 'spans-'));
   const b = await runBatch(cfgFor(dir), { planPath: 'docs/plan/p.md', tasks: ['T1', 'T2'] }).finally(() => { delete process.env.FAKE_DELAY_MS; });

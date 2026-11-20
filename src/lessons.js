@@ -1,4 +1,4 @@
-// Q7: lessons, the team's memory. Every failure conductor diagnoses (a failed acceptance check, a misnamed export,
+// Q7: lessons, the team's memory. Every failure conductor-ai diagnoses (a failed acceptance check, a misnamed export,
 // a wrong test, out-of-scope edits…) and every --note the controller writes is kept per project. Later work in the
 // same area gets the matching lessons in its prompt, and a provider that failed the same kind of task twice moves to
 // the back of the chain for it. Research on experience memory: modest but real gains (+4–7 points on coding tasks),
@@ -11,9 +11,9 @@ import { PROJECT_DIRNAME } from './config.js';
 
 const MAX = 500;
 // Inside the repository's git folder: git never tracks it (so it can't make the tree look changed, even when
-// conductor's folder is shared with init --share), and each clone keeps its own. promote shares one via AGENTS.md.
+// conductor-ai's folder is shared with init --share), and each clone keeps its own. promote shares one via AGENTS.md.
 const gitDirs = new Map();
-/** conductor's private folder inside the repository's git folder (never tracked; per clone). */
+/** conductor-ai's private folder inside the repository's git folder (never tracked; per clone). */
 export function conductorGitDir(root) {
   if (!gitDirs.has(root)) {
     let d = null;
@@ -180,8 +180,9 @@ export function promoteLesson(root, id) {
   const text = l.source === 'auto' && l.kind !== 'acceptance-check' ? GUIDANCE[l.kind] : l.text;
   const file = path.join(root, 'AGENTS.md');
   let cur = ''; try { cur = fs.readFileSync(file, 'utf8'); } catch { /* new */ }
+  cur = cur.replace('## Lessons (promoted by conductor)', '## Lessons (promoted by conductor-ai)'); // older files: rename the heading, don't add a second
   const bullet = `- ${text.replace(/\.$/, '')}.${l.dirs?.length && l.dirs[0] !== '.' ? ` (in ${l.dirs.join(', ')})` : ''}`;
-  const head = '## Lessons (promoted by conductor)';
+  const head = '## Lessons (promoted by conductor-ai)';
   const next = cur.includes(head) ? cur.replace(head, `${head}\n${bullet}`) : `${cur.trimEnd()}${cur ? '\n\n' : ''}${head}\n${bullet}\n`;
   fs.writeFileSync(file, next);
   l.promoted = true;

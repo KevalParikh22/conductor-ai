@@ -121,7 +121,7 @@ test('CLI: providers lists the catalog; keys set reads stdin; add --yes without 
   assert.equal(JSON.parse(list).length, Object.keys(CATALOG).length);
   assert.match(run(['keys', 'set', 'CEREBRAS_API_KEY'], 'csk-test-123\n'), /saved CEREBRAS_API_KEY/);
   assert.match(fs.readFileSync(path.join(home, 'secrets.env'), 'utf8'), /^CEREBRAS_API_KEY=csk-test-123$/m);
-  try { run(['add', 'mistral', '--yes']); assert.fail('should fail without a key'); } catch (e) { assert.match(e.stderr.toString(), /MISTRAL_API_KEY is not set.*conductor keys set MISTRAL_API_KEY/s); }
+  try { run(['add', 'mistral', '--yes']); assert.fail('should fail without a key'); } catch (e) { assert.match(e.stderr.toString(), /MISTRAL_API_KEY is not set.*conductor-ai keys set MISTRAL_API_KEY/s); }
 });
 
 test('an API provider with no model gets one picked from its live list when it runs', async () => {

@@ -1,4 +1,4 @@
-// conductor demo: a throwaway project, both tasks handed out in parallel, merged when they pass, tested, removed.
+// conductor-ai demo: a throwaway project, both tasks handed out in parallel, merged when they pass, tested, removed.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -55,7 +55,7 @@ test('demo without a coding agent: falls back to the free API models that are re
   assert.deepEqual(demoFallback({ roles: { build: ['agent'], test: ['freeapi', 'paid'] }, providers }), ['freeapi']);
   // an agent that is installed keeps the normal build chain
   assert.equal(demoFallback({ roles: { build: ['good'] }, providers: { ...providers, good: { type: 'cli', preset: 'codex', enabled: true, bin: 'demo-worker' } } }), null);
-  // nothing ready at all: an empty list, so the demo says to run conductor setup
+  // nothing ready at all: an empty list, so the demo says to run conductor-ai setup
   assert.deepEqual(demoFallback({ roles: { build: ['agent'] }, providers: { agent: providers.agent, nokey: providers.nokey } }), []);
 });
 

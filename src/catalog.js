@@ -1,11 +1,11 @@
-// Catalog of chat APIs conductor can add with one command (`conductor add <id>`) or one click (conductor ui).
+// Catalog of chat APIs conductor-ai can add with one command (`conductor-ai add <id>`) or one click (conductor-ai ui).
 // Every entry speaks the OpenAI chat-completions format (or Anthropic's, for type "anthropic").
 // Guides in docs/providers/ are generated from this file: edit here, then run `node scripts/gen-provider-docs.mjs`.
 //
 // Fields: label, category, baseUrl ({PLACEHOLDERS} filled from `fields` at add time), apiKeyEnv, apiKeyOptional,
 // keyUrl (where to get a key), docsUrl, free (free tier, or null), model ('' = pick from the live list),
 // privacy (data-use warning, or null), about (one line), verified (month the endpoint was checked),
-// keyNameOwn (the provider's docs name no env var, so apiKeyEnv is conductor's own name for it).
+// keyNameOwn (the provider's docs name no env var, so apiKeyEnv is conductor-ai's own name for it).
 
 export const CATEGORIES = {
   free: 'Free (no card needed)',
@@ -633,11 +633,11 @@ export const BUILTIN_ALIASES = {
   'deepseek-api': ['deepseek', {}],
   'kilo-free': ['kilo', { enabled: true, free: true, notes: 'Kilo Gateway free models. Works without a key (about 200 req/hour per IP). Free routes may log prompts.' }],
   'opencode-zen': ['opencode-zen', { notes: 'OpenCode Zen API (needs credits). Its free models only work inside the OpenCode app: use the opencode agent for those.' }],
-  'groq-api': ['groq', { notes: 'Free tier, very fast. About 30 req/min, 1000/day. Pick a model with: conductor models groq-api' }],
-  'cerebras-api': ['cerebras', { notes: 'Free tier, very fast. Pick a model with: conductor models cerebras-api' }],
-  'mistral-api': ['mistral', { notes: 'Free mode keys for testing. Prompts may be used for training. Pick a model with: conductor models mistral-api' }],
+  'groq-api': ['groq', { notes: 'Free tier, very fast. About 30 req/min, 1000/day. Pick a model with: conductor-ai models groq-api' }],
+  'cerebras-api': ['cerebras', { notes: 'Free tier, very fast. Pick a model with: conductor-ai models cerebras-api' }],
+  'mistral-api': ['mistral', { notes: 'Free mode keys for testing. Prompts may be used for training. Pick a model with: conductor-ai models mistral-api' }],
   // verified 2026-11-15: these answer fast on a free key; several listed models hang (deepseek-v4.1-flash, glm-5.3-flash) or 404
-  'nvidia-nim': ['nvidia', { free: true, model: 'nvidia/nemotron-3-ultra-550b-a55b', fallbackModels: ['minimaxai/minimax-m3.1-flash', 'google/gemma-4-31b-it'], notes: 'Free developer access, about 40 req/min; some listed models hang or are not open to free keys. Pick a model with: conductor models nvidia-nim' }],
+  'nvidia-nim': ['nvidia', { free: true, model: 'nvidia/nemotron-3-ultra-550b-a55b', fallbackModels: ['minimaxai/minimax-m3.1-flash', 'google/gemma-4-31b-it'], notes: 'Free developer access, about 40 req/min; some listed models hang or are not open to free keys. Pick a model with: conductor-ai models nvidia-nim' }],
   'claude-api': ['anthropic', {}],
   'ollama': ['ollama', { free: true, notes: 'Local model, free, private.' }],
   'lmstudio': ['lmstudio', { free: true }],

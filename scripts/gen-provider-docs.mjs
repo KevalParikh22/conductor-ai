@@ -20,12 +20,12 @@ export function apiGuide(id, e) {
   const flags = fields.map((f) => ` --${f.toLowerCase().replaceAll('_', '-')} <${f.toLowerCase()}>`).join('');
   const L = [HEADER, `# ${e.label}`, '', e.about, ''];
   L.push('| | |', '|---|---|');
-  L.push(`| Kind | Chat API (${e.type === 'anthropic' ? 'Anthropic Messages format' : 'OpenAI-compatible'}): returns code that conductor applies |`);
+  L.push(`| Kind | Chat API (${e.type === 'anthropic' ? 'Anthropic Messages format' : 'OpenAI-compatible'}): returns code that conductor-ai applies |`);
   L.push(`| Cost | ${e.free || 'Paid, per token'} |`);
-  L.push(`| Key | ${keyed ? `\`${e.apiKeyEnv}\` from ${e.keyUrl}${e.keyNameOwn ? ' (the provider\'s docs name no variable; this is conductor\'s name for it)' : ''}` : e.apiKeyEnv ? `Optional (\`${e.apiKeyEnv}\`, from ${e.keyUrl}) — works without one` : `None${isLocal(e) ? ' (runs on your machine)' : ''}`} |`);
+  L.push(`| Key | ${keyed ? `\`${e.apiKeyEnv}\` from ${e.keyUrl}${e.keyNameOwn ? ' (the provider\'s docs name no variable; this is conductor-ai\'s name for it)' : ''}` : e.apiKeyEnv ? `Optional (\`${e.apiKeyEnv}\`, from ${e.keyUrl}) — works without one` : `None${isLocal(e) ? ' (runs on your machine)' : ''}`} |`);
   L.push(`| Endpoint | \`${e.baseUrl}\` |`);
-  L.push(`| Default model | ${e.model ? `\`${e.model}\`` : 'picked automatically from the live list (coding models first); choose your own with `conductor models ' + name + ' --all`'} |`);
-  L.push(`| conductor name | \`${name}\` |`);
+  L.push(`| Default model | ${e.model ? `\`${e.model}\`` : 'picked automatically from the live list (coding models first); choose your own with `conductor-ai models ' + name + ' --all`'} |`);
+  L.push(`| conductor-ai name | \`${name}\` |`);
   if (e.privacy) L.push(`| Privacy | ${e.privacy} |`);
   L.push(`| Provider docs | ${e.docsUrl} |`, `| Checked | ${e.verified} |`, '');
 
@@ -33,25 +33,25 @@ export function apiGuide(id, e) {
   let n = 1;
   if (isLocal(e)) L.push(`${n++}. Install and start it: ${e.keyUrl}. ${e.about.split('. ').slice(1).join('. ')}`.trimEnd());
   else if (keyed) L.push(`${n++}. Create an API key: ${e.keyUrl}`);
-  L.push(`${n++}. Add it to conductor. It asks for ${[keyed && 'the key (hidden input)', ...fields.map((f) => f.replaceAll('_', ' ').toLowerCase())].filter(Boolean).join(', ') || 'nothing'}, lets you pick a model, sends one test prompt and adds it to the \`docs\`, \`test\`, \`review\` and \`ask\` roles:`);
-  L.push('   ```bash', `   conductor add ${id}${flags}`, '   ```');
-  L.push(`${n++}. Check it any time:`, '   ```bash', '   conductor doctor --live', '   ```', '');
-  L.push('Or click **Add** on its card in `conductor ui` → Providers.', '');
+  L.push(`${n++}. Add it to conductor-ai. It asks for ${[keyed && 'the key (hidden input)', ...fields.map((f) => f.replaceAll('_', ' ').toLowerCase())].filter(Boolean).join(', ') || 'nothing'}, lets you pick a model, sends one test prompt and adds it to the \`docs\`, \`test\`, \`review\` and \`ask\` roles:`);
+  L.push('   ```bash', `   conductor-ai add ${id}${flags}`, '   ```');
+  L.push(`${n++}. Check it any time:`, '   ```bash', '   conductor-ai doctor --live', '   ```', '');
+  L.push('Or click **Add** on its card in `conductor-ai ui` → Providers.', '');
 
   L.push('## Without the wizard', '');
-  if (keyed) L.push('Save the key (hidden input; or pipe it in):', '```bash', `conductor keys set ${e.apiKeyEnv}`, '```', '');
+  if (keyed) L.push('Save the key (hidden input; or pipe it in):', '```bash', `conductor-ai keys set ${e.apiKeyEnv}`, '```', '');
   L.push('Then add this to `~/.config/conductor/config.json` (all projects) or `.conductor/config.json` (one project):', '```json');
   const p = { ...(DEFAULT_PROVIDERS[name] ? { enabled: true } : { type: e.type || 'openai', enabled: true, baseUrl: e.baseUrl, apiKeyEnv: e.apiKeyEnv || '', ...(e.apiKeyOptional ? { apiKeyOptional: true } : {}) }), model: e.model || '<model id>' };
   L.push(JSON.stringify({ providers: { [name]: p } }, null, 2), '```');
-  L.push(`List models: \`conductor models ${name} --all\`. Put \`${name}\` in any role's chain in \`conductor ui\` → Roles & fallback.`, '');
+  L.push(`List models: \`conductor-ai models ${name} --all\`. Put \`${name}\` in any role's chain in \`conductor-ai ui\` → Roles & fallback.`, '');
 
-  if (e.apiKeyEnv) L.push(`The variable name only tells conductor where to find the key; the provider never sees it. To use a key you already keep under another name, set \`"apiKeyEnv": "YOUR_VAR"\` on \`${name}\`.`, '');
+  if (e.apiKeyEnv) L.push(`The variable name only tells conductor-ai where to find the key; the provider never sees it. To use a key you already keep under another name, set \`"apiKeyEnv": "YOUR_VAR"\` on \`${name}\`.`, '');
   L.push('## Troubleshooting', '');
-  L.push(`- **401 / 403**: the key is wrong, expired, or still a placeholder. Run \`conductor keys\` to see where it comes from${keyed ? `, then \`conductor keys set ${e.apiKeyEnv}\`` : ''}.`);
-  L.push('- **404 or "model not found"**: the model id changed. Pick a current one with `conductor models ' + name + ' --all`.');
-  L.push('- **429**: rate limit. conductor puts the provider on cooldown and moves to the next one in the chain; `conductor cooldown --clear ' + name + '` resets it.');
+  L.push(`- **401 / 403**: the key is wrong, expired, or still a placeholder. Run \`conductor-ai keys\` to see where it comes from${keyed ? `, then \`conductor-ai keys set ${e.apiKeyEnv}\`` : ''}.`);
+  L.push('- **404 or "model not found"**: the model id changed. Pick a current one with `conductor-ai models ' + name + ' --all`.');
+  L.push('- **429**: rate limit. conductor-ai puts the provider on cooldown and moves to the next one in the chain; `conductor-ai cooldown --clear ' + name + '` resets it.');
   if (isLocal(e)) L.push(`- **Connection refused**: the local server isn't running at \`${e.baseUrl}\`.`);
-  L.push('- **Empty reply**: some free routes return nothing now and then; conductor retries once, then falls back.', '');
+  L.push('- **Empty reply**: some free routes return nothing now and then; conductor-ai retries once, then falls back.', '');
   return L.join('\n');
 }
 
@@ -59,19 +59,19 @@ export function agentGuide(key, c) {
   const name = Object.entries(DEFAULT_PROVIDERS).find(([, p]) => p.preset === key)?.[0] || key;
   const perm = c.permissions || {};
   const L = [HEADER, `# ${c.label}`, '', `A coding agent that runs on your machine: it reads the repo, edits files and runs commands itself. Best for \`build\` and \`fix\`.`, ''];
-  L.push('| | |', '|---|---|', `| Kind | Local agent (\`${c.bin}\`) |`, `| conductor name | \`${name}\` |`, `| Docs | ${c.docs} |`, '');
+  L.push('| | |', '|---|---|', `| Kind | Local agent (\`${c.bin}\`) |`, `| conductor-ai name | \`${name}\` |`, `| Docs | ${c.docs} |`, '');
   L.push('## Set up', '', '1. Install:', '   ```bash', `   ${c.install.split(/\s+\(or: /)[0]}`, '   ```');
   const alt = c.install.match(/\(or: (.*)\)$/)?.[1];
   if (alt) L.push(`   Or: \`${alt}\``);
-  L.push(`2. Sign in once: \`${c.login}\``, `3. Enable \`${name}\` in \`conductor ui\` → Providers (or run \`conductor setup\`, which finds installed agents), then check it:`, '   ```bash', '   conductor doctor --live', '   ```', '');
-  L.push('## What it may do under conductor', '', `- **Write roles:** ${perm.write || 'see its own settings'}`, `- **Read roles:** ${perm.read || 'see its own settings'}${perm.readOnlyEnforced ? '' : ' (**not enforced** by the CLI: conductor warns and checks git afterwards)'}`, '');
-  L.push('conductor passes these rules on the command line for each run; your own settings for the CLI are not changed. Details: [Providers → Permissions](../PROVIDERS.md#permissions-what-each-agent-may-do).', '');
+  L.push(`2. Sign in once: \`${c.login}\``, `3. Enable \`${name}\` in \`conductor-ai ui\` → Providers (or run \`conductor-ai setup\`, which finds installed agents), then check it:`, '   ```bash', '   conductor-ai doctor --live', '   ```', '');
+  L.push('## What it may do under conductor-ai', '', `- **Write roles:** ${perm.write || 'see its own settings'}`, `- **Read roles:** ${perm.read || 'see its own settings'}${perm.readOnlyEnforced ? '' : ' (**not enforced** by the CLI: conductor-ai warns and checks git afterwards)'}`, '');
+  L.push('conductor-ai passes these rules on the command line for each run; your own settings for the CLI are not changed. Details: [Providers → Permissions](../PROVIDERS.md#permissions-what-each-agent-may-do).', '');
   if (c.guide?.length) L.push('## Notes', '', ...c.guide.map((g) => `- ${g}`), '');
   return L.join('\n');
 }
 
 export function indexPage() {
-  const L = [HEADER, '# Provider setup guides', '', `conductor can use **${Object.keys(CATALOG).length} chat APIs** and **${Object.keys(CLI_PRESETS).length} coding agents**. Each has a guide below. The quickest way to add any of them:`, '', '```bash', 'conductor setup            # finds what you have, adds a free provider, tests', 'conductor providers        # everything you can add, with status', 'conductor add <name>       # key, model, test, roles: one command', '```', ''];
+  const L = [HEADER, '# Provider setup guides', '', `conductor-ai can use **${Object.keys(CATALOG).length} chat APIs** and **${Object.keys(CLI_PRESETS).length} coding agents**. Each has a guide below. The quickest way to add any of them:`, '', '```bash', 'conductor-ai setup            # finds what you have, adds a free provider, tests', 'conductor-ai providers        # everything you can add, with status', 'conductor-ai add <name>       # key, model, test, roles: one command', '```', ''];
   L.push('Not listed? Any OpenAI-compatible endpoint works: see [Adding your own](../PROVIDERS.md#adding-your-own).', '');
   L.push('## Coding agents (run on your machine)', '', '| Agent | Install | Guide |', '|---|---|---|');
   for (const [k, c] of Object.entries(CLI_PRESETS)) L.push(`| ${c.label} | \`${c.install.split(/\s+\(or: /)[0]}\` | [${k}](agent-${k}.md) |`);
@@ -79,7 +79,7 @@ export function indexPage() {
     const list = Object.entries(CATALOG).filter(([, e]) => e.category === cat);
     if (!list.length) continue;
     L.push('', `## ${label}`, '', '| Provider | Key | Free tier | Add | Guide |', '|---|---|---|---|---|');
-    for (const [id, e] of list) L.push(`| ${e.label} | ${e.apiKeyEnv && !e.apiKeyOptional ? `\`${e.apiKeyEnv}\`` : e.apiKeyEnv ? 'optional' : 'none'} | ${e.free ? e.free.split(/[.(]/)[0].trim() : '—'} | \`conductor add ${id}\` | [guide](${id}.md) |`);
+    for (const [id, e] of list) L.push(`| ${e.label} | ${e.apiKeyEnv && !e.apiKeyOptional ? `\`${e.apiKeyEnv}\`` : e.apiKeyEnv ? 'optional' : 'none'} | ${e.free ? e.free.split(/[.(]/)[0].trim() : '—'} | \`conductor-ai add ${id}\` | [guide](${id}.md) |`);
   }
   L.push('');
   return L.join('\n');

@@ -63,7 +63,7 @@ export function withCommands(settings, commands) {
 }
 
 /**
- * Environment for a CLI worker: the user's shell environment, minus the secrets conductor loaded from
+ * Environment for a CLI worker: the user's shell environment, minus the secrets conductor-ai loaded from
  * secrets.env / .conductor/.env (except those this CLI needs, `passEnv`), plus the mode's own variables.
  */
 export function workerEnv(preset, mode, cwd) {
@@ -349,7 +349,7 @@ export function runProvider(name, p, opts) {
   return runOpenAI(name, p, opts);
 }
 
-/** Cheap connectivity test used by `conductor doctor --live` and the UI "Test" button. */
+/** Cheap connectivity test used by `conductor-ai doctor --live` and the UI "Test" button. */
 /**
  * V8 permission preflight for an agent: in a throwaway repo, ask it to run `npm test` (a command workers need) and
  * report the line it prints. Catches headless permission refusals (agy denied_actions) before real work does.

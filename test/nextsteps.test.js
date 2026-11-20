@@ -19,31 +19,31 @@ const REASONS = {
   disabled: /turn x on/,
   '"agy" not installed': /install it: curl .*antigravity.*sign in: agy/,
   'not installed': /install it/,
-  'GROQ_API_KEY not set': /conductor keys set GROQ_API_KEY.*get one at https:/,
-  'GROQ_API_KEY not set (placeholder value)': /conductor keys set GROQ_API_KEY/,
-  'cooling down until 10:42:00 (rate limited)': /until 10:42:00.*conductor cooldown --clear x/,
+  'GROQ_API_KEY not set': /conductor-ai keys set GROQ_API_KEY.*get one at https:/,
+  'GROQ_API_KEY not set (placeholder value)': /conductor-ai keys set GROQ_API_KEY/,
+  'cooling down until 10:42:00 (rate limited)': /until 10:42:00.*conductor-ai cooldown --clear x/,
   'daily budget reached ($1.00 of $1)': /dailyBudgetUSD/,
-  'every model is cooling down': /conductor cooldown --clear x/,
+  'every model is cooling down': /conductor-ai cooldown --clear x/,
   cancelled: /passed first/,
-  'waiting for your answer': /conductor import x-run <answer file>/,
+  'waiting for your answer': /conductor-ai import x-run <answer file>/,
   'prompt too long for DeepSeek web: 120000 characters, its limit is 60000': /over DeepSeek web's limit \(60000\)/,
   'context too small: the prompt needs ~9000 tokens with the answer, qwen3.5:2b runs with 4096 (Ollama 0.40.13)': /OLLAMA_CONTEXT_LENGTH=16384/,
   'quota (cooldown 30m)': /rate limit or its quota/,
   'denied: command (add an allow rule, e.g. settings.allowCommands)': /refused `command`.*allowCommands/,
   'agy status ERROR': /Antigravity reported an error: read run\/x\.log/,
-  'auth (401)': /conductor keys set GROQ_API_KEY/,
+  'auth (401)': /conductor-ai keys set GROQ_API_KEY/,
   'idle (no output for 5m)': /idleTimeoutMin/,
   'timeout (20m)': /--timeout 45m.*eta:/,
   timeout: /ran out of time/,
   'spawn error': /couldn't start/,
   'network: ECONNREFUSED': /connection and its base URL/,
   'server 503': /on its side/,
-  'acceptance check failed': /failed conductor's checks.*ranks x lower/,
-  'repro failed': /failed conductor's checks/,
-  'verify failed': /failed conductor's checks/,
+  'acceptance check failed': /failed conductor-ai's checks.*ranks x lower/,
+  'repro failed': /failed conductor-ai's checks/,
+  'verify failed': /failed conductor-ai's checks/,
   'server overloaded': /on its side/,
-  'http 404': /conductor models x/,
-  'model not available (404)': /not to your key.*conductor models x/,
+  'http 404': /conductor-ai models x/,
+  'model not available (404)': /not to your key.*conductor-ai models x/,
   'no model set, and its model list could not be fetched': /set a model for x/,
   'no file blocks in reply': /give this task to an agent/,
   'only protected/outside files returned': /give this task to an agent/,
@@ -97,7 +97,7 @@ test('lasting problems are flagged even when another worker won; passing ones on
   assert.deepEqual(fixLines(attempts, { won: true }), ['a: set the key']);
 });
 
-test('a failed run says what to do per provider, in the summary, conductor runs and the run list', async () => {
+test('a failed run says what to do per provider, in the summary, conductor-ai runs and the run list', async () => {
   fakeBins({ 'oops-bin': 'console.error("boom"); process.exit(1);' });
   clearCooldowns();
   const { dir } = makeRepo();

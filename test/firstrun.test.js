@@ -149,7 +149,7 @@ test('status, doctor and the UI data agree: a default provider with no key is op
 
 test('CLI: a typo gets a suggestion; piped output has no colour codes; long descriptions are cut at a word', () => {
   const run = (...a) => { try { return execFileSync(process.execPath, [bin, ...a], { stdio: 'pipe', env: { ...process.env, FORCE_COLOR: '' } }).toString(); } catch (e) { return e.stderr.toString() + e.stdout.toString(); } };
-  assert.match(run('bulid'), /Did you mean: conductor build\?/);
+  assert.match(run('bulid'), /Did you mean: conductor-ai build\?/);
   assert.doesNotMatch(run('xyzzy'), /Did you mean/);
   const list = run('providers');
   assert.doesNotMatch(list, /\x1b\[/, 'no ANSI codes when piped');
@@ -166,7 +166,7 @@ test('UI: the open page lives in the address, and links never drop the token', (
   assert.match(html, /\[data-goto\][^\n]*preventDefault/);
 });
 
-test('switching to Antigravity says how to register conductor with agy, unless it already is', async () => {
+test('switching to Antigravity says how to register conductor-ai with agy, unless it already is', async () => {
   const { initProject, agyHasConductor } = await import('../src/init.js');
   const cfgFile = path.join(home, 'agy-mcp.json');
   assert.equal(agyHasConductor(cfgFile), false, 'missing file');
@@ -177,7 +177,7 @@ test('switching to Antigravity says how to register conductor with agy, unless i
   const { dir } = makeRepo();
   const r = initProject(dir, { controller: 'antigravity' });
   assert.ok(fs.existsSync(path.join(dir, '.agents/skills/conduct-plan/SKILL.md')), 'skills written where agy reads them');
-  assert.ok(r.notes.some((n) => /agy mcp add conductor conductor-ai mcp/.test(n)) || agyHasConductor(), 'register hint unless already registered');
+  assert.ok(r.notes.some((n) => /agy mcp add conductor-ai conductor-ai mcp/.test(n)) || agyHasConductor(), 'register hint unless already registered');
 });
 
 test('UI: picking a controller is a project action, not part of Save (Save to global used to be silently overridden)', () => {
@@ -192,7 +192,7 @@ test('init --verify sets the Verify line; without any verify command init says r
   const { dir, git } = makeRepo();
   git('rm', '-q', 'package.json'); git('commit', '-qm', 'no scripts');
   let r = initProject(dir, {});
-  assert.ok(r.notes.some((n) => /No verify command found[\s\S]*unverified[\s\S]*conductor init --verify/.test(n)));
+  assert.ok(r.notes.some((n) => /No verify command found[\s\S]*unverified[\s\S]*conductor-ai init --verify/.test(n)));
   r = initProject(dir, { verify: 'make check' });
   assert.match(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), /^- \*\*Verify \(must pass before any task is "done"\):\*\* `make check`$/m);
   assert.ok(r.lines.some((l) => /updated +AGENTS\.md \(Verify: make check\)/.test(l)));

@@ -46,7 +46,7 @@ export async function detectLocal({ timeoutMs = 1500, servers } = {}) {
     const tooSmall = chat.filter((m) => modelSizeB(m.id) !== null && modelSizeB(m.id) < MIN_LOCAL_MODEL_B).map((m) => m.id);
     const best = chat.find((m) => !tooSmall.includes(m.id))?.id || '';
     let next = null;
-    if (p.running && p.needsKey) next = `it needs a key: conductor keys set ${e.apiKeyEnv}`;
+    if (p.running && p.needsKey) next = `it needs a key: conductor-ai keys set ${e.apiKeyEnv}`;
     else if (p.running && !models.length) next = tool.pull ? `no models yet: ${tool.pull}` : 'no models loaded yet';
     else if (p.running && !best && tooSmall.length) next = `only small models (${tooSmall.map((m) => `${m}, ${modelSizeB(m)}B`).join('; ')}), too small for coding tasks (${MIN_LOCAL_MODEL_B}B+ works)${tool.pull ? `: ${tool.pull}` : ''}`;
     else if (p.running && !best) next = `only non-chat models (${models.join(', ')})${tool.pull ? `: ${tool.pull}` : ''}`;
@@ -58,7 +58,7 @@ export async function detectLocal({ timeoutMs = 1500, servers } = {}) {
 // ---------------- V13: the context window a local server really uses ----------------
 // Ollama runs a model with its own default window (4,096 tokens on 0.40, measured) unless num_ctx or
 // OLLAMA_CONTEXT_LENGTH says otherwise, and its OpenAI endpoint cuts a longer prompt WITHOUT an error (measured: a
-// 59,000-character prompt reached the model as 2,050 tokens, status 200). So conductor asks the server first.
+// 59,000-character prompt reached the model as 2,050 tokens, status 200). So conductor-ai asks the server first.
 const windows = new Map(); // `${origin}|${model}` → { at, value }
 
 async function getJson(url, { method = 'GET', body, timeoutMs = 4000 } = {}) {

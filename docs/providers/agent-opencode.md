@@ -7,7 +7,7 @@ A coding agent that runs on your machine: it reads the repo, edits files and run
 | | |
 |---|---|
 | Kind | Local agent (`opencode`) |
-| conductor name | `opencode` |
+| conductor-ai name | `opencode` |
 | Docs | https://opencode.ai/docs/permissions/ |
 
 ## Set up
@@ -18,14 +18,14 @@ A coding agent that runs on your machine: it reads the repo, edits files and run
    ```
    Or: `npm install -g opencode-ai`
 2. Sign in once: `opencode auth login`
-3. Enable `opencode` in `conductor ui` → Providers (or run `conductor setup`, which finds installed agents), then check it:
+3. Enable `opencode` in `conductor-ai ui` → Providers (or run `conductor-ai setup`, which finds installed agents), then check it:
    ```bash
-   conductor doctor --live
+   conductor-ai doctor --live
    ```
 
-## What it may do under conductor
+## What it may do under conductor-ai
 
 - **Write roles:** edits inside the project only; git push/commit/reset and sudo denied; shell commands are not sandboxed (OpenCode only blocks outside paths it can detect)
 - **Read roles:** edits denied; only read-only shell commands (git diff/log/show/status, ls, cat, grep, rg...)
 
-conductor passes these rules on the command line for each run; your own settings for the CLI are not changed. Details: [Providers → Permissions](../PROVIDERS.md#permissions-what-each-agent-may-do).
+conductor-ai passes these rules on the command line for each run; your own settings for the CLI are not changed. Details: [Providers → Permissions](../PROVIDERS.md#permissions-what-each-agent-may-do).

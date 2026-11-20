@@ -6,28 +6,28 @@ High-throughput server for GPUs. Start it with `vllm serve <model>`.
 
 | | |
 |---|---|
-| Kind | Chat API (OpenAI-compatible): returns code that conductor applies |
+| Kind | Chat API (OpenAI-compatible): returns code that conductor-ai applies |
 | Cost | Free: runs on your hardware. |
 | Key | Optional (`VLLM_API_KEY`, from https://docs.vllm.ai) — works without one |
 | Endpoint | `http://localhost:8000/v1` |
-| Default model | picked automatically from the live list (coding models first); choose your own with `conductor models vllm --all` |
-| conductor name | `vllm` |
+| Default model | picked automatically from the live list (coding models first); choose your own with `conductor-ai models vllm --all` |
+| conductor-ai name | `vllm` |
 | Provider docs | https://docs.vllm.ai/en/latest/serving/online_serving/openai_compatible_server/ |
 | Checked | 2026-11 |
 
 ## Set up
 
 1. Install and start it: https://docs.vllm.ai. Start it with `vllm serve <model>`.
-2. Add it to conductor. It asks for nothing, lets you pick a model, sends one test prompt and adds it to the `docs`, `test`, `review` and `ask` roles:
+2. Add it to conductor-ai. It asks for nothing, lets you pick a model, sends one test prompt and adds it to the `docs`, `test`, `review` and `ask` roles:
    ```bash
-   conductor add vllm
+   conductor-ai add vllm
    ```
 3. Check it any time:
    ```bash
-   conductor doctor --live
+   conductor-ai doctor --live
    ```
 
-Or click **Add** on its card in `conductor ui` → Providers.
+Or click **Add** on its card in `conductor-ai ui` → Providers.
 
 ## Without the wizard
 
@@ -46,14 +46,14 @@ Then add this to `~/.config/conductor/config.json` (all projects) or `.conductor
   }
 }
 ```
-List models: `conductor models vllm --all`. Put `vllm` in any role's chain in `conductor ui` → Roles & fallback.
+List models: `conductor-ai models vllm --all`. Put `vllm` in any role's chain in `conductor-ai ui` → Roles & fallback.
 
-The variable name only tells conductor where to find the key; the provider never sees it. To use a key you already keep under another name, set `"apiKeyEnv": "YOUR_VAR"` on `vllm`.
+The variable name only tells conductor-ai where to find the key; the provider never sees it. To use a key you already keep under another name, set `"apiKeyEnv": "YOUR_VAR"` on `vllm`.
 
 ## Troubleshooting
 
-- **401 / 403**: the key is wrong, expired, or still a placeholder. Run `conductor keys` to see where it comes from.
-- **404 or "model not found"**: the model id changed. Pick a current one with `conductor models vllm --all`.
-- **429**: rate limit. conductor puts the provider on cooldown and moves to the next one in the chain; `conductor cooldown --clear vllm` resets it.
+- **401 / 403**: the key is wrong, expired, or still a placeholder. Run `conductor-ai keys` to see where it comes from.
+- **404 or "model not found"**: the model id changed. Pick a current one with `conductor-ai models vllm --all`.
+- **429**: rate limit. conductor-ai puts the provider on cooldown and moves to the next one in the chain; `conductor-ai cooldown --clear vllm` resets it.
 - **Connection refused**: the local server isn't running at `http://localhost:8000/v1`.
-- **Empty reply**: some free routes return nothing now and then; conductor retries once, then falls back.
+- **Empty reply**: some free routes return nothing now and then; conductor-ai retries once, then falls back.

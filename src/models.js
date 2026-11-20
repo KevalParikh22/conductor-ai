@@ -65,7 +65,7 @@ export function modelSizeB(id) {
   return sizes.length ? sizes[0] : null;
 }
 
-/** Smallest local model conductor turns on by itself for coding work (billions of parameters). */
+/** Smallest local model conductor-ai turns on by itself for coding work (billions of parameters). */
 export const MIN_LOCAL_MODEL_B = 7;
 
 const AUTO_CACHE = () => path.join(GLOBAL_DIR, 'models-cache.json');

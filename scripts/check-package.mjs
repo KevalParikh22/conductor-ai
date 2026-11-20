@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // V10: what `npm publish` would ship, checked. Every file must sit under an entry of package.json "files", and nothing
-// that is for development only may slip in: tests, the benchmark, eval reference solutions, plans, conductor's own
+// that is for development only may slip in: tests, the benchmark, eval reference solutions, plans, conductor-ai's own
 // state, roadmaps, logs or secrets. test/package.test.js runs this, so CI fails before a bad package is published.
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';

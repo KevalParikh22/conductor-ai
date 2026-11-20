@@ -1,5 +1,5 @@
-// `conductor stats --failures`: why work fails, biggest cause first, so the harness is fixed where it matters
-// (the trace-driven loop: look at failures, group them, fix the top group, measure with conductor eval).
+// `conductor-ai stats --failures`: why work fails, biggest cause first, so the harness is fixed where it matters
+// (the trace-driven loop: look at failures, group them, fix the top group, measure with conductor-ai eval).
 import { readUsage } from './usage.js';
 import { listRuns } from './runs.js';
 
@@ -19,7 +19,7 @@ export function failureKind(reason) {
   return r.split(/[:(]/)[0].replace(/\d+/g, 'N').trim() || 'unknown';
 }
 
-/** Why runs in this project weren't done: outcome plus the cause conductor recorded. */
+/** Why runs in this project weren't done: outcome plus the cause conductor-ai recorded. */
 function runCause(r) {
   if (r.state === 'failed') return 'every provider failed';
   if (r.state === 'verify-failed') return r.baseFailed ? 'verify failed (already failing before the worker)' : 'verify failed';
@@ -77,12 +77,12 @@ export function formatFailureStats(st) {
     L.push('', 'Most common warnings:');
     for (const w of st.warnings) L.push(`  ${String(w.count).padStart(4)}  ${w.text}`);
   }
-  L.push('', 'Fix the top cause first, then measure the change with: conductor eval run');
+  L.push('', 'Fix the top cause first, then measure the change with: conductor-ai eval run');
   return L.join('\n');
 }
 
 /**
- * Q10: is conductor delivering? From this project's runs: how often a write task was accepted on the first try with
+ * Q10: is conductor-ai delivering? From this project's runs: how often a write task was accepted on the first try with
  * proof (done, one worker, no hand-off or retry), where the rest ended, and what the workers cost. The alpha gate is
  * a first-try accept rate of 70% or more over at least 10 write tasks.
  */
@@ -111,7 +111,7 @@ export function qualityStats({ root, days = 30 } = {}) {
 
 export function formatQualityStats(q) {
   const L = [`Last ${q.days} days in this project: ${q.runs} runs, ${q.writeTasks} write tasks.`, ''];
-  if (!q.writeTasks) return [...L, 'No write tasks yet. Run some (conductor run build …), then check again.'].join('\n');
+  if (!q.writeTasks) return [...L, 'No write tasks yet. Run some (conductor-ai run build …), then check again.'].join('\n');
   L.push(`accepted first try   ${q.firstTry}/${q.writeTasks} = ${q.firstTryRate}%   (done, one worker, no hand-off or retry)`);
   L.push(`done in the end      ${q.done}/${q.writeTasks} = ${q.doneRate}%`);
   L.push(`outcomes             ${Object.entries(q.outcomes).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ${n}`).join(' · ')}`);
@@ -119,7 +119,7 @@ export function formatQualityStats(q) {
   L.push(`worker cost          ${q.workerTokens.toLocaleString()} tokens${q.workerCost ? ` · $${q.workerCost}` : ''} · ${q.workerMinutes} worker-minutes`);
   L.push(`context kept out     ~${q.contextKeptOut.toLocaleString()} tokens (estimate: trimmed reports, compact diffs, free-model picks)`);
   L.push('', `alpha gate (≥70% first try over ≥10 write tasks): ${q.gate}`);
-  L.push('Why the rest failed: conductor stats --failures');
+  L.push('Why the rest failed: conductor-ai stats --failures');
   return L.join('\n');
 }
 

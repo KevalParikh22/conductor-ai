@@ -1,5 +1,5 @@
-// `conductor init`: add conductor to a project for the chosen controller. Never overwrites user files.
-// `conductor setup`: first-time global setup (~/.config/conductor).
+// `conductor-ai init`: add conductor-ai to a project for the chosen controller. Never overwrites user files.
+// `conductor-ai setup`: first-time global setup (~/.config/conductor).
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
@@ -21,9 +21,9 @@ function mergeMarkedBlock(file, block, start, end, log) {
   const i = cur.indexOf(start), j = cur.indexOf(end);
   if (i >= 0 && j > i) {
     const next = cur.slice(0, i) + block.trim() + cur.slice(j + end.length);
-    if (next !== cur) { fs.writeFileSync(file, next); log('updated', `${name} (conductor block)`); } else log('kept', name);
+    if (next !== cur) { fs.writeFileSync(file, next); log('updated', `${name} (conductor-ai block)`); } else log('kept', name);
   } else {
-    fs.writeFileSync(file, cur.trimEnd() + '\n\n' + block.trim() + '\n'); log('merged', `${name} (conductor block appended)`);
+    fs.writeFileSync(file, cur.trimEnd() + '\n\n' + block.trim() + '\n'); log('merged', `${name} (conductor-ai block appended)`);
   }
 }
 
@@ -48,7 +48,7 @@ function mergeJsonFile(root, relPath, mutate, log) {
   const abs = path.join(root, relPath);
   const existed = fs.existsSync(abs);
   const data = readJSON(abs, existed ? null : {});
-  if (data === null) return log('SKIPPED', `${relPath} (not valid JSON, so add the conductor entry by hand)`);
+  if (data === null) return log('SKIPPED', `${relPath} (not valid JSON, so add the conductor-ai entry by hand)`);
   const before = JSON.stringify(data);
   mutate(data);
   if (JSON.stringify(data) === before) return log('kept', relPath);
@@ -84,12 +84,12 @@ function parseCommand(md) {
 }
 
 
-/** Is conductor registered in Codex's own config (~/.codex/config.toml)? */
+/** Is conductor-ai registered in Codex's own config (~/.codex/config.toml)? */
 export function codexHasConductor(file = path.join(process.env.CODEX_HOME || path.join(os.homedir(), '.codex'), 'config.toml')) {
   try { return /^\s*\[mcp_servers\.(conductor|"conductor")\]/m.test(fs.readFileSync(file, 'utf8')); } catch { return false; }
 }
 
-/** Is conductor registered as an MCP server in agy's own config (~/.gemini/config/mcp_config.json)? */
+/** Is conductor-ai registered as an MCP server in agy's own config (~/.gemini/config/mcp_config.json)? */
 export function agyHasConductor(file = path.join(os.homedir(), '.gemini', 'config', 'mcp_config.json')) {
   try { return !!JSON.parse(fs.readFileSync(file, 'utf8'))?.mcpServers?.conductor; } catch { return false; }
 }
@@ -122,8 +122,8 @@ export function initProject(root, { controller = 'claude-code', mcp = true, vsco
   let block = tpl('controller-block.md').replace('{{IMPORT}}', def.import ?? (ctrlFile === 'AGENTS.md' ? '' : '@AGENTS.md'));
   if (ctrlFile !== 'CLAUDE.md') {
     // AGENTS.md / GEMINI.md are also read by workers: make the controller section conditional
-    block = block.replace('## Conductor: you are the controller',
-      `## Conductor: controller instructions (${def.label} only)\n\n` +
+    block = block.replace('## conductor-ai: you are the controller',
+      `## conductor-ai: controller instructions (${def.label} only)\n\n` +
       '_Workers: ignore this section; follow your WORKER prompt. It applies only when the user runs you directly as the controller._');
   }
   mergeMarkedBlock(path.join(root, ctrlFile), block, '<!-- conductor:start -->', '<!-- conductor:end -->', log);
@@ -146,16 +146,16 @@ export function initProject(root, { controller = 'claude-code', mcp = true, vsco
   // 4. MCP registration (optional second interface next to the CLI)
   if (mcp) {
     // conductor-ai, not conductor: other tools install a `conductor` command too (Conductor OSS); conductor-ai is only ours.
-    // An entry an older init wrote (`conductor mcp`) is moved to the new name; one you changed yourself is kept.
+    // An entry an older init wrote (`conductor-ai mcp`) is moved to the new name; one you changed yourself is kept.
     const server = { command: 'conductor-ai', args: ['mcp'] };
     const old = (e) => e && e.command === 'conductor' && JSON.stringify(e.args) === '["mcp"]';
     const m = def.mcp || {};
     if (m.format === 'mcpServers') mergeJsonFile(root, m.file, (d) => { d.mcpServers ||= {}; if (old(d.mcpServers.conductor)) d.mcpServers.conductor = { ...d.mcpServers.conductor, ...server }; d.mcpServers.conductor ||= server; }, log);
-    if (m.format === 'opencode') mergeJsonFile(root, m.file, (d) => { d.$schema ||= 'https://opencode.ai/config.json'; d.mcp ||= {}; if (d.mcp.conductor?.command?.join?.(' ') === 'conductor mcp') d.mcp.conductor.command = ['conductor-ai', 'mcp']; d.mcp.conductor ||= { type: 'local', command: ['conductor-ai', 'mcp'], enabled: true }; }, log);
+    if (m.format === 'opencode') mergeJsonFile(root, m.file, (d) => { d.$schema ||= 'https://opencode.ai/config.json'; d.mcp ||= {}; if (d.mcp.conductor?.command?.join?.(' ') === 'conductor-ai mcp') d.mcp.conductor.command = ['conductor-ai', 'mcp']; d.mcp.conductor ||= { type: 'local', command: ['conductor-ai', 'mcp'], enabled: true }; }, log);
     // agy CLI reads MCP servers only from its own config (agy mcp add), not from the project: say how, don't edit it for the user
-    if (m.register === 'agy' && !agyHasConductor()) notes.push('Antigravity: agy loads MCP servers from its own config, not from this project. Register conductor once (for all projects):\n    agy mcp add conductor conductor-ai mcp\n  Then check with: agy mcp list');
+    if (m.register === 'agy' && !agyHasConductor()) notes.push('Antigravity: agy loads MCP servers from its own config, not from this project. Register conductor-ai once (for all projects):\n    agy mcp add conductor-ai conductor-ai mcp\n  Then check with: agy mcp list');
     // Codex reads MCP servers only from ~/.codex/config.toml: say how, don't edit it for the user
-    if (m.register === 'codex' && !codexHasConductor()) notes.push('Codex: Codex loads MCP servers from ~/.codex/config.toml, not from this project. Register conductor once (for all projects):\n    codex mcp add conductor -- conductor-ai mcp\n  Then check with: codex mcp list');
+    if (m.register === 'codex' && !codexHasConductor()) notes.push('Codex: Codex loads MCP servers from ~/.codex/config.toml, not from this project. Register conductor-ai once (for all projects):\n    codex mcp add conductor-ai -- conductor-ai mcp\n  Then check with: codex mcp list');
     // VS Code (Copilot agent mode and other MCP extensions) reads .vscode/mcp.json: on request, or when the project already has a .vscode folder
     if (vscode ?? fs.existsSync(path.join(root, '.vscode'))) mergeJsonFile(root, '.vscode/mcp.json', (d) => { d.servers ||= {}; if (old(d.servers.conductor)) d.servers.conductor = { ...d.servers.conductor, ...server }; d.servers.conductor ||= { type: 'stdio', ...server }; }, log);
   }
@@ -173,13 +173,13 @@ export function initProject(root, { controller = 'claude-code', mcp = true, vsco
   copyIfMissing(root, 'HANDOFF.md', tpl('HANDOFF.md'), log);
   copyIfMissing(root, 'docs/architecture.md', tpl('architecture.md'), log);
 
-  // 6. Keep conductor's files out of git (unless --share): the ones it created, plus its folders and skills
+  // 6. Keep conductor-ai's files out of git (unless --share): the ones it created, plus its folders and skills
   if (share) {
-    if (removeBlock(root)) log('updated', '.gitignore (conductor block removed: its files can be committed)');
+    if (removeBlock(root)) log('updated', '.gitignore (conductor-ai block removed: its files can be committed)');
   } else {
     const entries = [...new Set([...readBlock(root), ...BASE_ENTRIES, ...CREATED_FILES.filter((f) => created.has(f))])];
     const r = writeBlock(root, entries);
-    log(r, `.gitignore (conductor's files kept out of git${r === 'kept' ? '' : ': commit .gitignore'})`);
+    log(r, `.gitignore (conductor-ai's files kept out of git${r === 'kept' ? '' : ': commit .gitignore'})`);
     const tracked = trackedEntries(root, entries);
     if (tracked.length) notes.push(`Already committed, so .gitignore won't hide them: ${tracked.join(', ')}\n  To stop tracking them (the files stay on disk): git rm -r --cached ${tracked.map((t) => t.replace(/\/$/, '')).join(' ')}`);
   }
@@ -195,7 +195,7 @@ export function initProject(root, { controller = 'claude-code', mcp = true, vsco
 
   // no proof, no "done": without a verify command every write task ends "unverified" (exit 4)
   const configured = readJSON(pcfg, {}).settings?.verify || readJSON(GLOBAL_CONFIG, {}).settings?.verify;
-  if (!configured && !detectVerify(root)) notes.push('No verify command found. Until there is one, code a worker writes ends as "unverified" (exit 4), because nothing proves it works.\n  Set it once:  conductor init --verify "npm test"   (any command that exits 0 when the project is healthy)');
+  if (!configured && !detectVerify(root)) notes.push('No verify command found. Until there is one, code a worker writes ends as "unverified" (exit 4), because nothing proves it works.\n  Set it once:  conductor-ai init --verify "npm test"   (any command that exits 0 when the project is healthy)');
 
   return { lines, notes };
 }

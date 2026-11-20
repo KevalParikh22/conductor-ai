@@ -12,11 +12,11 @@ labels: bug
 Commands you ran, and the role and provider involved:
 
 ```
-conductor run …
+conductor-ai run …
 ```
 
 **Environment**
-- `conductor --version`:
+- `conductor-ai --version`:
 - OS and Node version:
 - Agent CLI and version (e.g. `agy --version`), if relevant:
 

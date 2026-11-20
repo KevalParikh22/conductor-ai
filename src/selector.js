@@ -5,7 +5,7 @@
 //   - bigger or open-ended tasks go to agents first: they find and edit files themselves, instead of an API
 //     model rewriting whole files blind;
 //   - paid API models go after free ones and agents;
-//   - a provider whose recent work mostly failed (< 60%, its reply or conductor's checks on it) goes after the reliable
+//   - a provider whose recent work mostly failed (< 60%, its reply or conductor-ai's checks on it) goes after the reliable
 //     ones, and one whose last 3 attempts all failed (not counting rate limits, which cooldowns handle) goes last;
 //   - under priority speed, the fastest reliable provider goes first, before the free-first rule.
 import { readUsage } from './usage.js';
@@ -90,7 +90,7 @@ export function smartOrder(entries, task) {
     return 2; // paid or unknown-price API
   };
   // measured on this role (and this task size when there is enough of it): a route whose recent work mostly failed
-  // (its reply, or conductor's checks on it: verify, acceptance) goes after the reliable ones, whatever its group.
+  // (its reply, or conductor-ai's checks on it: verify, acceptance) goes after the reliable ones, whatever its group.
   // Being free doesn't help when the work has to be done again (B2: NVIDIA went first on every small task at 30%).
   const stats = speedStats(live.map((e) => e.name), task.role, { size });
   const unreliable = (e) => (stats[e.name] && stats[e.name].okRate < 0.6 ? 1 : 0);

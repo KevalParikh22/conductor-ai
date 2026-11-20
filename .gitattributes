@@ -1,4 +1,4 @@
-# conductor reads and generates text with LF line endings; keep them on every OS (Windows checkouts too)
+# conductor-ai reads and generates text with LF line endings; keep them on every OS (Windows checkouts too)
 * text=auto eol=lf
 *.png binary
 *.gif binary

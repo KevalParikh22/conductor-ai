@@ -17,7 +17,7 @@ export function statusData(cfg) {
       optional, // on by default, no key yet: not broken
       cooling: c ? { until: c.until, reason: c.reason } : null, // paused by a rate limit: not broken either
       name, type: p.type, preset: p.preset, model: p.model || '', enabled: !!p.enabled,
-      location: providerLocation(p), kind: providerKind(p), ready: r.ready && !c, reason: c ? `cooling down until ${untilText(c.until)} (${c.reason}): conductor cooldown --clear ${name}` : optional ? `optional: add ${p.apiKeyEnv} to use it` : r.reason,
+      location: providerLocation(p), kind: providerKind(p), ready: r.ready && !c, reason: c ? `cooling down until ${untilText(c.until)} (${c.reason}): conductor-ai cooldown --clear ${name}` : optional ? `optional: add ${p.apiKeyEnv} to use it` : r.reason,
       label: p.type === 'cli' ? (CLI_PRESETS[p.preset]?.label || p.bin) : name, notes: p.notes || '',
     };
   });

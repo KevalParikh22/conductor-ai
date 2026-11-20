@@ -68,7 +68,7 @@ const TOOLS = [
     name: 'conductor_batch',
     description: 'Run several INDEPENDENT plan tasks in parallel, each in its own git worktree on branch conductor/<id>, spread across different providers. ' +
       'Without merge: refuses tasks that depend on each other; review each branch with `git diff HEAD...conductor/<id>` and merge the good ones. ' +
-      'With all: true (the whole plan in one call): tasks start as soon as their depends are merged, conductor merges each one that passed and runs verify on the merged code. Returns one line per task.',
+      'With all: true (the whole plan in one call): tasks start as soon as their depends are merged, conductor-ai merges each one that passed and runs verify on the merged code. Returns one line per task.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -112,12 +112,12 @@ const TOOLS = [
   },
   {
     name: 'conductor_plan_check',
-    description: 'Check a plan before handing out tasks: each write task needs files, acceptance criteria that can be checked, a verify command, and a size one worker can do. conductor refuses tasks that fail this.',
+    description: 'Check a plan before handing out tasks: each write task needs files, acceptance criteria that can be checked, a verify command, and a size one worker can do. conductor-ai refuses tasks that fail this.',
     inputSchema: { type: 'object', properties: { plan: { type: 'string', description: 'Plan file, e.g. docs/plan/feature.md' }, task_ids: { type: 'array', items: { type: 'string' }, description: 'Only these tasks (default: all)' } }, required: ['plan'] },
   },
   {
     name: 'conductor_lessons',
-    description: "What earlier work in this project taught: failures conductor diagnosed and the controller's notes. They go into later workers' prompts and move providers that keep failing a kind of work to the back. Give text to add one; remove or promote (to a rule in AGENTS.md) take a lesson id: promote only when the user agrees.",
+    description: "What earlier work in this project taught: failures conductor-ai diagnosed and the controller's notes. They go into later workers' prompts and move providers that keep failing a kind of work to the back. Give text to add one; remove or promote (to a rule in AGENTS.md) take a lesson id: promote only when the user agrees.",
     inputSchema: { type: 'object', properties: { text: { type: 'string', description: 'Add this lesson (omit to list)' }, files: { type: 'array', items: { type: 'string' }, description: 'Files or folders it applies to' }, role: { type: 'string', enum: Object.keys(ROLES) }, remove: { type: 'string', description: 'A lesson id to remove' }, promote: { type: 'string', description: 'A lesson id to make a rule in AGENTS.md' } } },
   },
   { name: 'conductor_stats', description: 'Quality numbers for this project: first-try accept rate, done rate, the alpha gate, why tasks failed, and runs, tokens, cost and time per provider.', inputSchema: { type: 'object', properties: { days: { type: 'number', description: 'Look back this many days (default 30)' } } } },
@@ -147,7 +147,7 @@ const TOOLS = [
   { name: 'conductor_status', description: 'Show providers (installed / key set / cooling down), role chains, controller and repo state.', inputSchema: { type: 'object', properties: {} } },
   { name: 'conductor_verify', description: "Run the project's verify command (lint/typecheck/tests) and return the result.", inputSchema: { type: 'object', properties: {} } },
 ];
-// every tool takes the project folder too: controllers that register conductor globally (Antigravity, Codex) may start
+// every tool takes the project folder too: controllers that register conductor-ai globally (Antigravity, Codex) may start
 // it outside the project
 for (const t of TOOLS) t.inputSchema.properties.project = { type: 'string', description: 'Absolute path of the project (default: the folder the MCP server started in)' };
 
@@ -161,7 +161,7 @@ async function callTool(name, args, startRoot) {
   const cfg = loadConfig(root);
   if (name === 'conductor_retry') {
     const m = readWorktreeMeta(root, args.task_id);
-    if (!m && !args.role) return text(`conductor: no record of a worktree task "${args.task_id}". Start it with conductor_run (worktree: true) first`, true);
+    if (!m && !args.role) return text(`conductor-ai: no record of a worktree task "${args.task_id}". Start it with conductor_run (worktree: true) first`, true);
     args = { ...args, role: args.role || m.role, plan: m?.plan || undefined, continue: true };
     name = 'conductor_run';
   }
@@ -172,13 +172,13 @@ async function callTool(name, args, startRoot) {
   }
   if (name === 'conductor_plan_check') {
     const abs = path.resolve(root, args.plan || '');
-    if (!args.plan || !fs.existsSync(abs)) return text(`conductor: plan not found: ${args.plan || '(none given)'}`, true);
+    if (!args.plan || !fs.existsSync(abs)) return text(`conductor-ai: plan not found: ${args.plan || '(none given)'}`, true);
     const rows = checkPlan(fs.readFileSync(abs, 'utf8'), { ids: args.task_ids, verifyCmd: detectVerify(root, cfg.settings), maxFiles: cfg.settings.maxTaskFiles || 4 });
     return text(rows.length ? formatPlanCheck(args.plan, rows, planWarnings(fs.readFileSync(abs, 'utf8'))) : `no tasks found in ${args.plan}`, !rows.length || rows.some((r) => r.problems.length));
   }
   if (name === 'conductor_lessons') {
-    if (args.remove) { const g = removeLesson(root, String(args.remove)); return g ? text(`removed ${g.id}`) : text(`conductor: no lesson "${args.remove}"`, true); }
-    if (args.promote) { const r = promoteLesson(root, String(args.promote)); return r ? text(`added to AGENTS.md: ${r.bullet}`) : text(`conductor: no lesson "${args.promote}"`, true); }
+    if (args.remove) { const g = removeLesson(root, String(args.remove)); return g ? text(`removed ${g.id}`) : text(`conductor-ai: no lesson "${args.remove}"`, true); }
+    if (args.promote) { const r = promoteLesson(root, String(args.promote)); return r ? text(`added to AGENTS.md: ${r.bullet}`) : text(`conductor-ai: no lesson "${args.promote}"`, true); }
     if (args.text) { const l = addLesson(root, { source: 'manual', text: String(args.text).slice(0, 300), role: args.role || null, files: args.files || [] }); return text(`added ${l.id}: ${l.text}`); }
     const all = readLessons(root);
     return text(all.length ? all.slice(-30).reverse().map((l) => `${l.id} ${l.source === 'auto' ? l.kind : l.source} ${l.provider || '-'} ×${l.count || 1}${l.promoted ? ' [rule]' : (l.count || 1) >= PROMOTE_AT ? ' [promote?]' : ''}${l.resolvedAt ? ' [resolved]' : ''}: ${l.text || GUIDANCE[l.kind] || ''}`).join('\n') : 'No lessons yet.');
@@ -199,18 +199,18 @@ async function callTool(name, args, startRoot) {
     try {
       const s = await importAnswer(cfg, String(args.run || ''), args.answer, { dispatch });
       return text(formatSummary(s), s.exitCode !== 0);
-    } catch (e) { if (e instanceof ImportError) return text(`conductor: ${e.message}`, true); throw e; }
+    } catch (e) { if (e instanceof ImportError) return text(`conductor-ai: ${e.message}`, true); throw e; }
   }
   if (name === 'conductor_rules') {
     const rules = readRules(root);
-    return text(rules.length ? rules.map((r) => `${r.name}: ${r.description}${r.paths.length ? ` (files: ${r.paths.join(', ')})` : ' (all files)'}`).join('\n') : 'No project rules yet (conductor rules new <name>).');
+    return text(rules.length ? rules.map((r) => `${r.name}: ${r.description}${r.paths.length ? ` (files: ${r.paths.join(', ')})` : ' (all files)'}`).join('\n') : 'No project rules yet (conductor-ai rules new <name>).');
   }
   if (name === 'conductor_route') {
     let section = '', role = args.role;
     const files = [...(args.files || [])];
     if (args.plan && args.task_id) {
       section = extractTask(fs.readFileSync(path.resolve(root, args.plan), 'utf8'), args.task_id);
-      if (!section) return text(`conductor: task "${args.task_id}" not found in ${args.plan}`, true);
+      if (!section) return text(`conductor-ai: task "${args.task_id}" not found in ${args.plan}`, true);
       role ||= (section.match(/\*\*role:\*\*\s*(\w+)/i) || [])[1];
       files.push(...taskFiles(section));
     }
@@ -222,7 +222,7 @@ async function callTool(name, args, startRoot) {
   if (name === 'conductor_runs') {
     if (args.run) {
       const r = readRun(root, args.run);
-      if (!r) return text(`conductor: no run "${args.run}" (or the prefix matches several)`, true);
+      if (!r) return text(`conductor-ai: no run "${args.run}" (or the prefix matches several)`, true);
       let report = ''; try { report = r.summary.report ? fs.readFileSync(path.join(root, r.summary.report), 'utf8') : ''; } catch { /* gone */ }
       return text(`${formatSummary(r.summary)}\n\n${formatGates(runGates(r.summary))}${report ? `\n\n---- report ----\n${report.slice(-20000)}` : ''}`);
     }
@@ -230,7 +230,7 @@ async function callTool(name, args, startRoot) {
   }
   if (name === 'conductor_skills') {
     const all = listSkills(root);
-    if (!all.length) return text('No skills yet. Make one with: conductor skills new <name> (or the Skills page in conductor ui).');
+    if (!all.length) return text('No skills yet. Make one with: conductor-ai skills new <name> (or the Skills page in conductor-ai ui).');
     return text(all.map((s) => `${s.on ? '✓' : '○'} ${s.name} (${s.scope}): ${s.description}  → workers: ${['roles', 'files', 'text'].filter((k) => s.when?.[k]).map((k) => `${k} ${s.when[k]}`).join(' · ') || 'every task'}`).join('\n'));
   }
   if (name === 'conductor_status') return text(statusReport(cfg));
@@ -244,11 +244,11 @@ async function callTool(name, args, startRoot) {
       const b = await runBatch(cfg, {
         planPath: args.plan, tasks: args.tasks, role: args.role, provider: args.provider, concurrency: args.concurrency,
         replace: args.replace, noVerify: args.no_verify, allowWeakPlan: args.allow_weak_plan, allowOpenQuestions: args.allow_open_questions, priority: args.priority, all: args.all, merge: args.merge,
-        onEvent: (e) => process.stderr.write(`[conductor ${e.task}] ${e.type} ${e.provider || ''} ${e.reason || ''}\n`),
+        onEvent: (e) => process.stderr.write(`[conductor-ai ${e.task}] ${e.type} ${e.provider || ''} ${e.reason || ''}\n`),
       });
       return text(formatBatch(b), b.ok === 0);
     } catch (e) {
-      return text(`conductor: ${e.message}`, true);
+      return text(`conductor-ai: ${e.message}`, true);
     }
   }
   if (name === 'conductor_run') {
@@ -258,7 +258,7 @@ async function callTool(name, args, startRoot) {
         files: args.files, base: args.base, focus: args.focus, save: args.save, noVerify: args.no_verify, allowUnverified: args.allow_unverified, allowScope: args.allow_scope, allowWeakPlan: args.allow_weak_plan, noEscalate: args.no_escalate, allowNoRepro: args.allow_no_repro, samples: args.samples, race: args.race, priority: args.priority, review: args.review === true, noReview: args.review === false, allowDirty: args.allow_dirty, allowOpenQuestions: args.allow_open_questions,
         worktree: args.worktree, worktreeId: args.task_id, replace: args.replace, continue: args.continue,
         timeoutMs: args.timeout ? parseDuration(args.timeout) || undefined : undefined,
-        onEvent: (e) => process.stderr.write(`[conductor] ${e.type} ${e.provider || ''} ${e.reason || ''}\n`),
+        onEvent: (e) => process.stderr.write(`[conductor-ai] ${e.type} ${e.provider || ''} ${e.reason || ''}\n`),
       });
       let out = formatSummary(s);
       if (s.report) {
@@ -268,7 +268,7 @@ async function callTool(name, args, startRoot) {
       if (s.verify?.status === 'FAIL') out += `\n\n---- verify output (tail) ----\n${s.verify.tail}`;
       return text(out, !s.winner);
     } catch (e) {
-      return text(`conductor: ${e.message}`, true);
+      return text(`conductor-ai: ${e.message}`, true);
     }
   }
   throw Object.assign(new Error(`unknown tool ${name}`), { code: -32602 });
@@ -297,7 +297,7 @@ export function readRunResource(root, uri) {
   if (!r) return null;
   let report = '';
   try { report = r.summary.report ? fs.readFileSync(path.join(root, r.summary.report), 'utf8') : ''; } catch { /* gone */ }
-  const text = `# conductor run ${r.id}\n\n\`\`\`text\n${formatSummary(r.summary).trim()}\n\n${formatGates(runGates(r.summary))}\n\`\`\`\n${report ? `\n## Worker report\n\n${report.slice(-20000)}\n` : ''}`;
+  const text = `# conductor-ai run ${r.id}\n\n\`\`\`text\n${formatSummary(r.summary).trim()}\n\n${formatGates(runGates(r.summary))}\n\`\`\`\n${report ? `\n## Worker report\n\n${report.slice(-20000)}\n` : ''}`;
   return { uri, mimeType: 'text/markdown', text };
 }
 
@@ -305,7 +305,7 @@ export function startMcpServer({ cwd = process.cwd() } = {}) {
   const root = findProjectRoot(cwd);
   const serverInfo = { name: 'conductor-ai', version: VERSION };
   const rl = readline.createInterface({ input: process.stdin });
-  process.stderr.write(`[conductor] MCP server ready (project: ${root})\n`);
+  process.stderr.write(`[conductor-ai] MCP server ready (project: ${root})\n`);
 
   let pending = 0, closed = false;
   const maybeExit = () => { if (closed && pending === 0) process.exit(0); };
@@ -334,7 +334,7 @@ export function startMcpServer({ cwd = process.cwd() } = {}) {
         case 'tools/call': return reply(id, await callTool(params.name, params.arguments || {}, root));
         // run reports as resources: a controller (or its user) can open a run like a file, without a tool call
         case 'resources/list': return reply(id, { resources: listRunResources(root) });
-        case 'resources/templates/list': return reply(id, { resourceTemplates: [{ uriTemplate: 'conductor://runs/{id}', name: 'A conductor run', description: 'One run: its summary, the checklist that decides "done", and the worker\'s report', mimeType: 'text/markdown' }] });
+        case 'resources/templates/list': return reply(id, { resourceTemplates: [{ uriTemplate: 'conductor://runs/{id}', name: 'A conductor-ai run', description: 'One run: its summary, the checklist that decides "done", and the worker\'s report', mimeType: 'text/markdown' }] });
         case 'resources/read': {
           const r = readRunResource(root, String(params.uri || ''));
           if (!r) return fail(id, -32002, `resource not found: ${params.uri}`);

@@ -7,7 +7,7 @@ A coding agent that runs on your machine: it reads the repo, edits files and run
 | | |
 |---|---|
 | Kind | Local agent (`grok`) |
-| conductor name | `grok-cli` |
+| conductor-ai name | `grok-cli` |
 | Docs | https://github.com/xai-org/grok-build |
 
 ## Set up
@@ -17,14 +17,14 @@ A coding agent that runs on your machine: it reads the repo, edits files and run
    curl -fsSL https://x.ai/cli/install.sh | bash
    ```
 2. Sign in once: `grok login   (or set XAI_API_KEY from console.x.ai)`
-3. Enable `grok-cli` in `conductor ui` → Providers (or run `conductor setup`, which finds installed agents), then check it:
+3. Enable `grok-cli` in `conductor-ai ui` → Providers (or run `conductor-ai setup`, which finds installed agents), then check it:
    ```bash
-   conductor doctor --live
+   conductor-ai doctor --live
    ```
 
-## What it may do under conductor
+## What it may do under conductor-ai
 
 - **Write roles:** OS sandbox (strict): writes only in the project and temp, no network for commands on Linux; git push/commit/reset and sudo denied; web tools off
 - **Read roles:** OS sandbox (read-only) and only its read, grep and list tools
 
-conductor passes these rules on the command line for each run; your own settings for the CLI are not changed. Details: [Providers → Permissions](../PROVIDERS.md#permissions-what-each-agent-may-do).
+conductor-ai passes these rules on the command line for each run; your own settings for the CLI are not changed. Details: [Providers → Permissions](../PROVIDERS.md#permissions-what-each-agent-may-do).

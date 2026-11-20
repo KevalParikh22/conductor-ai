@@ -36,7 +36,7 @@ export function deepDiff(base, eff) {
   return out;
 }
 
-/** Names of the variables conductor loaded from its secret files (kept away from CLI workers). */
+/** Names of the variables conductor-ai loaded from its secret files (kept away from CLI workers). */
 export const SECRET_VARS = new Set();
 
 /** Parse a KEY=VALUE env file. Does not override variables already set. */
@@ -96,7 +96,7 @@ export function runShell(line, opts = {}) {
   return run(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `"${line}"`], { ...opts, verbatim: true });
 }
 
-// Worker processes still running: killed with their whole process group if conductor itself is stopped.
+// Worker processes still running: killed with their whole process group if conductor-ai itself is stopped.
 const live = new Set();
 function onSignal(sig) {
   for (const k of live) k('SIGKILL');
@@ -114,7 +114,7 @@ function untrack(kill) {
 /**
  * Run a process. Never throws for non-zero exits.
  * On POSIX it runs in its own process group, so a timeout stops the helpers it started too: an agent's child
- * processes can hold its output pipes open, and killing only the agent would leave conductor waiting forever.
+ * processes can hold its output pipes open, and killing only the agent would leave conductor-ai waiting forever.
  * idleTimeoutMs stops it when it prints nothing for that long.
  * @returns {Promise<{code:number|null, stdout:string, stderr:string, timedOut:boolean, idle?:boolean, error?:string}>}
  */

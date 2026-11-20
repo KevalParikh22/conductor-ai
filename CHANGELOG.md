@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- **One command name: `conductor-ai`.** The short `conductor` command is gone (other tools ship a `conductor` too). Help, messages, the settings page, the README, the docs and generated files all say `conductor-ai`. If you typed `conductor …`, type `conductor-ai …`; your config, projects and MCP setup keep working as they are.
+- **Fixed: skills and slash commands now allow `Bash(conductor-ai:*)`.** They allowed `conductor:*`, which doesn't match `conductor-ai` commands, so Claude Code asked before each one.
+- Doctor no longer checks whether another program owns `conductor` on PATH; it checks for `conductor-ai`.
+
 ## 0.11.3 (2026-11-18)
 
 - **Fixed: "Save to Global" copied this project's settings into every project.** The UI sent the whole effective config (defaults + global + this project), and a global save stored all of it, so a value set only for this project became global. Now only what you changed on the page goes to the file you picked. A key set in both files: the project wins. A key set only globally applies to every project. When a global change doesn't apply here because this project overrides it, the save says so.

@@ -49,7 +49,7 @@ test('each gate carries its evidence: command, numbers, files, log', () => {
   assert.ok(gatesPass(Object.values(g)));
 });
 
-test('a real run: conductor runs show / MCP / UI API get the same checklist, and the API never reads outside the project', async () => {
+test('a real run: conductor-ai runs show / MCP / UI API get the same checklist, and the API never reads outside the project', async () => {
   fakeBins({
     'codex-v4': `let p='';process.stdin.on('data',d=>p+=d).on('end',()=>{const o=args[args.indexOf('-o')+1];
       fs.mkdirSync('src',{recursive:true});fs.writeFileSync('src/add.js','export const add=(a,b)=>a+b;\\n');

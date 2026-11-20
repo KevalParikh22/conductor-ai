@@ -7,7 +7,7 @@ A coding agent that runs on your machine: it reads the repo, edits files and run
 | | |
 |---|---|
 | Kind | Local agent (`claude`) |
-| conductor name | `claude-cli` |
+| conductor-ai name | `claude-cli` |
 | Docs | https://code.claude.com/docs/en/permissions |
 
 ## Set up
@@ -17,14 +17,14 @@ A coding agent that runs on your machine: it reads the repo, edits files and run
    npm install -g @anthropic-ai/claude-code
    ```
 2. Sign in once: `claude   (then /login)`
-3. Enable `claude-cli` in `conductor ui` → Providers (or run `conductor setup`, which finds installed agents), then check it:
+3. Enable `claude-cli` in `conductor-ai ui` → Providers (or run `conductor-ai setup`, which finds installed agents), then check it:
    ```bash
-   conductor doctor --live
+   conductor-ai doctor --live
    ```
 
-## What it may do under conductor
+## What it may do under conductor-ai
 
 - **Write roles:** file edits auto-approved; shell commands that would ask are refused; git push/commit/reset and sudo denied
 - **Read roles:** edit tools disabled; shell commands that would ask are refused
 
-conductor passes these rules on the command line for each run; your own settings for the CLI are not changed. Details: [Providers → Permissions](../PROVIDERS.md#permissions-what-each-agent-may-do).
+conductor-ai passes these rules on the command line for each run; your own settings for the CLI are not changed. Details: [Providers → Permissions](../PROVIDERS.md#permissions-what-each-agent-may-do).

@@ -52,7 +52,7 @@ test('with a repro: it must fail before (else refused), and pass after', async (
   let { dir } = repo(plan(`\n${REPRO}`));
   let s = await run(dir, ['fx-good']);
   assert.deepEqual([s.repro.before, s.repro.after, s.outcome], ['FAIL', 'PASS', 'done']);
-  assert.match(fs.readFileSync(path.join(dir, '.git', 'PROMPT.txt'), 'utf8'), /## Reproduce\nconductor runs `node -e/);
+  assert.match(fs.readFileSync(path.join(dir, '.git', 'PROMPT.txt'), 'utf8'), /## Reproduce\nconductor-ai runs `node -e/);
   assert.match(formatSummary(s), /repro: +`node -e .*` FAIL before, PASS after/);
 
   ({ dir } = repo(plan(`\n${REPRO}`)));

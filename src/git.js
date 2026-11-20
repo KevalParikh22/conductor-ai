@@ -5,7 +5,7 @@ import path from 'node:path';
 
 function git(root, args, opts = {}) {
   try {
-    // core.fsmonitor names a program git runs on status/diff: never let a repo's config run one through conductor
+    // core.fsmonitor names a program git runs on status/diff: never let a repo's config run one through conductor-ai
     return execFileSync('git', ['-c', 'core.fsmonitor=false', ...args], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 256 * 1024 * 1024, ...opts }).toString();
   } catch (e) {
     if (opts.allowFail) return e.stdout?.toString() ?? '';
@@ -72,7 +72,7 @@ export const failedStashCount = (root) =>
 // ---------------- git control files ----------------
 // .git/config and .git/hooks can make git run programs (hooks, fsmonitor, filters, diff drivers). They are not in
 // `git status`, so a worker that wrote them would go unnoticed and its code would run on the next git command.
-// conductor snapshots them before a worker runs and puts them back afterwards, before it runs git again.
+// conductor-ai snapshots them before a worker runs and puts them back afterwards, before it runs git again.
 
 function controlFiles(root) {
   const dirs = new Set();

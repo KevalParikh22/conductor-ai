@@ -23,8 +23,8 @@ test('runs are listed newest first with conductor://runs/latest; reading one giv
   assert.match(list[1].name, /^ask: done$/);
   assert.equal(list[1].mimeType, 'text/markdown');
   const latest = readRunResource(dir, 'conductor://runs/latest');
-  assert.match(latest.text, /^# conductor run .*-ask\n/);
+  assert.match(latest.text, /^# conductor-ai run .*-ask\n/);
   assert.match(latest.text, /CONDUCTOR RESULT[\s\S]*checks:[\s\S]*## Worker report\n\n## VERDICT: APPROVE/);
-  assert.ok(readRunResource(dir, list[2].uri).text.startsWith(`# conductor run ${s1.runDir.split('/').pop()}\n`), 'the older run by its id');
+  assert.ok(readRunResource(dir, list[2].uri).text.startsWith(`# conductor-ai run ${s1.runDir.split('/').pop()}\n`), 'the older run by its id');
   for (const bad of ['conductor://runs/../x', 'conductor://runs/', 'file:///etc/passwd', 'conductor://runs/nope']) assert.equal(readRunResource(dir, bad), null, bad);
 });

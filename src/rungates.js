@@ -1,5 +1,5 @@
 // V4: "done" means validated. One checklist per run, built from summary.json: each gate with pass / fail / waived /
-// skipped / missing and its evidence. The CLI (`conductor runs show`), MCP and the UI's run page all show this list.
+// skipped / missing and its evidence. The CLI (`conductor-ai runs show`), MCP and the UI's run page all show this list.
 // `required` gates must pass (or be waived on purpose) for the run to count as done; the rest are information.
 
 const OK = new Set(['pass', 'waived', 'off']);
@@ -36,15 +36,15 @@ export function runGates(s) {
   }
   const c = s.checks;
   if (c) {
-    add('checks', 'Acceptance checks pass when conductor runs them', c.failed?.length ? 'fail' : 'pass',
+    add('checks', 'Acceptance checks pass when conductor-ai runs them', c.failed?.length ? 'fail' : 'pass',
       `${c.passed}/${c.total} pass${c.failed?.length ? `; failing: ${c.failed.slice(0, 3).map((f) => `${f.expr} → ${f.got}`).join(' | ')}` : ''}${c.skipped?.length ? `; ${c.skipped.length} skipped` : ''}`);
   }
 
   const v = s.verify;
   if (write || v) {
-    if (!v) add('verify', 'Verify passes', 'missing', 'no verify command, so nothing proves the code works: conductor init --verify "<cmd>"');
+    if (!v) add('verify', 'Verify passes', 'missing', 'no verify command, so nothing proves the code works: conductor-ai init --verify "<cmd>"');
     else if (v.status === 'SKIPPED' && v.chosen) add('verify', 'Verify passes', 'skipped', `${v.note || 'skipped on purpose'}: check the work yourself`, { required: write });
-    else if (v.status === 'SKIPPED') add('verify', 'Verify passes', write ? 'missing' : 'skipped', 'no verify command, so nothing proves the code works: conductor init --verify "<cmd>"', { required: write });
+    else if (v.status === 'SKIPPED') add('verify', 'Verify passes', write ? 'missing' : 'skipped', 'no verify command, so nothing proves the code works: conductor-ai init --verify "<cmd>"', { required: write });
     else add('verify', 'Verify passes', v.status === 'PASS' ? 'pass' : 'fail',
       `\`${v.cmd}\` ${v.status}${v.baseFailed ? ` (it already failed before the worker started${v.newFailures?.length ? `; ${v.newFailures.length} new failure line(s)` : '; no new failure lines'})` : ''}${v.suspectTests?.length ? `; only the worker's own tests fail: ${v.suspectTests.join(', ')}` : ''}`,
       { required: write || v.status === 'FAIL', log: v.log || null });

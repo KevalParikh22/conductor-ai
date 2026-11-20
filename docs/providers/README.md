@@ -2,12 +2,12 @@
 
 # Provider setup guides
 
-conductor can use **45 chat APIs** and **10 coding agents**. Each has a guide below. The quickest way to add any of them:
+conductor-ai can use **45 chat APIs** and **10 coding agents**. Each has a guide below. The quickest way to add any of them:
 
 ```bash
-conductor setup            # finds what you have, adds a free provider, tests
-conductor providers        # everything you can add, with status
-conductor add <name>       # key, model, test, roles: one command
+conductor-ai setup            # finds what you have, adds a free provider, tests
+conductor-ai providers        # everything you can add, with status
+conductor-ai add <name>       # key, model, test, roles: one command
 ```
 
 Not listed? Any OpenAI-compatible endpoint works: see [Adding your own](../PROVIDERS.md#adding-your-own).
@@ -31,73 +31,73 @@ Not listed? Any OpenAI-compatible endpoint works: see [Adding your own](../PROVI
 
 | Provider | Key | Free tier | Add | Guide |
 |---|---|---|---|---|
-| Kilo Gateway | optional | ":free" models with no key at all: 200 requests an hour per IP | `conductor add kilo` | [guide](kilo.md) |
-| OVHcloud AI Endpoints | optional | Works without a key at 2 requests a minute per model; a key | `conductor add ovh` | [guide](ovh.md) |
-| Google Gemini API | `GEMINI_API_KEY` | Free tier on most models, with daily limits shown in AI Studio | `conductor add gemini` | [guide](gemini.md) |
-| Groq | `GROQ_API_KEY` | Free plan with per-model limits, e | `conductor add groq` | [guide](groq.md) |
-| Cerebras | `CEREBRAS_API_KEY` | Free accounts with lower per-minute limits | `conductor add cerebras` | [guide](cerebras.md) |
-| NVIDIA NIM | `NVIDIA_API_KEY` | Free for prototyping | `conductor add nvidia` | [guide](nvidia.md) |
-| Cohere | `COHERE_API_KEY` | Trial key: 1000 calls a month, 20 a minute | `conductor add cohere` | [guide](cohere.md) |
+| Kilo Gateway | optional | ":free" models with no key at all: 200 requests an hour per IP | `conductor-ai add kilo` | [guide](kilo.md) |
+| OVHcloud AI Endpoints | optional | Works without a key at 2 requests a minute per model; a key | `conductor-ai add ovh` | [guide](ovh.md) |
+| Google Gemini API | `GEMINI_API_KEY` | Free tier on most models, with daily limits shown in AI Studio | `conductor-ai add gemini` | [guide](gemini.md) |
+| Groq | `GROQ_API_KEY` | Free plan with per-model limits, e | `conductor-ai add groq` | [guide](groq.md) |
+| Cerebras | `CEREBRAS_API_KEY` | Free accounts with lower per-minute limits | `conductor-ai add cerebras` | [guide](cerebras.md) |
+| NVIDIA NIM | `NVIDIA_API_KEY` | Free for prototyping | `conductor-ai add nvidia` | [guide](nvidia.md) |
+| Cohere | `COHERE_API_KEY` | Trial key: 1000 calls a month, 20 a minute | `conductor-ai add cohere` | [guide](cohere.md) |
 
 ## Gateways and aggregators (many models, one key)
 
 | Provider | Key | Free tier | Add | Guide |
 |---|---|---|---|---|
-| OpenRouter | `OPENROUTER_API_KEY` | ":free" models: 50 requests a day, or 1000 a day after buying $10 of credits | `conductor add openrouter` | [guide](openrouter.md) |
-| OpenCode Zen | `OPENCODE_API_KEY` | — | `conductor add opencode-zen` | [guide](opencode-zen.md) |
-| Requesty | `REQUESTY_API_KEY` | — | `conductor add requesty` | [guide](requesty.md) |
-| Vercel AI Gateway | `AI_GATEWAY_API_KEY` | Some preview models are free; otherwise credits | `conductor add vercel` | [guide](vercel.md) |
-| Hugging Face | `HF_TOKEN` | Monthly included credits | `conductor add huggingface` | [guide](huggingface.md) |
-| Cloudflare Workers AI | `CLOUDFLARE_API_KEY` | 10,000 Neurons a day free | `conductor add cloudflare` | [guide](cloudflare.md) |
-| Poe | `POE_API_KEY` | — | `conductor add poe` | [guide](poe.md) |
-| AI/ML API | `AIMLAPI_API_KEY` | — | `conductor add aimlapi` | [guide](aimlapi.md) |
+| OpenRouter | `OPENROUTER_API_KEY` | ":free" models: 50 requests a day, or 1000 a day after buying $10 of credits | `conductor-ai add openrouter` | [guide](openrouter.md) |
+| OpenCode Zen | `OPENCODE_API_KEY` | — | `conductor-ai add opencode-zen` | [guide](opencode-zen.md) |
+| Requesty | `REQUESTY_API_KEY` | — | `conductor-ai add requesty` | [guide](requesty.md) |
+| Vercel AI Gateway | `AI_GATEWAY_API_KEY` | Some preview models are free; otherwise credits | `conductor-ai add vercel` | [guide](vercel.md) |
+| Hugging Face | `HF_TOKEN` | Monthly included credits | `conductor-ai add huggingface` | [guide](huggingface.md) |
+| Cloudflare Workers AI | `CLOUDFLARE_API_KEY` | 10,000 Neurons a day free | `conductor-ai add cloudflare` | [guide](cloudflare.md) |
+| Poe | `POE_API_KEY` | — | `conductor-ai add poe` | [guide](poe.md) |
+| AI/ML API | `AIMLAPI_API_KEY` | — | `conductor-ai add aimlapi` | [guide](aimlapi.md) |
 
 ## Model makers
 
 | Provider | Key | Free tier | Add | Guide |
 |---|---|---|---|---|
-| OpenAI | `OPENAI_API_KEY` | — | `conductor add openai` | [guide](openai.md) |
-| Anthropic (Claude API) | `ANTHROPIC_API_KEY` | — | `conductor add anthropic` | [guide](anthropic.md) |
-| xAI (Grok) | `XAI_API_KEY` | — | `conductor add xai` | [guide](xai.md) |
-| Mistral | `MISTRAL_API_KEY` | Free mode keys for testing, rate-limited | `conductor add mistral` | [guide](mistral.md) |
-| DeepSeek | `DEEPSEEK_API_KEY` | — | `conductor add deepseek` | [guide](deepseek.md) |
-| Moonshot (Kimi API) | `MOONSHOT_API_KEY` | — | `conductor add moonshot` | [guide](moonshot.md) |
-| Qwen (Alibaba Model Studio) | `DASHSCOPE_API_KEY` | — | `conductor add qwen` | [guide](qwen.md) |
-| Z.ai (GLM) | `ZAI_API_KEY` | — | `conductor add zhipu` | [guide](zhipu.md) |
-| MiniMax | `MINIMAX_API_KEY` | — | `conductor add minimax` | [guide](minimax.md) |
+| OpenAI | `OPENAI_API_KEY` | — | `conductor-ai add openai` | [guide](openai.md) |
+| Anthropic (Claude API) | `ANTHROPIC_API_KEY` | — | `conductor-ai add anthropic` | [guide](anthropic.md) |
+| xAI (Grok) | `XAI_API_KEY` | — | `conductor-ai add xai` | [guide](xai.md) |
+| Mistral | `MISTRAL_API_KEY` | Free mode keys for testing, rate-limited | `conductor-ai add mistral` | [guide](mistral.md) |
+| DeepSeek | `DEEPSEEK_API_KEY` | — | `conductor-ai add deepseek` | [guide](deepseek.md) |
+| Moonshot (Kimi API) | `MOONSHOT_API_KEY` | — | `conductor-ai add moonshot` | [guide](moonshot.md) |
+| Qwen (Alibaba Model Studio) | `DASHSCOPE_API_KEY` | — | `conductor-ai add qwen` | [guide](qwen.md) |
+| Z.ai (GLM) | `ZAI_API_KEY` | — | `conductor-ai add zhipu` | [guide](zhipu.md) |
+| MiniMax | `MINIMAX_API_KEY` | — | `conductor-ai add minimax` | [guide](minimax.md) |
 
 ## Fast and open-model hosts
 
 | Provider | Key | Free tier | Add | Guide |
 |---|---|---|---|---|
-| SambaNova | `SAMBANOVA_API_KEY` | — | `conductor add sambanova` | [guide](sambanova.md) |
-| Together AI | `TOGETHER_API_KEY` | — | `conductor add together` | [guide](together.md) |
-| Fireworks AI | `FIREWORKS_API_KEY` | — | `conductor add fireworks` | [guide](fireworks.md) |
-| DeepInfra | `DEEPINFRA_API_KEY` | — | `conductor add deepinfra` | [guide](deepinfra.md) |
-| Hyperbolic | `HYPERBOLIC_API_KEY` | — | `conductor add hyperbolic` | [guide](hyperbolic.md) |
-| Novita AI | `NOVITA_API_KEY` | — | `conductor add novita` | [guide](novita.md) |
-| Nebius Token Factory | `NEBIUS_API_KEY` | — | `conductor add nebius` | [guide](nebius.md) |
-| Baseten | `BASETEN_API_KEY` | — | `conductor add baseten` | [guide](baseten.md) |
-| Featherless | `FEATHERLESS_API_KEY` | — | `conductor add featherless` | [guide](featherless.md) |
-| Chutes | `CHUTES_API_KEY` | Some models are listed at $0 | `conductor add chutes` | [guide](chutes.md) |
-| Inference.net | `INFERENCE_API_KEY` | — | `conductor add inference-net` | [guide](inference-net.md) |
-| Scaleway Generative APIs | `SCW_SECRET_KEY` | First 1,000,000 tokens free | `conductor add scaleway` | [guide](scaleway.md) |
+| SambaNova | `SAMBANOVA_API_KEY` | — | `conductor-ai add sambanova` | [guide](sambanova.md) |
+| Together AI | `TOGETHER_API_KEY` | — | `conductor-ai add together` | [guide](together.md) |
+| Fireworks AI | `FIREWORKS_API_KEY` | — | `conductor-ai add fireworks` | [guide](fireworks.md) |
+| DeepInfra | `DEEPINFRA_API_KEY` | — | `conductor-ai add deepinfra` | [guide](deepinfra.md) |
+| Hyperbolic | `HYPERBOLIC_API_KEY` | — | `conductor-ai add hyperbolic` | [guide](hyperbolic.md) |
+| Novita AI | `NOVITA_API_KEY` | — | `conductor-ai add novita` | [guide](novita.md) |
+| Nebius Token Factory | `NEBIUS_API_KEY` | — | `conductor-ai add nebius` | [guide](nebius.md) |
+| Baseten | `BASETEN_API_KEY` | — | `conductor-ai add baseten` | [guide](baseten.md) |
+| Featherless | `FEATHERLESS_API_KEY` | — | `conductor-ai add featherless` | [guide](featherless.md) |
+| Chutes | `CHUTES_API_KEY` | Some models are listed at $0 | `conductor-ai add chutes` | [guide](chutes.md) |
+| Inference.net | `INFERENCE_API_KEY` | — | `conductor-ai add inference-net` | [guide](inference-net.md) |
+| Scaleway Generative APIs | `SCW_SECRET_KEY` | First 1,000,000 tokens free | `conductor-ai add scaleway` | [guide](scaleway.md) |
 
 ## Cloud platforms
 
 | Provider | Key | Free tier | Add | Guide |
 |---|---|---|---|---|
-| Azure OpenAI | `AZURE_OPENAI_API_KEY` | — | `conductor add azure-openai` | [guide](azure-openai.md) |
-| Amazon Bedrock | `AWS_BEARER_TOKEN_BEDROCK` | — | `conductor add bedrock` | [guide](bedrock.md) |
+| Azure OpenAI | `AZURE_OPENAI_API_KEY` | — | `conductor-ai add azure-openai` | [guide](azure-openai.md) |
+| Amazon Bedrock | `AWS_BEARER_TOKEN_BEDROCK` | — | `conductor-ai add bedrock` | [guide](bedrock.md) |
 
 ## Local and self-hosted (free, private)
 
 | Provider | Key | Free tier | Add | Guide |
 |---|---|---|---|---|
-| Ollama | none | Free: runs on your machine | `conductor add ollama` | [guide](ollama.md) |
-| LM Studio | none | Free: runs on your machine | `conductor add lmstudio` | [guide](lmstudio.md) |
-| llama.cpp server | optional | Free: runs on your machine | `conductor add llamacpp` | [guide](llamacpp.md) |
-| vLLM | optional | Free: runs on your hardware | `conductor add vllm` | [guide](vllm.md) |
-| LocalAI | optional | Free: runs on your machine | `conductor add localai` | [guide](localai.md) |
-| Jan | none | Free: runs on your machine | `conductor add jan` | [guide](jan.md) |
-| LiteLLM proxy | optional | Free: self-hosted | `conductor add litellm` | [guide](litellm.md) |
+| Ollama | none | Free: runs on your machine | `conductor-ai add ollama` | [guide](ollama.md) |
+| LM Studio | none | Free: runs on your machine | `conductor-ai add lmstudio` | [guide](lmstudio.md) |
+| llama.cpp server | optional | Free: runs on your machine | `conductor-ai add llamacpp` | [guide](llamacpp.md) |
+| vLLM | optional | Free: runs on your hardware | `conductor-ai add vllm` | [guide](vllm.md) |
+| LocalAI | optional | Free: runs on your machine | `conductor-ai add localai` | [guide](localai.md) |
+| Jan | none | Free: runs on your machine | `conductor-ai add jan` | [guide](jan.md) |
+| LiteLLM proxy | optional | Free: self-hosted | `conductor-ai add litellm` | [guide](litellm.md) |

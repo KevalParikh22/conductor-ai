@@ -1,7 +1,7 @@
 {
   "name": "conductor-ai",
   "version": "0.11.3",
-  "description": "Claude plans and reviews; free and cheap models write the code. Skills to plan, delegate, review and hand off work to Antigravity, Codex, OpenCode, 45+ APIs and local models, plus conductor's MCP tools.",
+  "description": "Claude plans and reviews; free and cheap models write the code. Skills to plan, delegate, review and hand off work to Antigravity, Codex, OpenCode, 45+ APIs and local models, plus conductor-ai's MCP tools.",
   "author": {
     "name": "Keval Parikh",
     "url": "https://github.com/KevalParikh22"

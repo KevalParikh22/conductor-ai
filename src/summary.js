@@ -11,9 +11,9 @@ export function formatSummary(s) {
   if (s.route) L.push(`route:     ${s.route}`);
   if (s.selector) L.push(`selector:  ${s.selector}`);
   if (s.skills?.length) L.push(`skills:    ${s.skills.join(', ')}`);
-  if (s.lessons?.length) L.push(`lessons:   ${s.lessons.length} from earlier work here were in the prompt (conductor lessons)`);
+  if (s.lessons?.length) L.push(`lessons:   ${s.lessons.length} from earlier work here were in the prompt (conductor-ai lessons)`);
   if (s.lessonsResolved) L.push(`lessons:   ${s.winner} passed this kind of work here, so ${s.lessonsResolved} earlier failure(s) of its no longer move it back`);
-  for (const l of s.promotable || []) L.push(`promote?:  seen ${l.count}×: "${String(l.text).slice(0, 100)}" → make it a rule: conductor lessons promote ${l.id}`);
+  for (const l of s.promotable || []) L.push(`promote?:  seen ${l.count}×: "${String(l.text).slice(0, 100)}" → make it a rule: conductor-ai lessons promote ${l.id}`);
   if (s.lessonsDemoted?.length) L.push(`order:     moved to the back: ${s.lessonsDemoted.join(', ')} (failed this kind of work here before)`);
   const multi = (n) => s.attempts.filter((a) => a.provider === n).length > 1; // show models only where a provider switched model
   L.push(`attempts:  ${s.attempts.map((a) => `${a.provider}${a.model && multi(a.provider) ? `[${a.model}]` : ''}(${a.reason}${a.stashed ? ', stashed' : ''})`).join(' → ') || '(none)'}`);
@@ -21,7 +21,7 @@ export function formatSummary(s) {
     // W1: the run waits for your answer from a web chat
     const id = (s.runDir || '').split('/').pop();
     L.push(`waiting:   for your answer (exit 5). The prompt (${s.waiting.chars} characters) is in ${s.waiting.prompt}`);
-    L.push(s.importedAs ? `answered:  imported as run ${s.importedAs}` : `next:      paste it into any web chat (DeepSeek, Kimi, Qwen, Gemini, ChatGPT…), save the whole answer to a file, then:\n           conductor import ${id} <answer file>   (or - to paste it on stdin)`);
+    L.push(s.importedAs ? `answered:  imported as run ${s.importedAs}` : `next:      paste it into any web chat (DeepSeek, Kimi, Qwen, Gemini, ChatGPT…), save the whole answer to a file, then:\n           conductor-ai import ${id} <answer file>   (or - to paste it on stdin)`);
     return L.join('\n');
   }
   if (!s.winner) {
@@ -46,7 +46,7 @@ export function formatSummary(s) {
   const chFail = s.checks?.failed?.length;
   const rp = s.repro;
   if (out === 'partial' && !chFail && rp?.ok === false) L.push(`outcome:   PARTIAL. ${rp.cmd ? `The bug still reproduces: \`${rp.cmd}\` still fails` : rp.why === 'no regression test added' ? 'The fix has no regression test' : 'The new test also passes on the original code, so it doesn\'t prove the fix'}`);
-  else if (out === 'partial' && chFail) L.push(`outcome:   PARTIAL. ${chFail} acceptance check(s) fail when conductor runs them: see "checks" below`);
+  else if (out === 'partial' && chFail) L.push(`outcome:   PARTIAL. ${chFail} acceptance check(s) fail when conductor-ai runs them: see "checks" below`);
   else if (out === 'partial') L.push(accShort && !/RESULT:\s*\**\s*(PARTIAL|BLOCKED|FAILED|FAIL)\b/i.test(s.status || '')
     ? `outcome:   PARTIAL. ${acc.answered ? `Only ${acc.met} of ${acc.total} acceptance criteria are met with evidence` : 'The worker reports DONE but did not answer the acceptance criteria'}: check them, then finish or retry with --note`
     : 'outcome:   PARTIAL. The worker says it did only part of the task: read the report, then finish it or retry the rest');
@@ -58,7 +58,7 @@ export function formatSummary(s) {
   if (out === 'out-of-scope') L.push(`outcome:   OUT OF SCOPE. The worker changed files the task doesn't list: ${s.scope.outside.join(', ')}. Check them in the diff: if they're needed, accept the work (and list them next time); if not, revert them or retry with --note`);
   if (out === 'unverified') L.push(s.verify?.chosen
     ? 'outcome:   UNVERIFIED. Verify was skipped, so nothing proves this works: check it yourself before committing'
-    : 'outcome:   UNVERIFIED (exit 4). No verify command, so nothing proves this works. Set one: conductor init --verify "<cmd>" (or the Verify line in AGENTS.md), then run conductor verify');
+    : 'outcome:   UNVERIFIED (exit 4). No verify command, so nothing proves this works. Set one: conductor-ai init --verify "<cmd>" (or the Verify line in AGENTS.md), then run conductor-ai verify');
   if (s.applied.length) L.push(`applied:   ${s.applied.join(', ')}`);
   if (s.rejected.length) L.push(`rejected:  ${s.rejected.join(', ')}`);
   if (s.mode === 'write') L.push(`changed:   ${s.changed.join(', ') || '(nothing)'}`);
@@ -93,14 +93,14 @@ export function formatSummary(s) {
   for (const f of fixLines(s.attempts, { won: true })) L.push(`fix:       ${f}`);
   if (s.worktree) {
     L.push(s.worktree.commit
-      ? `next:      orchestrator reviews \`conductor diff ${s.worktree.branch}\`, then \`git merge --no-ff ${s.worktree.branch}\` and \`conductor worktree rm ${s.worktree.id}\` (or rm --force to reject)`
+      ? `next:      orchestrator reviews \`conductor-ai diff ${s.worktree.branch}\`, then \`git merge --no-ff ${s.worktree.branch}\` and \`conductor-ai worktree rm ${s.worktree.id}\` (or rm --force to reject)`
       : s.worktree.continued
         ? `next:      nothing new this time; the earlier work is still on ${s.worktree.branch}. Retry with another note or provider, or merge it as it is`
-        : `next:      the worker changed nothing; \`conductor worktree rm ${s.worktree.id}\``);
+        : `next:      the worker changed nothing; \`conductor-ai worktree rm ${s.worktree.id}\``);
     return L.join('\n');
   }
   L.push(s.mode === 'write'
-    ? 'next:      orchestrator checks `conductor diff`, then commits, or retries with --provider <other> --note "<what was wrong>"'
+    ? 'next:      orchestrator checks `conductor-ai diff`, then commits, or retries with --provider <other> --note "<what was wrong>"'
     : 'next:      orchestrator reads the report and triages it. Workers can be wrong.');
   return L.join('\n');
 }

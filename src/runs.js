@@ -1,5 +1,5 @@
 // Run history: every dispatch leaves .conductor/runs/<stamp>-<role>[-task]/summary.json in the project.
-// `conductor runs` and the UI's Runs page read them back.
+// `conductor-ai runs` and the UI's Runs page read them back.
 import fs from 'node:fs';
 import path from 'node:path';
 import { PROJECT_DIRNAME } from './config.js';
@@ -72,7 +72,7 @@ export function formatRuns(rows) {
     L.push(`${r.id.slice(0, 29).padEnd(30)}${({ done: '✓ done', partial: '⚠ partial', unverified: '? unverif', 'out-of-scope': '⚠ scope', 'verify-failed': '✗ verify', waiting: '… waiting', answered: '↳ answer' }[r.state] || '✗ failed').padEnd(10)}${(r.winner || '-').padEnd(18)}${(r.verify || '-').padEnd(8)}${String(r.changed).padStart(6)}${`${r.seconds}s`.padStart(7)}  ${notes}`);
     for (const f of r.fixes || []) L.push(`${''.padEnd(30)}fix: ${f}`);
   }
-  L.push('', 'Details: conductor runs show <run>');
+  L.push('', 'Details: conductor-ai runs show <run>');
   return L.join('\n');
 }
 

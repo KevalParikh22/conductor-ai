@@ -6,12 +6,12 @@ One key for hundreds of models from every major lab.
 
 | | |
 |---|---|
-| Kind | Chat API (OpenAI-compatible): returns code that conductor applies |
+| Kind | Chat API (OpenAI-compatible): returns code that conductor-ai applies |
 | Cost | ":free" models: 50 requests a day, or 1000 a day after buying $10 of credits. |
 | Key | `OPENROUTER_API_KEY` from https://openrouter.ai/settings/keys |
 | Endpoint | `https://openrouter.ai/api/v1` |
 | Default model | `openrouter/free` |
-| conductor name | `openrouter-free` |
+| conductor-ai name | `openrouter-free` |
 | Privacy | If your privacy setting allows it, free models may log or train on prompts. |
 | Provider docs | https://openrouter.ai/docs/quickstart |
 | Checked | 2026-11 |
@@ -19,22 +19,22 @@ One key for hundreds of models from every major lab.
 ## Set up
 
 1. Create an API key: https://openrouter.ai/settings/keys
-2. Add it to conductor. It asks for the key (hidden input), lets you pick a model, sends one test prompt and adds it to the `docs`, `test`, `review` and `ask` roles:
+2. Add it to conductor-ai. It asks for the key (hidden input), lets you pick a model, sends one test prompt and adds it to the `docs`, `test`, `review` and `ask` roles:
    ```bash
-   conductor add openrouter
+   conductor-ai add openrouter
    ```
 3. Check it any time:
    ```bash
-   conductor doctor --live
+   conductor-ai doctor --live
    ```
 
-Or click **Add** on its card in `conductor ui` → Providers.
+Or click **Add** on its card in `conductor-ai ui` → Providers.
 
 ## Without the wizard
 
 Save the key (hidden input; or pipe it in):
 ```bash
-conductor keys set OPENROUTER_API_KEY
+conductor-ai keys set OPENROUTER_API_KEY
 ```
 
 Then add this to `~/.config/conductor/config.json` (all projects) or `.conductor/config.json` (one project):
@@ -48,13 +48,13 @@ Then add this to `~/.config/conductor/config.json` (all projects) or `.conductor
   }
 }
 ```
-List models: `conductor models openrouter-free --all`. Put `openrouter-free` in any role's chain in `conductor ui` → Roles & fallback.
+List models: `conductor-ai models openrouter-free --all`. Put `openrouter-free` in any role's chain in `conductor-ai ui` → Roles & fallback.
 
-The variable name only tells conductor where to find the key; the provider never sees it. To use a key you already keep under another name, set `"apiKeyEnv": "YOUR_VAR"` on `openrouter-free`.
+The variable name only tells conductor-ai where to find the key; the provider never sees it. To use a key you already keep under another name, set `"apiKeyEnv": "YOUR_VAR"` on `openrouter-free`.
 
 ## Troubleshooting
 
-- **401 / 403**: the key is wrong, expired, or still a placeholder. Run `conductor keys` to see where it comes from, then `conductor keys set OPENROUTER_API_KEY`.
-- **404 or "model not found"**: the model id changed. Pick a current one with `conductor models openrouter-free --all`.
-- **429**: rate limit. conductor puts the provider on cooldown and moves to the next one in the chain; `conductor cooldown --clear openrouter-free` resets it.
-- **Empty reply**: some free routes return nothing now and then; conductor retries once, then falls back.
+- **401 / 403**: the key is wrong, expired, or still a placeholder. Run `conductor-ai keys` to see where it comes from, then `conductor-ai keys set OPENROUTER_API_KEY`.
+- **404 or "model not found"**: the model id changed. Pick a current one with `conductor-ai models openrouter-free --all`.
+- **429**: rate limit. conductor-ai puts the provider on cooldown and moves to the next one in the chain; `conductor-ai cooldown --clear openrouter-free` resets it.
+- **Empty reply**: some free routes return nothing now and then; conductor-ai retries once, then falls back.

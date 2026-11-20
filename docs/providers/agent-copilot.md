@@ -7,7 +7,7 @@ A coding agent that runs on your machine: it reads the repo, edits files and run
 | | |
 |---|---|
 | Kind | Local agent (`copilot`) |
-| conductor name | `copilot-cli` |
+| conductor-ai name | `copilot-cli` |
 | Docs | https://docs.github.com/en/copilot/how-tos/copilot-cli |
 
 ## Set up
@@ -17,14 +17,14 @@ A coding agent that runs on your machine: it reads the repo, edits files and run
    npm install -g @github/copilot
    ```
 2. Sign in once: `copilot, then /login   (or set COPILOT_GITHUB_TOKEN; needs a Copilot plan)`
-3. Enable `copilot-cli` in `conductor ui` → Providers (or run `conductor setup`, which finds installed agents), then check it:
+3. Enable `copilot-cli` in `conductor-ai ui` → Providers (or run `conductor-ai setup`, which finds installed agents), then check it:
    ```bash
-   conductor doctor --live
+   conductor-ai doctor --live
    ```
 
-## What it may do under conductor
+## What it may do under conductor-ai
 
-- **Write roles:** file tools limited to the project; git push/commit/reset and sudo denied; web and the built-in GitHub MCP tools off; shell commands are not OS-sandboxed (Copilot's --sandbox needs bubblewrap on Linux, so conductor leaves it to your Copilot settings)
+- **Write roles:** file tools limited to the project; git push/commit/reset and sudo denied; web and the built-in GitHub MCP tools off; shell commands are not OS-sandboxed (Copilot's --sandbox needs bubblewrap on Linux, so conductor-ai leaves it to your Copilot settings)
 - **Read roles:** write tools, shell, web and memory denied; only its read and search tools run
 
-conductor passes these rules on the command line for each run; your own settings for the CLI are not changed. Details: [Providers → Permissions](../PROVIDERS.md#permissions-what-each-agent-may-do).
+conductor-ai passes these rules on the command line for each run; your own settings for the CLI are not changed. Details: [Providers → Permissions](../PROVIDERS.md#permissions-what-each-agent-may-do).

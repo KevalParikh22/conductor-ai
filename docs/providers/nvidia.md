@@ -6,12 +6,12 @@ Many open models hosted by NVIDIA.
 
 | | |
 |---|---|
-| Kind | Chat API (OpenAI-compatible): returns code that conductor applies |
+| Kind | Chat API (OpenAI-compatible): returns code that conductor-ai applies |
 | Cost | Free for prototyping (about 40 requests a minute reported). |
-| Key | `NVIDIA_API_KEY` from https://build.nvidia.com (the provider's docs name no variable; this is conductor's name for it) |
+| Key | `NVIDIA_API_KEY` from https://build.nvidia.com (the provider's docs name no variable; this is conductor-ai's name for it) |
 | Endpoint | `https://integrate.api.nvidia.com/v1` |
-| Default model | picked automatically from the live list (coding models first); choose your own with `conductor models nvidia-nim --all` |
-| conductor name | `nvidia-nim` |
+| Default model | picked automatically from the live list (coding models first); choose your own with `conductor-ai models nvidia-nim --all` |
+| conductor-ai name | `nvidia-nim` |
 | Privacy | Requests may be logged. |
 | Provider docs | https://docs.api.nvidia.com/nim/reference/llm-apis |
 | Checked | 2026-11 |
@@ -19,22 +19,22 @@ Many open models hosted by NVIDIA.
 ## Set up
 
 1. Create an API key: https://build.nvidia.com
-2. Add it to conductor. It asks for the key (hidden input), lets you pick a model, sends one test prompt and adds it to the `docs`, `test`, `review` and `ask` roles:
+2. Add it to conductor-ai. It asks for the key (hidden input), lets you pick a model, sends one test prompt and adds it to the `docs`, `test`, `review` and `ask` roles:
    ```bash
-   conductor add nvidia
+   conductor-ai add nvidia
    ```
 3. Check it any time:
    ```bash
-   conductor doctor --live
+   conductor-ai doctor --live
    ```
 
-Or click **Add** on its card in `conductor ui` → Providers.
+Or click **Add** on its card in `conductor-ai ui` → Providers.
 
 ## Without the wizard
 
 Save the key (hidden input; or pipe it in):
 ```bash
-conductor keys set NVIDIA_API_KEY
+conductor-ai keys set NVIDIA_API_KEY
 ```
 
 Then add this to `~/.config/conductor/config.json` (all projects) or `.conductor/config.json` (one project):
@@ -48,13 +48,13 @@ Then add this to `~/.config/conductor/config.json` (all projects) or `.conductor
   }
 }
 ```
-List models: `conductor models nvidia-nim --all`. Put `nvidia-nim` in any role's chain in `conductor ui` → Roles & fallback.
+List models: `conductor-ai models nvidia-nim --all`. Put `nvidia-nim` in any role's chain in `conductor-ai ui` → Roles & fallback.
 
-The variable name only tells conductor where to find the key; the provider never sees it. To use a key you already keep under another name, set `"apiKeyEnv": "YOUR_VAR"` on `nvidia-nim`.
+The variable name only tells conductor-ai where to find the key; the provider never sees it. To use a key you already keep under another name, set `"apiKeyEnv": "YOUR_VAR"` on `nvidia-nim`.
 
 ## Troubleshooting
 
-- **401 / 403**: the key is wrong, expired, or still a placeholder. Run `conductor keys` to see where it comes from, then `conductor keys set NVIDIA_API_KEY`.
-- **404 or "model not found"**: the model id changed. Pick a current one with `conductor models nvidia-nim --all`.
-- **429**: rate limit. conductor puts the provider on cooldown and moves to the next one in the chain; `conductor cooldown --clear nvidia-nim` resets it.
-- **Empty reply**: some free routes return nothing now and then; conductor retries once, then falls back.
+- **401 / 403**: the key is wrong, expired, or still a placeholder. Run `conductor-ai keys` to see where it comes from, then `conductor-ai keys set NVIDIA_API_KEY`.
+- **404 or "model not found"**: the model id changed. Pick a current one with `conductor-ai models nvidia-nim --all`.
+- **429**: rate limit. conductor-ai puts the provider on cooldown and moves to the next one in the chain; `conductor-ai cooldown --clear nvidia-nim` resets it.
+- **Empty reply**: some free routes return nothing now and then; conductor-ai retries once, then falls back.

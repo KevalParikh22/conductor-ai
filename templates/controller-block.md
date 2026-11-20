@@ -1,6 +1,6 @@
 <!-- conductor:start -->
 {{IMPORT}}
-## Conductor: you are the controller
+## conductor-ai: you are the controller
 
 This project uses **conductor-ai** to delegate work to other LLMs (Antigravity, Codex, OpenCode, free Kilo and OpenRouter models, ...) and save your own usage. You plan, decide, review and commit; workers do the bulk typing.
 

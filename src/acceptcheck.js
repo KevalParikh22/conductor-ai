@@ -2,7 +2,7 @@
 //     `slugify('alpha beta gamma', { maxLength: 12 })` returns `'alpha-beta'`
 //     `parseDuration('10')` and `parseDuration('1m30')` throw SyntaxError
 //     `retry(f, { attempts: 0 })` rejects with RangeError
-// become a small test conductor writes and runs itself after the worker: no model involved, so a confident but wrong
+// become a small test conductor-ai writes and runs itself after the worker: no model involved, so a confident but wrong
 // "[x]" can't pass. Anything it can't run safely (prose, helpers the plan never defines) is skipped, never guessed.
 // JavaScript first: the task's files are imported as ES modules (CommonJS exports work through Node's interop).
 import fs from 'node:fs';
@@ -95,7 +95,7 @@ export async function runAcceptanceChecks(work, criteria, taskFiles, { dir, time
   if (!runnable.length) return { total: failed.length, passed: 0, failed, skipped };
   const mods = [...new Set(runnable.flatMap((c) => freeNames(c.expr)).map((n) => where[n]).filter(Boolean))];
   const lines = [
-    // conductor's own names are prefixed, so a project function called check, show or inspect can't collide
+    // conductor-ai's own names are prefixed, so a project function called check, show or inspect can't collide
     "import * as __cdUtil from 'node:util';",
     ...mods.map((f, i) => `import * as __cdM${i} from ${JSON.stringify(pathToFileURL(path.join(fs.realpathSync(work), f)).href)};`),
     ...Object.entries(where).filter(([, f]) => mods.includes(f)).map(([n, f]) => `const ${n} = __cdM${mods.indexOf(f)}.${n} ?? __cdM${mods.indexOf(f)}.default?.${n};`),

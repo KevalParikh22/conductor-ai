@@ -61,7 +61,7 @@ test('a failed check makes DONE partial; all checks passing but verify failing h
   const base = { winner: 'w', mode: 'write', role: 'build', status: '## RESULT: DONE', changed: ['a.js'], applied: [], rejected: [], warnings: [], attempts: [{ provider: 'w', reason: 'ok' }] };
   const s = { ...base, verify: { status: 'PASS' }, checks: { total: 2, passed: 1, failed: [{ n: 1, expr: 'add(2, 3)', kind: 'returns', expected: '5', got: 'returned -1' }], skipped: [] } };
   assert.equal(outcome(s), 'partial');
-  assert.match(formatSummary(s), /PARTIAL\. 1 acceptance check\(s\) fail when conductor runs them[\s\S]*checks: +1\/2 acceptance checks pass when run\n +✗ add\(2, 3\) → returned -1 \(expected 5\)/);
+  assert.match(formatSummary(s), /PARTIAL\. 1 acceptance check\(s\) fail when conductor-ai runs them[\s\S]*checks: +1\/2 acceptance checks pass when run\n +✗ add\(2, 3\) → returned -1 \(expected 5\)/);
   const t = { ...base, verify: { status: 'FAIL', brief: 'Verify failed.\nFailing: x\nFix it.' }, checks: { total: 2, passed: 2, failed: [], skipped: [] } };
   assert.match(formatSummary(t), /hint: +every acceptance check passes, so the failing test may itself be wrong/);
 });

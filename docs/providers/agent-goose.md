@@ -7,7 +7,7 @@ A coding agent that runs on your machine: it reads the repo, edits files and run
 | | |
 |---|---|
 | Kind | Local agent (`goose`) |
-| conductor name | `goose` |
+| conductor-ai name | `goose` |
 | Docs | https://block.github.io/goose/docs/guides/goose-cli-commands |
 
 ## Set up
@@ -17,14 +17,14 @@ A coding agent that runs on your machine: it reads the repo, edits files and run
    curl -fsSL https://github.com/aaif-goose/goose/releases/download/stable/download_cli.sh | CONFIGURE=false bash
    ```
 2. Sign in once: `goose configure   (pick a provider and paste its key once)`
-3. Enable `goose` in `conductor ui` → Providers (or run `conductor setup`, which finds installed agents), then check it:
+3. Enable `goose` in `conductor-ai ui` → Providers (or run `conductor-ai setup`, which finds installed agents), then check it:
    ```bash
-   conductor doctor --live
+   conductor-ai doctor --live
    ```
 
-## What it may do under conductor
+## What it may do under conductor-ai
 
 - **Write roles:** no permission control: goose runs any command and edits any file it can reach. Only use it in a container or a worktree you can throw away
-- **Read roles:** chat mode: no tools at all, so it cannot edit (or open files: conductor puts the project context in the prompt)
+- **Read roles:** chat mode: no tools at all, so it cannot edit (or open files: conductor-ai puts the project context in the prompt)
 
-conductor passes these rules on the command line for each run; your own settings for the CLI are not changed. Details: [Providers → Permissions](../PROVIDERS.md#permissions-what-each-agent-may-do).
+conductor-ai passes these rules on the command line for each run; your own settings for the CLI are not changed. Details: [Providers → Permissions](../PROVIDERS.md#permissions-what-each-agent-may-do).
