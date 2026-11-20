@@ -40,7 +40,6 @@
   "license": "MIT",
   "type": "module",
   "bin": {
-    "conductor": "bin/conductor.js",
     "conductor-ai": "bin/conductor.js"
   },
   "files": [

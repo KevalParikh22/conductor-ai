@@ -10,8 +10,8 @@ const { conductorCommandCheck } = await import('../src/doctor.js');
 const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 const OWN = fileURLToPath(new URL('../bin/conductor.js', import.meta.url));
 
-test('both command names run the same program', () => {
-  assert.deepEqual(pkg.bin, { conductor: 'bin/conductor.js', 'conductor-ai': 'bin/conductor.js' });
+test('conductor-ai is the only command name', () => {
+  assert.deepEqual(pkg.bin, { 'conductor-ai': 'bin/conductor.js' });
 });
 
 test('doctor knows whether `conductor` on PATH is this program or another tool\'s', () => {

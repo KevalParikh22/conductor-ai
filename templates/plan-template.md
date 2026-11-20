@@ -14,7 +14,7 @@
 
 ## Tasks
 
-<!-- Tasks with no unmet `depends on` and no shared files can run in parallel (conductor batch). -->
+<!-- Tasks with no unmet `depends on` and no shared files can run in parallel (conductor-ai batch). -->
 
 ### T1: <title>
 - **role:** build | fix | test | docs | controller
