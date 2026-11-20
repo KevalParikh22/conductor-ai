@@ -21,7 +21,10 @@ export function listRuns(root, { limit = 20 } = {}) {
   dirs.sort().reverse();
   return dirs.slice(0, limit).map((id) => {
     const s = readJSON(path.join(runsDir(root), id, 'summary.json'), null);
-    if (!s) return { id, state: 'running', role: id.split('-')[2] || '?' };
+    if (!s) {
+      const l = readJSON(path.join(runsDir(root), id, 'live.json'), null); // written at each step while it runs
+      return { id, state: 'running', role: l?.role || id.split('-')[2] || '?', task: l?.task || null, startedAt: l?.startedAt || null, step: l?.step || null, since: l?.since || null, limitMs: l?.limitMs || 0 };
+    }
     const tried = s.attempts.filter((a) => !a.skipped);
     const known = s.attempts.filter((a) => a.cost != null);
     return {
@@ -71,7 +74,7 @@ export function formatRuns(rows) {
   if (!rows.length) return 'No runs yet in this project.';
   const L = [`${'run'.padEnd(30)}${'result'.padEnd(10)}${'worker'.padEnd(18)}${'verify'.padEnd(8)}${'files'.padStart(6)}${'time'.padStart(7)}  notes`];
   for (const r of rows) {
-    if (r.state === 'running') { L.push(`${r.id.padEnd(30)}running…`); continue; }
+    if (r.state === 'running') { L.push(`${r.id.padEnd(30)}running…${r.step ? `  ${r.step}` : ''}`); continue; }
     const notes = [r.branch && `branch ${r.branch}`, r.warnings.length && `${r.warnings.length} warning(s)`, r.cost && `$${r.cost.toFixed(4)}`].filter(Boolean).join(' · ');
     L.push(`${r.id.slice(0, 29).padEnd(30)}${({ done: '✓ done', partial: '⚠ partial', unverified: '? unverif', 'out-of-scope': '⚠ scope', 'verify-failed': '✗ verify', waiting: '… waiting', answered: '↳ answer' }[r.state] || '✗ failed').padEnd(10)}${(r.winner || '-').padEnd(18)}${((r.verify || '-') + (r.rechecked ? ' ↻' : '')).padEnd(8)}${String(r.changed).padStart(6)}${`${r.seconds}s`.padStart(7)}  ${notes}`);
     for (const f of r.fixes || []) L.push(`${''.padEnd(30)}fix: ${f}`);
@@ -104,7 +107,7 @@ export function runDetail(root, id) {
     winner: s.winner, model: s.model, status: s.status, changed: s.changed || [], warnings: s.warnings || [],
     attempts: (s.attempts || []).map((a) => ({ provider: a.provider, model: a.model, ok: a.ok, reason: a.reason, next: a.next || '', seconds: a.seconds, tokens: a.tokens || null, skipped: !!a.skipped })),
     fixes: fixLines(s.attempts || [], { won: !!s.winner }),
-    branch: wt?.commit ? wt.branch : null, worktreeId: wt?.id || null,
+    branch: wt?.commit ? wt.branch : null, worktreeId: wt?.id || null, canRecheck: !!(wt?.commit && s.verify?.cmd),
     report: tail(root, s.report, 20_000),
     waiting: s.waiting ? { ...s.waiting, importedAs: s.importedAs || null, promptText: s.importedAs ? null : tail(root, s.waiting.prompt, 400_000) } : null,
     logs: Object.fromEntries(gates.filter((g) => g.log).map((g) => [g.id, tail(root, g.log, 6_000)])),
@@ -128,7 +131,7 @@ export async function recheckRuns(root, ids, settings = {}, { onStart = () => {}
   const out = [];
   for (const want of targets) {
     const r = readRun(root, want);
-    if (!r) { out.push({ id: want, skipped: 'no single run matches' }); continue; }
+    if (!r) { out.push({ id: want, skipped: fs.existsSync(path.join(runsDir(root), path.basename(want))) ? 'it is still running' : 'no single run matches' }); continue; }
     const s = r.summary, v = s.verify, commit = s.worktree?.commit;
     if (!v?.cmd) { out.push({ id: r.id, skipped: 'it had no verify command' }); continue; }
     // only a worktree run kept its code as a commit; a run in the main checkout has nothing fixed to check again

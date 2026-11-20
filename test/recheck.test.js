@@ -37,3 +37,22 @@ test('recheck runs verify on the run\'s commit with the shared folders, updates 
   assert.ok(listRuns(dir).find((r) => r.id === '20261030-1-build-T1').rechecked);
   assert.equal(git('worktree', 'list').trim().split('\n').length, 1, 'the throwaway checkout is gone');
 });
+
+test('a running run shows its current step from live.json; the UI rechecks over POST /api/recheck, one at a time', async () => {
+  const { createUiServer } = await import('../src/ui/server.js');
+  const { dir } = makeRepo({ files: { '.gitignore': '.conductor/\n' } });
+  const d = path.join(dir, '.conductor', 'runs', '20261120-1-build-T9'); fs.mkdirSync(d, { recursive: true });
+  assert.equal(listRuns(dir)[0].state, 'running');
+  fs.writeFileSync(path.join(d, 'live.json'), JSON.stringify({ role: 'build', task: 'T9', startedAt: '2026-11-20T10:00:00Z', step: 'codex-cli is working', since: '2026-11-20T10:00:05Z', limitMs: 1200000 }));
+  const row = listRuns(dir)[0];
+  assert.deepEqual([row.state, row.task, row.step, row.limitMs], ['running', 'T9', 'codex-cli is working', 1200000]);
+
+  const ui = createUiServer({ cwd: dir, token: 'tok' });
+  const port = await ui.listen(0);
+  const post = (body) => fetch(`http://127.0.0.1:${port}/api/recheck`, { method: 'POST', headers: { 'x-conductor-token': 'tok', 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  try {
+    const r = await post({ ids: ['20261120-1-build-T9'] });
+    assert.equal(r.status, 200);
+    assert.deepEqual((await r.json()).rows, [{ id: '20261120-1-build-T9', skipped: 'it is still running' }]);
+  } finally { ui.server.closeAllConnections?.(); ui.server.close(); }
+});

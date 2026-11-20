@@ -25,6 +25,7 @@ import { snapshot as snapshotLocal } from './localfiles.js';
 import { skillsForTask } from './skills.js';
 import { createWorktree, openWorktree, commitWorktree, removeWorktree, readWorktreeMeta, writeWorktreeMeta } from './worktree.js';
 import { writeJSON, timestamp, rel, untilText, run as runCmd } from './util.js';
+import { stepText } from './progress.js';
 import { budgetBlock, estimateCost, recordUsage, recordSaving } from './usage.js';
 import { nextStep } from './nextsteps.js';
 import { extractTask, extractSection, openQuestions, taskFiles, expandBraces, notesForFiles, parseDuration } from './plan.js';
@@ -280,7 +281,9 @@ async function dispatchOnce(cfg, opts) {
   const meta = ROLES[role];
   if (!meta) throw new UsageError(`unknown role "${role}". Roles: ${Object.keys(ROLES).join(', ')}`);
   const mode = meta.mode;
-  const emit = opts.onEvent || (() => {});
+  const onEvent = opts.onEvent || (() => {});
+  let live = () => {}; // set once the run folder exists: the UI's Runs page reads its live.json
+  const emit = (e) => { live(e); onEvent(e); };
   const inRepo = git.isRepo(root);
   const useWorktree = !!(opts.worktree || opts.continue);
   const wtId = opts.worktreeId || opts.taskId;
@@ -439,6 +442,10 @@ async function dispatchOnce(cfg, opts) {
     try { fs.mkdirSync(runDir); break; } catch (e) { if (e.code !== 'EEXIST') throw e; runDir = `${runBase}-${n}`; }
   }
   fs.writeFileSync(path.join(runDir, 'task.md'), body);
+  // what the run is doing now, for the Runs page while summary.json doesn't exist yet (it's written at the end)
+  const liveFile = path.join(runDir, 'live.json'), liveStart = new Date().toISOString();
+  live = (e) => { const step = stepText(e); if (step) try { writeJSON(liveFile, { role, task: opts.taskId || null, startedAt: liveStart, step, since: new Date().toISOString(), limitMs: e.type === 'try' ? e.limitMs || 0 : 0 }); } catch { /* the page shows "running" */ } };
+  live({ type: 'start' });
 
   const summary = {
     role, mode, startedAt: new Date().toISOString(), task: opts.taskId || null, plan: opts.planPath || null, attempts: [], winner: null, model: null,

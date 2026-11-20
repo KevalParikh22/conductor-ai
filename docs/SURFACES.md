@@ -11,8 +11,9 @@ A dash means the action is left out of that surface on purpose, with the reason.
 | Preview who would take a task, and why | `conductor-ai route "task"` | `conductor_route` | `POST /api/route-preview` |
 | Check a plan before handing it out | `conductor-ai plan check <file>` | `conductor_plan_check` | — *plans are files in your editor; the controller checks them* |
 | Run the project's verify command | `conductor-ai verify` | `conductor_verify` | — *runs project commands; use the terminal or your controller* |
-| Recent runs, and one run in full (checks, attempts, report) | `conductor-ai runs [show <run> \| recheck]` | `conductor_runs` | `GET /api/run` |
+| Recent runs, and one run in full (checks, attempts, report) | `conductor-ai runs [show <run>]` | `conductor_runs` | `GET /api/run` |
 | Import your answer from a web chat for a waiting run (or a research report) | `conductor-ai import <run> <file>` | `conductor_import` | `POST /api/import` |
+| Run verify again for runs that failed it | `conductor-ai runs recheck [<run>…]` | — *slow, and it rewrites run records: run it yourself, from cron or from the Runs page* | `POST /api/recheck` |
 | Compact diff to review | `conductor-ai diff [branch]` | `conductor_diff` | `GET /api/run` |
 | Quality numbers: first-try accept rate, alpha gate, failure causes | `conductor-ai stats [--failures]` | `conductor_stats` | `GET /api/stats` |
 | Runs, tokens, cost and time per provider | `conductor-ai usage` | `conductor_stats` | `GET /api/runs` |

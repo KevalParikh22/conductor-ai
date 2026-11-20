@@ -8,7 +8,7 @@ import { spawn } from 'node:child_process';
 import { loadConfig, findProjectRoot, readScope, writeScope, scopeSave, validateConfig, GLOBAL_CONFIG, GLOBAL_SECRETS, GLOBAL_SECRETS as SECRETS, projectConfigPath, loadSecrets, writeSecrets } from '../config.js';
 import { DEFAULT_CONFIG, CLI_PRESETS, ROLES, CONTROLLERS, controllerWorker } from '../presets.js';
 import { statusData } from '../status.js';
-import { listRuns, runDetail } from '../runs.js';
+import { listRuns, runDetail, recheckRuns } from '../runs.js';
 import { importAnswer, ImportError } from '../manual.js';
 import { dispatch } from '../core.js';
 import { qualityStats, failureStats, qualityTrend } from '../stats.js';
@@ -106,6 +106,7 @@ function guardState(root) {
   return { controller, supported: !!GUARD_SUPPORTED[controller], on: GUARD_SUPPORTED[controller] ? guardsOn(root, controller) : false, file: GUARD_SUPPORTED[controller] || null, lastVerify: readVerifyState(root) };
 }
 
+let rechecking = false; // POST /api/recheck runs one at a time
 export function createUiServer({ cwd = process.cwd(), token = crypto.randomBytes(16).toString('hex') } = {}) {
   const root = findProjectRoot(cwd);
   const html = fs.readFileSync(new URL('./index.html', import.meta.url), 'utf8');
@@ -187,6 +188,13 @@ export function createUiServer({ cwd = process.cwd(), token = crypto.randomBytes
         case 'GET /api/run': {
           const d = runDetail(root, String(url.searchParams.get('id') || ''));
           return d ? send(200, d) : send(404, { error: 'no such run' });
+        }
+        case 'POST /api/recheck': {
+          // one at a time: each checks out code and runs the project's checks
+          if (rechecking) return send(409, { error: 'a recheck is already running' });
+          rechecking = true;
+          try { return send(200, { rows: await recheckRuns(root, Array.isArray(body.ids) ? body.ids.map(String) : [], loadConfig(root).settings) }); }
+          finally { rechecking = false; }
         }
         case 'GET /api/runs': return send(200, { runs: listRuns(root, { limit: 50 }), usage: usageReport(7), budget: loadConfig(root).settings.dailyBudgetUSD || 0 });
         case 'GET /api/models': return send(200, { models: await listFreeModels() });

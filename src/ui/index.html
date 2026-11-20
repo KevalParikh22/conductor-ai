@@ -438,9 +438,26 @@ function copyIcon(text, done = 'Copied', label = 'Copy') { return `<button class
 let lessonsData = null, rulesData = null, statsData = null, guardData = null; // V3: same actions as the CLI and MCP
 function loadLessons() { Promise.all([api('GET', '/api/lessons'), api('GET', '/api/rules')]).then(([l, r]) => { lessonsData = l; rulesData = r; if (tab === 'lessons') render(); }, (e) => toast(e.message)); }
 function loadOverviewExtras() { Promise.all([api('GET', '/api/stats'), api('GET', '/api/guard')]).then(([st, g]) => { statsData = st; guardData = g; if (tab === 'overview') render(); }, () => { statsData = statsData || {}; guardData = guardData || {}; }); }
-function loadRuns() { api('GET', '/api/runs').then((d) => { runsData = d; if (tab === 'runs') render(); }, (e) => toast(e.message)); }
-// keep the Runs page current while it is open (runs started from the terminal show up on their own)
-setInterval(() => { if (tab === 'runs' && !runOpen && document.visibilityState === 'visible') loadRuns(); }, 5000);
+let runsAt = 0;
+function loadRuns() { runsAt = Date.now(); api('GET', '/api/runs').then((d) => { runsData = d; if (tab === 'runs') render(); }, (e) => toast(e.message)); }
+// keep the Runs page current while it is open (runs started from the terminal show up on their own):
+// every 2s while a run is going, so its step stays current; every 5s otherwise; at once when you come back to the tab
+const runsShown = () => tab === 'runs' && !runOpen && document.visibilityState === 'visible';
+setInterval(() => { if (runsShown() && (runsData?.runs?.some((r) => r.state === 'running') || Date.now() - runsAt >= 5000)) loadRuns(); }, 2000);
+document.addEventListener('visibilitychange', () => { if (runsShown()) loadRuns(); });
+let recheckBusy = null; // which runs are being checked again: [] = every failed one
+async function recheck(ids = []) {
+  recheckBusy = ids; render();
+  try {
+    const { rows } = await api('POST', '/api/recheck', { ids });
+    const pass = rows.filter((r) => r.after === 'PASS').length, fail = rows.filter((r) => r.after === 'FAIL').length, skip = rows.filter((r) => r.skipped).length;
+    toast(rows.length ? `Verify run again: ${pass} pass, ${fail} still fail${skip ? `, ${skip} skipped (${rows.find((r) => r.skipped).skipped})` : ''}` : 'No run with a failed verify to check again', 6000);
+  } catch (e) { toast(e.message); }
+  recheckBusy = null;
+  if (runOpen) { runDet = null; fetchRun(runOpen); }
+  loadRuns();
+}
+const elapsed = (iso) => { const s = Math.max(0, Math.round((Date.now() - new Date(iso)) / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 function openRun(id) {
   runOpen = id; runDet = null;
   const h = new URLSearchParams(location.hash.slice(1)); if (id) h.set('run', id); else h.delete('run');
@@ -480,7 +497,8 @@ function runPage() {
   const next = d.branch ? [`conductor-ai diff ${d.branch}`, `git merge --no-ff ${d.branch}`, `conductor-ai worktree rm ${d.worktreeId}`, `conductor-ai worktree rm ${d.worktreeId} --force`] : [];
   return `<div class="head">${back}<h1>${esc(d.role)}${d.task ? ` · ${esc(d.task)}` : ''}</h1>
     <p class="sub"><span class="mono">${esc(d.id)}</span>${d.plan ? ` · plan <span class="mono">${esc(d.plan)}</span>` : ''} · ${d.validated ? '<span class="pill ok">validated: every required check passed</span>' : '<span class="pill bad">not validated</span>'} · result <b>${esc(d.state)}</b></p></div>
-    <div class="card"><h2>Checks</h2><p class="note">A run counts as done only when every required check passes (or was waived on purpose). Info rows don't decide it.</p>
+    <div class="card"><div class="row"><h2 style="margin:0">Checks</h2><span class="spacer"></span>${d.canRecheck ? `<button class="btn small" id="run-recheck" ${recheckBusy ? 'disabled' : ''} title="Check out this run's commit again and run its verify command (conductor-ai runs recheck ${esc(d.id)})">${recheckBusy ? 'Running verify…' : '↻ Run verify again'}</button>` : ''}</div>
+      <p class="note">A run counts as done only when every required check passes (or was waived on purpose). Info rows don't decide it.</p>
       <table><tr><th>Check</th><th>Result</th><th>Evidence</th></tr>${d.gates.map((g) => `<tr><td>${esc(g.label)}${g.required ? '' : ' <span class="note">(info)</span>'}</td>
         <td><span class="pill ${GATE_PILL[g.status] ?? ''}">${esc(g.status)}</span></td>
         <td>${esc(g.evidence || '')}${g.seconds != null ? ` <span class="note">(${g.seconds}s)</span>` : ''}${g.log && d.logs[g.id] ? `<details><summary class="note">log: <span class="mono">${esc(g.log)}</span></summary><pre class="cmd">${esc(d.logs[g.id])}</pre></details>` : ''}</td></tr>`).join('')}</table></div>
@@ -593,7 +611,7 @@ const views = {
     const { runs, usage, budget } = runsData;
     const money = (n) => (n == null ? '–' : n ? `$${n.toFixed(n < 0.01 ? 4 : 2)}` : '$0');
     const result = (r) => ({
-      running: '<span class="pill warn">running</span>',
+      running: `<span class="pill warn">running</span>${r.step ? `<div class="note">${esc(r.step)} · ${elapsed(r.since)}${r.limitMs ? ` of ${Math.round(r.limitMs / 60000)} min` : ''}</div>` : ''}`,
       done: r.validated === false ? '<span class="pill warn" title="A required check did not pass">not validated</span>' : '<span class="pill ok" title="Every required check passed">done</span>',
       partial: `<span class="pill warn" title="${esc(r.status || 'the worker did only part of the task')}">partial</span>`,
       'verify-failed': '<span class="pill bad" title="The worker finished, but verify fails">verify failed</span>',
@@ -602,19 +620,20 @@ const views = {
       waiting: '<span class="pill warn" title="Waiting for your answer from a web chat: open the run to copy the prompt and paste the answer">waiting for you</span>',
       answered: '<span class="pill" title="Your answer was imported as a new run">answered</span>',
     }[r.state] || '<span class="pill bad">failed</span>');
-    const verify = (v) => !v ? '–' : `<span class="pill ${v === 'PASS' ? 'ok' : v === 'FAIL' ? 'bad' : ''}">${esc(v)}</span>`;
+    const verify = (v, again) => !v ? '–' : `<span class="pill ${v === 'PASS' ? 'ok' : v === 'FAIL' ? 'bad' : ''}" ${again ? `title="${esc(`Run again ${new Date(again).toLocaleString()}`)}"` : ''}>${esc(v)}${again ? ' ↻' : ''}</span>`;
+    const failed = runs.filter((r) => r.verify === 'FAIL' && r.branch).length; // only runs kept as a commit can be checked again
     return `<div class="head"><h1>Runs</h1><p class="sub">Work handed out in this project, newest first, refreshed every few seconds (<span class="mono">conductor-ai runs</span> in the terminal).</p></div>
     <div class="grid">
       <div class="card stat"><div class="l">Runs (last ${usage.days} days, all projects)</div><div class="n">${usage.rows.reduce((t, r) => t + r.runs, 0)}</div></div>
       <div class="card stat"><div class="l" title="Estimated from characters (about 4 per token) kept out of each model's context. Not measured Claude usage.">Context kept out (estimate)</div><div class="n">${usage.savings?.total ? `~${usage.savings.total.toLocaleString()}` : '<span class="note" style="font-size:16px">none yet</span>'}</div><div class="note">${usage.savings?.total ? `controller ~${usage.savings.controller.toLocaleString()} · workers ~${usage.savings.workers.toLocaleString()}${usage.savings.freeRuns ? ` · ${usage.savings.freeRuns} task${usage.savings.freeRuns === 1 ? '' : 's'} moved to free models` : ''}` : 'compact diffs, trimmed reports and free-model picks'}</div></div>
       <div class="card stat"><div class="l">Known API cost today</div><div class="n">${money(usage.today)}</div><div class="note">${budget ? `daily budget ${money(budget)}` : 'no daily budget (Settings)'}</div></div>
     </div>
-    <div class="card"><h2>Recent runs</h2>${runs.length ? `<table><tr><th>When</th><th>Role · task</th><th>Result</th><th>Worker</th><th>Verify</th><th>Files</th><th>Time</th></tr>
+    <div class="card"><div class="row" style="margin-bottom:8px"><h2 style="margin:0">Recent runs</h2><span class="spacer"></span>${failed || recheckBusy ? `<button class="btn small" id="runs-recheck" ${recheckBusy ? 'disabled' : ''} title="For each run whose verify failed: check out the code it made and run its verify again (conductor-ai runs recheck). Use it after fixing something outside the code, like a missing package.">${recheckBusy ? 'Running verify again… (this can take a while)' : `↻ Recheck failed runs (${failed})`}</button>` : ''}</div>${runs.length ? `<table><tr><th>When</th><th>Role · task</th><th>Result</th><th>Worker</th><th>Verify</th><th>Files</th><th>Time</th></tr>
       ${runs.map((r) => `<tr><td class="mono">${r.state === 'running' ? esc(r.startedAt ? new Date(r.startedAt).toLocaleString() : r.id) : `<a href="#" data-run="${esc(r.id)}" title="Checks, attempts, report and diff">${esc(r.startedAt ? new Date(r.startedAt).toLocaleString() : r.id)}</a>`}</td>
         <td><b>${esc(r.role)}</b>${r.task ? ` · ${esc(r.task)}` : ''}${r.branch ? `<div class="note mono">${esc(r.branch)}</div>` : ''}</td>
         <td>${result(r)}</td>
         <td>${esc(r.winner || '–')}${r.why ? `<div class="note">${esc(r.why)}</div>` : ''}${r.attempts?.length > 1 ? `<div class="note">${r.attempts.map((a) => a.ok ? `${esc(a.provider)} ✓` : `<span title="${esc(a.reason + (a.next ? ' — next: ' + a.next : ''))}">${esc(a.provider)} ✗</span>`).join(' → ')}</div>` : ''}</td>
-        <td>${verify(r.verify)}</td><td>${r.changed ?? '–'}</td><td>${r.seconds != null ? `${r.seconds}s` : ''}</td></tr>
+        <td>${verify(r.verify, r.rechecked)}</td><td>${r.changed ?? '–'}</td><td>${r.seconds != null ? `${r.seconds}s` : ''}</td></tr>
         ${r.warnings?.length || r.fixes?.length ? `<tr><td></td><td colspan="6">${(r.warnings || []).map((w) => `<div class="note">⚠ ${esc(w)}</div>`).join('')}${(r.fixes || []).map((f) => `<div class="note"><b>Fix:</b> ${esc(f)}</div>`).join('')}</td></tr>` : ''}`).join('')}
       </table>` : '<p class="note">No runs yet. They appear here when your controller hands out work (<span class="mono">conductor-ai run …</span>).</p>'}</div>
     <div class="card"><h2>Usage by provider</h2><p class="note">Last ${usage.days} days, all projects. CLI agents run on your subscriptions, so they show runs and time; API providers also show tokens and, when a price is set, cost.</p>
@@ -824,6 +843,8 @@ function bind() {
   const gt = $('#guard-toggle'); if (gt) gt.onclick = async () => { try { guardData = await api('POST', '/api/guard', { on: !guardData.on }); render(); toast(`Push guard ${guardData.on ? 'on' : 'off'}`); } catch (e) { toast(e.message); } };
   document.querySelectorAll('[data-run]').forEach((a) => a.onclick = (e) => { e.preventDefault(); openRun(a.dataset.run); });
   const rb = $('#run-back'); if (rb) rb.onclick = () => { openRun(null); loadRuns(); };
+  const rr = $('#runs-recheck'); if (rr) rr.onclick = () => recheck();
+  const r1 = $('#run-recheck'); if (r1) r1.onclick = () => recheck([runDet.id]);
   const mc = $('#mw-copy'); if (mc) mc.onclick = () => navigator.clipboard?.writeText(runDet?.waiting?.promptText || '').then(() => toast('Prompt copied: paste it into the web chat'), () => toast('Copy failed: open the prompt file'));
   const mi = $('#mw-import'); if (mi) mi.onclick = async () => {
     const text = $('#mw-answer').value.trim();

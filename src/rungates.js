@@ -3,6 +3,7 @@
 // `required` gates must pass (or be waived on purpose) for the run to count as done; the rest are information.
 
 const OK = new Set(['pass', 'waived', 'off']);
+const localTime = (iso) => { const d = new Date(iso), p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
 
 /** → [{ id, label, status, required, evidence, log? }] for one run summary. Gates that don't apply are left out. */
 export function runGates(s) {
@@ -46,7 +47,7 @@ export function runGates(s) {
     else if (v.status === 'SKIPPED' && v.chosen) add('verify', 'Verify passes', 'skipped', `${v.note || 'skipped on purpose'}: check the work yourself`, { required: write });
     else if (v.status === 'SKIPPED') add('verify', 'Verify passes', write ? 'missing' : 'skipped', 'no verify command, so nothing proves the code works: conductor-ai init --verify "<cmd>"', { required: write });
     else add('verify', 'Verify passes', v.status === 'PASS' ? 'pass' : 'fail',
-      `\`${v.cmd}\` ${v.status}${v.baseFailed ? ` (it already failed before the worker started${v.newFailures?.length ? `; ${v.newFailures.length} new failure line(s)` : '; no new failure lines'})` : ''}${v.suspectTests?.length ? `; only the worker's own tests fail: ${v.suspectTests.join(', ')}` : ''}${v.rechecked ? `; run again ${v.rechecked.at.slice(0, 16).replace('T', ' ')} (it was ${v.rechecked.first.status} when the run finished)` : ''}`,
+      `\`${v.cmd}\` ${v.status}${v.baseFailed ? ` (it already failed before the worker started${v.newFailures?.length ? `; ${v.newFailures.length} new failure line(s)` : '; no new failure lines'})` : ''}${v.suspectTests?.length ? `; only the worker's own tests fail: ${v.suspectTests.join(', ')}` : ''}${v.rechecked ? `; run again ${localTime(v.rechecked.at)} (it was ${v.rechecked.first.status} when the run finished)` : ''}`,
       { required: write || v.status === 'FAIL', log: v.log || null });
   }
   if (s.base) G.push({ id: 'base', label: 'Verify on the starting commit', status: s.base.status === 'PASS' ? 'pass' : s.base.status === 'FAIL' ? 'fail' : 'skipped', required: false,
