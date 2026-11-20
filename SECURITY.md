@@ -22,7 +22,7 @@ For every agent, `git push`, `commit`, `reset`, `checkout`, `rebase`, `stash`, `
 
 ### 2. Your keys stay yours
 
-- API keys live in `~/.config/conductor/secrets.env` (mode 600), never in config files or the repo.
+- API keys live in `~/.config/conductor-ai/secrets.env` (mode 600), never in config files or the repo.
 - Keys loaded from there are removed from each worker's environment, except the one key that CLI needs. They are also removed from the verify command's environment.
 - Files that look like secrets (`.env*`, `auth.json`, `secrets.env`, `.npmrc`, SSH keys, `*.pem`/`*.key`, and anything in `protectedPaths`) are never sent to an API model as context, even if a task asks for them.
 - `.env*`, `auth.json`, `app/etc/env.php` and conductor-ai's own `secrets.env`, `config.json`, `state.json` and `usage.jsonl` are unreadable through Antigravity's file tools. (Task worktrees live in conductor-ai's folder too, so the folder as a whole stays open to the worker working there.)
@@ -30,14 +30,14 @@ For every agent, `git push`, `commit`, `reset`, `checkout`, `rebase`, `stash`, `
 
 ### 3. Git can't be turned against you
 
-- Write roles refuse to run on protected branches (`main`, `master` by default) or a dirty tree, unless you allow it. Parallel tasks run in their own worktrees on `conductor/<id>` branches.
+- Write roles refuse to run on protected branches (`main`, `master` by default) or a dirty tree, unless you allow it. Parallel tasks run in their own worktrees on `conductor-ai/<id>` branches.
 - A failed attempt's changes are stashed, never deleted.
 - **Git hooks and `.git/config` are snapshotted before every worker and restored right after it**, before conductor-ai runs git again. A worker that plants a `pre-commit` hook, an `fsmonitor` program, a filter or a diff driver is undone, and the run shows a warning. conductor-ai's own git commands also run with `core.fsmonitor` disabled.
 - Hook folders kept in the repo (`.husky/`, `.githooks/`, or your `core.hooksPath`) count as protected files.
 
 ### 4. Model output is checked before it touches disk
 
-API models (Kilo, OpenRouter, Gemini…) don't touch your files themselves; they return file blocks, and conductor-ai writes them. Paths outside the repo are rejected, and so are protected files: `AGENTS.md`, `CLAUDE.md`, plans, `.git/`, `.claude/`, `.conductor/`, MCP configs, hook folders, `.env*`, `node_modules/`, and your `protectedPaths`.
+API models (Kilo, OpenRouter, Gemini…) don't touch your files themselves; they return file blocks, and conductor-ai writes them. Paths outside the repo are rejected, and so are protected files: `AGENTS.md`, `CLAUDE.md`, plans, `.git/`, `.claude/`, `.conductor-ai/`, MCP configs, hook folders, `.env*`, `node_modules/`, and your `protectedPaths`.
 
 After every write task, conductor-ai also:
 

@@ -25,7 +25,7 @@
 > [!NOTE]
 > **Early and moving fast (v0.11, public alpha), solo-maintained.** The full test suite (300+ tests) runs in CI on Linux, macOS and Windows with Node 20, 22 and 24. Day-to-day use with real agents so far is on **Linux**; macOS and Windows pass the same tests but haven't been tried by hand yet, so reports from either are very welcome. The agents it drives change their CLI flags often; each one is a small preset you can override in config.
 >
-> **Not affiliated with** Conductor (conductor.build, a Mac app for parallel Claude Code agents) or Conductor OSS (Orkes, workflow orchestration). The commands `conductor` and `conductor-ai` are the same program; use `conductor-ai` if another tool already installed a `conductor` command (`conductor-ai doctor` tells you).
+> **Not affiliated with** Conductor (conductor.build, a Mac app for parallel Claude Code agents) or Conductor OSS (Orkes, workflow orchestration). The only command is `conductor-ai` (`conductor` alone is not used).
 
 Your best agent's quota runs out fast when it types every line, and its strength is judgement: planning, design and catching bugs. **conductor-ai** keeps the agent you work in (Claude Code, Codex CLI, Antigravity CLI or OpenCode) as the controller and quality gate, and hands the typing to Antigravity, Codex, OpenCode, free Kilo / OpenRouter / Groq / Gemini models, Kimi or local models. When one hits its limit, the next one takes over.
 
@@ -226,7 +226,7 @@ Every one has a setup guide: **[docs/providers](docs/providers/README.md)**. See
 | CLI | |
 |---|---|
 | `conductor-ai run <role> [task] [--plan f --task T1] [--provider p] [--chain a,b] [--note …] [--files a,b] [--json]` | Delegate with fallback |
-| `conductor-ai build\|fix\|test\|docs\|review\|ask …` | Shortcuts for `run <role>`; add `--worktree` to run on branch `conductor/<id>` |
+| `conductor-ai build\|fix\|test\|docs\|review\|ask …` | Shortcuts for `run <role>`; add `--worktree` to run on branch `conductor-ai/<id>` |
 | `conductor-ai batch --plan f --tasks T2,T3 [--concurrency 4]` | Independent tasks in parallel, one worktree each |
 | `conductor-ai diff [branch]` | Compact diff to review: lockfiles and whitespace left out, new files included |
 | `conductor-ai route "task" [--files a,b]` · `conductor-ai local [--enable]` | Where a task would go and why; find and turn on local models |

@@ -6,5 +6,5 @@ How to work:
 - Base every change on the code shown to you. Never invent APIs, files, functions or packages; use the names and signatures the design notes and acceptance criteria give, exactly.
 - Stay inside the task and its files. No refactors, renames or reformatting elsewhere.
 - Make the change complete: no TODOs, placeholders or "rest unchanged" comments.
-- Never touch AGENTS.md, CLAUDE.md, GEMINI.md, HANDOFF.md, docs/plan/*, .claude/, .gemini/, .agents/, .conductor/, or secrets.
+- Never touch AGENTS.md, CLAUDE.md, GEMINI.md, HANDOFF.md, docs/plan/*, .claude/, .gemini/, .agents/, .conductor-ai/, or secrets.
 - Be truthful: if something in the task can't be done from what you were given, say so in the report.

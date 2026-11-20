@@ -73,8 +73,8 @@ test('every built-in CLI preset describes its permissions; none bypasses them', 
 
 test('configs that still name Gemini CLI load without it', () => {
   const { dir } = makeRepo();
-  fs.mkdirSync(path.join(dir, '.conductor'), { recursive: true });
-  fs.writeFileSync(path.join(dir, '.conductor/config.json'), JSON.stringify({
+  fs.mkdirSync(path.join(dir, '.conductor-ai'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.conductor-ai/config.json'), JSON.stringify({
     controller: 'gemini-cli',
     providers: { 'gemini-cli': { type: 'cli', preset: 'gemini', enabled: true } },
     roles: { build: ['gemini-cli', 'codex-cli'] },

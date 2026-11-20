@@ -1,26 +1,27 @@
-// conductor-ai's own files in a project (AGENTS.md, CLAUDE.md, .conductor/, plans, skills…) stay out of git by default:
+// conductor-ai's own files in a project (AGENTS.md, CLAUDE.md, .conductor-ai/, plans, skills…) stay out of git by default:
 // `init` lists them in a marked block in .gitignore. Because git can't see them then, conductor-ai itself copies them
 // into task worktrees and puts them back if a worker changes them.
 import fs from 'node:fs';
+import { legacyMarkers } from './util.js';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
-export const BLOCK_START = '# >>> conductor: local files, not committed (conductor init --share keeps them in git)';
-export const BLOCK_END = '# <<< conductor';
+export const BLOCK_START = '# >>> conductor-ai: local files, not committed (conductor-ai init --share keeps them in git)';
+export const BLOCK_END = '# <<< conductor-ai';
 
 // always ignored when conductor-ai manages a project; created files are added on top of these
-export const BASE_ENTRIES = ['.conductor/', 'docs/plan/', '.claude/commands/conduct-*', '.agents/skills/conduct-*/',
-  // per-controller files conductor-ai generates from .conductor/rules and its reviewer subagent (Q8)
+export const BASE_ENTRIES = ['.conductor-ai/', 'docs/plan/', '.claude/commands/conduct-*', '.agents/skills/conduct-*/',
+  // per-controller files conductor-ai generates from .conductor-ai/rules and its reviewer subagent (Q8)
   '.claude/rules/conductor-*', '.agents/rules/conductor-*', '.claude/agents/conductor-*', '.agents/agents/conductor-*', '.codex/agents/conductor-*', '.opencode/agents/conductor-*'];
 // files conductor-ai writes for a controller: ignored only when conductor-ai created them (never your own existing file)
 export const CREATED_FILES = ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md', 'HANDOFF.md', 'docs/architecture.md', '.mcp.json', 'opencode.json', '.agents/mcp_config.json', '.vscode/mcp.json'];
 // not copied into worktrees: conductor-ai's own state, plans (inlined into the prompt) and MCP configs
-const NOT_IN_WORKTREES = ['.conductor/', 'docs/plan/', '.mcp.json', 'opencode.json', '.agents/mcp_config.json', '.vscode/mcp.json', '.agents/hooks.json', '.claude/settings.local.json'];
+const NOT_IN_WORKTREES = ['.conductor-ai/', 'docs/plan/', '.mcp.json', 'opencode.json', '.agents/mcp_config.json', '.vscode/mcp.json', '.agents/hooks.json', '.claude/settings.local.json'];
 
 /** Entries in the conductor-ai block of .gitignore ([] when there is none). */
 export function readBlock(root) {
   let text = '';
-  try { text = fs.readFileSync(path.join(root, '.gitignore'), 'utf8'); } catch { return []; }
+  try { text = legacyMarkers(fs.readFileSync(path.join(root, '.gitignore'), 'utf8')); } catch { return []; }
   const i = text.indexOf(BLOCK_START), j = text.indexOf(BLOCK_END);
   if (i < 0 || j < i) return [];
   return text.slice(i + BLOCK_START.length, j).split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'));
@@ -30,7 +31,7 @@ export function readBlock(root) {
 export function writeBlock(root, entries) {
   const file = path.join(root, '.gitignore');
   const existed = fs.existsSync(file);
-  const cur = existed ? fs.readFileSync(file, 'utf8') : '';
+  const cur = existed ? legacyMarkers(fs.readFileSync(file, 'utf8')) : '';
   const block = [BLOCK_START, ...[...new Set(entries)], BLOCK_END].join('\n');
   const i = cur.indexOf(BLOCK_START), j = cur.indexOf(BLOCK_END);
   const next = i >= 0 && j > i ? cur.slice(0, i) + block + cur.slice(j + BLOCK_END.length) : `${cur}${cur && !cur.endsWith('\n') ? '\n' : ''}${cur ? '\n' : ''}${block}\n`;
@@ -42,7 +43,7 @@ export function writeBlock(root, entries) {
 /** Remove the conductor-ai block (init --share). */
 export function removeBlock(root) {
   const file = path.join(root, '.gitignore');
-  let cur; try { cur = fs.readFileSync(file, 'utf8'); } catch { return false; }
+  let cur; try { cur = legacyMarkers(fs.readFileSync(file, 'utf8')); } catch { return false; }
   const i = cur.indexOf(BLOCK_START), j = cur.indexOf(BLOCK_END);
   if (i < 0 || j < i) return false;
   fs.writeFileSync(file, (cur.slice(0, i) + cur.slice(j + BLOCK_END.length)).replace(/\n{3,}/g, '\n\n'));
@@ -119,7 +120,7 @@ export function copyIntoWorktree(root, dir) {
  */
 export function snapshot(root, work) {
   const block = readBlock(root);
-  const rels = block.length ? files(work, [...expand(work, block.filter((e) => e !== '.conductor/')), ...syncedSkillDirs(work)]) : [];
+  const rels = block.length ? files(work, [...expand(work, block.filter((e) => e !== '.conductor-ai/')), ...syncedSkillDirs(work)]) : [];
   const saved = new Map(rels.map((r) => [r, fs.readFileSync(path.join(work, r))]));
   return () => {
     const back = [];

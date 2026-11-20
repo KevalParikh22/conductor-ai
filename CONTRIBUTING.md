@@ -5,7 +5,7 @@ Thanks for helping! conductor-ai has **no runtime dependencies**. Please keep it
 ```bash
 git clone https://github.com/KevalParikh22/conductor-ai && cd conductor-ai
 npm test                 # node:test, no network: CLIs and APIs are mocked
-node bin/conductor.js ui # try the settings page against the current folder
+node bin/conductor-ai.js ui # try the settings page against the current folder
 ```
 
 Good first contributions:

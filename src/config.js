@@ -7,16 +7,23 @@ import { GLOBAL_DIR, readJSON, writeJSON, deepMerge, deepDiff, loadEnvFile, whic
 
 export const GLOBAL_CONFIG = path.join(GLOBAL_DIR, 'config.json');
 export const GLOBAL_SECRETS = path.join(GLOBAL_DIR, 'secrets.env');
-export const PROJECT_DIRNAME = '.conductor';
+export const PROJECT_DIRNAME = '.conductor-ai';
+
+// shortcut: one-time move of the pre-rename project folder .conductor; drop this once nobody has the old name
+function migrateProjectDir(root) {
+  const old = path.join(root, '.conductor');
+  try { if (fs.existsSync(path.join(old, 'config.json')) && !fs.existsSync(path.join(root, PROJECT_DIRNAME))) fs.renameSync(old, path.join(root, PROJECT_DIRNAME)); } catch { /* keep the old folder */ }
+  return root;
+}
 
 export function findProjectRoot(cwd = process.cwd()) {
   try {
-    return path.resolve(execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim()); // C:/x → C:\\x on Windows
+    return migrateProjectDir(path.resolve(execFileSync('git', ['rev-parse', '--show-toplevel'], { cwd, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim())); // C:/x → C:\\x on Windows
   } catch {
-    // not a git repo: walk up looking for .conductor/
+    // not a git repo: walk up looking for .conductor-ai/
     let dir = path.resolve(cwd);
     while (true) {
-      if (fs.existsSync(path.join(dir, PROJECT_DIRNAME, 'config.json'))) return dir;
+      if (fs.existsSync(path.join(dir, PROJECT_DIRNAME, 'config.json')) || fs.existsSync(path.join(dir, '.conductor', 'config.json'))) return migrateProjectDir(dir);
       const up = path.dirname(dir);
       if (up === dir) return path.resolve(cwd);
       dir = up;
@@ -49,7 +56,7 @@ export function writeSecrets(updates) {
 
 export function projectConfigPath(root) { return path.join(root, PROJECT_DIRNAME, 'config.json'); }
 
-/** Load secrets: global secrets.env, then project .conductor/.env. Real env vars always win. */
+/** Load secrets: global secrets.env, then project .conductor-ai/.env. Real env vars always win. */
 export function loadSecrets(root) {
   loadEnvFile(GLOBAL_SECRETS);
   if (root) loadEnvFile(path.join(root, PROJECT_DIRNAME, '.env'));

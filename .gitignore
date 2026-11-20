@@ -1,14 +1,14 @@
 node_modules/
-.conductor/runs/
-.conductor/.env
+.conductor-ai/runs/
+.conductor-ai/.env
 *.log
 .DS_Store
 
 # local test material: benchmark runs, eval history, notes (only published results go in bench/results)
 lab/
 
-# >>> conductor: local files, not committed (conductor init --share keeps them in git)
-.conductor/
+# >>> conductor-ai: local files, not committed (conductor-ai init --share keeps them in git)
+.conductor-ai/
 docs/plan/
 .claude/commands/conduct-*
 .agents/skills/conduct-*/
@@ -23,4 +23,4 @@ CLAUDE.md
 GEMINI.md
 HANDOFF.md
 docs/architecture.md
-# <<< conductor
+# <<< conductor-ai

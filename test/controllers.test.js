@@ -14,9 +14,9 @@ const { dispatch, clearCooldowns } = await import('../src/core.js');
 const { loadConfig } = await import('../src/config.js');
 
 const rules = (dir) => {
-  fs.mkdirSync(path.join(dir, '.conductor/rules'), { recursive: true });
-  fs.writeFileSync(path.join(dir, '.conductor/rules/api-errors.md'), '---\ndescription: How API handlers report errors\npaths: src/api/**, *.ts\n---\n\n- Every handler returns { data, error }.\n');
-  fs.writeFileSync(path.join(dir, '.conductor/rules/money.md'), '---\ndescription: Money\n---\n\n- Prices are integer cents.\n');
+  fs.mkdirSync(path.join(dir, '.conductor-ai/rules'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.conductor-ai/rules/api-errors.md'), '---\ndescription: How API handlers report errors\npaths: src/api/**, *.ts\n---\n\n- Every handler returns { data, error }.\n');
+  fs.writeFileSync(path.join(dir, '.conductor-ai/rules/money.md'), '---\ndescription: Money\n---\n\n- Prices are integer cents.\n');
 };
 const read = (dir, f) => fs.readFileSync(path.join(dir, f), 'utf8');
 
@@ -31,7 +31,7 @@ test('one rule source, written the way each controller reads it, plus the review
   assert.match(read(dir, '.agents/rules/conductor-money.md'), /^---\ntrigger: always_on\n/);
   assert.match(read(dir, '.agents/agents/conductor-reviewer.md'), /^---\nname: conductor-reviewer\n/);
   C.syncControllerFiles(dir, 'codex-cli');
-  assert.match(read(dir, 'AGENTS.md'), /<!-- conductor:project-rules:start -->\n## Project rules\n### api-errors \(applies to src\/api\/\*\*, \*\.ts\)\n- Every handler returns[\s\S]*### money\n- Prices are integer cents\.\n<!-- conductor:project-rules:end -->/);
+  assert.match(read(dir, 'AGENTS.md'), /<!-- conductor-ai:project-rules:start -->\n## Project rules\n### api-errors \(applies to src\/api\/\*\*, \*\.ts\)\n- Every handler returns[\s\S]*### money\n- Prices are integer cents\.\n<!-- conductor-ai:project-rules:end -->/);
   assert.match(read(dir, '.codex/agents/conductor-reviewer.toml'), /^name = "conductor-reviewer"\ndescription = ".*"\ndeveloper_instructions = '''\n/);
   C.syncControllerFiles(dir, 'opencode');
   const oc = read(dir, '.opencode/agents/conductor-reviewer.md');
@@ -44,11 +44,11 @@ test('sync is idempotent, removes rules you deleted, and only ever touches condu
   fs.writeFileSync(path.join(dir, '.claude/rules/mine.md'), 'my own rule\n');
   assert.ok(C.syncControllerFiles(dir, 'claude-code').length > 0);
   assert.deepEqual(C.syncControllerFiles(dir, 'claude-code'), [], 'nothing changes the second time');
-  fs.rmSync(path.join(dir, '.conductor/rules/money.md'));
+  fs.rmSync(path.join(dir, '.conductor-ai/rules/money.md'));
   assert.deepEqual(C.syncControllerFiles(dir, 'claude-code'), [['removed', '.claude/rules/conductor-money.md']]);
   assert.ok(fs.existsSync(path.join(dir, '.claude/rules/mine.md')), 'your own rule file is never touched');
   C.syncControllerFiles(dir, 'codex-cli');
-  fs.rmSync(path.join(dir, '.conductor/rules'), { recursive: true });
+  fs.rmSync(path.join(dir, '.conductor-ai/rules'), { recursive: true });
   C.syncControllerFiles(dir, 'codex-cli');
   assert.ok(!read(dir, 'AGENTS.md').includes('project-rules'), 'block removed with the last rule');
 });
@@ -92,9 +92,9 @@ test('init writes them for its controller and keeps them out of git; the CLI cre
   assert.ok(r.lines.some((l) => /added +\.agents\/rules\/conductor-api-errors\.md/.test(l)));
   assert.ok(fs.existsSync(path.join(dir, '.agents/agents/conductor-reviewer.md')));
   for (const e of ['.agents/rules/conductor-*', '.agents/agents/conductor-*', '.claude/agents/conductor-*']) assert.ok(readBlock(dir).includes(e), e);
-  const bin = path.resolve('bin/conductor.js');
+  const bin = path.resolve('bin/conductor-ai.js');
   const cli = (...a) => execFileSync('node', [bin, 'rules', ...a], { cwd: dir, encoding: 'utf8', env: process.env });
-  assert.match(cli('new', 'naming', '--paths', 'src/**', '--description', 'Naming'), /created \.conductor\/rules\/naming\.md/);
+  assert.match(cli('new', 'naming', '--paths', 'src/**', '--description', 'Naming'), /created \.conductor-ai\/rules\/naming\.md/);
   assert.match(cli('list'), /naming +src\/\*\* +Naming/);
   assert.match(cli('sync'), /added +\.agents\/rules\/conductor-naming\.md/);
 });

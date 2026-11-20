@@ -1,5 +1,5 @@
 // Q8: give each controller only what it really reads, in its own format, from one source.
-//   rules     .conductor/rules/<name>.md (description, optional paths) →
+//   rules     .conductor-ai/rules/<name>.md (description, optional paths) →
 //               Claude Code  .claude/rules/conductor-<name>.md   (paths: [...])
 //               Antigravity  .agents/rules/conductor-<name>.md   (trigger: glob + globs, or always_on; agy silently
 //                            drops a rule whose frontmatter is wrong, so conductor-ai writes it for you)
@@ -9,6 +9,7 @@
 //             doesn't spend its own context on it.
 // Only files conductor-ai made (named conductor-*) are ever replaced or removed.
 import fs from 'node:fs';
+import { legacyMarkers } from './util.js';
 import os from 'node:os';
 import path from 'node:path';
 import { PROJECT_DIRNAME, readScope } from './config.js';
@@ -17,7 +18,7 @@ import { globToRegex } from './routing.js';
 
 export const rulesDir = (root) => path.join(root, PROJECT_DIRNAME, 'rules');
 const NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
-const RULES_START = '<!-- conductor:project-rules:start -->', RULES_END = '<!-- conductor:project-rules:end -->';
+const RULES_START = '<!-- conductor-ai:project-rules:start -->', RULES_END = '<!-- conductor-ai:project-rules:end -->';
 
 /** Frontmatter (flat key: value, or a YAML/JSON-style list for paths) and body. */
 function parseFront(text) {
@@ -61,7 +62,7 @@ export function rulesPrompt(root, files) {
 const REVIEWER_BODY = `You review work that a conductor-ai worker did, in a fresh context, so the controller doesn't spend its own context on it. You never edit files and never commit.
 
 1. Read the task the worker had (docs/plan/<plan>.md, the task id you were given) and its acceptance criteria.
-2. Get the change: \`conductor-ai diff\` for the working tree, or \`conductor-ai diff conductor/<id>\` for a worktree task.
+2. Get the change: \`conductor-ai diff\` for the working tree, or \`conductor-ai diff conductor-ai/<id>\` for a worktree task.
 3. Check, against the task: does it do what the acceptance criteria say; bugs and edge cases; missing error handling; security; changes outside the task's files; tests that really prove the behaviour.
 4. Report only real problems, each with \`path:line\`, a concrete failure scenario and a one-line fix. End with \`VERDICT: APPROVE\` or \`VERDICT: CHANGES_REQUESTED\`.`;
 const REVIEWER_DESC = "Reviews a conductor-ai worker's diff against its plan task in a fresh context and returns findings with path:line and a verdict. Use after a conductor-ai run, before committing.";
@@ -81,7 +82,7 @@ function removeStale(dir, keep, log, rel) {
 }
 
 function mergeBlock(file, block, log, label) {
-  let cur = ''; try { cur = fs.readFileSync(file, 'utf8'); } catch { /* new */ }
+  let cur = ''; try { cur = legacyMarkers(fs.readFileSync(file, 'utf8')); } catch { /* new */ }
   const i = cur.indexOf(RULES_START), j = cur.indexOf(RULES_END);
   const rest = i >= 0 && j > i ? cur.slice(0, i).trimEnd() + cur.slice(j + RULES_END.length) : cur;
   const next = block ? `${rest.trimEnd()}${rest.trim() ? '\n\n' : ''}${RULES_START}\n${block}\n${RULES_END}\n` : `${rest.trimEnd()}\n`;
@@ -193,7 +194,7 @@ export function checkControllerFiles(root, controller) {
   }
   const agents = read('AGENTS.md');
   const cap = me.limits?.agentsMdBytes;
-  if (agents !== null && cap && Buffer.byteLength(agents) > cap) add('warn', 'AGENTS.md', `${Buffer.byteLength(agents)} bytes: ${me.label} reads at most ${cap.toLocaleString('en-US')} bytes of it`, 'move topics into .conductor/rules or skills');
+  if (agents !== null && cap && Buffer.byteLength(agents) > cap) add('warn', 'AGENTS.md', `${Buffer.byteLength(agents)} bytes: ${me.label} reads at most ${cap.toLocaleString('en-US')} bytes of it`, 'move topics into .conductor-ai/rules or skills');
   for (const rel of [...new Set([...all.map((c) => c.mcp?.file).filter(Boolean), '.vscode/mcp.json'])]) {
     const text = read(rel);
     if (text === null) continue;

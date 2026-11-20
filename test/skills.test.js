@@ -19,14 +19,14 @@ const { readBlock } = await import('../src/localfiles.js');
 const { listSkills, newSkill, setSkillOn, syncSkills, skillsForTask, skillMatches, removeSkill, addSkill, parseSkill } = await import('../src/skills.js');
 const { dispatch, clearCooldowns } = await import('../src/core.js');
 const { loadConfig } = await import('../src/config.js');
-const bin = fileURLToPath(new URL('../bin/conductor.js', import.meta.url));
+const bin = fileURLToPath(new URL('../bin/conductor-ai.js', import.meta.url));
 
 test('init keeps conductor-ai files out of git: creates .gitignore, lists only files it created, --share removes the block', () => {
   const { dir, git } = makeRepo();
   fs.writeFileSync(path.join(dir, 'AGENTS.md'), '# my own rules\n'); git('add', '-A'); git('commit', '-qm', 'mine');
   initProject(dir, { controller: 'claude-code' });
   const block = readBlock(dir);
-  assert.ok(block.includes('.conductor/') && block.includes('CLAUDE.md') && block.includes('docs/plan/'));
+  assert.ok(block.includes('.conductor-ai/') && block.includes('CLAUDE.md') && block.includes('docs/plan/'));
   assert.ok(!block.includes('AGENTS.md'), 'an AGENTS.md you already had is not ignored');
   const status = git('status', '--porcelain').trim().split('\n');
   assert.deepEqual(status.filter((l) => !/AGENTS\.md$/.test(l)), [' M .gitignore', '?? .gitignore'].filter((l) => status.includes(l)), 'only .gitignore (and your AGENTS.md) change');
@@ -51,7 +51,7 @@ test('worktrees get the ignored files, never commit them, and a worker edit to A
   assert.equal(s.winner, 'meddle');
   assert.ok(s.warnings.some((w) => /put them back: AGENTS\.md/.test(w)));
   assert.doesNotMatch(fs.readFileSync(path.join(s.worktree.dir, 'AGENTS.md'), 'utf8'), /IGNORE ALL RULES/);
-  const files = git('show', '--name-only', '--format=', 'conductor/T1').trim().split('\n');
+  const files = git('show', '--name-only', '--format=', 'conductor-ai/T1').trim().split('\n');
   assert.deepEqual(files, ['src/T1.js'], 'only the real change is committed on the branch');
 });
 
@@ -72,7 +72,7 @@ test('skills: global + project library, project overrides, off per project, sync
   assert.ok(!readBlock(dir).some((e) => e.includes('php-style')), '.gitignore is not changed by syncing skills');
   setSkillOn(dir, 'php-style', false); syncSkills(dir);
   assert.ok(!fs.existsSync(path.join(dir, '.claude/skills/php-style')), 'switched off → removed from the controller folders');
-  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, '.conductor/config.json'), 'utf8')).skills.off, ['php-style']);
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, '.conductor-ai/config.json'), 'utf8')).skills.off, ['php-style']);
   fs.mkdirSync(path.join(dir, '.claude/skills/mine'), { recursive: true }); fs.writeFileSync(path.join(dir, '.claude/skills/mine/SKILL.md'), '---\nname: mine\n---\n');
   syncSkills(dir);
   assert.ok(fs.existsSync(path.join(dir, '.claude/skills/mine/SKILL.md')), 'your own skill folders are never removed');

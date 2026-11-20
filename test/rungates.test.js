@@ -34,7 +34,7 @@ test('each gate carries its evidence: command, numbers, files, log', () => {
   const s = {
     mode: 'write', role: 'fix', winner: 'cx', model: 'm', planGate: { status: 'pass' }, changed: ['src/a.js'], status: '## RESULT: DONE',
     attempts: [{ provider: 'kilo', ok: false, reason: 'syntax error in src/a.js', guard: { syntax: [{ file: 'src/a.js' }] } }, { provider: 'cx', ok: true, reason: 'ok' }],
-    base: { status: 'PASS', head: 'abc123', cached: true }, verify: { status: 'PASS', cmd: 'npm test', log: '.conductor/runs/x/verify.log' },
+    base: { status: 'PASS', head: 'abc123', cached: true }, verify: { status: 'PASS', cmd: 'npm test', log: '.conductor-ai/runs/x/verify.log' },
     checks: { passed: 3, total: 3, failed: [] }, acceptance: { met: 3, total: 3, answered: true, unmet: [] }, scope: { outside: [] },
     repro: { kind: 'test', tests: ['test/a.test.js'], proof: 'proved', ok: true }, review: { reviewer: 'gem', verdict: 'APPROVE', findings: [] },
   };
@@ -43,7 +43,7 @@ test('each gate carries its evidence: command, numbers, files, log', () => {
   assert.match(g.worker.evidence, /cx \(m\) after 1 failed attempt/);
   assert.match(g.guard.evidence, /rejected earlier: kilo \(syntax error in src\/a\.js\)/);
   assert.match(g.verify.evidence, /`npm test` PASS/);
-  assert.equal(g.verify.log, '.conductor/runs/x/verify.log');
+  assert.equal(g.verify.log, '.conductor-ai/runs/x/verify.log');
   assert.match(g.repro.evidence, /test\/a\.test\.js: fails on the original code, passes now/);
   assert.equal(g.base.required, false); assert.equal(g.review.required, false);
   assert.ok(gatesPass(Object.values(g)));
@@ -85,7 +85,7 @@ test('a real run: conductor-ai runs show / MCP / UI API get the same checklist, 
   } finally { ui.server.closeAllConnections?.(); ui.server.close(); }
 
   // a report path that points outside the project is not read
-  const sumFile = `${dir}/.conductor/runs/${id}/summary.json`;
+  const sumFile = `${dir}/.conductor-ai/runs/${id}/summary.json`;
   const sj = JSON.parse(fs.readFileSync(sumFile, 'utf8'));
   fs.writeFileSync(sumFile, JSON.stringify({ ...sj, report: '../../../../etc/hostname' }));
   assert.equal(runDetail(dir, id).report, null);

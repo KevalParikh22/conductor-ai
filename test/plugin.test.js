@@ -35,7 +35,7 @@ test('manifests: names, version from package.json, both MCP files run conductor-
   assert.ok(fs.existsSync(path.join(root, json('.antigravity-plugin/plugin.json').logo)));
   const mk = json('.claude-plugin/marketplace.json');
   assert.deepEqual(mk.plugins.map((p) => [p.name, p.source]), [['conductor-ai', './']]);
-  for (const f of ['.mcp.json', 'mcp_config.json']) assert.deepEqual(json(f).mcpServers.conductor, { command: 'conductor-ai', args: ['mcp'] }, f);
+  for (const f of ['.mcp.json', 'mcp_config.json']) assert.deepEqual(json(f).mcpServers['conductor-ai'], { command: 'conductor-ai', args: ['mcp'] }, f);
   const claudeHook = json('hooks/hooks.json').hooks.SessionStart[0].hooks[0].command;
   assert.equal(json('hooks.json')['conductor-check'].SessionStart[0].command, claudeHook, 'Claude and Antigravity hooks run the same check');
   for (const f of ['skills', 'hooks', 'hooks.json', '.claude-plugin', '.antigravity-plugin', '.mcp.json', 'mcp_config.json', 'assets']) assert.ok(pkg.files.includes(f), `package.json files includes ${f}`);

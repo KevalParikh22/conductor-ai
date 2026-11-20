@@ -3,8 +3,19 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-export const GLOBAL_DIR = process.env.CONDUCTOR_HOME
-  || path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'conductor');
+const CONFIG_ROOT = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
+export const GLOBAL_DIR = process.env.CONDUCTOR_HOME || path.join(CONFIG_ROOT, 'conductor-ai');
+// shortcut: one-time move of the pre-rename folder ~/.config/conductor; drop this once nobody has the old name
+if (!process.env.CONDUCTOR_HOME) {
+  try { if (!fs.existsSync(GLOBAL_DIR) && fs.existsSync(path.join(CONFIG_ROOT, 'conductor'))) fs.renameSync(path.join(CONFIG_ROOT, 'conductor'), GLOBAL_DIR); } catch { /* keep going without the old settings */ }
+}
+
+/** Marker lines older versions wrote into user files (.gitignore, AGENTS.md, CLAUDE.md, .git/info/exclude), in the new spelling. */
+export const legacyMarkers = (t) => t
+  .replace(/<!-- conductor:/g, '<!-- conductor-ai:')
+  .replace('# >>> conductor: local files, not committed (conductor init --share', '# >>> conductor-ai: local files, not committed (conductor-ai init --share')
+  .replace('# <<< conductor\n', '# <<< conductor-ai\n')
+  .replace('# >>> conductor skills', '# >>> conductor-ai skills').replace('# <<< conductor skills', '# <<< conductor-ai skills');
 
 export function readJSON(file, fallback = undefined) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; }

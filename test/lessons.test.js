@@ -64,7 +64,7 @@ test('end to end: failures become lessons, the next prompt carries them, and the
   clearCooldowns();
   const { dir, git } = makeRepo({ files: { 'docs/plan/p.md': PLAN, 'src/.keep': '' } });
   // like init --share: conductor-ai's folder is in git, so its own files must never make the tree look changed
-  fs.mkdirSync(path.join(dir, '.conductor'), { recursive: true }); fs.writeFileSync(path.join(dir, '.conductor', '.gitignore'), 'runs/\n');
+  fs.mkdirSync(path.join(dir, '.conductor-ai'), { recursive: true }); fs.writeFileSync(path.join(dir, '.conductor-ai', '.gitignore'), 'runs/\n');
   git('add', '-A'); git('commit', '-qm', 'share conductor-ai folder');
   const cfg = loadConfig(dir);
   cfg.providers.misnamer = { type: 'cli', preset: 'codex', enabled: true, bin: 'ls-misnamer' };
@@ -96,7 +96,7 @@ test('promote turns a lesson into a rule in AGENTS.md; the CLI lists, adds and r
   assert.match(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), /## Lessons \(promoted by conductor-ai\)\n- Prices are integer cents\. \(in src\)/);
   assert.equal(r.lesson.promoted, true);
   assert.equal(L.lessonsPrompt(dir, { role: 'build', files: ['src/x.js'] }).text, '', 'a rule is in AGENTS.md now, not repeated in prompts');
-  const bin = path.resolve('bin/conductor.js');
+  const bin = path.resolve('bin/conductor-ai.js');
   const cli = (...a) => execFileSync('node', [bin, 'lessons', ...a], { cwd: dir, encoding: 'utf8', env: process.env });
   assert.match(cli('add', 'Never', 'log', 'tokens', '--files', 'src/auth.js'), /^added (\w+): Never log tokens/);
   const id = cli('list').match(/^(\w{6}) +manual .*Never log tokens/m)[1];

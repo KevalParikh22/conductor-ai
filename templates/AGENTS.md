@@ -15,7 +15,7 @@ Claude Code, Antigravity CLI, Codex CLI, OpenCode, Kimi and API models all follo
 
 - <naming, folder layout, error handling, logging, testing conventions>
 
-<!-- conductor:rules:start -->
+<!-- conductor-ai:rules:start -->
 ## 3. How to work (the quality bar)
 
 1. **Read before you write.** Open the files you change and their callers. Match existing patterns. Never guess at an API, file or function you have not seen.
@@ -30,13 +30,13 @@ Claude Code, Antigravity CLI, Codex CLI, OpenCode, Kimi and API models all follo
 
 ## 4. Team protocol
 
-One AI is the **controller** (default: Claude Code). It plans, delegates, reviews and commits. The others are **workers**, called through `conductor`.
+One AI is the **controller** (default: Claude Code). It plans, delegates, reviews and commits. The others are **workers**, called through `conductor-ai`.
 
 Workers:
 - Do only the task id you were given; read its plan file in `docs/plan/` first.
 - Never `git commit`/`push`/`checkout`/`stash`/`reset`.
-- Never edit `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `HANDOFF.md`, `docs/plan/*`, `.claude/`, `.gemini/`, `.agents/`, `.conductor/`.
+- Never edit `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `HANDOFF.md`, `docs/plan/*`, `.claude/`, `.gemini/`, `.agents/`, `.conductor-ai/`.
 - End with the report format given in your prompt (`## RESULT: DONE | PARTIAL | BLOCKED` …).
 
 Shared state: `docs/plan/<feature>.md` (plan, owned by the controller) · `HANDOFF.md` (current state; read it first) · `docs/architecture.md` (codebase map).
-<!-- conductor:rules:end -->
+<!-- conductor-ai:rules:end -->

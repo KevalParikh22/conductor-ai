@@ -1,7 +1,7 @@
 // Skills: one library for every controller and worker.
 //
-//   ~/.config/conductor/skills/<name>/       global: every project gets it (switch it off per project)
-//   <project>/.conductor/skills/<name>/      this project only (wins over a global skill of the same name)
+//   ~/.config/conductor-ai/skills/<name>/       global: every project gets it (switch it off per project)
+//   <project>/.conductor-ai/skills/<name>/      this project only (wins over a global skill of the same name)
 //
 // A skill is the standard SKILL.md (name + description frontmatter, Markdown body, optional extra files), the format
 // Claude Code, Antigravity, Codex and OpenCode all read. `sync` copies the active ones into .claude/skills/ and
@@ -17,7 +17,7 @@
 //   ---
 import fs from 'node:fs';
 import path from 'node:path';
-import { GLOBAL_DIR } from './util.js';
+import { GLOBAL_DIR, legacyMarkers } from './util.js';
 import { PROJECT_DIRNAME, readScope, writeScope } from './config.js';
 import { globToRegex } from './routing.js';
 import { execFileSync } from 'node:child_process';
@@ -67,7 +67,7 @@ export function listSkills(root) {
   return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name)).map((s) => ({ ...s, on: !off.has(s.name) }));
 }
 
-/** Switch a skill on or off for this project (stored in .conductor/config.json → skills.off). */
+/** Switch a skill on or off for this project (stored in .conductor-ai/config.json → skills.off). */
 export function setSkillOn(root, name, on) {
   const data = readScope('project', root);
   const off = new Set(data.skills?.off || []);
@@ -157,13 +157,13 @@ export function syncSkills(root) {
   return report;
 }
 
-const EX_START = '# >>> conductor skills (synced copies)', EX_END = '# <<< conductor skills';
+const EX_START = '# >>> conductor-ai skills (synced copies)', EX_END = '# <<< conductor-ai skills';
 /** Replace conductor-ai's block in .git/info/exclude (local to this clone, never committed). */
 function writeExclude(root, entries) {
   let dir;
   try { dir = execFileSync('git', ['rev-parse', '--git-common-dir'], { cwd: root, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { return; }
   const file = path.join(path.isAbsolute(dir) ? dir : path.join(root, dir), 'info', 'exclude');
-  let cur = ''; try { cur = fs.readFileSync(file, 'utf8'); } catch { /* none yet */ }
+  let cur = ''; try { cur = legacyMarkers(fs.readFileSync(file, 'utf8')); } catch { /* none yet */ }
   const i = cur.indexOf(EX_START), j = cur.indexOf(EX_END);
   const rest = i >= 0 && j > i ? cur.slice(0, i) + cur.slice(j + EX_END.length) : cur;
   const next = `${rest.trimEnd()}${rest.trim() ? '\n' : ''}${entries.length ? `${EX_START}\n${entries.join('\n')}\n${EX_END}\n` : ''}`;

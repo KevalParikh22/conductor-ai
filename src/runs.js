@@ -1,4 +1,4 @@
-// Run history: every dispatch leaves .conductor/runs/<stamp>-<role>[-task]/summary.json in the project.
+// Run history: every dispatch leaves .conductor-ai/runs/<stamp>-<role>[-task]/summary.json in the project.
 // `conductor-ai runs` and the UI's Runs page read them back.
 import fs from 'node:fs';
 import path from 'node:path';

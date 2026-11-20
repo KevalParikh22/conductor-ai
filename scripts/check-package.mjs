@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('..', import.meta.url));
 export const DENY = [
   [/^test\//, 'tests'], [/^bench\//, 'the benchmark'], [/^evals\/[^/]+\/solution\//, 'eval reference solutions (only `eval check` uses them)'],
-  [/(^|\/)docs\/plan\//, 'plans'], [/(^|\/)\.conductor\//, "conductor's own state"], [/^(ROADMAP|PRODUCT_PLAN|LAUNCH_PLAN|ALPHA_READINESS|UX_REVIEW|RELEASE_NOTES)/, 'internal planning notes'],
+  [/(^|\/)docs\/plan\//, 'plans'], [/(^|\/)\.conductor-ai\//, "conductor-ai's own state"], [/^(ROADMAP|PRODUCT_PLAN|LAUNCH_PLAN|ALPHA_READINESS|UX_REVIEW|RELEASE_NOTES)/, 'internal planning notes'],
   [/(^|\/)node_modules\//, 'dependencies'], [/(^|\/)(\.env|secrets\.env|auth\.json)$|\.pem$|\.key$/, 'secrets'], [/\.log$/, 'logs'], [/(^|\/)scratch/, 'scratch files'],
 ];
 

@@ -36,7 +36,7 @@ Save the key (hidden input; or pipe it in):
 conductor-ai keys set REQUESTY_API_KEY
 ```
 
-Then add this to `~/.config/conductor/config.json` (all projects) or `.conductor/config.json` (one project):
+Then add this to `~/.config/conductor-ai/config.json` (all projects) or `.conductor-ai/config.json` (one project):
 ```json
 {
   "providers": {

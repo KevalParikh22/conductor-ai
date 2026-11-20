@@ -76,18 +76,18 @@ test('--worktree runs on its own branch, commits there, and leaves the main chec
   assert.equal(git('symbolic-ref', '--short', 'HEAD').trim(), 'main', 'main checkout stays on its branch');
   assert.ok(!fs.existsSync(path.join(dir, 'src/T1.js')), 'the main checkout is not written to');
   assert.equal(fs.readFileSync(path.join(dir, 'scratch.txt'), 'utf8'), 'mine');
-  assert.equal(git('show', 'conductor/T1:src/T1.js'), '// by a\n');
-  assert.match(git('log', '-1', '--format=%s', 'conductor/T1'), /conductor-ai: T1 by agent-a \(verify PASS\)/);
+  assert.equal(git('show', 'conductor-ai/T1:src/T1.js'), '// by a\n');
+  assert.match(git('log', '-1', '--format=%s', 'conductor-ai/T1'), /conductor-ai: T1 by agent-a \(verify PASS\)/);
   assert.equal(git('status', '--porcelain', '--', 'node_modules').trim(), '');
   assert.match(fs.readFileSync(path.join(dir, s.runDir, 'task.md'), 'utf8'), /each task writes src/, 'design notes are inlined');
 
   // a second run for the same task is refused unless --replace
   await assert.rejects(dispatch(cfgFor(dir), { role: 'build', planPath: 'docs/plan/p.md', taskId: 'T1', worktree: true }), UsageError);
   const again = await dispatch(cfgFor(dir), { role: 'build', planPath: 'docs/plan/p.md', taskId: 'T1', worktree: true, replace: true, chain: ['agent-b'] });
-  assert.equal(git('show', 'conductor/T1:src/T1.js'), '// by b\n');
+  assert.equal(git('show', 'conductor-ai/T1:src/T1.js'), '// by b\n');
 
   // merge, then rm deletes the merged branch
-  git('merge', '-q', '--no-ff', 'conductor/T1', '-m', 'merge T1');
+  git('merge', '-q', '--no-ff', 'conductor-ai/T1', '-m', 'merge T1');
   assert.deepEqual(listWorktrees(dir).map((w) => [w.id, w.merged]), [['T1', true]]);
   assert.ok(removeWorktree(dir, 'T1').some((l) => l.includes('deleted branch')));
   assert.ok(!fs.existsSync(again.worktree.dir));
@@ -102,7 +102,7 @@ test('a failed worktree run stashes the attempt and removes the empty worktree',
   assert.equal(s.attempts[0].stashed, true);
   assert.equal(s.worktree.removed, true);
   assert.ok(!fs.existsSync(s.worktree.dir));
-  assert.equal(git('branch', '--list', 'conductor/T2').trim(), '');
+  assert.equal(git('branch', '--list', 'conductor-ai/T2').trim(), '');
   assert.match(git('stash', 'list'), /failed attempt by agent-broken T2/);
 });
 
@@ -125,8 +125,8 @@ test('batch runs independent tasks in parallel on different providers', async ()
   assert.equal(b.exitCode, 0);
   assert.deepEqual(b.results.map((r) => r.summary.winner), ['agent-a', 'agent-b'], 'spread across providers');
   assert.ok(s2 < e1 && s1 < e2, `ran in parallel (T1 ${s1}-${e1}, T2 ${s2}-${e2})`);
-  assert.equal(git('show', 'conductor/T1:src/T1.js'), '// by a\n');
-  assert.equal(git('show', 'conductor/T2:src/T2.js'), '// by b\n');
+  assert.equal(git('show', 'conductor-ai/T1:src/T1.js'), '// by a\n');
+  assert.equal(git('show', 'conductor-ai/T2:src/T2.js'), '// by b\n');
   assert.ok(!fs.existsSync(path.join(dir, 'src')), 'main checkout untouched');
   assert.equal(listWorktrees(dir).length, 2);
 

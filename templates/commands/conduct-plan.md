@@ -5,7 +5,7 @@ disable-model-invocation: true
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash(conductor-ai run ask:*), Bash(conductor-ai status:*), Bash(conductor-ai plan check:*), Bash(git status:*), Bash(git switch -c:*), Bash(git branch:*)
 ---
 
-You are the controller (see `.conductor/ORCHESTRATOR.md`). Plan: **$ARGUMENTS**
+You are the controller (see `.conductor-ai/ORCHESTRATOR.md`). Plan: **$ARGUMENTS**
 
 Use as few of your own tokens as possible:
 1. Read `HANDOFF.md` and `docs/architecture.md`. If architecture.md is empty, don't explore the repo yourself. Run this in the background and read the result:

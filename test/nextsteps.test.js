@@ -108,7 +108,7 @@ test('a failed run says what to do per provider, in the summary, conductor-ai ru
   };
   const s = await dispatch(cfg, { role: 'ask', task: 'q', chain: ['missing', 'broken'] });
   assert.equal(s.winner, null);
-  assert.match(s.attempts.find((a) => a.provider === 'broken').next, /stopped with an error: read \.conductor\/runs\/.+\/broken\.log/);
+  assert.match(s.attempts.find((a) => a.provider === 'broken').next, /stopped with an error: read \.conductor-ai\/runs\/.+\/broken\.log/);
   const text = formatSummary(s);
   assert.match(text, /fix: {7}missing: install it: npm install -g @openai\/codex, sign in: codex login/);
   assert.match(text, /fix: {7}broken: the worker stopped with an error/);

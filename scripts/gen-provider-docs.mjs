@@ -40,7 +40,7 @@ export function apiGuide(id, e) {
 
   L.push('## Without the wizard', '');
   if (keyed) L.push('Save the key (hidden input; or pipe it in):', '```bash', `conductor-ai keys set ${e.apiKeyEnv}`, '```', '');
-  L.push('Then add this to `~/.config/conductor/config.json` (all projects) or `.conductor/config.json` (one project):', '```json');
+  L.push('Then add this to `~/.config/conductor-ai/config.json` (all projects) or `.conductor-ai/config.json` (one project):', '```json');
   const p = { ...(DEFAULT_PROVIDERS[name] ? { enabled: true } : { type: e.type || 'openai', enabled: true, baseUrl: e.baseUrl, apiKeyEnv: e.apiKeyEnv || '', ...(e.apiKeyOptional ? { apiKeyOptional: true } : {}) }), model: e.model || '<model id>' };
   L.push(JSON.stringify({ providers: { [name]: p } }, null, 2), '```');
   L.push(`List models: \`conductor-ai models ${name} --all\`. Put \`${name}\` in any role's chain in \`conductor-ai ui\` → Roles & fallback.`, '');

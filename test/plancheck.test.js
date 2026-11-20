@@ -60,7 +60,7 @@ test('plan check: ready tasks pass; each gap is named; controller tasks are not 
 
 test('the CLI plan check prints each task and exits 1 when one needs work', () => {
   const { dir } = makeRepo({ files: { 'docs/plan/p.md': PLAN } });
-  const bin = path.resolve('bin/conductor.js');
+  const bin = path.resolve('bin/conductor-ai.js');
   let out = '', code = 0;
   try { out = execFileSync('node', [bin, 'plan', 'check', 'docs/plan/p.md'], { cwd: dir, encoding: 'utf8', env: process.env }); } catch (e) { out = e.stdout; code = e.status; }
   assert.equal(code, 1);

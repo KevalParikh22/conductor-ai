@@ -59,7 +59,7 @@ export function makeDemoProject(parent = os.tmpdir()) {
   fs.writeFileSync(path.join(dir, 'test', 'index.test.js'), "import { test } from 'node:test';\nimport assert from 'node:assert/strict';\nimport { name } from '../src/index.js';\n\ntest('the project loads', () => assert.equal(name, 'conductor-demo'));\n");
   fs.writeFileSync(path.join(dir, 'docs', 'plan', 'demo.md'), DEMO_PLAN);
   git(dir, 'init', '-q', '-b', 'main');
-  git(dir, 'config', 'user.email', 'demo@conductor.local'); git(dir, 'config', 'user.name', 'conductor-ai demo');
+  git(dir, 'config', 'user.email', 'demo@conductor-ai.local'); git(dir, 'config', 'user.name', 'conductor-ai demo');
   initProject(dir, { controller: 'claude-code', mcp: false });
   git(dir, 'add', '-A'); git(dir, 'commit', '-qm', 'demo start');
   git(dir, 'switch', '-qc', 'feat/demo');

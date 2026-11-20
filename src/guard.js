@@ -49,7 +49,7 @@ export function pushBlock(root) {
   return `conductor-ai: the last verify failed${st.cmd ? ` (\`${st.cmd}\`)` : ''}, so this push is blocked (committing is fine). Fix the failures and run \`conductor-ai verify\` (a pass unblocks it), or run \`conductor-ai guard allow\` to push this commit anyway.`;
 }
 
-/** Conductor task branches still waiting for review, for a Stop reminder; '' when there are none. */
+/** conductor-ai task branches still waiting for review, for a Stop reminder; '' when there are none. */
 export function stopReminder(root) {
   let wts = [];
   try { wts = listWorktrees(root).filter((w) => w.ahead > 0 || w.dirty); } catch { return ''; }

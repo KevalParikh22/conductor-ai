@@ -8,7 +8,7 @@ import { isolateHome, makeRepo } from './helpers.js';
 
 isolateHome();
 const G = await import('../src/guard.js');
-const bin = path.resolve('bin/conductor.js');
+const bin = path.resolve('bin/conductor-ai.js');
 
 test('commit detection: git commit in any position of a shell line, nothing else', () => {
   for (const c of ['git commit -m x', 'cd a && git commit -am y', 'x; git commit', '(git commit)', 'git -C sub commit', 'git -c user.name=t commit --allow-empty']) assert.equal(G.isCommit(c), true, c);
@@ -56,7 +56,7 @@ test('Stop reminder lists task branches waiting for review, and stays quiet othe
   fs.writeFileSync(path.join(wt.dir, 'x.js'), '1\n');
   execFileSync('git', ['add', '-A'], { cwd: wt.dir }); execFileSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'w'], { cwd: wt.dir });
   const out = JSON.parse(G.runHook('claude-stop', {}, dir).stdout);
-  assert.match(out.systemMessage, /1 task branch waiting for review \(conductor\/T7\)/);
+  assert.match(out.systemMessage, /1 task branch waiting for review \(conductor-ai\/T7\)/);
   assert.equal(G.runHook('claude-stop', { stop_hook_active: true }, dir).stdout, '', 'never loops');
 });
 

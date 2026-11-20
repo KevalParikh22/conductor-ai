@@ -81,7 +81,7 @@ test('build falls back from a rate-limited agent to the next, stashing partial w
   assert.deepEqual(s.changed, ['src/add.js']);
   assert.equal(s.verify.status, 'PASS');
   assert.ok(!fs.existsSync(path.join(dir, 'src/partial.js')), 'partial work must be stashed, not left in the tree');
-  assert.match(git('stash', 'list'), /conductor: failed attempt by antigravity-cli T1/);
+  assert.match(git('stash', 'list'), /conductor-ai: failed attempt by antigravity-cli T1/);
   assert.ok(getCooldowns()['antigravity-cli'], 'rate-limited provider cools down');
 
   // second run skips the cooling-down provider without calling it

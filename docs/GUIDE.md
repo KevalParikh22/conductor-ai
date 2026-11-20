@@ -40,15 +40,15 @@ You use conductor-ai in three ways, and they all do the same things:
 | **The UI**: `conductor-ai ui` | The same setup and history in the browser |
 
 The controller reaches conductor-ai through its **MCP server** (`conductor-ai mcp`). Its tools:
-- `conductor_run`, `conductor_batch`, `conductor_retry`: run tasks.
-- `conductor_diff`, `conductor_runs`: review what ran.
-- `conductor_plan_check`, `conductor_route`, `conductor_skills`, `conductor_status`: check a plan and see how work will be handled.
-- `conductor_verify`: run your checks.
-- `conductor_stats`, `conductor_doctor`, `conductor_rules`, `conductor_lessons`: quality numbers, health, project rules and lessons.
+- `conductor_ai_run`, `conductor_ai_batch`, `conductor_ai_retry`: run tasks.
+- `conductor_ai_diff`, `conductor_ai_runs`: review what ran.
+- `conductor_ai_plan_check`, `conductor_ai_route`, `conductor_ai_skills`, `conductor_ai_status`: check a plan and see how work will be handled.
+- `conductor_ai_verify`: run your checks.
+- `conductor_ai_stats`, `conductor_ai_doctor`, `conductor_ai_rules`, `conductor_ai_lessons`: quality numbers, health, project rules and lessons.
 
 Each tool also takes an optional `project` path. Every action and where it lives (CLI, MCP, UI): [SURFACES.md](SURFACES.md).
 
-Run reports are also **MCP resources**: `conductor://runs/latest` and `conductor://runs/<id>` (listed newest first) hold a run's summary, the checklist that decides "done", and the worker's report, so a controller can open one like a file instead of calling a tool.
+Run reports are also **MCP resources**: `conductor-ai://runs/latest` and `conductor-ai://runs/<id>` (listed newest first) hold a run's summary, the checklist that decides "done", and the worker's report, so a controller can open one like a file instead of calling a tool.
 
 ---
 
@@ -58,8 +58,8 @@ conductor-ai reads **built-in defaults → your global settings → the project'
 
 | Where | Path | Holds |
 |---|---|---|
-| **Global** (all projects) | `~/.config/conductor/` | `config.json`: providers, roles, settings. `secrets.env`: API keys, mode 600. `skills/`: your skill library. Also run usage, cooldowns, task worktrees |
-| **Project** | `<project>/.conductor/` | `config.json`: controller, project overrides (roles, routing rules, verify, skills switched off). `skills/`: project-only skills. `runs/`: history |
+| **Global** (all projects) | `~/.config/conductor-ai/` | `config.json`: providers, roles, settings. `secrets.env`: API keys, mode 600. `skills/`: your skill library. Also run usage, cooldowns, task worktrees |
+| **Project** | `<project>/.conductor-ai/` | `config.json`: controller, project overrides (roles, routing rules, verify, skills switched off). `skills/`: project-only skills. `runs/`: history |
 | **Project rules** | `AGENTS.md` (+ `CLAUDE.md` / `GEMINI.md`) | Stack, conventions and the **Verify** command. Every worker reads it |
 
 **What to put where:**
@@ -158,9 +158,9 @@ In your controller, inside the project:
 | Step | In your controller | What to do |
 |---|---|---|
 | 1. Plan | `/conduct-plan add password reset` | Answer the plan's **open questions**. Keep tasks small (1–3 files) with files, acceptance and a verify line. Add `- **eta:** 1h` to big tasks |
-| 2. Run | `/conduct-run docs/plan/password-reset.md` | Independent tasks run **in parallel**, each in its own worktree on branch `conductor/<id>`, spread across workers |
-| 3. Review | `conductor-ai diff conductor/T3` | The compact diff: lockfiles and whitespace left out. Check verify passed |
-| 4a. Good | `git merge --no-ff conductor/T3`, then `conductor-ai worktree rm T3` | |
+| 2. Run | `/conduct-run docs/plan/password-reset.md` | Independent tasks run **in parallel**, each in its own worktree on branch `conductor-ai/<id>`, spread across workers |
+| 3. Review | `conductor-ai diff conductor-ai/T3` | The compact diff: lockfiles and whitespace left out. Check verify passed |
+| 4a. Good | `git merge --no-ff conductor-ai/T3`, then `conductor-ai worktree rm T3` | |
 | 4b. Close but wrong | `conductor-ai retry T3 --note "what to fix"` | **The same worker fixes its own work** in place, on the same branch |
 | 4c. Wrong | `conductor-ai worktree rm T3 --force`, then rerun with `--provider <other>` | |
 | 5. End of day | `/conduct-handoff` | Updates `HANDOFF.md` so any controller can continue tomorrow |
@@ -190,7 +190,7 @@ In your controller, inside the project:
 
 | Controller | Commands | conductor-ai's MCP tools | One-time step |
 |---|---|---|---|
-| **Claude Code** | `/conduct-*` in `.claude/commands` (or the plugin's skills) | from `.mcp.json` or the plugin | Approve the "conductor" server when Claude asks, or install the plugin |
+| **Claude Code** | `/conduct-*` in `.claude/commands` (or the plugin's skills) | from `.mcp.json` or the plugin | Approve the "conductor-ai" server when Claude asks, or install the plugin |
 | **Antigravity** (Gemini) | `conduct-*` skills in `.agents/skills` (or the plugin's skills) | only from agy's own config or a plugin | Install the plugin (section 3), or `agy mcp add conductor-ai conductor-ai mcp` |
 | **Codex** | `conduct-*` skills in `.agents/skills` | only from `~/.codex/config.toml` | `codex mcp add conductor-ai -- conductor-ai mcp` |
 | **OpenCode** | `conduct-*` skills in `.agents/skills` | from `opencode.json` | none |
@@ -205,15 +205,15 @@ Workers read `AGENTS.md` whatever the controller.
 
 ## 7. Skills: one library for every controller and worker
 
-A skill is a folder with a `SKILL.md`: a name, a description, and instructions. It's the format Claude Code, Antigravity, Codex and OpenCode all read. You keep **one library in conductor**, and conductor-ai delivers it everywhere:
+A skill is a folder with a `SKILL.md`: a name, a description, and instructions. It's the format Claude Code, Antigravity, Codex and OpenCode all read. You keep **one library in conductor-ai**, and conductor-ai delivers it everywhere:
 - **Controllers:** the active skills are copied into `.claude/skills/` and `.agents/skills/`, so each tool loads them natively, on demand.
 - **Workers:** each task gets only the skills that match it. Agents get the skill's name, description and path, and open what they need. API models get the text, up to about 6,000 characters.
 
 **Where skills live:**
-- `~/.config/conductor/skills/<name>/`: **every project** (the universal set).
-- `.conductor/skills/<name>/`: **this project only**. Wins over a global skill with the same name.
+- `~/.config/conductor-ai/skills/<name>/`: **every project** (the universal set).
+- `.conductor-ai/skills/<name>/`: **this project only**. Wins over a global skill with the same name.
 
-**Thinning out per project:** every global skill is on by default. Switch off the ones a project doesn't need; the choice is saved in that project's `.conductor/config.json` → `skills.off`.
+**Thinning out per project:** every global skill is on by default. Switch off the ones a project doesn't need; the choice is saved in that project's `.conductor-ai/config.json` → `skills.off`.
 
 **When a skill reaches workers:** optional `metadata` in the frontmatter, matched like routing rules. A skill without metadata goes to every task.
 ```markdown
@@ -270,17 +270,17 @@ metadata:
 
 `conductor-ai init` keeps conductor-ai's files **out of git** by adding a marked block to `.gitignore`, creating the file if needed:
 ```
-# >>> conductor: local files, not committed (conductor init --share keeps them in git)
-.conductor/
+# >>> conductor-ai: local files, not committed (conductor-ai init --share keeps them in git)
+.conductor-ai/
 docs/plan/
 .claude/commands/conduct-*
 .agents/skills/conduct-*/
 AGENTS.md
 …
-# <<< conductor
+# <<< conductor-ai
 ```
 **What goes in the block:**
-- conductor-ai's folders (`.conductor/`, plans, its own commands and skills).
+- conductor-ai's folders (`.conductor-ai/`, plans, its own commands and skills).
 - The files **it created** (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `HANDOFF.md`, `docs/architecture.md`, MCP configs). A file you already had before `init` is never added.
 - If something was already committed, `init` prints the `git rm --cached` line to stop tracking it.
 - Synced copies of your skills are hidden through `.git/info/exclude`, which is local to your clone and never committed. So adding or switching a skill doesn't change `.gitignore`.
@@ -301,7 +301,7 @@ AGENTS.md
 - **Measure it: `conductor-ai eval`.** A suite of fixed tasks (bug fixes, features, test-writing) with hidden tests the worker never sees. `conductor-ai eval run` runs them with your routing (or `--provider` / `--chain`), scores each against the hidden tests, and compares conductor-ai's verdict with reality: the key number is **"done" but wrong**. `--compare last` shows the change since the previous run. `conductor-ai eval check` proves every task is fair without any LLM. `conductor-ai stats --failures` lists why work failed, biggest cause first.
 - **Guards (opt-in):** `conductor-ai guard on` makes your controller's `git push` fail while the last `conductor-ai verify` failed (Claude Code and Antigravity); committing stays allowed, since a commit is local and easy to fix. Fix and `conductor-ai verify` again, or `conductor-ai guard allow` once. Claude Code also reminds you on Stop of task branches waiting for review.
 - **Workers start with the facts:** before a write task, conductor-ai gives the worker its files, where that code is used elsewhere (so callers keep working), the verify command and the matching `docs/architecture.md` sections. A provider can also get its own note via `promptExtra` in its settings.
-- **Project rules, one source for every controller:** `conductor-ai rules new api-errors --paths "src/api/**"` creates `.conductor/rules/api-errors.md`; `conductor-ai rules sync` (and `init`) writes it in each controller's own format, and workers get the rules for their files. `init` also adds a `conductor-reviewer` subagent you can ask to review a worker's diff in a fresh context. `conductor-ai doctor` checks these files.
+- **Project rules, one source for every controller:** `conductor-ai rules new api-errors --paths "src/api/**"` creates `.conductor-ai/rules/api-errors.md`; `conductor-ai rules sync` (and `init`) writes it in each controller's own format, and workers get the rules for their files. `init` also adds a `conductor-reviewer` subagent you can ask to review a worker's diff in a fresh context. `conductor-ai doctor` checks these files.
 - **Lessons:** what failed before in this project (and every `--note` you write) goes into later workers' prompts for the same area, and a provider that keeps failing a kind of work moves to the back. `conductor-ai lessons` lists them; `promote` turns one into a rule in AGENTS.md. When that provider later passes the same kind of work here, its earlier failures are marked resolved and stop moving it back (the guidance stays). A lesson seen 3 times is offered as a rule in the run summary (`promote?:`); promoting stays your call.
 - **Risky work gets a second opinion:** big changes, security-related files, or `review: yes` in the plan are reviewed by a model from a different family than the worker's. Only findings on changed lines are kept, and they're advice for the controller, never an override of passing checks.
 - **Wrong tests are recognised:** if verify fails but every acceptance check passes and the code alone passes the original tests, conductor-ai says the worker's own test is the problem, and the hand-off asks for the test to be fixed, not the code.
@@ -310,13 +310,13 @@ AGENTS.md
 - **Acceptance criteria are run:** a line like `` `add(2, 3)` returns `5` `` or `` `parse('x')` throws SyntaxError `` is turned into a check conductor-ai runs itself after the worker (JavaScript for now). A failure makes the task partial, whatever the worker claimed.
 - **Failed work is handed on, with the error:** if verify fails, conductor-ai writes a short brief (failing tests, error, file:line) and gives the work once to the next provider in the chain, which fixes it in place. The brief is also in the summary (`why:`) for your `--note`.
 - **Edits are guarded:** a worker's changed files are syntax-checked, any function or class the task names in `code` must exist afterwards, and in JavaScript/TypeScript the ones the acceptance checks call must be exported by that name; otherwise the attempt is rejected and the next provider runs. Chat models (no tools) get a project map and, if they answer without files, one repair turn.
-- **Plans are checked before work starts:** `conductor-ai plan check <plan>` (also run automatically, and the MCP tool `conductor_plan_check`). A write task needs `files:`, acceptance criteria a check can confirm, a verify command and at most 4 files besides tests; otherwise conductor-ai refuses it and says what is missing. `--allow-weak-plan` overrides.
+- **Plans are checked before work starts:** `conductor-ai plan check <plan>` (also run automatically, and the MCP tool `conductor_ai_plan_check`). A write task needs `files:`, acceptance criteria a check can confirm, a verify command and at most 4 files besides tests; otherwise conductor-ai refuses it and says what is missing. `--allow-weak-plan` overrides.
 - **Acceptance is answered, not assumed:** the task's criteria are repeated at the end of the worker's prompt, and the worker must answer each one with evidence in an `## Acceptance` section. A DONE that leaves any unanswered or unmet is **partial**.
 - **Checks before and after a task:**
   - **The starting commit is checked first.** conductor-ai runs verify on the commit the worker starts from (once per commit). If it already fails, the worker is told, and the result says which failure lines are new.
   - **Scope:** when a task lists `files:`, changing other files (beyond their tests, lockfiles and snapshots) makes the outcome **out of scope**, with the files listed. `--allow-scope` accepts it.
 - **No proof, no "done":** code a worker wrote counts as done only when the verify command ran and passed. Without a verify command the outcome is **unverified** and the exit code is 4. Set one with `conductor-ai init --verify "<cmd>"` (or the Verify line in AGENTS.md). `--no-verify` and `--allow-unverified` accept unverified work on purpose.
-- **If the controller runs out:** run `/conduct-handoff` while you still can. Then open another agent and say: *"Read HANDOFF.md and act as the controller described in .conductor/ORCHESTRATOR.md."*
+- **If the controller runs out:** run `/conduct-handoff` while you still can. Then open another agent and say: *"Read HANDOFF.md and act as the controller described in .conductor-ai/ORCHESTRATOR.md."*
 
 Details: [Configuration](CONFIGURATION.md#time-limits-and-model-fallback).
 
@@ -335,9 +335,9 @@ tmux new-session -d -s conductor-ai -c "$PWD" 'claude' \; split-window -h -c "$P
 
 **VS Code:**
 - **Claude Code extension:** it reads the same `.mcp.json` and `/conduct-*` commands as the terminal.
-- **Copilot agent mode** (and other MCP extensions): `conductor-ai init --vscode` writes `.vscode/mcp.json`. It does this automatically when the project already has a `.vscode/` folder. Then ask the agent, e.g. *"use conductor_run with role test to add tests for src/auth"*.
+- **Copilot agent mode** (and other MCP extensions): `conductor-ai init --vscode` writes `.vscode/mcp.json`. It does this automatically when the project already has a `.vscode/` folder. Then ask the agent, e.g. *"use conductor_ai_run with role test to add tests for src/auth"*.
 - **Cursor:** reads `.cursor/mcp.json` in the `.mcp.json` shape.
-- **Review as you go:** keep Source Control open. Workers never commit on your branch, and parallel tasks appear as `conductor/<id>` branches.
+- **Review as you go:** keep Source Control open. Workers never commit on your branch, and parallel tasks appear as `conductor-ai/<id>` branches.
 - **"command not found" from an editor:** editors started from the dock often lack your shell's PATH. Use the full path from `which conductor-ai` as `command` in the MCP entry.
 
 ---
@@ -383,16 +383,16 @@ conductor-ai init
 **Remove from a project:**
 1. Delete conductor-ai's files:
    ```bash
-   rm -rf .conductor .claude/commands/conduct-*.md .agents/skills/conduct-*
+   rm -rf .conductor-ai .claude/commands/conduct-*.md .agents/skills/conduct-*
    ```
-2. Remove the `<!-- conductor:… -->` blocks from `CLAUDE.md`, `GEMINI.md` and `AGENTS.md`.
-3. Remove the `conductor` MCP entry and the conductor-ai block in `.gitignore`.
+2. Remove the `<!-- conductor-ai:… -->` blocks from `CLAUDE.md`, `GEMINI.md` and `AGENTS.md`.
+3. Remove the `conductor-ai` MCP entry and the conductor-ai block in `.gitignore`.
 
 **Remove from the machine:**
 ```bash
 npm uninstall -g conductor-ai
 ```
-Your settings, keys and skill library are kept in `~/.config/conductor`; delete that folder too if you want them gone.
+Your settings, keys and skill library are kept in `~/.config/conductor-ai`; delete that folder too if you want them gone.
 
 ---
 
@@ -406,7 +406,7 @@ Your settings, keys and skill library are kept in `~/.config/conductor`; delete 
 | `/conduct-*` or `conduct-*` skills missing | Open the controller in the project folder, or run `conductor-ai init` again |
 | Antigravity attempt `denied: command`, or the warning "refused N action(s)" | agy needed a shell command that has no allow rule; headless runs can't ask. Add it to `allowCommands` in Settings (the verify command and common build/test commands are allowed already) |
 | `conductor-ai: command not found` inside the controller | Install globally so its shell finds it (`which conductor-ai`) |
-| A worker always fails | Its log is `.conductor/runs/<run>/<provider>.log`: usually a login, or changed CLI flags |
+| A worker always fails | Its log is `.conductor-ai/runs/<run>/<provider>.log`: usually a login, or changed CLI flags |
 | A free route hangs | It gives up after 90 seconds and tries another model, then the next provider (section 10) |
 | A skill isn't loaded | `conductor-ai skills` shows whether it's on; `conductor-ai skills sync` copies it again |
 | UI says wrong token | Open the full URL printed by `conductor-ai ui` (the token is after `#t=`) |

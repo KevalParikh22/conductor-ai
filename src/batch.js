@@ -384,8 +384,8 @@ export function formatBatch(b) {
   if (b.stopped) L.push(`stopped:   after ${b.stopped}; tasks after it were not started or merged`);
   if (b.results.some((r) => r.summary?.verify?.scope === 'task')) L.push('verify:    "(task)" = the task\'s own verify line from the plan; run `conductor-ai verify` after merging');
   if (b.merge) L.push(b.merged === b.results.length ? 'next:      everything is merged into your branch. Review it: git log --oneline, git diff <start>..HEAD' : 'next:      merged tasks are on your branch; for the rest see their lines above.');
-  else L.push('next:      for each ✓: review `conductor-ai diff conductor/<id>`, then `git merge --no-ff conductor/<id>`; afterwards `conductor-ai worktree rm <id>` (or run the batch with --merge).');
-  if (b.results.some((r) => r.summary?.hedged && /-h\d*$/.test(r.summary.worktree?.id || ''))) L.push('           A hedged task that the second attempt won lives on conductor/<id>-h… (the branch on its line).');
+  else L.push('next:      for each ✓: review `conductor-ai diff conductor-ai/<id>`, then `git merge --no-ff conductor-ai/<id>`; afterwards `conductor-ai worktree rm <id>` (or run the batch with --merge).');
+  if (b.results.some((r) => r.summary?.hedged && /-h\d*$/.test(r.summary.worktree?.id || ''))) L.push('           A hedged task that the second attempt won lives on conductor-ai/<id>-h… (the branch on its line).');
   if (b.unverified) L.push('           For each ?: no verify ran, so nothing proves it works. Set a verify command (conductor-ai init --verify "<cmd>"), or check it yourself before merging.');
   if (b.partial) L.push('           For each ⚠: the worker did only part of it. Read its report.md, then finish it or retry the rest.');
   if (b.failed || b.results.some((r) => r.merge && !['merged', 'no-changes'].includes(r.merge.status))) L.push('           For each ✗: retry it alone with `conductor-ai run <role> --plan … --task <id> --worktree --provider <other>`, or do it yourself.');

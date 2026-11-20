@@ -1,7 +1,7 @@
 # How it works
 
 ```
-bin/conductor.js        CLI: arg parsing, commands
+bin/conductor-ai.js        CLI: arg parsing, commands
 src/core.js             dispatch(): role → chain → attempts → checks → summary (times each step: timings)
 src/plan.js             plan text: tasks, sections, open questions, file lists, durations
 src/outcome.js          a run's outcome: done only with proof
@@ -13,7 +13,7 @@ src/presets.js          CLI presets, default providers, roles, controllers, sett
 src/config.js           layered config (defaults ← global ← project), secrets, readiness
 src/git.js              clean-tree checks, stash-on-failure, diffs
 src/verify.js           verify command detection and execution
-src/mcp.js              MCP stdio server (conductor_run / conductor_status / conductor_verify)
+src/mcp.js              MCP stdio server (conductor_ai_run / conductor_ai_status / conductor_ai_verify)
 src/ui/                 local settings page (server.js + index.html)
 src/init.js             per-project setup for each controller
 src/prompts/            worker preambles per role
@@ -30,7 +30,7 @@ templates/              AGENTS.md, controller block, playbook, plan template, sl
 4. **Chain.** Each provider is checked (enabled? installed or key set? cooling down? over its daily budget?) and skipped with a reason if it isn't ready. Plan tasks for write roles are refused while the plan has unanswered `## Open questions`.
 5. **Attempt.** On failure, the reason is classified (`quota`, `timeout`, `exit N`, `auth`, `empty output`…). Quota failures set a cooldown. Write-role failures stash partial work, so the next provider starts clean and nothing is lost.
 6. **Success.** The report is saved, the changed files listed, protected-file edits flagged, and verify run. The **evidence check** compares the worker's "Files changed" list with what git shows and warns on claimed-but-unchanged files, unreported changes, or "DONE" with no changes at all. Files already modified before the run are left out of that comparison.
-7. **Usage.** Every attempt (failed ones too) is appended to `~/.config/conductor/usage.jsonl` with time and, for APIs, tokens and cost.
+7. **Usage.** Every attempt (failed ones too) is appended to `~/.config/conductor-ai/usage.jsonl` with time and, for APIs, tokens and cost.
 8. **Summary.** The controller gets a short text block (or JSON with `--json`, or the MCP tool result) and only reads the full report when it needs to.
 
 ## Smart selector
@@ -39,26 +39,26 @@ templates/              AGENTS.md, controller block, playbook, plan template, sl
 
 ## Parallel runs (worktrees)
 
-With `--worktree` (or `conductor-ai batch`, which always uses it), step 1 changes: instead of checking your branch and tree, conductor-ai creates a git worktree from your last commit on a new branch `conductor/<task-id>`. The checkout lives outside the repo, in `~/.config/conductor/worktrees/<repo>-<hash>/<id>`, so test runners and file watchers in your project never see it. Ignored dependency folders (`node_modules`, `vendor`, `.venv`, `venv`) are symlinked in, so verify works without a reinstall.
+With `--worktree` (or `conductor-ai batch`, which always uses it), step 1 changes: instead of checking your branch and tree, conductor-ai creates a git worktree from your last commit on a new branch `conductor-ai/<task-id>`. The checkout lives outside the repo, in `~/.config/conductor-ai/worktrees/<repo>-<hash>/<id>`, so test runners and file watchers in your project never see it. Ignored dependency folders (`node_modules`, `vendor`, `.venv`, `venv`) are symlinked in, so verify works without a reinstall.
 
 The worker, file-block writes, stash-on-failure and verify all run inside that worktree. On success conductor-ai commits the result on the branch (with `--no-verify`, since conductor-ai's own verify already ran). On total failure the empty worktree is removed. Plan Design notes are copied into the prompt, because the plan file may not be committed yet. The task's own `verify:` line from the plan is used when present, because the other parallel tasks' code is missing from this checkout; run the full verify after merging. Prompt files go to a folder outside the repo, workers get `PWD` set to the worktree (OpenCode reads it), and conductor-ai compares `git status` of your main checkout before and after, warning if anything appeared there.
 
-`conductor-ai batch` checks the tasks first (they must exist, must not depend on each other, and shared files trigger a warning), gives task *n* of a role the *n*-th ready provider in that role's chain as its first choice, and runs up to `--concurrency` tasks at once. The controller then reviews and merges each `conductor/<id>` branch and removes the worktree with `conductor-ai worktree rm`.
+`conductor-ai batch` checks the tasks first (they must exist, must not depend on each other, and shared files trigger a warning), gives task *n* of a role the *n*-th ready provider in that role's chain as its first choice, and runs up to `--concurrency` tasks at once. The controller then reviews and merges each `conductor-ai/<id>` branch and removes the worktree with `conductor-ai worktree rm`.
 
-Everything for a run lives in `.conductor/runs/<timestamp>-<role>-<task>/`: the prompt, each provider's log, the report, `verify.log` and `summary.json`. That folder is gitignored.
+Everything for a run lives in `.conductor-ai/runs/<timestamp>-<role>-<task>/`: the prompt, each provider's log, the report, `verify.log` and `summary.json`. That folder is gitignored.
 
 ## Safety model
 
 | Risk | Mitigation |
 |---|---|
-| Worker breaks main | Write roles refuse protected branches; worktree runs write only to their own `conductor/<id>` branch |
+| Worker breaks main | Write roles refuse protected branches; worktree runs write only to their own `conductor-ai/<id>` branch |
 | Parallel workers collide | Each parallel task has its own worktree and branch; the controller merges them one by one |
 | Failed worker leaves a mess | Clean-tree requirement + automatic `git stash push -u` per failed attempt |
-| Worker rewrites the rules or plan | Agents are told not to; chat output is filtered by path (`AGENTS.md`, `CLAUDE.md`, `docs/plan/`, `.claude/`, `.conductor/`, `.git/`, `.env*`, `node_modules/`); changes are flagged in the summary |
+| Worker rewrites the rules or plan | Agents are told not to; chat output is filtered by path (`AGENTS.md`, `CLAUDE.md`, `docs/plan/`, `.claude/`, `.conductor-ai/`, `.git/`, `.env*`, `node_modules/`); changes are flagged in the summary |
 | Path traversal from model output | File blocks must resolve inside the repo |
 | Worker runs dangerous commands | Every CLI gets permission rules for that run only (agy `--settings` + `--sandbox`, Codex OS sandbox, OpenCode `OPENCODE_CONFIG_CONTENT`, Claude `--disallowedTools`): project-only edits, no push/commit/reset/sudo, no "skip permissions" flags. See [Providers → Permissions](PROVIDERS.md#permissions-what-each-agent-may-do) |
 | "Read-only" worker edits files | Enforced by the CLI where it can be (agy, Codex, OpenCode, Claude); a warning when the agent can't be held to read-only (Kimi, custom CLIs); the tree is also hashed before and after, with a warning in the summary |
-| Worker reads your API keys | Keys conductor-ai loaded from `secrets.env` / `.conductor/.env` are removed from CLI workers' environment, except the one that CLI needs (`passEnv`); agy is also denied conductor-ai's config, secrets, state and usage files and `.env`-type files |
+| Worker reads your API keys | Keys conductor-ai loaded from `secrets.env` / `.conductor-ai/.env` are removed from CLI workers' environment, except the one that CLI needs (`passEnv`); agy is also denied conductor-ai's config, secrets, state and usage files and `.env`-type files |
 | Fake success | Verify runs independently of the worker's claim, and the controller reviews `git diff` |
 | Keys leaking | Keys only in env or `secrets.env` (0600); config stores env var *names* |
 | Settings UI abused by other sites | Binds 127.0.0.1 only, Host-header check (anti DNS rebinding), per-launch token required for the API |

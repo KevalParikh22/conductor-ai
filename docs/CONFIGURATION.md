@@ -9,9 +9,9 @@ Effective config = **built-in defaults** ← **global** ← **project**. Later l
 | Layer | File | Typical use |
 |---|---|---|
 | Built-in | `src/presets.js` | Sensible defaults |
-| Global | `~/.config/conductor/config.json` | Your providers and role order for all projects |
-| Project | `<repo>/.conductor/config.json` | Per-project overrides, e.g. a different controller |
-| Secrets | `~/.config/conductor/secrets.env`, `<repo>/.conductor/.env` | API keys (both gitignored or private) |
+| Global | `~/.config/conductor-ai/config.json` | Your providers and role order for all projects |
+| Project | `<repo>/.conductor-ai/config.json` | Per-project overrides, e.g. a different controller |
+| Secrets | `~/.config/conductor-ai/secrets.env`, `<repo>/.conductor-ai/.env` | API keys (both gitignored or private) |
 
 Set `CONDUCTOR_HOME` to move the global directory. The UI saves **only the differences** from the layer below, so future built-in defaults still reach you.
 
@@ -91,7 +91,7 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | `apiTimeoutSec` | 300 | API (chat) providers give up after this and the next provider runs; a stalled free route shouldn't hold the chain for the agent timeout |
 | `cooldownMinutes` | 30 | How long a rate-limited provider is skipped (or its `Retry-After`) |
 | `protectedBranches` | `["main","master"]` | Write roles refuse to run on these |
-| `protectedPaths` | `[]` | Extra regexes (repo-relative paths) workers may never write, e.g. `"^app/etc/env\\.php$"`. Built in: AGENTS/CLAUDE/GEMINI/HANDOFF.md, plans, `.claude/`, `.gemini/`, `.agents/`, `.conductor/`, `.git/`, `.env*`, `auth.json`, `node_modules/` |
+| `protectedPaths` | `[]` | Extra regexes (repo-relative paths) workers may never write, e.g. `"^app/etc/env\\.php$"`. Built in: AGENTS/CLAUDE/GEMINI/HANDOFF.md, plans, `.claude/`, `.gemini/`, `.agents/`, `.conductor-ai/`, `.git/`, `.env*`, `auth.json`, `node_modules/` |
 | `requireCleanTree` | true | Write roles need a clean tree (enables stash-on-failure) |
 | `verify` | `""` | Verify command. Empty = `AGENTS.md` Verify line, then auto-detect |
 | `autoVerify` | true | Run verify after each write task |
@@ -142,7 +142,7 @@ An empty chain means the controller does that role itself. For one run, `--provi
 
 ## Skills
 
-Your skill library lives in `~/.config/conductor/skills/` (all projects) and `.conductor/skills/` (one project). A project switches skills off in its `.conductor/config.json`:
+Your skill library lives in `~/.config/conductor-ai/skills/` (all projects) and `.conductor-ai/skills/` (one project). A project switches skills off in its `.conductor-ai/config.json`:
 ```json
 { "skills": { "off": ["php-conventions"] } }
 ```
@@ -205,7 +205,7 @@ It lists what's running, its models and the best one for coding (models under 7B
 Your controller's context is the expensive part, so conductor-ai keeps what it reads small:
 
 - **Smart selector** (`smartSelect`). Each run's summary shows a `selector:` line when it reorders a chain, e.g. `small task (1 file): free API models first`.
-- **Compact diffs.** `conductor-ai diff` (working tree, new files included), `conductor-ai diff conductor/T3` (a parallel task's branch) or `conductor-ai diff A..B`. Whitespace-only changes, lockfiles, build output and source maps are listed but not shown, with 2 lines of context and long files cut (`--lines`). It prints how much of the full diff it showed. Review workers get the same compact diff.
+- **Compact diffs.** `conductor-ai diff` (working tree, new files included), `conductor-ai diff conductor-ai/T3` (a parallel task's branch) or `conductor-ai diff A..B`. Whitespace-only changes, lockfiles, build output and source maps are listed but not shown, with 2 lines of context and long files cut (`--lines`). It prints how much of the full diff it showed. Review workers get the same compact diff.
 - **Trimmed reports.** `report.md` starts at the worker's `## RESULT` line, so tool transcripts printed before it never reach the controller.
 - **The `/conduct-*` commands** tell the controller to read only the summary, `report.md` and `conductor-ai diff`.
 - **What it adds up to.** Each run's summary has a `context:` line, `conductor-ai diff` prints how much it kept out, and `conductor-ai usage` and the Runs page total them. These are estimates of context kept out of each model (about 4 characters per token), not measured Claude usage:
@@ -215,7 +215,7 @@ Your controller's context is the expensive part, so conductor-ai keeps what it r
 
 ## Usage and budgets
 
-Every attempt is logged to `~/.config/conductor/usage.jsonl`: provider, model, role, project, result, time and, for API providers, tokens. Cost is known when the provider reports tokens and has a `price` (or is `free`). CLI agents run on your subscriptions, so they're counted in runs and minutes, not dollars.
+Every attempt is logged to `~/.config/conductor-ai/usage.jsonl`: provider, model, role, project, result, time and, for API providers, tokens. Cost is known when the provider reports tokens and has a `price` (or is `free`). CLI agents run on your subscriptions, so they're counted in runs and minutes, not dollars.
 
 ```bash
 conductor-ai usage --days 7
@@ -225,17 +225,17 @@ Set `settings.dailyBudgetUSD` (or the field on one provider) to stop paid APIs f
 
 ## Run history
 
-Each run leaves `.conductor/runs/<time>-<role>[-task]/` in the project: the task, every provider's log, the winning report and `summary.json`. `conductor-ai runs` lists them (newest first, with result, worker, verify and warnings), `conductor-ai runs show <run>` prints one in full, and the UI's Runs page shows the same list, refreshing every few seconds.
+Each run leaves `.conductor-ai/runs/<time>-<role>[-task]/` in the project: the task, every provider's log, the winning report and `summary.json`. `conductor-ai runs` lists them (newest first, with result, worker, verify and warnings), `conductor-ai runs show <run>` prints one in full, and the UI's Runs page shows the same list, refreshing every few seconds.
 
 `conductor-ai runs recheck [<run>…]` runs verify again for runs whose verify failed (every one, when you name none). It checks out the commit each run made in a throwaway folder, with the same shared folders (`.venv`, `node_modules`…), and runs that run's own verify command. The result replaces the run's verify, so the list and the run page show it, marked ↻, and the first result is kept in `summary.json` (`verify.rechecked.first`). Use it when a run failed for a reason outside its code, such as a package that wasn't installed yet. Only runs started with `--worktree` (and batch runs) kept their code as a commit, so only those can be checked again. It exits 1 while any run still fails, so it can run from cron and you can tell from the exit code:
 
 ```bash
-0 * * * * cd /path/to/project && conductor-ai runs recheck >> .conductor/recheck.log 2>&1
+0 * * * * cd /path/to/project && conductor-ai runs recheck >> .conductor-ai/recheck.log 2>&1
 ```
 
 ## Cooldown state
 
-Shared across projects in `~/.config/conductor/state.json`. See it with `conductor-ai cooldown` and clear it with `conductor-ai cooldown --clear [name]` (or from the UI Overview).
+Shared across projects in `~/.config/conductor-ai/state.json`. See it with `conductor-ai cooldown` and clear it with `conductor-ai cooldown --clear [name]` (or from the UI Overview).
 
 ## Priority: tokens or time
 
@@ -263,4 +263,4 @@ Speed costs tokens: a second attempt at the same task finishes sooner, but both 
 conductor-ai batch --plan docs/plan/x.md --tasks T1,T2,T3,T4 --priority speed
 ```
 
-To make it the default, set `"settings": { "priority": "save" }` in `.conductor/config.json` (this project) or the global config (`conductor-ai config` shows where).
+To make it the default, set `"settings": { "priority": "save" }` in `.conductor-ai/config.json` (this project) or the global config (`conductor-ai config` shows where).

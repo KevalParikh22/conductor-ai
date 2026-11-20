@@ -13,7 +13,7 @@ const { CONTROLLERS } = await import('../src/presets.js');
 const { controllerErrors, controllersMarkdown, allControllers, syncControllerFiles } = await import('../src/controllers.js');
 const { BASE_ENTRIES, CREATED_FILES } = await import('../src/localfiles.js');
 const { GUARD_SUPPORTED } = await import('../src/guard.js');
-const BIN = fileURLToPath(new URL('../bin/conductor.js', import.meta.url));
+const BIN = fileURLToPath(new URL('../bin/conductor-ai.js', import.meta.url));
 const cli = (cwd, ...args) => spawnSync(process.execPath, [BIN, ...args], { cwd, encoding: 'utf8', env: { ...process.env, CONDUCTOR_HOME: home, CODEX_HOME: path.join(home, 'nocodex') } });
 
 test('every built-in controller entry is valid, and docs/CONTROLLERS.md is generated from the registry', () => {

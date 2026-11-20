@@ -26,7 +26,7 @@ test('linked node_modules outside the worker folder becomes readable in the agy 
 });
 
 test('outcome: verify failures and PARTIAL results are not done; batch counts them so', () => {
-  const base = { winner: 'codex-cli', changed: ['a.js'], warnings: [], worktree: { commit: 'abc1234', branch: 'conductor/T1' } };
+  const base = { winner: 'codex-cli', changed: ['a.js'], warnings: [], worktree: { commit: 'abc1234', branch: 'conductor-ai/T1' } };
   assert.equal(outcome({ ...base, status: '## RESULT: DONE', verify: { status: 'PASS' } }), 'done');
   assert.equal(outcome({ ...base, status: '## RESULT: DONE', verify: { status: 'FAIL' } }), 'verify-failed');
   assert.equal(outcome({ ...base, status: '## RESULT: PARTIAL', verify: { status: 'PASS' } }), 'partial');
@@ -44,7 +44,7 @@ test('outcome: verify failures and PARTIAL results are not done; batch counts th
 });
 
 test('report paths: links, braces, absolute paths and prose', () => {
-  const wt = '/home/u/.conductor/worktrees/app/T3';
+  const wt = '/home/u/.conductor-ai/worktrees/app/T3';
   const r = [
     '## Files changed',
     `- [src/food/types.ts](file://${wt}/src/food/types.ts) — new type`,
@@ -86,7 +86,7 @@ test('overriding only the time limit keeps read-only enforced; dropping --sandbo
 });
 
 test('batch: unverified results are counted, marked "?" and fail the batch unless allowed', () => {
-  const base = { winner: 'codex-cli', mode: 'write', changed: ['a.js'], warnings: [], worktree: { commit: 'abc1234', branch: 'conductor/T1' } };
+  const base = { winner: 'codex-cli', mode: 'write', changed: ['a.js'], warnings: [], worktree: { commit: 'abc1234', branch: 'conductor-ai/T1' } };
   const results = [
     { task: 'T1', summary: { ...base, status: '## RESULT: DONE', verify: { status: 'PASS' } } },
     { task: 'T2', summary: { ...base, status: '## RESULT: DONE', verify: { status: 'SKIPPED', cmd: '' } } },
