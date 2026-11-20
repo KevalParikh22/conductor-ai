@@ -16,7 +16,7 @@ fakeBins({
 });
 const { initProject } = await import('../src/init.js');
 const { readBlock } = await import('../src/localfiles.js');
-const { listSkills, newSkill, setSkillOn, syncSkills, skillsForTask, skillMatches, removeSkill, addSkill, parseSkill } = await import('../src/skills.js');
+const { builtinSkillsDir, listSkills, newSkill, setSkillOn, syncSkills, skillsForTask, skillMatches, removeSkill, saveSkill, addSkill, parseSkill } = await import('../src/skills.js');
 const { dispatch, clearCooldowns } = await import('../src/core.js');
 const { loadConfig } = await import('../src/config.js');
 const bin = fileURLToPath(new URL('../bin/conductor-ai.js', import.meta.url));
@@ -64,7 +64,7 @@ test('skills: global + project library, project overrides, off per project, sync
   newSkill(dir, 'commit-style', { scope: 'project', description: 'Project version' });
   assert.throws(() => newSkill(dir, 'Bad Name'), /lowercase/);
   let all = listSkills(dir);
-  assert.deepEqual(all.map((s) => `${s.name}:${s.scope}`), ['commit-style:project', 'php-style:global']);
+  assert.deepEqual(all.map((s) => `${s.name}:${s.scope}`), ['commit-style:project', 'karpathy-guidelines:builtin', 'php-style:global']);
   assert.equal(all.find((s) => s.name === 'commit-style').overrides, true);
   syncSkills(dir);
   for (const t of ['.claude/skills', '.agents/skills']) assert.ok(fs.existsSync(path.join(dir, t, 'php-style/SKILL.md')));
@@ -91,14 +91,14 @@ test('skills reach workers: matching by role/files/text; agents get paths, API m
   assert.equal(skillMatches(php, { role: 'build', files: ['app/code/A.php'] }), true);
   assert.equal(skillMatches(php, { role: 'build', files: ['a.ts'] }), false);
   const agent = skillsForTask(dir, { role: 'build', files: ['x.php'] });
-  assert.deepEqual(agent.names.sort(), ['always', 'php-style']);
+  assert.deepEqual(agent.names.sort(), ['always', 'karpathy-guidelines', 'php-style']);
   assert.match(agent.text, /read \.agents\/skills\/php-style\/SKILL\.md/);
   assert.match(skillsForTask(dir, { role: 'build', files: ['x.php'] }, { inline: true }).text, /# php-style/);
   clearCooldowns();
   const cfg = loadConfig(dir);
   cfg.providers.look = { type: 'cli', enabled: true, bin: 'agent-look', write: ['{prompt}'], read: ['{prompt}'] };
   const s = await dispatch(cfg, { role: 'ask', task: 'what?', files: ['src/a.php'], chain: ['look'] });
-  assert.deepEqual(s.skills.sort(), ['always', 'php-style']);
+  assert.deepEqual(s.skills.sort(), ['always', 'karpathy-guidelines', 'php-style']);
   assert.match(fs.readFileSync(path.join(dir, s.report), 'utf8'), /prompt-skill:true/);
 });
 
@@ -139,4 +139,50 @@ test('synced skills reach the worker inside a worktree too', async () => {
   cfg.settings.autoVerify = false;
   const s = await dispatch(cfg, { role: 'build', planPath: 'docs/plan/p.md', taskId: 'T1', worktree: true, chain: ['look'], allowOpenQuestions: true });
   assert.match(fs.readFileSync(path.join(dir, s.report), 'utf8'), /agents:true skill:true prompt-skill:true/);
+});
+
+test('built-in skills: karpathy-guidelines is built in, active by default, overridable globally, and cannot be deleted or edited directly', () => {
+  fs.rmSync(path.join(home, 'skills'), { recursive: true, force: true });
+  const { dir } = makeRepo();
+  initProject(dir, {});
+
+  // builtinSkillsDir() points at defaults/skills/ in the package
+  assert.equal(builtinSkillsDir(), fileURLToPath(new URL('../defaults/skills/', import.meta.url)));
+
+  // a fresh project lists `karpathy-guidelines` with scope `builtin` and `on: true`
+  const all = listSkills(dir);
+  const builtin = all.find((s) => s.name === 'karpathy-guidelines');
+  assert.ok(builtin, 'karpathy-guidelines is present');
+  assert.equal(builtin.scope, 'builtin');
+  assert.equal(builtin.on, true);
+
+  // a second sync with unchanged skills changes nothing (init stays idempotent)
+  assert.deepEqual(syncSkills(dir), { added: [], updated: [], removed: [], skipped: [] });
+
+  // skillsForTask for any task includes it
+  assert.ok(skillsForTask(dir, { role: 'build', files: ['src/index.js'] }).names.includes('karpathy-guidelines'));
+
+  // setSkillOn(root, 'karpathy-guidelines', false) removes it from skillsForTask
+  setSkillOn(dir, 'karpathy-guidelines', false);
+  assert.ok(!skillsForTask(dir, { role: 'build', files: ['src/index.js'] }).names.includes('karpathy-guidelines'));
+
+  // removeSkill(root, 'karpathy-guidelines') on the built-in throws
+  assert.throws(
+    () => removeSkill(dir, 'karpathy-guidelines'),
+    (err) => err instanceof Error && err.message === '"karpathy-guidelines" is built in: switch it off instead (conductor-ai skills off karpathy-guidelines)'
+  );
+
+  // saveSkill(root, 'karpathy-guidelines', 'x') throws when the skill is the built-in one
+  assert.throws(
+    () => saveSkill(dir, 'karpathy-guidelines', 'x'),
+    (err) => err instanceof Error && err.message === '"karpathy-guidelines" is built in: copy it to your library to edit it'
+  );
+
+  // a global skill named `karpathy-guidelines` (via `newSkill`) replaces it in `listSkills` with scope `global`
+  newSkill(dir, 'karpathy-guidelines', { scope: 'global', description: 'Overridden Karpathy guidelines' });
+  const afterOverride = listSkills(dir);
+  const overridden = afterOverride.find((s) => s.name === 'karpathy-guidelines');
+  assert.ok(overridden);
+  assert.equal(overridden.scope, 'global');
+  assert.equal(overridden.overrides, true);
 });
