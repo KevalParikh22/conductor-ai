@@ -4,6 +4,9 @@
 
 - **One command name: `conductor-ai`.** The short `conductor` command is gone (other tools ship a `conductor` too). Help, messages, the settings page, the README, the docs and generated files all say `conductor-ai`. If you typed `conductor …`, type `conductor-ai …`; your config, projects and MCP setup keep working as they are.
 - **Fixed: skills and slash commands now allow `Bash(conductor-ai:*)`.** They allowed `conductor:*`, which doesn't match `conductor-ai` commands, so Claude Code asked before each one.
+- **`conductor-ai runs recheck`: run verify again for failed runs.** A run whose verify failed for a reason outside its code (a package not installed yet, a service that was down) stayed red for good. `runs recheck` checks out each failed run's commit in a throwaway folder and runs its verify again; the new result shows in `conductor-ai runs` and on the run page, marked ↻, and the first result is kept. It exits 1 while any still fail, so it can run from cron.
+- **Runs page: Recheck buttons.** "↻ Recheck failed runs" on the list and "↻ Run verify again" on a run's page do what `conductor-ai runs recheck` does.
+- **Runs page: a running task shows what it's doing.** Before, a run showed only "running" until it finished, with no task or start time. Now each step is written as it happens (checking the starting commit, which worker is working and for how long, verify, checks), and the list refreshes every 2 seconds while a run goes (5 otherwise), and at once when you come back to the tab.
 - Doctor no longer checks whether another program owns `conductor` on PATH; it checks for `conductor-ai`.
 
 ## 0.11.3 (2026-11-18)

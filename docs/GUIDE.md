@@ -330,7 +330,7 @@ tmux new-session -d -s conductor-ai -c "$PWD" 'claude' \; split-window -h -c "$P
 ```
 **Notes:**
 - Replace `claude` with your controller.
-- Detach with `Ctrl-b d` and come back with `tmux attach -t conductor`; workers keep going.
+- Detach with `Ctrl-b d` and come back with `tmux attach -t conductor-ai`; workers keep going.
 - Run the UI in a pane with `conductor-ai ui --no-open`. On a server, tunnel it first: `ssh -L 4545:127.0.0.1:4545 host`.
 
 **VS Code:**

@@ -227,6 +227,12 @@ Set `settings.dailyBudgetUSD` (or the field on one provider) to stop paid APIs f
 
 Each run leaves `.conductor/runs/<time>-<role>[-task]/` in the project: the task, every provider's log, the winning report and `summary.json`. `conductor-ai runs` lists them (newest first, with result, worker, verify and warnings), `conductor-ai runs show <run>` prints one in full, and the UI's Runs page shows the same list, refreshing every few seconds.
 
+`conductor-ai runs recheck [<run>…]` runs verify again for runs whose verify failed (every one, when you name none). It checks out the commit each run made in a throwaway folder, with the same shared folders (`.venv`, `node_modules`…), and runs that run's own verify command. The result replaces the run's verify, so the list and the run page show it, marked ↻, and the first result is kept in `summary.json` (`verify.rechecked.first`). Use it when a run failed for a reason outside its code, such as a package that wasn't installed yet. Only runs started with `--worktree` (and batch runs) kept their code as a commit, so only those can be checked again. It exits 1 while any run still fails, so it can run from cron and you can tell from the exit code:
+
+```bash
+0 * * * * cd /path/to/project && conductor-ai runs recheck >> .conductor/recheck.log 2>&1
+```
+
 ## Cooldown state
 
 Shared across projects in `~/.config/conductor/state.json`. See it with `conductor-ai cooldown` and clear it with `conductor-ai cooldown --clear [name]` (or from the UI Overview).

@@ -49,16 +49,7 @@ export function createWorktree(root, id, { replace = false, links = DEFAULT_LINK
   }
   fs.mkdirSync(path.dirname(dir), { recursive: true });
   git(root, ['worktree', 'add', '-q', '-b', branch, dir, 'HEAD']);
-  const linked = [];
-  for (const name of links) {
-    const src = path.join(root, name);
-    const dst = path.join(dir, name);
-    if (!fs.existsSync(src) || fs.existsSync(dst)) continue;
-    // only share folders git ignores; tracked folders are already in the checkout
-    if (git(root, ['check-ignore', '-q', name], { allowFail: true }) === null) continue;
-    fs.symlinkSync(src, dst, 'dir');
-    linked.push(name);
-  }
+  const linked = linkIgnored(root, dir, links);
   // conductor-ai's own files (AGENTS.md, skills…) are git-ignored, so the checkout lacks them: copy them in
   const copied = copyIntoWorktree(root, dir);
   if (linked.length || copied.length) {
@@ -70,6 +61,43 @@ export function createWorktree(root, id, { replace = false, links = DEFAULT_LINK
     if (add.length) { fs.mkdirSync(path.dirname(abs), { recursive: true }); fs.appendFileSync(abs, `${cur && !cur.endsWith('\n') ? '\n' : ''}${add.join('\n')}\n`); }
   }
   return { id: sid, branch, dir, base: git(root, ['rev-parse', 'HEAD']).trim(), linked };
+}
+
+/** Symlink the ignored dependency folders (node_modules, .venv…) from the main checkout into `dir`. */
+function linkIgnored(root, dir, links) {
+  const linked = [];
+  for (const name of links) {
+    const src = path.join(root, name);
+    const dst = path.join(dir, name);
+    if (!fs.existsSync(src) || fs.existsSync(dst)) continue;
+    // only share folders git ignores; tracked folders are already in the checkout
+    if (git(root, ['check-ignore', '-q', name], { allowFail: true }) === null) continue;
+    fs.symlinkSync(src, dst, 'dir');
+    linked.push(name);
+  }
+  return linked;
+}
+
+/** True when `commit` is still in this repo (a merged and deleted branch keeps its commits; a gc'd one doesn't). */
+export const commitExists = (root, commit) => !!commit && git(root, ['cat-file', '-e', `${commit}^{commit}`], { allowFail: true }) !== null;
+
+/**
+ * Run `fn(dir)` in a throwaway checkout of `commit` (no branch), with the same shared folders and conductor-ai files
+ * a task worktree gets. The checkout is removed afterwards, whatever fn does.
+ */
+export async function withCommitCheckout(root, commit, fn, { links = DEFAULT_LINKS } = {}) {
+  const dir = path.join(worktreesDir(root), `.recheck-${safeId(commit)}-${crypto.randomBytes(3).toString('hex')}`);
+  fs.mkdirSync(path.dirname(dir), { recursive: true });
+  git(root, ['worktree', 'add', '-q', '--detach', dir, commit]);
+  try {
+    linkIgnored(root, dir, links);
+    copyIntoWorktree(root, dir);
+    return await fn(dir);
+  } finally {
+    git(root, ['worktree', 'remove', '--force', dir], { allowFail: true });
+    if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true, force: true });
+    git(root, ['worktree', 'prune'], { allowFail: true });
+  }
 }
 
 /**

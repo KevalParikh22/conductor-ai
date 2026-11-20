@@ -53,12 +53,13 @@ export async function baseVerify(root, work, settings, logFile) {
 function readLog(file) { try { return fs.readFileSync(file, 'utf8'); } catch { return ''; } }
 
 /** Lines that name a failure, with timings and counters removed so two runs can be compared. */
-export function failureLines(text) {
+export function failureLines(text, { normalize = true } = {}) {
   const out = new Set();
   for (const raw of String(text || '').split('\n')) {
     if (/^(\$ |--- )/.test(raw)) continue; // the log's own header lines (the command, exit code)
     if (!/(\bFAIL(ED|URE)?\b|\bERROR\b|\bError\b|✖|✗|^\s*not ok\b|\bfailed\b|AssertionError|Traceback)/.test(raw)) continue;
-    const l = raw.replace(/\x1b\[[0-9;]*m/g, '').replace(/\(?\d+(\.\d+)?\s*(ms|s|sec|seconds)\)?/g, '').replace(/\b\d+(\.\d+)?\b/g, 'N').replace(/\s+/g, ' ').trim();
+    const plain = raw.replace(/\x1b\[[0-9;]*m/g, '');
+    const l = (normalize ? plain.replace(/\(?\d+(\.\d+)?\s*(ms|s|sec|seconds)\)?/g, '').replace(/\b\d+(\.\d+)?\b/g, 'N') : plain).replace(/\s+/g, ' ').trim();
     if (l.length > 3) out.add(l.slice(0, 200));
   }
   return [...out];

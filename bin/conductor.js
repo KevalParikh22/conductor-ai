@@ -25,7 +25,7 @@ import { CLI_PRESETS, ROLES, CONTROLLERS, controllerWorker } from '../src/preset
 import { VERSION } from '../src/version.js';
 import { which, rel, keyValue, untilText, wrapForTerminal, copyToClipboard } from '../src/util.js';
 import { usageReport, formatUsage, recordSaving } from '../src/usage.js';
-import { listRuns, readRun, formatRuns, runDetail, runGates, formatGates } from '../src/runs.js';
+import { listRuns, readRun, formatRuns, runDetail, runGates, formatGates, recheckRuns, formatRecheck } from '../src/runs.js';
 import { CATALOG, CATEGORIES, urlFields } from '../src/catalog.js';
 import { runAdd, catalogStatus, detect, enableDetected, enableLocal, keyList, interactive, askSecret, confirm, choose } from '../src/setup.js';
 import { detectLocal } from '../src/local.js';
@@ -107,6 +107,8 @@ Work (normally called by the controller)
 
 Inspect
   conductor-ai runs [--limit 20] [--json] | runs show <run>
+  conductor-ai runs recheck [<run>…] [--json]   run verify again for failed runs (all of them when none given), on the code each one
+                                       made; their status updates. For cron: 0 * * * * cd <project> && conductor-ai runs recheck
   conductor-ai usage [--days 7] [--json]  runs, tokens and cost per provider
   conductor-ai status [--json]            providers, chains and repo state
   conductor-ai models [provider] [--all]  current models of an API provider
@@ -704,6 +706,12 @@ async function main() {
         if (!r) throw new UsageError(`usage: conductor-ai runs show <run>   (no single run matches "${o._[1] || ''}"; see conductor-ai runs)`);
         console.log(o.json ? JSON.stringify(runDetail(root, r.id), null, 2) : `run: ${r.id}${formatSummary(r.summary)}\n\n${formatGates(runGates(r.summary))}`);
         return 0;
+      }
+      if (o._[0] === 'recheck') {
+        // also for cron: exits 1 while any rechecked run still fails
+        const rows = await recheckRuns(root, o._.slice(1), loadConfig().settings, { onStart: o.json ? undefined : (id, c) => console.log(`checking ${id}: ${c}`) });
+        console.log(o.json ? JSON.stringify(rows, null, 2) : `${rows.length && !o.json ? '\n' : ''}${formatRecheck(rows)}`);
+        return rows.some((r) => r.after === 'FAIL') ? 1 : 0;
       }
       const rows = listRuns(root, { limit: Number(o.limit) || 20 });
       console.log(o.json ? JSON.stringify(rows, null, 2) : formatRuns(rows));
