@@ -2,7 +2,7 @@
 
 Generated from `CONTROLLERS` in `src/presets.js` by `node scripts/gen-controller-docs.mjs`; a test keeps it in step.
 
-The controller is the tool you talk to (it plans and reviews); conductor writes its files in the format each one reads.
+The controller is the tool you talk to (it plans and reviews); conductor-ai writes its files in the format each one reads.
 
 | Controller | Instructions | Commands | Skills | Rules | Reviewer subagent | MCP | Push guard |
 |---|---|---|---|---|---|---|---|
@@ -16,14 +16,14 @@ The controller is the tool you talk to (it plans and reviews); conductor writes 
 Most coding agents read the same files as one of these (AGENTS.md, `.agents/skills`, an `mcpServers` JSON file). Then a new controller is a data entry, no code:
 
 ```bash
-conductor controller add copilot --like codex-cli --label "Copilot CLI"
-conductor controller check
-conductor init --controller copilot
+conductor-ai controller add copilot --like codex-cli --label "Copilot CLI"
+conductor-ai controller check
+conductor-ai init --controller copilot
 ```
 
-It is stored under `controllers` in your config (`--project` for this project only). Edit the entry when its folders differ. `conductor doctor` reports an entry that names a format conductor cannot write.
+It is stored under `controllers` in your config (`--project` for this project only). Edit the entry when its folders differ. `conductor-ai doctor` reports an entry that names a format conductor-ai cannot write.
 
-**Formats conductor can write:**
+**Formats conductor-ai can write:**
 
 - rules: `claude`, `agy`, or `{ "block": "AGENTS.md" }`
 - reviewer: `claude`, `agy`, `codex-toml`, `opencode`
@@ -31,4 +31,4 @@ It is stored under `controllers` in your config (`--project` for this project on
 - hooks (the push guard): `claude-settings`, `agy-hooks`
 - commands: as `commands` or `skills`
 
-A tool that reads a format not listed here needs its writer in `src/controllers.js` (or `src/guard.js` for hooks), and a test against the real tool before conductor claims it works: hook and permission formats are where tools differ most.
+A tool that reads a format not listed here needs its writer in `src/controllers.js` (or `src/guard.js` for hooks), and a test against the real tool before conductor-ai claims it works: hook and permission formats are where tools differ most.

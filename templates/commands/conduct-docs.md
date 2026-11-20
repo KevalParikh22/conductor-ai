@@ -2,7 +2,7 @@
 description: Delegate documentation (README, docs, changelog) to a free/cheap model; controller checks accuracy
 argument-hint: <what to document>
 disable-model-invocation: true
-allowed-tools: Read, Bash(conductor:*), Bash(git status:*), Bash(git diff:*), Bash(git add:*), Bash(git commit:*), Bash(git stash push:*)
+allowed-tools: Read, Bash(conductor-ai:*), Bash(git status:*), Bash(git diff:*), Bash(git add:*), Bash(git commit:*), Bash(git stash push:*)
 ---
 
 You are the controller. Make sure the tree is clean, then run in the background:

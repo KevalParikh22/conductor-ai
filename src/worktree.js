@@ -43,7 +43,7 @@ export function createWorktree(root, id, { replace = false, links = DEFAULT_LINK
   const dir = path.join(worktreesDir(root), sid);
   if (branchExists(root, branch) || fs.existsSync(dir)) {
     if (!replace) {
-      throw new Error(`worktree for "${sid}" already exists (branch ${branch}). Merge it, or remove it with: conductor worktree rm ${sid} (or pass --replace)`);
+      throw new Error(`worktree for "${sid}" already exists (branch ${branch}). Merge it, or remove it with: conductor-ai worktree rm ${sid} (or pass --replace)`);
     }
     removeWorktree(root, sid, { force: true });
   }
@@ -59,7 +59,7 @@ export function createWorktree(root, id, { replace = false, links = DEFAULT_LINK
     fs.symlinkSync(src, dst, 'dir');
     linked.push(name);
   }
-  // conductor's own files (AGENTS.md, skills…) are git-ignored, so the checkout lacks them: copy them in
+  // conductor-ai's own files (AGENTS.md, skills…) are git-ignored, so the checkout lacks them: copy them in
   const copied = copyIntoWorktree(root, dir);
   if (linked.length || copied.length) {
     // keep the symlinks and copies out of `git status` in the worktree (info/exclude is shared by all worktrees)
@@ -81,7 +81,7 @@ export function openWorktree(root, id) {
   const branch = BRANCH_PREFIX + sid;
   const dir = path.join(worktreesDir(root), sid);
   if (!fs.existsSync(dir) || !branchExists(root, branch)) {
-    throw new Error(`no worktree for "${sid}" to continue. Start the task with --worktree (or conductor batch) first`);
+    throw new Error(`no worktree for "${sid}" to continue. Start the task with --worktree (or conductor-ai batch) first`);
   }
   const base = (git(root, ['merge-base', 'HEAD', branch], { allowFail: true }) || git(root, ['rev-parse', 'HEAD'])).trim();
   const linked = DEFAULT_LINKS.filter((n) => { try { return fs.lstatSync(path.join(dir, n)).isSymbolicLink(); } catch { return false; } });
@@ -89,7 +89,7 @@ export function openWorktree(root, id) {
 }
 
 const metaFile = (root, id) => path.join(worktreesDir(root), '.meta', `${safeId(id)}.json`);
-/** What a worktree was made for (role, plan, task) and who last worked in it, so `conductor retry` can continue it. */
+/** What a worktree was made for (role, plan, task) and who last worked in it, so `conductor-ai retry` can continue it. */
 export function readWorktreeMeta(root, id) {
   try { return JSON.parse(fs.readFileSync(metaFile(root, id), 'utf8')); } catch { return null; }
 }
@@ -105,8 +105,8 @@ export function commitWorktree(dir, message) {
   git(dir, ['add', '-A']);
   const args = ['commit', '-q', '--no-verify', '-m', message];
   if (git(dir, args, { allowFail: true }) === null) {
-    // no git identity configured: commit as conductor rather than lose the work
-    git(dir, ['-c', 'user.name=conductor', '-c', 'user.email=conductor@localhost', ...args]);
+    // no git identity configured: commit as conductor-ai rather than lose the work
+    git(dir, ['-c', 'user.name=conductor-ai', '-c', 'user.email=conductor@localhost', ...args]);
   }
   return git(dir, ['rev-parse', '--short', 'HEAD']).trim();
 }

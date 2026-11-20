@@ -7,7 +7,7 @@ A coding agent that runs on your machine: it reads the repo, edits files and run
 | | |
 |---|---|
 | Kind | Local agent (`codex`) |
-| conductor name | `codex-cli` |
+| conductor-ai name | `codex-cli` |
 | Docs | https://developers.openai.com/codex/security |
 
 ## Set up
@@ -17,14 +17,14 @@ A coding agent that runs on your machine: it reads the repo, edits files and run
    npm install -g @openai/codex
    ```
 2. Sign in once: `codex login   (or: printenv OPENAI_API_KEY | codex login --with-api-key)`
-3. Enable `codex-cli` in `conductor ui` → Providers (or run `conductor setup`, which finds installed agents), then check it:
+3. Enable `codex-cli` in `conductor-ai ui` → Providers (or run `conductor-ai setup`, which finds installed agents), then check it:
    ```bash
-   conductor doctor --live
+   conductor-ai doctor --live
    ```
 
-## What it may do under conductor
+## What it may do under conductor-ai
 
 - **Write roles:** OS sandbox: writes only inside the project (and temp), .git read-only, no network, never asks
 - **Read roles:** OS sandbox: read-only, no network
 
-conductor passes these rules on the command line for each run; your own settings for the CLI are not changed. Details: [Providers → Permissions](../PROVIDERS.md#permissions-what-each-agent-may-do).
+conductor-ai passes these rules on the command line for each run; your own settings for the CLI are not changed. Details: [Providers → Permissions](../PROVIDERS.md#permissions-what-each-agent-may-do).

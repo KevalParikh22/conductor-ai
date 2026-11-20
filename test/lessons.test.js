@@ -63,9 +63,9 @@ fakeBins({ 'ls-misnamer': worker('export const sum = (a, b) => a + b;\n'), 'ls-g
 test('end to end: failures become lessons, the next prompt carries them, and the repeat offender moves back', async () => {
   clearCooldowns();
   const { dir, git } = makeRepo({ files: { 'docs/plan/p.md': PLAN, 'src/.keep': '' } });
-  // like init --share: conductor's folder is in git, so its own files must never make the tree look changed
+  // like init --share: conductor-ai's folder is in git, so its own files must never make the tree look changed
   fs.mkdirSync(path.join(dir, '.conductor'), { recursive: true }); fs.writeFileSync(path.join(dir, '.conductor', '.gitignore'), 'runs/\n');
-  git('add', '-A'); git('commit', '-qm', 'share conductor folder');
+  git('add', '-A'); git('commit', '-qm', 'share conductor-ai folder');
   const cfg = loadConfig(dir);
   cfg.providers.misnamer = { type: 'cli', preset: 'codex', enabled: true, bin: 'ls-misnamer' };
   cfg.providers.good = { type: 'cli', preset: 'codex', enabled: true, bin: 'ls-good' };
@@ -93,7 +93,7 @@ test('promote turns a lesson into a rule in AGENTS.md; the CLI lists, adds and r
   const { dir } = makeRepo({ files: { 'AGENTS.md': '# AGENTS\n' } });
   const l = L.addLesson(dir, { source: 'manual', text: 'Prices are integer cents', files: ['src/money.js'] });
   const r = L.promoteLesson(dir, l.id);
-  assert.match(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), /## Lessons \(promoted by conductor\)\n- Prices are integer cents\. \(in src\)/);
+  assert.match(fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8'), /## Lessons \(promoted by conductor-ai\)\n- Prices are integer cents\. \(in src\)/);
   assert.equal(r.lesson.promoted, true);
   assert.equal(L.lessonsPrompt(dir, { role: 'build', files: ['src/x.js'] }).text, '', 'a rule is in AGENTS.md now, not repeated in prompts');
   const bin = path.resolve('bin/conductor.js');

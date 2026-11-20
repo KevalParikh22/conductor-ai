@@ -7,7 +7,7 @@ A coding agent that runs on your machine: it reads the repo, edits files and run
 | | |
 |---|---|
 | Kind | Local agent (`kiro-cli`) |
-| conductor name | `kiro-cli` |
+| conductor-ai name | `kiro-cli` |
 | Docs | https://kiro.dev/docs/cli/ |
 
 ## Set up
@@ -17,14 +17,14 @@ A coding agent that runs on your machine: it reads the repo, edits files and run
    curl -fsSL https://cli.kiro.dev/install | bash
    ```
 2. Sign in once: `kiro-cli login   (headless runs can also use KIRO_API_KEY, on paid plans)`
-3. Enable `kiro-cli` in `conductor ui` → Providers (or run `conductor setup`, which finds installed agents), then check it:
+3. Enable `kiro-cli` in `conductor-ai ui` → Providers (or run `conductor-ai setup`, which finds installed agents), then check it:
    ```bash
-   conductor doctor --live
+   conductor-ai doctor --live
    ```
 
-## What it may do under conductor
+## What it may do under conductor-ai
 
-- **Write roles:** commands in Kiro's OS sandbox with network blocked; .git writes refused; git commit/reset are not denied per run (Kiro keeps deny rules in ~/.kiro/settings/permissions.yaml), and conductor warns if a worker commits
+- **Write roles:** commands in Kiro's OS sandbox with network blocked; .git writes refused; git commit/reset are not denied per run (Kiro keeps deny rules in ~/.kiro/settings/permissions.yaml), and conductor-ai warns if a worker commits
 - **Read roles:** only its read_file and grep_search tools; anything else is denied in headless mode
 
-conductor passes these rules on the command line for each run; your own settings for the CLI are not changed. Details: [Providers → Permissions](../PROVIDERS.md#permissions-what-each-agent-may-do).
+conductor-ai passes these rules on the command line for each run; your own settings for the CLI are not changed. Details: [Providers → Permissions](../PROVIDERS.md#permissions-what-each-agent-may-do).

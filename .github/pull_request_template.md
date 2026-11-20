@@ -12,4 +12,4 @@
 
 <!-- Anything risky, anything you weren't sure about. -->
 
-<sub>conductor has no runtime dependencies. Please keep it that way, and never log or store API keys.</sub>
+<sub>conductor-ai has no runtime dependencies. Please keep it that way, and never log or store API keys.</sub>

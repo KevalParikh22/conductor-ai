@@ -1,4 +1,4 @@
-// Windows: npm installs CLIs as .cmd shims, which Node can't start directly. conductor runs the shim's script with
+// Windows: npm installs CLIs as .cmd shims, which Node can't start directly. conductor-ai runs the shim's script with
 // node instead, so prompt text in the arguments never passes through cmd.exe. Checked on every OS (pure logic).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

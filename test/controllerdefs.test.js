@@ -22,7 +22,7 @@ test('every built-in controller entry is valid, and docs/CONTROLLERS.md is gener
   assert.deepEqual(GUARD_SUPPORTED, { 'claude-code': '.claude/settings.local.json', antigravity: '.agents/hooks.json' }, 'guard support comes from the entries');
 });
 
-test('every file conductor generates for a built-in controller is kept out of git (no surprise files in your commits)', () => {
+test('every file conductor-ai generates for a built-in controller is kept out of git (no surprise files in your commits)', () => {
   const match = (p) => [...BASE_ENTRIES, ...CREATED_FILES].some((e) => {
     const re = new RegExp(`^${e.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*').replace(/\/$/, '(/.*)?')}$`);
     return re.test(p) || re.test(`${p}/`);

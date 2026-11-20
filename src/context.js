@@ -1,5 +1,5 @@
 // What a chat model (no tools) is shown so it doesn't have to guess: a short map of the project, with the names each
-// code file defines. Agents can look for themselves; chat models can't (H7: conductor does the "find" step).
+// code file defines. Agents can look for themselves; chat models can't (H7: conductor-ai does the "find" step).
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -107,7 +107,7 @@ export function architectureExcerpt(root, files, { budget = 3000 } = {}) {
 }
 
 /**
- * Facts conductor gathers before a worker starts, so it doesn't have to guess or explore blind: the task's files,
+ * Facts conductor-ai gathers before a worker starts, so it doesn't have to guess or explore blind: the task's files,
  * who calls the code in them, how the work is checked, and the architecture notes that concern them.
  * kind 'agent': compact (paths and lines to open); kind 'chat': the same, plus caller code lines (it can't open files).
  */
@@ -147,7 +147,7 @@ export function contextPack(root, { files = [], verifyCmd = '', kind = 'agent', 
     if (map) parts.push(`- **Project map** (files and the names they define):\n${map.split('\n').map((l) => `  ${l}`).join('\n')}`);
   }
   if (!parts.length) return '';
-  let text = `\n## Context (gathered by conductor, so you don't have to search)\n${parts.join('\n')}\n`;
+  let text = `\n## Context (gathered by conductor-ai, so you don't have to search)\n${parts.join('\n')}\n`;
   if (text.length > budget) text = `${text.slice(0, budget)}\n… (cut to fit)\n`;
   return text;
 }

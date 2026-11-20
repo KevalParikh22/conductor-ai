@@ -36,43 +36,43 @@ import { runProgress, batchProgress } from '../src/progress.js';
 import { runDemo } from '../src/demo.js';
 import { importAnswer, importResearch, ImportError } from '../src/manual.js';
 
-const HELP = `conductor ${VERSION}: your coding agent (Claude Code, Codex, Antigravity, OpenCode) plans and reviews; cheaper models do the work.
+const HELP = `conductor-ai ${VERSION}: your coding agent (Claude Code, Codex, Antigravity, OpenCode) plans and reviews; cheaper models do the work.
 
 Start
-  conductor setup                 guided setup: finds your agents and keys, adds a free provider
-  conductor add <provider>        add one of ${Object.keys(CATALOG).length} chat APIs (see: conductor providers)
-  conductor init                  set up the current project
-  conductor ui                    settings page
-  conductor demo                  see it work end to end on a throwaway project (about 2 minutes)
-  conductor doctor [--live]       check everything
+  conductor-ai setup                 guided setup: finds your agents and keys, adds a free provider
+  conductor-ai add <provider>        add one of ${Object.keys(CATALOG).length} chat APIs (see: conductor-ai providers)
+  conductor-ai init                  set up the current project
+  conductor-ai ui                    settings page
+  conductor-ai demo                  see it work end to end on a throwaway project (about 2 minutes)
+  conductor-ai doctor [--live]       check everything
 
 Work
-  conductor <role> "task"         roles: ${Object.keys(ROLES).join(', ')}
-  conductor <role> --plan <file> --task T1
-  conductor batch --plan <file> --tasks T1,T2   parallel, one worktree each
-  conductor diff [branch]         compact diff to review (lockfiles hidden, whitespace ignored)
-  conductor runs                  what ran, who did it, verify results
-  conductor retry <task> --note … the same worker fixes its task in place
-  conductor skills                your skill library: one set for every controller and worker
+  conductor-ai <role> "task"         roles: ${Object.keys(ROLES).join(', ')}
+  conductor-ai <role> --plan <file> --task T1
+  conductor-ai batch --plan <file> --tasks T1,T2   parallel, one worktree each
+  conductor-ai diff [branch]         compact diff to review (lockfiles hidden, whitespace ignored)
+  conductor-ai runs                  what ran, who did it, verify results
+  conductor-ai retry <task> --note … the same worker fixes its task in place
+  conductor-ai skills                your skill library: one set for every controller and worker
 
-All commands and options: conductor help all`;
+All commands and options: conductor-ai help all`;
 
 const HELP_ALL = `conductor-ai ${VERSION}: one controller (Claude Code, Codex, Antigravity or OpenCode), many worker LLMs.
 
 Setup
-  conductor setup [--yes]              guided first-time setup: finds your agents and keys, adds a free provider, tests
-  conductor providers [--free] [--search x] [--json]   every provider conductor can add (${Object.keys(CATALOG).length}), with status
-  conductor add <provider> [--model m] [--yes] [--project]   add one: key, model, test, role chains
-  conductor keys [set NAME | rm NAME]  list, set (hidden input or stdin) or remove API keys
-  conductor local [--enable]           find local model servers (Ollama, LM Studio, llama.cpp…) and turn them on
-  conductor init [--controller <c>] [--verify "<cmd>"] [--guards] [--vscode] [--no-mcp] [--share]   add conductor to the current project (its files go in .gitignore unless --share)
-                                       controllers: ${Object.keys(CONTROLLERS).join(', ')} (or your own: conductor controller add)
-  conductor demo [--keep] [--provider p]   a throwaway project, 2 tasks handed out in parallel, merged and tested
-  conductor ui [--port 4545] [--no-open]   settings page
-  conductor doctor [--live] [--details] [--json]   check installs and keys (--live sends a test prompt)
+  conductor-ai setup [--yes]              guided first-time setup: finds your agents and keys, adds a free provider, tests
+  conductor-ai providers [--free] [--search x] [--json]   every provider conductor-ai can add (${Object.keys(CATALOG).length}), with status
+  conductor-ai add <provider> [--model m] [--yes] [--project]   add one: key, model, test, role chains
+  conductor-ai keys [set NAME | rm NAME]  list, set (hidden input or stdin) or remove API keys
+  conductor-ai local [--enable]           find local model servers (Ollama, LM Studio, llama.cpp…) and turn them on
+  conductor-ai init [--controller <c>] [--verify "<cmd>"] [--guards] [--vscode] [--no-mcp] [--share]   add conductor-ai to the current project (its files go in .gitignore unless --share)
+                                       controllers: ${Object.keys(CONTROLLERS).join(', ')} (or your own: conductor-ai controller add)
+  conductor-ai demo [--keep] [--provider p]   a throwaway project, 2 tasks handed out in parallel, merged and tested
+  conductor-ai ui [--port 4545] [--no-open]   settings page
+  conductor-ai doctor [--live] [--details] [--json]   check installs and keys (--live sends a test prompt)
 
 Work (normally called by the controller)
-  conductor run <role> [task text] [options]      (or just: conductor <role> ...)
+  conductor-ai run <role> [task text] [options]      (or just: conductor-ai <role> ...)
      roles: ${Object.entries(ROLES).map(([r, m]) => `${r}${m.mode === 'read' ? '(ro)' : ''}`).join(' ')}
      --plan <file> --task <id>   take the task from a plan file
      --provider <name>           try this provider first
@@ -88,61 +88,61 @@ Work (normally called by the controller)
      --review / --no-review      force or skip the independent review (default: only for risky work)
      --no-verify --no-escalate --allow-no-repro --allow-unverified --allow-scope --allow-weak-plan --allow-dirty --allow-open-questions --json
                                  exit 4 = the worker wrote code but no verify command proved it (--allow-unverified accepts it)
-  conductor batch --plan <file> --tasks T1,T2,T3 [--concurrency 4] [--role r] [--provider p] [--replace] [--json]
-  conductor batch --plan <file> --all              every worker task in the plan, started as soon as its depends are merged (implies --merge)
+  conductor-ai batch --plan <file> --tasks T1,T2,T3 [--concurrency 4] [--role r] [--provider p] [--replace] [--json]
+  conductor-ai batch --plan <file> --all              every worker task in the plan, started as soon as its depends are merged (implies --merge)
      --merge                     merge each task that passed into your branch (one at a time), run verify on the merged
                                  code, and stop at the first conflict or failing verify. Needs a clean checkout
-  conductor diff [branch | A..B] [--lines 200]   compact diff for review (default: working tree, new files included)
-  conductor route "task" [--role r] [--files a,b] | --plan f --task T1   which providers would take a task, and why
-  conductor route --rules | --templates | --add starter|<id,id> | --rm <n> [--global]   list, add or remove routing rules
-  conductor plan check <file> [--task T1,T2]   is each task ready for a worker? (files, checkable acceptance, verify, size)
-  conductor stats [--failures] [--days 30]   first-try accept rate and the alpha gate; --failures: why work fails, biggest cause first
-  conductor rules [list] | new <name> [--paths "src/api/**"] | sync   project rules, written in each controller's own format
-  conductor guard [status] | on | off | allow   block the controller's git push while the last verify failed; commits stay allowed (Claude Code, Antigravity)
-  conductor lessons [list] | add "text" [--files a,b] [--role r] | rm <id> | promote <id>   what earlier work taught (in later prompts and routing)
-  conductor verify                     run the project's verify command
-  conductor skills [list] | new <name> | add <path> | on|off <name> | rm <name> | sync   one skill library for every controller and worker
-  conductor retry <task> --note "…" [--provider p]   the task's worker continues in its worktree with your note
-  conductor worktree [list] | rm <id>|--all [--force]
+  conductor-ai diff [branch | A..B] [--lines 200]   compact diff for review (default: working tree, new files included)
+  conductor-ai route "task" [--role r] [--files a,b] | --plan f --task T1   which providers would take a task, and why
+  conductor-ai route --rules | --templates | --add starter|<id,id> | --rm <n> [--global]   list, add or remove routing rules
+  conductor-ai plan check <file> [--task T1,T2]   is each task ready for a worker? (files, checkable acceptance, verify, size)
+  conductor-ai stats [--failures] [--days 30]   first-try accept rate and the alpha gate; --failures: why work fails, biggest cause first
+  conductor-ai rules [list] | new <name> [--paths "src/api/**"] | sync   project rules, written in each controller's own format
+  conductor-ai guard [status] | on | off | allow   block the controller's git push while the last verify failed; commits stay allowed (Claude Code, Antigravity)
+  conductor-ai lessons [list] | add "text" [--files a,b] [--role r] | rm <id> | promote <id>   what earlier work taught (in later prompts and routing)
+  conductor-ai verify                     run the project's verify command
+  conductor-ai skills [list] | new <name> | add <path> | on|off <name> | rm <name> | sync   one skill library for every controller and worker
+  conductor-ai retry <task> --note "…" [--provider p]   the task's worker continues in its worktree with your note
+  conductor-ai worktree [list] | rm <id>|--all [--force]
 
 Inspect
-  conductor runs [--limit 20] [--json] | runs show <run>
-  conductor usage [--days 7] [--json]  runs, tokens and cost per provider
-  conductor status [--json]            providers, chains and repo state
-  conductor models [provider] [--all]  current models of an API provider
-  conductor cooldown [--clear [name]]  rate-limit cooldowns
-  conductor config path                config file locations
-  conductor mcp                        run as an MCP server (stdio)
+  conductor-ai runs [--limit 20] [--json] | runs show <run>
+  conductor-ai usage [--days 7] [--json]  runs, tokens and cost per provider
+  conductor-ai status [--json]            providers, chains and repo state
+  conductor-ai models [provider] [--all]  current models of an API provider
+  conductor-ai cooldown [--clear [name]]  rate-limit cooldowns
+  conductor-ai config path                config file locations
+  conductor-ai mcp                        run as an MCP server (stdio)
 
 Experimental (works, may change; not covered by the alpha's promises)
   run/batch --priority speed           races small tasks and gives slow batch tasks a second attempt; spends more tokens
   run --race / --no-race               the 2 fastest free routes together; the first to pass every check wins (settings.race)
   run --samples N                      N attempts on different providers in parallel, keep the best by checks
-  conductor eval [list] | check | run [--tasks a,b] [--provider p | --chain a,b] [--samples N] [--label x] [--compare last|<file>] [--keep] [--lessons <file> | --no-lessons]
-                                       measure conductor on fixed tasks with hidden tests (check = prove the tasks are fair, no LLM)
-  conductor controller [list] | add <name> --like <existing> | check   controllers as data: add one that reads the same formats
-  conductor import <run> [file | -]    web chat bridge: your answer from a web chat for a run with --provider manual
-                                       (the manual provider is off by default: turn it on in conductor ui)
-  conductor import --research <file> [--save docs/research/x.md]   file a web chat's research report into the project
+  conductor-ai eval [list] | check | run [--tasks a,b] [--provider p | --chain a,b] [--samples N] [--label x] [--compare last|<file>] [--keep] [--lessons <file> | --no-lessons]
+                                       measure conductor-ai on fixed tasks with hidden tests (check = prove the tasks are fair, no LLM)
+  conductor-ai controller [list] | add <name> --like <existing> | check   controllers as data: add one that reads the same formats
+  conductor-ai import <run> [file | -]    web chat bridge: your answer from a web chat for a run with --provider manual
+                                       (the manual provider is off by default: turn it on in conductor-ai ui)
+  conductor-ai import --research <file> [--save docs/research/x.md]   file a web chat's research report into the project
   Beta agents (off until you turn them on): Copilot CLI, Grok Build, Kiro, Aider, Goose, Kimi
 
 Exit codes: 0 ok · 2 usage/unsafe state · 3 every provider failed (controller takes over) · 4 unverified · 5 waiting for your answer (--provider manual)`;
 
-/** conductor skills [list] | new <name> | add <path> | on|off <name> | rm <name> | sync: one skill library for every controller. */
+/** conductor-ai skills [list] | new <name> | add <path> | on|off <name> | rm <name> | sync: one skill library for every controller. */
 function skillsCmd(o) {
   const root = findProjectRoot();
   const [sub = 'list', name] = o._;
   const scope = o.project ? 'project' : 'global';
   const synced = () => { const r = syncSkills(root); const n = (r.added.length + r.updated.length) / 2; console.log(`synced: ${n} active skill${n === 1 ? '' : 's'} → .claude/skills and .agents/skills${r.removed.length ? ` (${r.removed.length / 2} removed)` : ''}`); r.skipped.forEach((s) => console.log(`- not synced: ${s}`)); };
-  const need = () => { if (!name) throw new UsageError(`usage: conductor skills ${sub} <name>`); };
+  const need = () => { if (!name) throw new UsageError(`usage: conductor-ai skills ${sub} <name>`); };
   switch (sub) {
     case 'list': case 'ls': {
       const all = listSkills(root);
       if (o.json) { console.log(JSON.stringify(all, null, 2)); return 0; }
       if (!all.length) {
         console.log(`No skills yet. Your library: ${globalSkillsDir()} (all projects) and ${rel(root, projectSkillsDir(root))} (this project).`);
-        console.log('Make one:   conductor skills new php-conventions --description "How PHP is written here" --files "*.php"');
-        console.log('Or add one: conductor skills add ./path/to/skill-folder');
+        console.log('Make one:   conductor-ai skills new php-conventions --description "How PHP is written here" --files "*.php"');
+        console.log('Or add one: conductor-ai skills add ./path/to/skill-folder');
         return 0;
       }
       console.log('Skills for this project (✓ on, ○ off). Controllers load them natively; workers get the ones that match their task.\n');
@@ -151,13 +151,13 @@ function skillsCmd(o) {
         console.log(`  ${s.on ? '✓' : '○'} ${s.name.padEnd(24)} ${s.scope.padEnd(8)} ${fit(s.description, termWidth() - 50)}`);
         console.log(`    ${''.padEnd(24)} ${''.padEnd(8)} workers: ${when}`);
       }
-      console.log('\nSwitch for this project: conductor skills off <name> | on <name>   Edit: open the SKILL.md, then conductor skills sync');
+      console.log('\nSwitch for this project: conductor-ai skills off <name> | on <name>   Edit: open the SKILL.md, then conductor-ai skills sync');
       return 0;
     }
     case 'new': {
       need();
       const dir = newSkill(root, name, { scope, description: o.description, files: o.files, roles: o.roles, text: o.text });
-      console.log(`✓ created ${path.join(dir, 'SKILL.md')} (${scope}). Write the instructions in it, then: conductor skills sync`);
+      console.log(`✓ created ${path.join(dir, 'SKILL.md')} (${scope}). Write the instructions in it, then: conductor-ai skills sync`);
       synced(); return 0;
     }
     case 'add': {
@@ -168,7 +168,7 @@ function skillsCmd(o) {
     }
     case 'on': case 'off': {
       need();
-      if (!listSkills(root).some((s) => s.name === name)) throw new UsageError(`no skill "${name}" (see: conductor skills)`);
+      if (!listSkills(root).some((s) => s.name === name)) throw new UsageError(`no skill "${name}" (see: conductor-ai skills)`);
       setSkillOn(root, name, sub === 'on');
       console.log(`✓ ${name} ${sub} for this project`);
       synced(); return 0;
@@ -180,17 +180,17 @@ function skillsCmd(o) {
       return 0;
     }
     case 'sync': synced(); return 0;
-    default: throw new UsageError('usage: conductor skills [list] | new <name> [--project] [--description …] [--files …] [--roles …] | add <path> [--project] | on|off <name> | rm <name> | sync');
+    default: throw new UsageError('usage: conductor-ai skills [list] | new <name> [--project] [--description …] [--files …] [--roles …] | add <path> [--project] | on|off <name> | rm <name> | sync');
   }
 }
 
-/** conductor route --rules | --templates | --add | --rm: manage routing rules (project scope unless --global). */
+/** conductor-ai route --rules | --templates | --add | --rm: manage routing rules (project scope unless --global). */
 function routeRules(cfg, o) {
   const scope = o.global ? 'global' : 'project';
   const where = scope === 'global' ? GLOBAL_CONFIG : projectConfigPath(cfg.root);
   if (o.templates) {
     const have = new Set((cfg.routes || []).map((r) => r.from).filter(Boolean));
-    console.log('Rule library (★ = in the starter set). Add with: conductor route --add <id>   or   --add starter\n');
+    console.log('Rule library (★ = in the starter set). Add with: conductor-ai route --add <id>   or   --add starter\n');
     for (const t of ROUTE_TEMPLATES) {
       const r = resolveTemplate(t, cfg.providers, { exclude: [controllerWorker(cfg.controller)] });
       console.log(`${t.starter ? '★' : ' '} ${t.id.padEnd(13)} ${t.label}${have.has(t.id) ? '   [added]' : ''}`);
@@ -205,7 +205,7 @@ function routeRules(cfg, o) {
     let routes = Array.isArray(data.routes) ? data.routes : scope === 'project' && Array.isArray(cfg.routes) ? [...cfg.routes] : [];
     if (o.rm) {
       const n = Number(o.rm);
-      if (!Number.isInteger(n) || n < 1 || n > routes.length) throw new UsageError(`--rm takes a rule number from 1 to ${routes.length} (see conductor route --rules${o.global ? ' --global' : ''})`);
+      if (!Number.isInteger(n) || n < 1 || n > routes.length) throw new UsageError(`--rm takes a rule number from 1 to ${routes.length} (see conductor-ai route --rules${o.global ? ' --global' : ''})`);
       const [gone] = routes.splice(n - 1, 1);
       console.log(`✓ removed rule ${n}: ${describeRoute(gone)}`);
     } else {
@@ -214,16 +214,16 @@ function routeRules(cfg, o) {
       routes = r.routes;
       for (const id of r.added) console.log(`✓ added ${id}: ${describeRoute(routes.find((x) => x.from === id))}`);
       for (const s of r.skipped) console.log(`- skipped ${s.id}: ${s.why}`);
-      if (!r.added.length) return r.skipped.some((s) => s.why === 'no such template') ? (console.log('See the ids with: conductor route --templates'), 1) : 0;
+      if (!r.added.length) return r.skipped.some((s) => s.why === 'no such template') ? (console.log('See the ids with: conductor-ai route --templates'), 1) : 0;
     }
     const errors = routeErrors(routes, cfg.providers);
     if (errors.length) throw new UsageError(errors.join('; '));
     writeScope(scope, cfg.root, { ...data, routes });
-    console.log(`saved to ${where}. Try one: conductor route "fix the login form" --files src/Login.tsx`);
+    console.log(`saved to ${where}. Try one: conductor-ai route "fix the login form" --files src/Login.tsx`);
     return 0;
   }
   const routes = cfg.routes || [];
-  if (!routes.length) { console.log('No routing rules. The smart selector orders each chain.\nStart with: conductor route --add starter   (see the list: conductor route --templates)'); return 0; }
+  if (!routes.length) { console.log('No routing rules. The smart selector orders each chain.\nStart with: conductor-ai route --add starter   (see the list: conductor-ai route --templates)'); return 0; }
   console.log('Routing rules, first match wins:');
   routes.forEach((r, i) => console.log(`  ${String(i + 1).padStart(2)}. ${describeRoute(r)}${r.from ? `   (${r.from})` : ''}`));
   return 0;
@@ -249,7 +249,7 @@ function closest(word, options) {
   const scored = [...new Set(options)].map((o) => [o, d(word.toLowerCase(), o)]).sort((x, y) => x[1] - y[1]);
   if (!scored.length || scored[0][1] > 2) return null;
   // a tie (runz: run or runs) names both, best first
-  return scored.filter(([, n]) => n === scored[0][1]).slice(0, 2).map(([o]) => o).join(' or conductor ');
+  return scored.filter(([, n]) => n === scored[0][1]).slice(0, 2).map(([o]) => o).join(' or conductor-ai ');
 }
 
 // Colour for people at a terminal: ✓ green, ✗ red, ⚠ and WARNING yellow, ○ dim. Off for pipes, NO_COLOR, --no-color
@@ -311,20 +311,15 @@ async function main() {
   if (cols && cmd !== 'mcp' && cmd !== 'hook' && !o.json) { const log = console.log; console.log = (...a) => log(...a.map((x) => (typeof x === 'string' ? wrapForTerminal(x, cols) : x))); }
   if (useColor() && cmd !== 'mcp' && !o.json) { const log = console.log; console.log = (...a) => log(...a.map((x) => (typeof x === 'string' ? colorize(x) : x))); }
   if (o.version) { console.log(VERSION); return 0; }
-  if (o.help || cmd === 'help') {
-    // show commands under the name the user typed: `conductor-ai` users may not have `conductor` on PATH
-    const name = path.basename(process.argv[1] || '', '.js') === 'conductor-ai' ? 'conductor-ai' : 'conductor';
-    console.log((o._[0] === 'all' || o.all ? HELP_ALL : HELP).replace(/\bconductor(-ai)?\b(?!-)/g, name));
-    return 0;
-  }
+  if (o.help || cmd === 'help') { console.log(o._[0] === 'all' || o.all ? HELP_ALL : HELP); return 0; }
   if (ROLES[cmd]) { o._.unshift(cmd); cmd = 'run'; }
   if (cmd === 'retry') {
-    // conductor retry T3 --note "…": the task's worker continues in its existing worktree with your note
+    // conductor-ai retry T3 --note "…": the task's worker continues in its existing worktree with your note
     const id = o._.shift();
-    if (!id) throw new UsageError('usage: conductor retry <task id> --note "what to fix" [--provider p] [--role fix]');
+    if (!id) throw new UsageError('usage: conductor-ai retry <task id> --note "what to fix" [--provider p] [--role fix]');
     if (!o.note) throw new UsageError('retry needs --note "what to fix", so the worker knows what you found');
     const m = readWorktreeMeta(findProjectRoot(), id);
-    if (!m && !(o.plan && o.role)) throw new UsageError(`no record of a worktree task "${id}". Use: conductor run <role> --plan <file> --task ${id} --continue --note "…"`);
+    if (!m && !(o.plan && o.role)) throw new UsageError(`no record of a worktree task "${id}". Use: conductor-ai run <role> --plan <file> --task ${id} --continue --note "…"`);
     o._ = [o.role || m.role];
     o.plan ||= m?.plan || undefined; o.task = m?.task || id; o.continue = true; o.worktreeId = id;
     cmd = 'run';
@@ -335,7 +330,7 @@ async function main() {
     case 'providers': return providers(o);
     case 'add': {
       const id = o._[0];
-      if (!id) throw new UsageError('usage: conductor add <provider>   (list them with: conductor providers)');
+      if (!id) throw new UsageError('usage: conductor-ai add <provider>   (list them with: conductor-ai providers)');
       const e = CATALOG[id];
       const fields = Object.fromEntries((e ? urlFields(e) : []).map((f) => [f, o[f.toLowerCase().replaceAll('_', '-')]]).filter(([, v]) => v));
       const r = await runAdd(findProjectRoot(), id, { model: o.model, baseUrl: o['base-url'], fields, yes: o.yes, scope: o.project ? 'project' : 'global' });
@@ -362,7 +357,7 @@ async function main() {
       }
       const ready = local.filter((l) => l.running && l.best);
       if (ready.length && o.enable) console.log(`\n✓ enabled: ${enableLocal(root, local).join(', ') || 'already on'}`);
-      else if (ready.length) console.log('\nTurn them on (free, private, in the docs/test/review/ask roles): conductor local --enable');
+      else if (ready.length) console.log('\nTurn them on (free, private, in the docs/test/review/ask roles): conductor-ai local --enable');
       return 0;
     }
     case 'skills': case 'skill': return skillsCmd(o);
@@ -385,14 +380,14 @@ async function main() {
       if (sub === 'allow') { allowCommit(root); console.log('commits on the current HEAD are allowed once, even though the last verify failed'); return 0; }
       if (sub === 'status') {
         const st = readVerifyState(root);
-        console.log(`guards for ${ctrl(controller)?.label || controller}: ${ctrl(controller).hooks ? (guardsOn(root, controller) ? `on (${ctrl(controller).hooks.file})` : 'off (conductor guard on)') : 'not available for this controller yet'}`);
-        console.log(`last verify: ${st ? `${st.status}${st.cmd ? ` (${st.cmd})` : ''} at ${st.at}` : 'none recorded (conductor verify)'}`);
+        console.log(`guards for ${ctrl(controller)?.label || controller}: ${ctrl(controller).hooks ? (guardsOn(root, controller) ? `on (${ctrl(controller).hooks.file})` : 'off (conductor-ai guard on)') : 'not available for this controller yet'}`);
+        console.log(`last verify: ${st ? `${st.status}${st.cmd ? ` (${st.cmd})` : ''} at ${st.at}` : 'none recorded (conductor-ai verify)'}`);
         return 0;
       }
-      if (sub !== 'on' && sub !== 'off') throw new UsageError('usage: conductor guard [status] | on | off | allow');
+      if (sub !== 'on' && sub !== 'off') throw new UsageError('usage: conductor-ai guard [status] | on | off | allow');
       const r = switchGuards(root, controller, sub === 'on');
       if (r.unsupported) { console.log(`Guards are not available for ${ctrl(controller)?.label || controller} yet: only Claude Code and Antigravity, whose hooks were tested. (Codex runs project hooks only in trusted projects after you approve them in /hooks.)`); return 1; }
-      console.log(r.changed ? `guards ${sub} (${r.file})${sub === 'on' ? ': a `git commit` by the controller is blocked while the last conductor verify failed' : ''}` : `guards already ${sub}`);
+      console.log(r.changed ? `guards ${sub} (${r.file})${sub === 'on' ? ': a `git commit` by the controller is blocked while the last conductor-ai verify failed' : ''}` : `guards already ${sub}`);
       return 0;
     }
     case 'import': {
@@ -400,11 +395,11 @@ async function main() {
       const root = findProjectRoot();
       if (o.research) {
         const rel = importResearch(root, typeof o.research === 'string' ? o.research : o._[0], o.save);
-        console.log(`saved ${rel}. Use it as context: conductor ask "…" --files ${rel}`);
+        console.log(`saved ${rel}. Use it as context: conductor-ai ask "…" --files ${rel}`);
         return 0;
       }
       const [runId, src = '-'] = o._;
-      if (!runId) throw new UsageError('usage: conductor import <run> [answer file | -]   (or: conductor import --research <file> [--save docs/research/x.md])');
+      if (!runId) throw new UsageError('usage: conductor-ai import <run> [answer file | -]   (or: conductor-ai import --research <file> [--save docs/research/x.md])');
       const text = src === '-' ? fs.readFileSync(0, 'utf8') : fs.readFileSync(path.resolve(src), 'utf8');
       const prog = runProgress();
       let s;
@@ -415,7 +410,7 @@ async function main() {
     }
     case 'demo': {
       // a throwaway project, both tasks handed out in parallel with every check, merged and tested: about 2 minutes
-      console.log('conductor demo: see conductor work end to end, without touching your projects.\n');
+      console.log('conductor-ai demo: see conductor-ai work end to end, without touching your projects.\n');
       const table = batchProgress(['T1', 'T2']);
       const t0 = Date.now();
       const d = await runDemo({ keep: !!o.keep, provider: o.provider, say: (m) => console.log(m), onEvent: (e) => table.event(e) });
@@ -423,8 +418,8 @@ async function main() {
       // the batch summary without its "next: review, then merge" lines: the demo merged already
       console.log(`\n${formatBatch(d.batch).split('\n').filter((l, i, all) => !/^next:/.test(l) && !(/^\s/.test(l) && all.slice(0, i).reverse().find((x) => !/^\s/.test(x))?.startsWith('next:'))).join('\n')}`);
       console.log(`\n3. Merged what passed every check: ${d.merged.length ? d.merged.join(', ') : 'nothing'} · the project's tests: ${d.verify.status}${d.verify.output ? ` (${d.verify.output})` : ''}${d.merged.length ? '' : ', but only the starting test ran'}`);
-      console.log(`   ${Math.round((Date.now() - t0) / 1000)}s in total.${d.kept ? ` The project is kept: ${d.dir} (open it, or: cd ${d.dir} && conductor ui)` : ' The project is removed (--keep to look around).'}`);
-      console.log('\nNext, in your own project:  conductor init   then plan with your coding agent (/conduct-plan in Claude Code).');
+      console.log(`   ${Math.round((Date.now() - t0) / 1000)}s in total.${d.kept ? ` The project is kept: ${d.dir} (open it, or: cd ${d.dir} && conductor-ai ui)` : ' The project is removed (--keep to look around).'}`);
+      console.log('\nNext, in your own project:  conductor-ai init   then plan with your coding agent (/conduct-plan in Claude Code).');
       return d.merged.length === 2 && d.verify.status === 'PASS' ? 0 : 3;
     }
     case 'controller': case 'controllers': {
@@ -436,14 +431,14 @@ async function main() {
         c.reviewer && `reviewer ${c.reviewer.file}`, c.mcp && (c.mcp.file ? `MCP ${c.mcp.file}` : `MCP: register with ${c.mcp.register}`), c.hooks ? `guard ${c.hooks.file}` : 'no guard'].filter(Boolean).join(' · ');
       if (sub === 'list') {
         for (const [n, c] of Object.entries(all)) console.log(`${n.padEnd(14)} ${String(c.label).padEnd(18)} reads ${c.file} · ${what(c)}${CONTROLLERS[n] ? '' : '  [yours]'}`);
-        console.log('\nAdd one that reads the same formats as an existing one: conductor controller add <name> --like <existing> [--label "Name"] [--file AGENTS.md] [--project]');
+        console.log('\nAdd one that reads the same formats as an existing one: conductor-ai controller add <name> --like <existing> [--label "Name"] [--file AGENTS.md] [--project]');
         return 0;
       }
       if (sub === 'add') {
         const name = o._[1], like = o.like;
-        if (!name || !like) throw new UsageError('usage: conductor controller add <name> --like <existing> [--label "Name"] [--file AGENTS.md] [--project]');
-        if (all[name]) throw new UsageError(`"${name}" already exists (conductor controller list)`);
-        if (!all[like]) throw new UsageError(`no controller "${like}" to copy (conductor controller list)`);
+        if (!name || !like) throw new UsageError('usage: conductor-ai controller add <name> --like <existing> [--label "Name"] [--file AGENTS.md] [--project]');
+        if (all[name]) throw new UsageError(`"${name}" already exists (conductor-ai controller list)`);
+        if (!all[like]) throw new UsageError(`no controller "${like}" to copy (conductor-ai controller list)`);
         const { worker, docs, ...formats } = all[like];
         const entry = { ...JSON.parse(JSON.stringify(formats)), label: o.label || name, ...(o.file ? { file: o.file } : {}) };
         const errs = controllerErrors(name, entry);
@@ -452,8 +447,8 @@ async function main() {
         const cur = readScope(scope, root);
         writeScope(scope, root, { version: 1, ...cur, controllers: { ...(cur.controllers || {}), [name]: entry } });
         console.log(`added controller "${name}" (${scope} config), reading the same formats as ${like}: ${what(entry)}`);
-        console.log(`Edit its entry under "controllers" in ${scope === 'global' ? GLOBAL_CONFIG : projectConfigPath(root)} if its folders differ, then: conductor controller check && conductor init --controller ${name}`);
-        console.log('A tool that reads a format conductor has no writer for still needs code and a real test (see docs/CONTROLLERS.md).');
+        console.log(`Edit its entry under "controllers" in ${scope === 'global' ? GLOBAL_CONFIG : projectConfigPath(root)} if its folders differ, then: conductor-ai controller check && conductor-ai init --controller ${name}`);
+        console.log('A tool that reads a format conductor-ai has no writer for still needs code and a real test (see docs/CONTROLLERS.md).');
         return 0;
       }
       if (sub === 'check') {
@@ -461,7 +456,7 @@ async function main() {
         for (const [n, c] of Object.entries(all)) { const e = controllerErrors(n, c); if (e.length) bad++; console.log(`${e.length ? '✗' : '✓'} ${n}${e.length ? `\n    - ${e.join('\n    - ')}` : ''}`); }
         return bad ? 1 : 0;
       }
-      throw new UsageError('usage: conductor controller [list] | add <name> --like <existing> | check');
+      throw new UsageError('usage: conductor-ai controller [list] | add <name> --like <existing> | check');
     }
     case 'rules': case 'rule': {
       const cfg = loadConfig();
@@ -469,24 +464,24 @@ async function main() {
       const sub = o._[0] || 'list';
       if (sub === 'list') {
         const rs = readRules(root);
-        if (!rs.length) { console.log(`No project rules yet. Add one: conductor rules new <name> [--paths "src/api/**"]  (stored in ${rel(root, rulesDir(root))}/)`); return 0; }
+        if (!rs.length) { console.log(`No project rules yet. Add one: conductor-ai rules new <name> [--paths "src/api/**"]  (stored in ${rel(root, rulesDir(root))}/)`); return 0; }
         for (const r of rs) console.log(`${r.name.padEnd(24)} ${(r.paths.join(', ') || 'all files').padEnd(30)} ${r.description}`);
-        console.log(`\n${rs.length} rule(s), written for ${ctrl(controller)?.label || controller} by: conductor rules sync. Workers get the ones matching their files.`);
+        console.log(`\n${rs.length} rule(s), written for ${ctrl(controller)?.label || controller} by: conductor-ai rules sync. Workers get the ones matching their files.`);
         return 0;
       }
       if (sub === 'new') {
         const f = newRule(root, o._[1] || '', { description: o.description || '', paths: o.paths || '' });
-        console.log(`created ${rel(root, f)}: write the rule, then run conductor rules sync`); return 0;
+        console.log(`created ${rel(root, f)}: write the rule, then run conductor-ai rules sync`); return 0;
       }
       if (sub === 'sync') {
         const lines = syncControllerFiles(root, controller);
         console.log(lines.length ? lines.map(([w, p]) => `  ${w.padEnd(8)} ${p}`).join('\n') : `  up to date for ${ctrl(controller)?.label || controller}`);
         return 0;
       }
-      throw new UsageError('usage: conductor rules [list] | new <name> [--paths "a/**, *.ts"] [--description "..."] | sync');
+      throw new UsageError('usage: conductor-ai rules [list] | new <name> [--paths "a/**, *.ts"] [--description "..."] | sync');
     }
     case 'plan': {
-      if (o._[0] !== 'check' || !o._[1]) throw new UsageError('usage: conductor plan check <plan-file> [--task T1,T2]');
+      if (o._[0] !== 'check' || !o._[1]) throw new UsageError('usage: conductor-ai plan check <plan-file> [--task T1,T2]');
       const cfg = loadConfig();
       const file = o._[1];
       const abs = path.resolve(cfg.root, file);
@@ -503,7 +498,7 @@ async function main() {
       if (sub === 'list') {
         const all = listEvals();
         for (const t of all) console.log(`${t.id.padEnd(24)} ${String(t.role).padEnd(6)} ${String(t.difficulty || '').padEnd(7)} ${t.title}`);
-        console.log(`\n${all.length} tasks. conductor eval run   runs them all with your routing (uses your providers; one at a time)`);
+        console.log(`\n${all.length} tasks. conductor-ai eval run   runs them all with your routing (uses your providers; one at a time)`);
         return 0;
       }
       if (sub === 'check') {
@@ -512,11 +507,11 @@ async function main() {
         console.log(`\n${rows.filter((r) => !r.problems.length).length}/${rows.length} tasks are fair (fail before, pass with the reference solution).`);
         return rows.some((r) => r.problems.length) ? 1 : 0;
       }
-      if (sub !== 'run') throw new UsageError('usage: conductor eval [list | check | run]');
+      if (sub !== 'run') throw new UsageError('usage: conductor-ai eval [list | check | run]');
       const rep = await runEvals({
         ids, samples: o.samples ? Number(o.samples) : undefined, provider: o.provider, chain: o.chain ? String(o.chain).split(',').map((x) => x.trim()).filter(Boolean) : undefined, keep: o.keep, label: o.label || '', lessons: o['no-lessons'] ? 'off' : o.lessons || undefined,
         onEvent: o.json ? undefined : (e) => {
-          const m = { start: 'starting', wait: `waiting for ${e.provider} (one task at a time on it)…`, try: `trying ${e.provider}…`, fail: `${e.provider} failed: ${e.reason}`, ok: `${e.provider} finished`, verify: 'running verify…', isolate: 'checking the code alone against the original tests…', escalate: `verify failed: handing ${e.from}'s work to ${e.provider}…`, repair: `${e.provider} sent no files: asking once more…`, scored: `${e.pass ? 'PASS' : 'FAIL'} (conductor said: ${e.outcome})` }[e.type];
+          const m = { start: 'starting', wait: `waiting for ${e.provider} (one task at a time on it)…`, try: `trying ${e.provider}…`, fail: `${e.provider} failed: ${e.reason}`, ok: `${e.provider} finished`, verify: 'running verify…', isolate: 'checking the code alone against the original tests…', escalate: `verify failed: handing ${e.from}'s work to ${e.provider}…`, repair: `${e.provider} sent no files: asking once more…`, scored: `${e.pass ? 'PASS' : 'FAIL'} (conductor-ai said: ${e.outcome})` }[e.type];
           if (m) process.stderr.write(`eval [${e.task}]: ${m}\n`);
         },
       });
@@ -529,22 +524,22 @@ async function main() {
       const sub = o._[0] || 'list';
       if (sub === 'list') {
         const all = readLessons(root);
-        if (!all.length) { console.log('No lessons yet. conductor records them from failed checks and from your --note on retries; add one with: conductor lessons add "<text>"'); return 0; }
+        if (!all.length) { console.log('No lessons yet. conductor-ai records them from failed checks and from your --note on retries; add one with: conductor-ai lessons add "<text>"'); return 0; }
         for (const l of all.slice().reverse()) console.log(`${l.id}  ${(l.source === 'auto' ? l.kind : l.source).padEnd(16)} ${String(l.provider || '-').padEnd(16)} ×${String(l.count || 1).padEnd(3)} ${l.promoted ? '[rule] ' : (l.count || 1) >= PROMOTE_AT ? '[promote?] ' : ''}${l.resolvedAt ? '[resolved] ' : ''}${l.dirs?.length ? `[${l.dirs.join(',')}] ` : ''}${l.text || GUIDANCE[l.kind] || ''}`.slice(0, 220));
         console.log(`\n${all.length} lesson(s). Matching ones go into later prompts; a provider with 2+ failures on the same kind of work moves to the back, until it passes that work here again ([resolved]). promote <id> makes one a rule in AGENTS.md.`);
         const pr = promotable(all);
-        if (pr.length) console.log(`Seen ${PROMOTE_AT}+ times, worth a rule: ${pr.map((l) => `conductor lessons promote ${l.id}`).join(' · ')}`);
+        if (pr.length) console.log(`Seen ${PROMOTE_AT}+ times, worth a rule: ${pr.map((l) => `conductor-ai lessons promote ${l.id}`).join(' · ')}`);
         return 0;
       }
       if (sub === 'add') {
         const text = o._.slice(1).join(' ').trim();
-        if (!text) throw new UsageError('usage: conductor lessons add "<text>" [--files a,b] [--role build]');
+        if (!text) throw new UsageError('usage: conductor-ai lessons add "<text>" [--files a,b] [--role build]');
         const l = addLesson(root, { source: 'manual', text, role: o.role || null, files: o.files ? String(o.files).split(',').map((x) => x.trim()) : [] });
         console.log(`added ${l.id}: ${l.text}`); return 0;
       }
-      if (sub === 'rm' || sub === 'remove') { const g = removeLesson(root, o._[1] || ''); if (!g) throw new UsageError(`no lesson "${o._[1] || ''}" (see conductor lessons)`); console.log(`removed ${g.id}`); return 0; }
-      if (sub === 'promote') { const r = promoteLesson(root, o._[1] || ''); if (!r) throw new UsageError(`no lesson "${o._[1] || ''}" (see conductor lessons)`); console.log(`added to AGENTS.md: ${r.bullet}`); return 0; }
-      throw new UsageError('usage: conductor lessons [list] | add "<text>" | rm <id> | promote <id>');
+      if (sub === 'rm' || sub === 'remove') { const g = removeLesson(root, o._[1] || ''); if (!g) throw new UsageError(`no lesson "${o._[1] || ''}" (see conductor-ai lessons)`); console.log(`removed ${g.id}`); return 0; }
+      if (sub === 'promote') { const r = promoteLesson(root, o._[1] || ''); if (!r) throw new UsageError(`no lesson "${o._[1] || ''}" (see conductor-ai lessons)`); console.log(`added to AGENTS.md: ${r.bullet}`); return 0; }
+      throw new UsageError('usage: conductor-ai lessons [list] | add "<text>" | rm <id> | promote <id>');
     }
     case 'stats': {
       if (!o.failures) {
@@ -589,20 +584,20 @@ async function main() {
       const root = findProjectRoot();
       const controller = o.controller || 'claude-code';
       setupGlobal();
-      if (o.verify === true || (o.verify !== undefined && !String(o.verify).trim())) throw new UsageError('usage: conductor init --verify "<command>" (e.g. --verify "npm test")');
+      if (o.verify === true || (o.verify !== undefined && !String(o.verify).trim())) throw new UsageError('usage: conductor-ai init --verify "<command>" (e.g. --verify "npm test")');
       const { lines, notes } = initProject(root, { controller, mcp: !o['no-mcp'], vscode: o.vscode || undefined, share: !!o.share, verify: o.verify ? String(o.verify).trim() : undefined });
       if (o.guards) { const g = setGuards(root, controller, true); lines.push(g.unsupported ? `  skipped  guards (not available for ${controller} yet)` : `  ${g.changed ? 'added' : 'kept'}    ${g.file} (guards: commit blocked while verify fails)`); if (!g.unsupported && !o.share) { const b = readBlock(root); if (b.length && !b.includes(g.file)) writeBlock(root, [...b, g.file]); } }
-      console.log(`conductor init → ${root}  (controller: ${ctrl(controller).label})`);
+      console.log(`conductor-ai init → ${root}  (controller: ${ctrl(controller).label})`);
       lines.forEach((l) => console.log(l));
       notes.forEach((n) => console.log('\n' + n));
       console.log(`\nNext:
   1. Fill in section 1 of AGENTS.md (stack; check the Verify command)
-  2. conductor ui         choose providers, models and fallback order
-  3. conductor doctor     check every provider is ready
+  2. conductor-ai ui         choose providers, models and fallback order
+  3. conductor-ai doctor     check every provider is ready
   4. ${controller === 'claude-code'
     ? 'In Claude Code: /conduct-status, then /conduct-plan <feature> (approve the "conductor" MCP server when Claude asks)'
     : `In ${ctrl(controller).label}: use the conduct-* skills (in .agents/skills), e.g. ask it to run conduct-status, then conduct-plan <feature>`}`);
-      if (!which('conductor')) console.log('\nNOTE: "conductor" is not on your PATH. Install globally so controllers can call it: npm install -g .');
+      if (!which('conductor-ai')) console.log('\nNOTE: "conductor-ai" is not on your PATH. Install globally so controllers can call it: npm install -g .');
       return 0;
     }
     case 'ui': {
@@ -622,14 +617,14 @@ async function main() {
     case 'verify': {
       const cfg = loadConfig();
       const v = await runVerify(cfg.root, cfg.settings);
-      recordVerify(cfg.root, v); // the push guard (conductor guard) reads this
+      recordVerify(cfg.root, v); // the push guard (conductor-ai guard) reads this
       console.log(`verify: ${v.status}${v.cmd ? ` (${v.cmd})` : ''}${v.note ? `, ${v.note}` : ''}`);
       if (v.tail) console.log(v.tail);
       return v.status === 'FAIL' ? 1 : 0;
     }
     case 'run': {
       const role = o._.shift();
-      if (!role) throw new UsageError('usage: conductor run <role> [task] [--plan f --task T1]');
+      if (!role) throw new UsageError('usage: conductor-ai run <role> [task] [--plan f --task T1]');
       const cfg = loadConfig();
       const errs = validateConfig(cfg);
       if (errs.length) throw new UsageError('config problems:\n  ' + errs.join('\n  '));
@@ -648,7 +643,7 @@ async function main() {
       });
       prog.stop();
       // W1: put the waiting run's prompt on the clipboard, ready to paste into a web chat
-      if (s.waiting && !o.json) { const via = copyToClipboard(fs.readFileSync(path.join(findProjectRoot(), s.waiting.prompt), 'utf8')); if (via) process.stderr.write(`conductor: the prompt is on your clipboard (${via})\n`); }
+      if (s.waiting && !o.json) { const via = copyToClipboard(fs.readFileSync(path.join(findProjectRoot(), s.waiting.prompt), 'utf8')); if (via) process.stderr.write(`conductor-ai: the prompt is on your clipboard (${via})\n`); }
       console.log(o.json ? JSON.stringify(s, null, 2) : formatSummary(s));
       return s.exitCode;
     }
@@ -661,13 +656,13 @@ async function main() {
         const r = await listProviderModels(p, { freeOnly: !o.all });
         if (r.error) { console.error(`${name}: ${r.error}`); return 1; }
         for (const m of r.models) console.log(`${String(m.id).padEnd(55)} ${m.context ? 'ctx ' + String(m.context).padStart(7) : ''}${m.free ? '  free' : ''}`);
-        console.log(`\n${r.models.length} models${o.all ? '' : ' marked free (use --all for every model; providers with a free tier mark none)'}. Set one in conductor ui → Providers → ${name} → model.`);
+        console.log(`\n${r.models.length} models${o.all ? '' : ' marked free (use --all for every model; providers with a free tier mark none)'}. Set one in conductor-ai ui → Providers → ${name} → model.`);
         return 0;
       }
       const models = await listFreeModels({ all: o.all });
       if (!models.length) { console.log('no models returned (network?)'); return 1; }
       for (const m of models) console.log(`${m.id.padEnd(55)} ctx ${String(m.context || '?').padStart(7)}  ${m.tools ? 'tools' : ''}`);
-      console.log(`\n${models.length} models. Use one in conductor ui → Providers → openrouter-free → model.`);
+      console.log(`\n${models.length} models. Use one in conductor-ai ui → Providers → openrouter-free → model.`);
       return 0;
     }
     case 'batch': {
@@ -690,23 +685,23 @@ async function main() {
       const sub = o._[0] || 'list';
       if (sub === 'list') {
         const items = listWorktrees(root);
-        if (!items.length) { console.log('no conductor worktrees'); return 0; }
+        if (!items.length) { console.log('no conductor-ai worktrees'); return 0; }
         for (const w of items) console.log(`${w.id.padEnd(14)} ${w.merged ? 'merged      ' : `${w.ahead} commit(s)`}${w.dirty ? ' · uncommitted changes' : ''}  ${w.branch}  ${w.dir}`);
         return 0;
       }
       if (sub === 'rm' || sub === 'remove') {
         const ids = o.all ? listWorktrees(root).map((w) => w.id) : o._.slice(1);
-        if (!ids.length) throw new UsageError('usage: conductor worktree rm <id> [<id>…] | --all [--force]');
+        if (!ids.length) throw new UsageError('usage: conductor-ai worktree rm <id> [<id>…] | --all [--force]');
         for (const id of ids) removeWorktree(root, id, { force: o.force }).forEach((l) => console.log(`${id}: ${l}`));
         return 0;
       }
-      throw new UsageError('usage: conductor worktree [list] | rm <id>|--all [--force]');
+      throw new UsageError('usage: conductor-ai worktree [list] | rm <id>|--all [--force]');
     }
     case 'runs': {
       const root = findProjectRoot();
       if (o._[0] === 'show') {
         const r = o._[1] && readRun(root, o._[1]);
-        if (!r) throw new UsageError(`usage: conductor runs show <run>   (no single run matches "${o._[1] || ''}"; see conductor runs)`);
+        if (!r) throw new UsageError(`usage: conductor-ai runs show <run>   (no single run matches "${o._[1] || ''}"; see conductor-ai runs)`);
         console.log(o.json ? JSON.stringify(runDetail(root, r.id), null, 2) : `run: ${r.id}${formatSummary(r.summary)}\n\n${formatGates(runGates(r.summary))}`);
         return 0;
       }
@@ -734,7 +729,7 @@ async function main() {
     }
     default:
       const guess = closest(cmd, [...COMMANDS, ...Object.keys(ROLES)]);
-      throw new UsageError(`unknown command "${cmd}".${guess ? ` Did you mean: conductor ${guess}?` : ''} Run: conductor help`);
+      throw new UsageError(`unknown command "${cmd}".${guess ? ` Did you mean: conductor-ai ${guess}?` : ''} Run: conductor-ai help`);
   }
 }
 
@@ -742,7 +737,7 @@ async function doctor(o) {
   const cfg = loadConfig();
   const { results, errs, ctrlIssues, problems } = await doctorData(cfg, { live: o.live });
   if (o.json) { console.log(JSON.stringify({ version: VERSION, node: process.version, project: cfg.root, notices: cfg.notices, providers: results, configErrors: errs, controllerFiles: ctrlIssues, problems }, null, 2)); return problems ? 1 : 0; }
-  console.log(`conductor ${VERSION} · node ${process.version} · ${os.platform()}`);
+  console.log(`conductor-ai ${VERSION} · node ${process.version} · ${os.platform()}`);
   console.log(`project: ${cfg.root}\n`);
   for (const n of cfg.notices || []) console.log(`! ${n}`);
   for (const r of results) {
@@ -762,10 +757,10 @@ async function doctor(o) {
     console.log(`\ncontroller files (${ctrl(cfg.controller || 'claude-code')?.label || cfg.controller}):`);
     for (const c of ctrlIssues) console.log(`${c.level === 'error' ? '✗' : '!'} ${c.file}: ${c.problem}\n    fix: ${c.fix}`);
   }
-  if (!o.details && results.some((r) => r.permissions)) console.log('\nWhat each agent may do: conductor doctor --details');
+  if (!o.details && results.some((r) => r.permissions)) console.log('\nWhat each agent may do: conductor-ai doctor --details');
   const weak = results.filter((r) => r.permissions && !r.readOnlyEnforced).map((r) => r.name);
   if (weak.length) console.log(`⚠ read-only not enforced for: ${weak.join(', ')}`);
-  console.log(problems ? `\n${problems} problem(s). Disabled providers are ignored; toggle them in conductor ui.` : '\nAll enabled providers look good.');
+  console.log(problems ? `\n${problems} problem(s). Disabled providers are ignored; toggle them in conductor-ai ui.` : '\nAll enabled providers look good.');
   return 0;
 }
 
@@ -775,16 +770,16 @@ async function setup(o) {
   setupGlobal().forEach((l) => console.log(l));
   const root = findProjectRoot();
   const nodeOk = Number(process.versions.node.split('.')[0]) >= 20;
-  console.log(`\nThis machine: node ${process.version} ${nodeOk ? '✓' : '✗ (20+ needed)'} · git ${which('git') ? '✓' : '✗ (needed)'} · conductor on PATH ${which('conductor') ? '✓' : '✗ (add "$(npm prefix -g)/bin" to PATH)'}`);
+  console.log(`\nThis machine: node ${process.version} ${nodeOk ? '✓' : '✗ (20+ needed)'} · git ${which('git') ? '✓' : '✗ (needed)'} · conductor-ai on PATH ${which('conductor-ai') ? '✓' : '✗ (add "$(npm prefix -g)/bin" to PATH)'}`);
 
   const found = detect(loadConfig(root));
   const installed = found.agents.filter((a) => a.installed);
   console.log(`\nAgents installed: ${installed.length ? installed.map((a) => a.label).join(', ') : 'none (optional: free API providers work without one)'}`);
   console.log(`API keys found:   ${found.keys.length ? found.keys.map((k) => `${k.label} (${k.env})`).join(', ') : 'none yet'}`);
   const own = installed.find((a) => a.controller && !a.enabled);
-  if (own) console.log(`                  ${own.name} stays off: it is your controller, and work sent to it would spend the quota conductor saves (turn it on in conductor ui only as a last resort)`);
+  if (own) console.log(`                  ${own.name} stays off: it is your controller, and work sent to it would spend the quota conductor-ai saves (turn it on in conductor-ai ui only as a last resort)`);
   const beta = installed.filter((a) => a.beta && !a.enabled && !a.controller);
-  if (beta.length) console.log(`                  beta, left off: ${beta.map((a) => a.name).join(', ')} (newer agents: turn one on in conductor ui → Providers)`);
+  if (beta.length) console.log(`                  beta, left off: ${beta.map((a) => a.name).join(', ')} (newer agents: turn one on in conductor-ai ui → Providers)`);
   const off = [...installed.filter((a) => !a.enabled && !a.controller && !a.beta), ...found.keys.filter((k) => !k.enabled)];
   if (off.length && (!ask || await confirm(`Enable ${off.map((x) => x.name).join(', ')}?`))) console.log(`✓ enabled: ${enableDetected(root, found).join(', ')}`);
 
@@ -802,9 +797,9 @@ async function setup(o) {
   }
   if (ask && await confirm('Test the enabled providers now (one-word prompt each)?')) await doctor({ live: true });
   console.log(`\nNext:
-  cd my-project && conductor init       set up a project (CLAUDE.md / AGENTS.md, commands, MCP)
-  conductor providers                   ${Object.keys(CATALOG).length} providers you can add with: conductor add <name>
-  conductor ui                          settings page`);
+  cd my-project && conductor-ai init       set up a project (CLAUDE.md / AGENTS.md, commands, MCP)
+  conductor-ai providers                   ${Object.keys(CATALOG).length} providers you can add with: conductor-ai add <name>
+  conductor-ai ui                          settings page`);
   return 0;
 }
 
@@ -821,14 +816,14 @@ function providers(o) {
       console.log(`  ${state} ${c.id.padEnd(16)} ${c.label.padEnd(26)} ${key.padEnd(11)} ${c.free ? fit(c.free, termWidth() - 64) : ''}`);
     }
   }
-  console.log(`\nAdd one: conductor add <name>   Guides: docs/providers/<name>.md`);
+  console.log(`\nAdd one: conductor-ai add <name>   Guides: docs/providers/<name>.md`);
   return 0;
 }
 
 async function keys(o) {
   const [sub, name] = o._;
   if (sub === 'set' || sub === 'rm') {
-    if (!name || !/^[A-Z_][A-Z0-9_]*$/.test(name)) throw new UsageError(`usage: conductor keys ${sub} NAME   (an env var name, e.g. GROQ_API_KEY)`);
+    if (!name || !/^[A-Z_][A-Z0-9_]*$/.test(name)) throw new UsageError(`usage: conductor-ai keys ${sub} NAME   (an env var name, e.g. GROQ_API_KEY)`);
     if (sub === 'rm') { writeSecrets({ [name]: null }); console.log(`removed ${name} from ${GLOBAL_SECRETS}`); return 0; }
     let value = '';
     if (process.stdin.isTTY) value = await askSecret(`${name} (hidden): `);
@@ -841,9 +836,9 @@ async function keys(o) {
   const list = keyList(loadConfig());
   if (o.json) { console.log(JSON.stringify(list, null, 2)); return 0; }
   for (const k of list) console.log(`${k.set ? '✓' : k.placeholder ? '!' : ' '} ${k.name.padEnd(22)} ${k.set ? k.source : k.placeholder ? 'placeholder value, not a real key' : 'not set'}${k.usedBy.length ? `  · ${k.usedBy.join(', ')}` : ''}`);
-  console.log(`\nSet one: conductor keys set NAME   (hidden input, or pipe it: printenv X | conductor keys set NAME)`);
+  console.log(`\nSet one: conductor-ai keys set NAME   (hidden input, or pipe it: printenv X | conductor-ai keys set NAME)`);
   return 0;
 }
 
 main().then((code) => { if (code !== null) process.exitCode = code; })
-  .catch((e) => { console.error(`conductor: ${e.message}`); process.exitCode = e instanceof UsageError ? 2 : 1; });
+  .catch((e) => { console.error(`conductor-ai: ${e.message}`); process.exitCode = e instanceof UsageError ? 2 : 1; });

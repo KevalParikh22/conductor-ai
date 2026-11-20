@@ -1,7 +1,7 @@
 // H1: best of several cheap attempts. The research (repeated sampling, CodeMonkeys, S*): N cheap attempts picked by
 // running checks beat one attempt, and picking by execution, not by a model's opinion, is what makes it work.
 // Each attempt runs in its own worktree on a different provider and goes through every gate (verify, scope, edit
-// guard, acceptance checks, repro). conductor then picks: done first, then the most acceptance checks and criteria
+// guard, acceptance checks, repro). conductor-ai then picks: done first, then the most acceptance checks and criteria
 // met, then the smallest diff. The winner's changes land where a normal run's would; the others are removed.
 import { execFileSync } from 'node:child_process';
 import { removeWorktree } from './worktree.js';

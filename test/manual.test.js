@@ -1,5 +1,5 @@
-// W1: the manual web bridge. A run with --provider manual writes the prompt and waits; `conductor import` replays the
-// user's answer through every check. conductor never drives a browser or holds a web account (decided 2026-11-11).
+// W1: the manual web bridge. A run with --provider manual writes the prompt and waits; `conductor-ai import` replays the
+// user's answer through every check. conductor-ai never drives a browser or holds a web account (decided 2026-11-11).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -7,7 +7,7 @@ import path from 'node:path';
 import { isolateHome, makeRepo, tmpdir } from './helpers.js';
 
 const home = isolateHome();
-// the web bridge is experimental and off by default: these tests turn it on, as a user would in conductor ui
+// the web bridge is experimental and off by default: these tests turn it on, as a user would in conductor-ai ui
 fs.writeFileSync(path.join(home, "config.json"), JSON.stringify({ version: 1, providers: { manual: { enabled: true } } }));
 const { dispatch, formatSummary, outcome, EXIT_WAITING } = await import('../src/core.js');
 const { loadConfig } = await import('../src/config.js');
@@ -38,7 +38,7 @@ test('a manual run writes the whole prompt and waits (exit 5); nothing is sent a
   assert.match(prompt, /### T1: add[\s\S]*<<<FILE/, 'the task and the file-block format a chat needs');
   assert.ok(!/usually Claude/.test(prompt), 'no Claude-only wording');
   assert.ok(fs.existsSync(path.join(dir, s.runDir, 'request.json')));
-  assert.match(formatSummary(s), /waiting: +for your answer \(exit 5\)[\s\S]*conductor import \S+ <answer file>/);
+  assert.match(formatSummary(s), /waiting: +for your answer \(exit 5\)[\s\S]*conductor-ai import \S+ <answer file>/);
   assert.equal(listRuns(dir)[0].state, 'waiting');
   assert.match(runDetail(dir, runId(s)).waiting.promptText, /### T1: add/, 'the run page can copy it');
 });

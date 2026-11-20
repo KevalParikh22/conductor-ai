@@ -35,7 +35,7 @@ const cfgFor = (dir, settings = {}) => {
 };
 const run = (dir, chain, settings) => dispatch(cfgFor(dir, settings), { role: 'build', planPath: 'docs/plan/p.md', taskId: 'T1', chain });
 
-test('right code, wrong test: conductor says the test is the problem', async () => {
+test('right code, wrong test: conductor-ai says the test is the problem', async () => {
   clearCooldowns();
   const s = await run(repo().dir, ['sus-badtest']);
   assert.equal(s.outcome, 'verify-failed');
@@ -44,7 +44,7 @@ test('right code, wrong test: conductor says the test is the problem', async () 
   assert.match(formatSummary(s), /NOT DONE, but the code looks right[\s\S]*check those tests first/);
 });
 
-test('wrong code is never blamed on the test; without acceptance checks conductor does not guess', async () => {
+test('wrong code is never blamed on the test; without acceptance checks conductor-ai does not guess', async () => {
   clearCooldowns();
   let s = await run(repo().dir, ['sus-badcode']);
   assert.equal(s.verify.suspectTests, undefined, 'the acceptance check fails: the code is wrong');

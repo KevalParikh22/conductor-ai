@@ -5,7 +5,7 @@
 **Out of scope:** <not now>
 
 ## Open questions
-<!-- Anything the user must decide, or that the controller couldn't settle from the code. conductor refuses to
+<!-- Anything the user must decide, or that the controller couldn't settle from the code. conductor-ai refuses to
      hand out write tasks while an item is unchecked. Resolve each one as: - [x] question → answer -->
 - [ ] <question>
 
@@ -25,10 +25,10 @@
 - **files:** `src/...`, `src/....test.ts`
 - **steps:**
   1. ...
-- **acceptance:** (things a check can confirm: a return value, an HTTP status, a command that passes. Not "works". Code in backticks with exact names, e.g. `cartTotal([])` returns `0`: conductor checks those names exist. Workers answer each one with evidence. Cover the edge cases and exact values from the Design notes too, not only the happy path)
+- **acceptance:** (things a check can confirm: a return value, an HTTP status, a command that passes. Not "works". Code in backticks with exact names, e.g. `cartTotal([])` returns `0`: conductor-ai checks those names exist. Workers answer each one with evidence. Cover the edge cases and exact values from the Design notes too, not only the happy path)
   - [ ] ...
 - **verify:** `<command>`
-- **repro:** (fix tasks, optional) a command that fails now because of the bug and must pass after the fix, e.g. `npm test -- -t "empty cart"`. Without it, the worker must add a test that fails on the original code; conductor checks both
+- **repro:** (fix tasks, optional) a command that fails now because of the bug and must pass after the fix, e.g. `npm test -- -t "empty cart"`. Without it, the worker must add a test that fails on the original code; conductor-ai checks both
 
 ### T2: <title>
 - **role:** test

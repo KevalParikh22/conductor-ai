@@ -1,8 +1,8 @@
 // Q8b: guard hooks (opt-in). What must always hold is enforced by code, not asked of the model:
-//   - the controller's `git push` is blocked while the last `conductor verify` in this checkout failed (commits stay
-//     allowed: they are local and cheap to fix; a push is what reaches others). `conductor verify` again until it
-//     passes, or `conductor guard allow` for a deliberate exception;
-//   - on Stop, Claude Code shows a reminder of conductor task branches still waiting for review.
+//   - the controller's `git push` is blocked while the last `conductor-ai verify` in this checkout failed (commits stay
+//     allowed: they are local and cheap to fix; a push is what reaches others). `conductor-ai verify` again until it
+//     passes, or `conductor-ai guard allow` for a deliberate exception;
+//   - on Stop, Claude Code shows a reminder of conductor-ai task branches still waiting for review.
 // Formats were checked against the real tools:
 //   Claude Code  .claude/settings.local.json  PreToolUse matcher "Bash": exit 2 + stderr blocks; Stop: {systemMessage}
 //   Antigravity  .agents/hooks.json           named hook, PreToolUse grouped by matcher "run_command"; input
@@ -23,7 +23,7 @@ const head = (root) => { try { return execFileSync('git', ['rev-parse', 'HEAD'],
 const stateFile = (root) => path.join(conductorGitDir(root), 'verify-state.json');
 export function readVerifyState(root) { try { return JSON.parse(fs.readFileSync(stateFile(root), 'utf8')); } catch { return null; } }
 
-/** Remember the latest verify result for this checkout (conductor verify, and runs in the main checkout). */
+/** Remember the latest verify result for this checkout (conductor-ai verify, and runs in the main checkout). */
 export function recordVerify(root, { status, cmd = '' }) {
   if (!['PASS', 'FAIL'].includes(status)) return;
   fs.mkdirSync(path.dirname(stateFile(root)), { recursive: true });
@@ -46,7 +46,7 @@ export function pushBlock(root) {
   if (!st || st.status !== 'FAIL') return null;
   const h = head(root);
   if (!h || st.allowedHead === h) return null; // allowed once for this commit
-  return `conductor: the last verify failed${st.cmd ? ` (\`${st.cmd}\`)` : ''}, so this push is blocked (committing is fine). Fix the failures and run \`conductor verify\` (a pass unblocks it), or run \`conductor guard allow\` to push this commit anyway.`;
+  return `conductor-ai: the last verify failed${st.cmd ? ` (\`${st.cmd}\`)` : ''}, so this push is blocked (committing is fine). Fix the failures and run \`conductor-ai verify\` (a pass unblocks it), or run \`conductor-ai guard allow\` to push this commit anyway.`;
 }
 
 /** Conductor task branches still waiting for review, for a Stop reminder; '' when there are none. */
@@ -54,7 +54,7 @@ export function stopReminder(root) {
   let wts = [];
   try { wts = listWorktrees(root).filter((w) => w.ahead > 0 || w.dirty); } catch { return ''; }
   if (!wts.length) return '';
-  return `conductor: ${wts.length} task branch${wts.length > 1 ? 'es' : ''} waiting for review (${wts.slice(0, 5).map((w) => w.branch).join(', ')}). Check with conductor diff <branch>, then merge or remove them (conductor worktree rm <id>).`;
+  return `conductor-ai: ${wts.length} task branch${wts.length > 1 ? 'es' : ''} waiting for review (${wts.slice(0, 5).map((w) => w.branch).join(', ')}). Check with conductor-ai diff <branch>, then merge or remove them (conductor-ai worktree rm <id>).`;
 }
 
 /** The hook entry point. → { stdout, stderr, code } for the tool that called it. */
@@ -73,7 +73,7 @@ export function runHook(kind, input, root) {
     const why = isPush(cmd) ? pushBlock(root) : null;
     return { stdout: JSON.stringify(why ? { decision: 'deny', reason: why } : { decision: 'ask' }), stderr: '', code: 0 };
   }
-  return { stdout: '', stderr: `conductor: unknown hook "${kind}"`, code: 1 };
+  return { stdout: '', stderr: `conductor-ai: unknown hook "${kind}"`, code: 1 };
 }
 
 // ---------------- install ----------------
@@ -91,7 +91,7 @@ export function setGuards(root, controller, on) {
   const rel = h.file;
   const file = path.join(root, rel);
   const cur = readJson(file);
-  if (fs.existsSync(file) && cur === null) throw new Error(`${rel} is not valid JSON: fix it first, conductor won't overwrite it`);
+  if (fs.existsSync(file) && cur === null) throw new Error(`${rel} is not valid JSON: fix it first, conductor-ai won't overwrite it`);
   const data = cur || {};
   const before = JSON.stringify(data);
   if (h.format === 'claude-settings') {
@@ -124,7 +124,7 @@ export function guardsOn(root, controller) {
   return h.format === 'claude-settings' ? /conductor(-ai)? hook/.test(JSON.stringify(d.hooks || {})) : !!d['conductor-guard'];
 }
 
-/** guard on/off as the CLI and UI do it: the hook file is kept out of git like conductor's other local files. */
+/** guard on/off as the CLI and UI do it: the hook file is kept out of git like conductor-ai's other local files. */
 export function switchGuards(root, controller, on) {
   const r = setGuards(root, controller, on);
   if (r.unsupported) return r;

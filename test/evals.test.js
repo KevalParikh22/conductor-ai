@@ -26,7 +26,7 @@ test('eval run scores against hidden tests and compares conductor\'s verdict wit
   fakeBins({
     // fixes the bug for real
     evgood: `let p='';process.stdin.on('data',d=>p+=d).on('end',()=>{const o=args[args.indexOf('-o')+1];fs.writeFileSync('src/paginate.js',${JSON.stringify(sol)});fs.writeFileSync('test/paginate.regression.test.js',${JSON.stringify(REGRESSION)});fs.writeFileSync(o,${report()});});`,
-    // claims everything, changes a comment only: verify still passes, acceptance all ticked → conductor says done
+    // claims everything, changes a comment only: verify still passes, acceptance all ticked → conductor-ai says done
     evliar: `let p='';process.stdin.on('data',d=>p+=d).on('end',()=>{const o=args[args.indexOf('-o')+1];fs.appendFileSync('src/paginate.js','// fixed\\n');fs.writeFileSync(o,${report()});});`,
   });
   fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ providers: {
@@ -35,7 +35,7 @@ test('eval run scores against hidden tests and compares conductor\'s verdict wit
   assert.deepEqual([a.results[0].outcome, a.results[0].pass], ['done', true]);
   assert.deepEqual([a.summary.passRate, a.summary.rightDone, a.summary.falseDone], [100, 1, 0]);
   assert.ok(fs.existsSync(a.file), 'saved');
-  // the liar ticks every criterion; conductor runs them itself (H11) and catches it: not "done"
+  // the liar ticks every criterion; conductor-ai runs them itself (H11) and catches it: not "done"
   const b = await runEvals({ ids: ['fix-paginate'], chain: ['liar'], label: 'liar' });
   assert.deepEqual([b.results[0].outcome, b.results[0].pass, b.summary.falseDone, b.summary.caught], ['partial', false, 0, 1]);
   const out = formatEvals(b, loadResult('last', b.file));
@@ -46,7 +46,7 @@ test('eval run scores against hidden tests and compares conductor\'s verdict wit
     good: { type: 'cli', preset: 'codex', enabled: true, bin: 'evgood' }, liar: { type: 'cli', preset: 'codex', enabled: true, bin: 'evliar' } } }));
   const c = await runEvals({ ids: ['fix-paginate'], chain: ['liar'], label: 'liar-nochecks' });
   assert.deepEqual([c.results[0].outcome, c.summary.falseDone], ['done', 1]);
-  assert.match(formatEvals(c), /conductor said done, hidden tests fail/);
+  assert.match(formatEvals(c), /conductor-ai said done, hidden tests fail/);
 });
 
 test('summary counts the four verdicts', () => {

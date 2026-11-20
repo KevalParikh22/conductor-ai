@@ -1,7 +1,7 @@
 // Plan gate (Q1) and acceptance check (H5): enforced by code, not by asking the model.
 //   checkTask:   is a plan task specific enough to hand to a worker? (files, checkable acceptance, verify, size)
 //   acceptance:  the task's criteria are repeated at the end of the worker's prompt, the worker answers each one with
-//                evidence in its report, and conductor counts the answers.
+//                evidence in its report, and conductor-ai counts the answers.
 import { taskFiles, extractTask } from './core.js';
 
 const field = (section, name) => (section.match(new RegExp(`\\*\\*${name}:\\*\\*\\s*(.*)`, 'i')) || [])[1]?.trim() || '';
@@ -49,7 +49,7 @@ export function checkTask(section, { verifyCmd = '', maxFiles = 4 } = {}) {
     if (vague.length) problems.push(`acceptance too vague to check: ${vague.map((v) => `"${v}"`).join(', ')}. Say what can be observed (a return value, an HTTP status, a command that passes)`);
   }
   const taskVerify = (field(section, 'verify').match(/`([^`]+)`/) || [])[1];
-  if (!verifyCmd && (!taskVerify || taskVerify.includes('<'))) problems.push('no verify command: add - **verify:** `<command>` to the task, or set one for the project (conductor init --verify "<cmd>")');
+  if (!verifyCmd && (!taskVerify || taskVerify.includes('<'))) problems.push('no verify command: add - **verify:** `<command>` to the task, or set one for the project (conductor-ai init --verify "<cmd>")');
   const code = files.filter((f) => !/(^|[/._-])(tests?|spec|__tests__)([/._-]|$)/i.test(f));
   if (code.length > maxFiles) problems.push(`too big for one worker: ${code.length} files besides tests (limit ${maxFiles}). Split it into smaller tasks`);
   return problems;

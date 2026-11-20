@@ -6,34 +6,34 @@ Claude models, pay per token.
 
 | | |
 |---|---|
-| Kind | Chat API (Anthropic Messages format): returns code that conductor applies |
+| Kind | Chat API (Anthropic Messages format): returns code that conductor-ai applies |
 | Cost | Paid, per token |
 | Key | `ANTHROPIC_API_KEY` from https://platform.claude.com/settings/keys |
 | Endpoint | `https://api.anthropic.com` |
 | Default model | `claude-sonnet-5-5` |
-| conductor name | `claude-api` |
+| conductor-ai name | `claude-api` |
 | Provider docs | https://platform.claude.com/docs/en/api/overview |
 | Checked | 2026-11 |
 
 ## Set up
 
 1. Create an API key: https://platform.claude.com/settings/keys
-2. Add it to conductor. It asks for the key (hidden input), lets you pick a model, sends one test prompt and adds it to the `docs`, `test`, `review` and `ask` roles:
+2. Add it to conductor-ai. It asks for the key (hidden input), lets you pick a model, sends one test prompt and adds it to the `docs`, `test`, `review` and `ask` roles:
    ```bash
-   conductor add anthropic
+   conductor-ai add anthropic
    ```
 3. Check it any time:
    ```bash
-   conductor doctor --live
+   conductor-ai doctor --live
    ```
 
-Or click **Add** on its card in `conductor ui` → Providers.
+Or click **Add** on its card in `conductor-ai ui` → Providers.
 
 ## Without the wizard
 
 Save the key (hidden input; or pipe it in):
 ```bash
-conductor keys set ANTHROPIC_API_KEY
+conductor-ai keys set ANTHROPIC_API_KEY
 ```
 
 Then add this to `~/.config/conductor/config.json` (all projects) or `.conductor/config.json` (one project):
@@ -47,13 +47,13 @@ Then add this to `~/.config/conductor/config.json` (all projects) or `.conductor
   }
 }
 ```
-List models: `conductor models claude-api --all`. Put `claude-api` in any role's chain in `conductor ui` → Roles & fallback.
+List models: `conductor-ai models claude-api --all`. Put `claude-api` in any role's chain in `conductor-ai ui` → Roles & fallback.
 
-The variable name only tells conductor where to find the key; the provider never sees it. To use a key you already keep under another name, set `"apiKeyEnv": "YOUR_VAR"` on `claude-api`.
+The variable name only tells conductor-ai where to find the key; the provider never sees it. To use a key you already keep under another name, set `"apiKeyEnv": "YOUR_VAR"` on `claude-api`.
 
 ## Troubleshooting
 
-- **401 / 403**: the key is wrong, expired, or still a placeholder. Run `conductor keys` to see where it comes from, then `conductor keys set ANTHROPIC_API_KEY`.
-- **404 or "model not found"**: the model id changed. Pick a current one with `conductor models claude-api --all`.
-- **429**: rate limit. conductor puts the provider on cooldown and moves to the next one in the chain; `conductor cooldown --clear claude-api` resets it.
-- **Empty reply**: some free routes return nothing now and then; conductor retries once, then falls back.
+- **401 / 403**: the key is wrong, expired, or still a placeholder. Run `conductor-ai keys` to see where it comes from, then `conductor-ai keys set ANTHROPIC_API_KEY`.
+- **404 or "model not found"**: the model id changed. Pick a current one with `conductor-ai models claude-api --all`.
+- **429**: rate limit. conductor-ai puts the provider on cooldown and moves to the next one in the chain; `conductor-ai cooldown --clear claude-api` resets it.
+- **Empty reply**: some free routes return nothing now and then; conductor-ai retries once, then falls back.

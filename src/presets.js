@@ -2,12 +2,12 @@ import { catalogDefaults } from './catalog.js';
 // Built-in knowledge: how to drive each CLI agent, default providers, roles and controllers.
 // Everything here can be overridden in config (global or per project).
 
-// Commands no worker may run: conductor commits and merges, the controller pushes.
+// Commands no worker may run: conductor-ai commits and merges, the controller pushes.
 export const DENIED_COMMANDS = ['git push', 'git commit', 'git reset', 'git checkout', 'git switch', 'git rebase', 'git stash', 'git clean', 'sudo'];
 // Shell commands read-only workers may still run (prefixes).
 export const READ_ONLY_COMMANDS = ['git diff', 'git log', 'git show', 'git status', 'git blame', 'git grep', 'ls', 'cat', 'head', 'tail', 'wc', 'grep', 'rg', 'pwd'];
 // Files no worker may read (agy rules; deny read also denies write). {cwd} = the folder the worker runs in.
-// Only conductor's own sensitive files, not its whole folder: task worktrees live inside that folder, and
+// Only conductor-ai's own sensitive files, not its whole folder: task worktrees live inside that folder, and
 // denying all of it locked agy out of the very files it was asked to edit.
 const SECRET_FILE_RULES = ['read_file({cwd}/.env)', 'read_file({cwd}/.conductor/.env)', 'read_file({cwd}/auth.json)',
   'read_file({cwd}/app/etc/env.php)', 'read_file({conductorHome}/secrets.env)', 'read_file({conductorHome}/config.json)',
@@ -30,9 +30,9 @@ export const BUILD_COMMANDS = ['npm test', 'npm run', 'npx tsc', 'npx jest', 'np
  *   {sessionSettings}  `sessionSettings[mode]` as one JSON string
  * `stdin: true` pipes the prompt to the process. `modeEnv[mode]` adds environment variables (objects are
  * sent as JSON). In sessionSettings and modeEnv, {cwd} is the worker's folder and {conductorHome} is
- * conductor's own folder (config, secrets). `passEnv` lists the keys from conductor's secret files this CLI
- * may see; every other secret conductor loaded is removed from its environment.
- * `permissions` describes what each mode allows (shown by `conductor providers` and the UI).
+ * conductor-ai's own folder (config, secrets). `passEnv` lists the keys from conductor-ai's secret files this CLI
+ * may see; every other secret conductor-ai loaded is removed from its environment.
+ * `permissions` describes what each mode allows (shown by `conductor-ai providers` and the UI).
  */
 export const CLI_PRESETS = {
   antigravity: {
@@ -43,7 +43,7 @@ export const CLI_PRESETS = {
     // run only and is never saved, so the user's own ~/.gemini/antigravity-cli/settings.json is untouched.
     // Not --mode plan for reads: plan mode saves its answer as a plan artifact and prints only a link.
     // --output-format json: agy exits 0 and says "SUCCESS" even when headless mode refused an action it needed;
-    // only the JSON's denied_actions shows it (checked against agy 1.5.3), so conductor reads that (output: 'agy-json')
+    // only the JSON's denied_actions shows it (checked against agy 1.5.3), so conductor-ai reads that (output: 'agy-json')
     write: ['{modelArgs}', '--mode', 'accept-edits', '--sandbox', '--settings', '{sessionSettings}', '--print-timeout', '{timeout}', '--output-format', 'json', '-p', '{prompt}'],
     read: ['{modelArgs}', '--sandbox', '--settings', '{sessionSettings}', '--print-timeout', '{timeout}', '--output-format', 'json', '-p', '{prompt}'],
     output: 'agy-json',
@@ -170,7 +170,7 @@ export const CLI_PRESETS = {
     beta: true, // newer: not turned on by setup, marked beta in doctor and the UI
     bin: 'copilot',
     // -p runs one prompt and exits; -s prints only the answer. Deny rules beat --allow-all-tools. File tools are
-    // limited to the working folder (plus temp, plus --add-dir for conductor's prompt folder in worktree runs).
+    // limited to the working folder (plus temp, plus --add-dir for conductor-ai's prompt folder in worktree runs).
     // Not --trust-folder / COPILOT_ALLOW_ALL=true: those would load the repo's own hooks and MCP servers.
     // --disable-builtin-mcps: its GitHub MCP server could push or open PRs through the API, around the git rules.
     write: ['-p', '{prompt}', '-s', '--no-ask-user', '--no-auto-update', '--disable-builtin-mcps', '--allow-all-tools', '--add-dir', '{ioDir}',
@@ -181,7 +181,7 @@ export const CLI_PRESETS = {
     modelArgs: ['--model', '{model}'],
     passEnv: ['COPILOT_GITHUB_TOKEN', 'GH_TOKEN', 'GITHUB_TOKEN'],
     permissions: {
-      write: 'file tools limited to the project; git push/commit/reset and sudo denied; web and the built-in GitHub MCP tools off; shell commands are not OS-sandboxed (Copilot\'s --sandbox needs bubblewrap on Linux, so conductor leaves it to your Copilot settings)',
+      write: 'file tools limited to the project; git push/commit/reset and sudo denied; web and the built-in GitHub MCP tools off; shell commands are not OS-sandboxed (Copilot\'s --sandbox needs bubblewrap on Linux, so conductor-ai leaves it to your Copilot settings)',
       read: 'write tools, shell, web and memory denied; only its read and search tools run',
       readOnlyEnforced: true,
     },
@@ -193,7 +193,7 @@ export const CLI_PRESETS = {
     label: 'Aider',
     beta: true, // newer: not turned on by setup, marked beta in doctor and the UI
     bin: 'aider',
-    // one message from a file, then exit. Aider commits after every edit by default: turned off, conductor
+    // one message from a file, then exit. Aider commits after every edit by default: turned off, conductor-ai
     // decides about commits. It also loads the repo's .env by default: pointed at an empty file instead.
     // No shell commands (--no-suggest-shell-commands), so --yes-always only approves edits and adding files.
     write: ['--message-file', '{promptFile}', '--yes-always', '--no-auto-commits', '--no-dirty-commits', '--no-suggest-shell-commands',
@@ -205,12 +205,12 @@ export const CLI_PRESETS = {
     modelArgs: ['--model', '{model}'],
     passEnv: ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GEMINI_API_KEY', 'OPENROUTER_API_KEY', 'DEEPSEEK_API_KEY', 'GROQ_API_KEY', 'MISTRAL_API_KEY', 'XAI_API_KEY'],
     permissions: {
-      write: 'edits files in the repo only; no shell commands; no commits (conductor turns auto-commit off); the project .env is not loaded',
+      write: 'edits files in the repo only; no shell commands; no commits (conductor-ai turns auto-commit off); the project .env is not loaded',
       read: '--dry-run: shows the changes, writes nothing; no shell commands',
       readOnlyEnforced: true,
     },
     install: 'python -m pip install aider-install && aider-install   (or: uv tool install aider-chat)',
-    login: 'no login: it uses the API key of the model you pick (e.g. ANTHROPIC_API_KEY, or conductor keys set …)',
+    login: 'no login: it uses the API key of the model you pick (e.g. ANTHROPIC_API_KEY, or conductor-ai keys set …)',
     docs: 'https://aider.chat/docs/config/options.html',
   },
   grok: {
@@ -247,7 +247,7 @@ export const CLI_PRESETS = {
     modelArgs: ['--model', '{model}'],
     passEnv: ['KIRO_API_KEY'],
     permissions: {
-      write: 'commands in Kiro\'s OS sandbox with network blocked; .git writes refused; git commit/reset are not denied per run (Kiro keeps deny rules in ~/.kiro/settings/permissions.yaml), and conductor warns if a worker commits',
+      write: 'commands in Kiro\'s OS sandbox with network blocked; .git writes refused; git commit/reset are not denied per run (Kiro keeps deny rules in ~/.kiro/settings/permissions.yaml), and conductor-ai warns if a worker commits',
       read: 'only its read_file and grep_search tools; anything else is denied in headless mode',
       readOnlyEnforced: true,
     },
@@ -260,7 +260,7 @@ export const CLI_PRESETS = {
     beta: true, // newer: not turned on by setup, marked beta in doctor and the UI
     bin: 'goose',
     // write: GOOSE_MODE=auto is fully autonomous and goose has no per-command or path rules, so it is not contained.
-    // read: GOOSE_MODE=chat has no tools at all, so it cannot edit; conductor inlines the project context instead.
+    // read: GOOSE_MODE=chat has no tools at all, so it cannot edit; conductor-ai inlines the project context instead.
     write: ['run', '--no-session', '-q', '{modelArgs}', '-t', '{prompt}'],
     read: ['run', '--no-session', '-q', '{modelArgs}', '-t', '{prompt}'],
     modeEnv: { write: { GOOSE_MODE: 'auto' }, read: { GOOSE_MODE: 'chat' } },
@@ -269,7 +269,7 @@ export const CLI_PRESETS = {
     passEnv: ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GOOGLE_API_KEY', 'OPENROUTER_API_KEY', 'GROQ_API_KEY', 'XAI_API_KEY'],
     permissions: {
       write: 'no permission control: goose runs any command and edits any file it can reach. Only use it in a container or a worktree you can throw away',
-      read: 'chat mode: no tools at all, so it cannot edit (or open files: conductor puts the project context in the prompt)',
+      read: 'chat mode: no tools at all, so it cannot edit (or open files: conductor-ai puts the project context in the prompt)',
       readOnlyEnforced: true,
     },
     install: 'curl -fsSL https://github.com/aaif-goose/goose/releases/download/stable/download_cli.sh | CONFIGURE=false bash',
@@ -287,7 +287,7 @@ export const DEFAULT_PROVIDERS = {
   'claude-cli': { type: 'cli', preset: 'claude', enabled: false, model: '', notes: 'Claude as a worker (spends Claude quota).' },
   // W1: you paste the prompt into any web chat (DeepSeek, Kimi, Qwen, Gemini, ChatGPT…) and import the answer. Never
   // automated: no cookies, no browser, no logins. In no role chain: name it (--provider manual) when you want it.
-  'manual': { type: 'manual', enabled: false, model: 'web chat', maxPromptChars: 100_000, notes: 'You paste the prompt into a web chat yourself, then: conductor import <run> <answer file>. Add your own (e.g. "deepseek-web") with a lower maxPromptChars for a chat with a smaller limit.' },
+  'manual': { type: 'manual', enabled: false, model: 'web chat', maxPromptChars: 100_000, notes: 'You paste the prompt into a web chat yourself, then: conductor-ai import <run> <answer file>. Add your own (e.g. "deepseek-web") with a lower maxPromptChars for a chat with a smaller limit.' },
   'copilot-cli': { type: 'cli', preset: 'copilot', enabled: false, model: '', notes: 'GitHub Copilot as a worker (uses your Copilot plan).' },
   'grok-cli': { type: 'cli', preset: 'grok', enabled: false, model: '', notes: 'xAI Grok Build: OS-sandboxed agent. Uses your grok login or XAI_API_KEY.' },
   'kiro-cli': { type: 'cli', preset: 'kiro', enabled: false, model: '', notes: 'AWS Kiro: sandboxed commands; uses your Kiro login or KIRO_API_KEY.' },
@@ -318,12 +318,12 @@ export const DEFAULT_ROLES = {
   ask: ['antigravity-cli', 'gemini-api', 'kilo-free', 'openrouter-free'],
 };
 
-/** Who plans, reviews and commits. `conductor init` writes the matching instruction files. */
+/** Who plans, reviews and commits. `conductor-ai init` writes the matching instruction files. */
 /**
  * V6: every controller as data: where it reads instructions, commands, skills, rules and its reviewer subagent, how it
  * registers MCP servers, and its hook file (the push guard). Each `format` names a writer in src/controllers.js
  * (or src/guard.js for hooks), so a new controller that reads the same formats is a data entry: add one with
- * `conductor controller add <name> --like <one of these>`. A new format still needs its writer and a real test.
+ * `conductor-ai controller add <name> --like <one of these>`. A new format still needs its writer and a real test.
  * Checked against each tool (2026-11): Claude Code 2.1, Antigravity CLI 1.5, Codex CLI 0.16x, OpenCode 2.0.
  */
 export const CONTROLLERS = {
@@ -353,7 +353,7 @@ export const CONTROLLERS = {
     reviewer: { file: '.codex/agents/conductor-reviewer.toml', format: 'codex-toml' },
     // Codex reads MCP servers only from ~/.codex/config.toml, and a project's .codex/ only once it is trusted
     mcp: { register: 'codex' },
-    hooks: null, // project hooks need a trusted project and /hooks approval: not set up by conductor yet
+    hooks: null, // project hooks need a trusted project and /hooks approval: not set up by conductor-ai yet
     limits: { agentsMdBytes: 32 * 1024 }, docs: 'https://developers.openai.com/codex',
   },
   'opencode': {
@@ -368,8 +368,8 @@ export const CONTROLLERS = {
 };
 
 /**
- * The worker provider that is the controller's own CLI (claude-cli under Claude Code). conductor never turns it
- * on or picks it by itself: work handed to it spends the very quota conductor is meant to save.
+ * The worker provider that is the controller's own CLI (claude-cli under Claude Code). conductor-ai never turns it
+ * on or picks it by itself: work handed to it spends the very quota conductor-ai is meant to save.
  */
 export const controllerWorker = (controller) => CONTROLLERS[controller]?.worker || null;
 

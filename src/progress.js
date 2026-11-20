@@ -19,7 +19,7 @@ export function stepText(e) {
  * Progress for one run. `line(text)` prints an event line; `step(e)` updates the status line from an event.
  * → { line, step, stop }
  */
-export function runProgress({ stream = process.stderr, prefix = 'conductor', now = () => Date.now(), tty = !!stream.isTTY, columns = () => stream.columns || 80 } = {}) {
+export function runProgress({ stream = process.stderr, prefix = 'conductor-ai', now = () => Date.now(), tty = !!stream.isTTY, columns = () => stream.columns || 80 } = {}) {
   let status = null, since = now(), limit = 0, frame = 0, timer = null, shown = false;
   const clear = () => { if (shown) { stream.write('\r\x1b[2K'); shown = false; } };
   const draw = () => {
@@ -91,7 +91,7 @@ export function batchProgress(tasks, { stream = process.stderr, now = () => Date
       if (!tty) {
         // not a terminal: the plain lines batch has always printed
         const m = { start: `starting (first choice: ${e.provider})`, wait: `waiting for ${e.provider} (one task at a time on it)…`, try: `trying ${e.provider}…`, fail: `${e.provider} failed: ${e.reason}`, ok: `${e.provider} finished`, verify: 'running verify…', base: 'checking the starting commit…', escalate: `verify failed: handing ${e.from}'s work to ${e.provider}…`, repair: `${e.provider} sent no files: asking once more…`, hedge: `${e.from} ${String(e.from).includes(' and ') ? 'are' : 'is'} slow: second attempt on ${e.provider}…`, 'hedge-won': `${e.provider} won`, 'race-won': `${e.provider} won the race`, done: 'done' }[e.type];
-        if (m) stream.write(`conductor [${e.task}]: ${m}\n`);
+        if (m) stream.write(`conductor-ai [${e.task}]: ${m}\n`);
         return;
       }
       if (r.since == null) r.since = now();

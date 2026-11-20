@@ -6,34 +6,34 @@ Open models hosted in Europe.
 
 | | |
 |---|---|
-| Kind | Chat API (OpenAI-compatible): returns code that conductor applies |
+| Kind | Chat API (OpenAI-compatible): returns code that conductor-ai applies |
 | Cost | First 1,000,000 tokens free. |
 | Key | `SCW_SECRET_KEY` from https://console.scaleway.com/iam/api-keys |
 | Endpoint | `https://api.scaleway.ai/v1` |
-| Default model | picked automatically from the live list (coding models first); choose your own with `conductor models scaleway --all` |
-| conductor name | `scaleway` |
+| Default model | picked automatically from the live list (coding models first); choose your own with `conductor-ai models scaleway --all` |
+| conductor-ai name | `scaleway` |
 | Provider docs | https://www.scaleway.com/en/docs/generative-apis/quickstart/ |
 | Checked | 2026-11 |
 
 ## Set up
 
 1. Create an API key: https://console.scaleway.com/iam/api-keys
-2. Add it to conductor. It asks for the key (hidden input), lets you pick a model, sends one test prompt and adds it to the `docs`, `test`, `review` and `ask` roles:
+2. Add it to conductor-ai. It asks for the key (hidden input), lets you pick a model, sends one test prompt and adds it to the `docs`, `test`, `review` and `ask` roles:
    ```bash
-   conductor add scaleway
+   conductor-ai add scaleway
    ```
 3. Check it any time:
    ```bash
-   conductor doctor --live
+   conductor-ai doctor --live
    ```
 
-Or click **Add** on its card in `conductor ui` → Providers.
+Or click **Add** on its card in `conductor-ai ui` → Providers.
 
 ## Without the wizard
 
 Save the key (hidden input; or pipe it in):
 ```bash
-conductor keys set SCW_SECRET_KEY
+conductor-ai keys set SCW_SECRET_KEY
 ```
 
 Then add this to `~/.config/conductor/config.json` (all projects) or `.conductor/config.json` (one project):
@@ -50,13 +50,13 @@ Then add this to `~/.config/conductor/config.json` (all projects) or `.conductor
   }
 }
 ```
-List models: `conductor models scaleway --all`. Put `scaleway` in any role's chain in `conductor ui` → Roles & fallback.
+List models: `conductor-ai models scaleway --all`. Put `scaleway` in any role's chain in `conductor-ai ui` → Roles & fallback.
 
-The variable name only tells conductor where to find the key; the provider never sees it. To use a key you already keep under another name, set `"apiKeyEnv": "YOUR_VAR"` on `scaleway`.
+The variable name only tells conductor-ai where to find the key; the provider never sees it. To use a key you already keep under another name, set `"apiKeyEnv": "YOUR_VAR"` on `scaleway`.
 
 ## Troubleshooting
 
-- **401 / 403**: the key is wrong, expired, or still a placeholder. Run `conductor keys` to see where it comes from, then `conductor keys set SCW_SECRET_KEY`.
-- **404 or "model not found"**: the model id changed. Pick a current one with `conductor models scaleway --all`.
-- **429**: rate limit. conductor puts the provider on cooldown and moves to the next one in the chain; `conductor cooldown --clear scaleway` resets it.
-- **Empty reply**: some free routes return nothing now and then; conductor retries once, then falls back.
+- **401 / 403**: the key is wrong, expired, or still a placeholder. Run `conductor-ai keys` to see where it comes from, then `conductor-ai keys set SCW_SECRET_KEY`.
+- **404 or "model not found"**: the model id changed. Pick a current one with `conductor-ai models scaleway --all`.
+- **429**: rate limit. conductor-ai puts the provider on cooldown and moves to the next one in the chain; `conductor-ai cooldown --clear scaleway` resets it.
+- **Empty reply**: some free routes return nothing now and then; conductor-ai retries once, then falls back.

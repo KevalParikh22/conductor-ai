@@ -25,7 +25,7 @@ export function recordUsage(entry) {
 // Tokens saved are estimates: characters kept out of a model's context, at about 4 characters per token.
 export const CHARS_PER_TOKEN = 4;
 export const SAVING_SOURCES = {
-  diff: 'compact diffs the controller read (conductor diff)',
+  diff: 'compact diffs the controller read (conductor-ai diff)',
   report: 'trimmed worker reports the controller read',
   'review-diff': 'compact diffs sent to review workers',
   'free-model': 'tasks the selector gave to a free model first',

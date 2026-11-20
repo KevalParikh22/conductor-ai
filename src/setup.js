@@ -1,4 +1,4 @@
-// Adding providers and first-time setup, shared by the CLI (`conductor add`, `conductor setup`, `conductor keys`)
+// Adding providers and first-time setup, shared by the CLI (`conductor-ai add`, `conductor-ai setup`, `conductor-ai keys`)
 // and the settings UI, so both behave the same.
 import readline from 'node:readline';
 import { CATALOG, CATEGORIES, providerFromCatalog, urlFields } from './catalog.js';
@@ -34,7 +34,7 @@ export function catalogStatus(cfg) {
  */
 export function addProvider(root, id, { key, model, baseUrl, fields = {}, scope = 'global', roles = CHAT_ROLES } = {}) {
   const e = CATALOG[id];
-  if (!e) throw new Error(`unknown provider "${id}". See: conductor providers`);
+  if (!e) throw new Error(`unknown provider "${id}". See: conductor-ai providers`);
   const cfg = loadConfig(root);
   const name = providerNameFor(cfg, id);
   if (key) writeSecrets({ [e.apiKeyEnv]: key });
@@ -72,7 +72,7 @@ export async function addProviderAuto(root, id, opts = {}) {
     const list = await listProviderModels(r.provider, { freeOnly: false });
     const m = rankModels(list.models || [])[0];
     if (m) r = { ...addProvider(root, id, { scope: opts.scope, model: m.id, roles: [] }), roles: r.roles };
-    else r.warning = `no model set${list.error ? ` (could not list models: ${list.error})` : ''}: conductor will pick one when it runs, or set one on its card`;
+    else r.warning = `no model set${list.error ? ` (could not list models: ${list.error})` : ''}: conductor-ai will pick one when it runs, or set one on its card`;
   } else r = await checkLocalModel(root, id, r, opts.scope);
   return r;
 }
@@ -123,13 +123,13 @@ export async function choose(items, label, fallback) {
   return Number.isInteger(n) && n >= 1 && n <= items.length ? items[n - 1] : fallback;
 }
 
-// ---------------- conductor add ----------------
+// ---------------- conductor-ai add ----------------
 /** Interactive (or --yes) add flow for the CLI. */
 export async function runAdd(root, id, o = {}) {
   const e = CATALOG[id];
   if (!e) {
     const near = Object.keys(CATALOG).filter((k) => k.includes(id) || id.includes(k) || CATALOG[k].label.toLowerCase().includes(id.toLowerCase()));
-    throw new Error(`unknown provider "${id}".${near.length ? ` Did you mean: ${near.join(', ')}?` : ''} See: conductor providers`);
+    throw new Error(`unknown provider "${id}".${near.length ? ` Did you mean: ${near.join(', ')}?` : ''} See: conductor-ai providers`);
   }
   const ask_ = interactive() && !o.yes;
   loadSecrets(root);
@@ -143,7 +143,7 @@ export async function runAdd(root, id, o = {}) {
     if (e.apiKeyOptional) console.log(`\nNo ${e.apiKeyEnv} needed to start (it raises limits). Get one at ${e.keyUrl}`);
     else {
       console.log(`\n1. Get a key: ${e.keyUrl}`);
-      if (!ask_) throw new Error(`${e.apiKeyEnv} is not set. Run in a terminal to paste it, or: conductor keys set ${e.apiKeyEnv}`);
+      if (!ask_) throw new Error(`${e.apiKeyEnv} is not set. Run in a terminal to paste it, or: conductor-ai keys set ${e.apiKeyEnv}`);
       key = await askSecret(`2. Paste your ${e.apiKeyEnv} (hidden): `);
       if (!key) throw new Error('no key entered; nothing changed');
     }
@@ -167,16 +167,16 @@ export async function runAdd(root, id, o = {}) {
       const current = r.provider.model ? { id: r.provider.model } : shown[0];
       const pick = await choose(shown, (m) => `${m.id}${m.free ? '  (free)' : ''}${m.id === r.provider.model ? '  (default)' : ''}`, current);
       if (pick?.id && pick.id !== r.provider.model) r = addProvider(root, id, { model: pick.id, scope: o.scope, roles: [] });
-      if (models.length > shown.length) console.log(`   (${models.length - shown.length} more: conductor models ${r.name} --all)`);
+      if (models.length > shown.length) console.log(`   (${models.length - shown.length} more: conductor-ai models ${r.name} --all)`);
     } else if (models.length && !r.provider.model) r = addProvider(root, id, { model: models[0].id, scope: o.scope, roles: [] });
-    else if (list.error) console.log(`\nCould not list models (${list.error}). Set one later: conductor ui → Providers → ${r.name}`);
+    else if (list.error) console.log(`\nCould not list models (${list.error}). Set one later: conductor-ai ui → Providers → ${r.name}`);
   }
   r = await checkLocalModel(root, id, r, o.scope);
   if (r.warning) console.log(`\n! ${r.warning}`);
   return r;
 }
 
-// ---------------- conductor setup ----------------
+// ---------------- conductor-ai setup ----------------
 /** What is already on this machine: agent CLIs on PATH and catalog keys in the environment. */
 export function detect(cfg) {
   const own = controllerWorker(cfg.controller);
@@ -215,7 +215,7 @@ export function enableLocal(root, local) {
   return on;
 }
 
-/** Keys conductor knows about, with where each comes from. Values are never returned. */
+/** Keys conductor-ai knows about, with where each comes from. Values are never returned. */
 export function keyList(cfg) {
   const file = loadEnvFile(GLOBAL_SECRETS);
   const names = new Set([...Object.values(CATALOG).map((e) => e.apiKeyEnv), ...Object.values(cfg.providers).map((p) => p.apiKeyEnv)].filter(Boolean));

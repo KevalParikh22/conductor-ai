@@ -1,6 +1,6 @@
 ---
 name: ✨ Feature request
-about: Suggest something conductor should do
+about: Suggest something conductor-ai should do
 labels: enhancement
 ---
 

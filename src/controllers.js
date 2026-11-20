@@ -2,12 +2,12 @@
 //   rules     .conductor/rules/<name>.md (description, optional paths) →
 //               Claude Code  .claude/rules/conductor-<name>.md   (paths: [...])
 //               Antigravity  .agents/rules/conductor-<name>.md   (trigger: glob + globs, or always_on; agy silently
-//                            drops a rule whose frontmatter is wrong, so conductor writes it for you)
+//                            drops a rule whose frontmatter is wrong, so conductor-ai writes it for you)
 //               Codex/OpenCode  a block in AGENTS.md (they have no path-scoped rule files)
 //             Workers get the rules matching their files in the prompt.
 //   reviewer  a conductor-reviewer subagent that reviews a worker's diff in a fresh context, so the controller
 //             doesn't spend its own context on it.
-// Only files conductor made (named conductor-*) are ever replaced or removed.
+// Only files conductor-ai made (named conductor-*) are ever replaced or removed.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -58,13 +58,13 @@ export function rulesPrompt(root, files) {
   return `\n## Project rules for these files\n${hits.map((r) => `### ${r.name}${r.paths.length ? ` (applies to ${r.paths.join(', ')})` : ''}\n${r.body}`).join('\n\n')}\n`;
 }
 
-const REVIEWER_BODY = `You review work that a conductor worker did, in a fresh context, so the controller doesn't spend its own context on it. You never edit files and never commit.
+const REVIEWER_BODY = `You review work that a conductor-ai worker did, in a fresh context, so the controller doesn't spend its own context on it. You never edit files and never commit.
 
 1. Read the task the worker had (docs/plan/<plan>.md, the task id you were given) and its acceptance criteria.
-2. Get the change: \`conductor diff\` for the working tree, or \`conductor diff conductor/<id>\` for a worktree task.
+2. Get the change: \`conductor-ai diff\` for the working tree, or \`conductor-ai diff conductor/<id>\` for a worktree task.
 3. Check, against the task: does it do what the acceptance criteria say; bugs and edge cases; missing error handling; security; changes outside the task's files; tests that really prove the behaviour.
 4. Report only real problems, each with \`path:line\`, a concrete failure scenario and a one-line fix. End with \`VERDICT: APPROVE\` or \`VERDICT: CHANGES_REQUESTED\`.`;
-const REVIEWER_DESC = "Reviews a conductor worker's diff against its plan task in a fresh context and returns findings with path:line and a verdict. Use after a conductor run, before committing.";
+const REVIEWER_DESC = "Reviews a conductor-ai worker's diff against its plan task in a fresh context and returns findings with path:line and a verdict. Use after a conductor-ai run, before committing.";
 
 function writeIfChanged(file, text, log, label) {
   let cur = null; try { cur = fs.readFileSync(file, 'utf8'); } catch { /* new */ }
@@ -98,7 +98,7 @@ export const RULE_FORMATS = {
   agy: (r) => `---\ntrigger: ${r.paths.length ? 'glob' : 'always_on'}\ndescription: ${r.description || r.name}\n${r.paths.length ? `globs: ${r.paths.join(', ')}\n` : ''}---\n\n${r.body}\n`,
 };
 // OpenCode 2: ordered permissions, last match wins, so the catch-all deny comes first
-const OC_PERMS = [['edit', '*', 'deny'], ['shell', '*', 'deny'], ['shell', 'conductor diff*', 'allow'], ['shell', 'git diff*', 'allow'], ['shell', 'git log*', 'allow'], ['shell', 'git show*', 'allow']];
+const OC_PERMS = [['edit', '*', 'deny'], ['shell', '*', 'deny'], ['shell', 'conductor-ai diff*', 'allow'], ['shell', 'git diff*', 'allow'], ['shell', 'git log*', 'allow'], ['shell', 'git show*', 'allow']];
 export const REVIEWER_FORMATS = {
   claude: () => `---\nname: conductor-reviewer\ndescription: ${JSON.stringify(REVIEWER_DESC)}\ntools: Read, Grep, Glob, Bash\nmodel: inherit\n---\n\n${REVIEWER_BODY}\n`,
   agy: () => `---\nname: conductor-reviewer\ndescription: ${REVIEWER_DESC}\nmodel: inherit\n---\n\n${REVIEWER_BODY}\n`,
@@ -214,21 +214,21 @@ export function checkControllerFiles(root, controller) {
 export function controllersMarkdown() {
   const c = (v) => (v ? `\`${v}\`` : '—');
   const L = ['# Controllers', '', 'Generated from `CONTROLLERS` in `src/presets.js` by `node scripts/gen-controller-docs.mjs`; a test keeps it in step.', '',
-    'The controller is the tool you talk to (it plans and reviews); conductor writes its files in the format each one reads.', '',
+    'The controller is the tool you talk to (it plans and reviews); conductor-ai writes its files in the format each one reads.', '',
     '| Controller | Instructions | Commands | Skills | Rules | Reviewer subagent | MCP | Push guard |', '|---|---|---|---|---|---|---|---|'];
   for (const [n, d] of Object.entries(CONTROLLERS)) {
     L.push(`| **${d.label}** (\`${n}\`) | ${c(d.file)}${d.import ? ` imports ${c(d.import)}` : ''} | ${d.commands ? `${d.commands.as} in ${c(d.commands.dir)}` : '—'} | ${c(d.skills)} | ${d.rules?.dir ? `${c(d.rules.dir)} (${d.rules.format})` : d.rules?.block ? `a block in ${c(d.rules.block)}` : '—'} | ${d.reviewer ? `${c(d.reviewer.file)}` : '—'} | ${d.mcp?.file ? c(d.mcp.file) : d.mcp?.register ? `register once with \`${d.mcp.register} mcp add …\`` : '—'} | ${d.hooks ? c(d.hooks.file) : 'not yet'} |`);
   }
   L.push('', '## Adding a controller', '',
     'Most coding agents read the same files as one of these (AGENTS.md, `.agents/skills`, an `mcpServers` JSON file). Then a new controller is a data entry, no code:', '',
-    '```bash', 'conductor controller add copilot --like codex-cli --label "Copilot CLI"', 'conductor controller check', 'conductor init --controller copilot', '```', '',
-    'It is stored under `controllers` in your config (`--project` for this project only). Edit the entry when its folders differ. `conductor doctor` reports an entry that names a format conductor cannot write.', '',
-    '**Formats conductor can write:**', '',
+    '```bash', 'conductor-ai controller add copilot --like codex-cli --label "Copilot CLI"', 'conductor-ai controller check', 'conductor-ai init --controller copilot', '```', '',
+    'It is stored under `controllers` in your config (`--project` for this project only). Edit the entry when its folders differ. `conductor-ai doctor` reports an entry that names a format conductor-ai cannot write.', '',
+    '**Formats conductor-ai can write:**', '',
     `- rules: ${Object.keys(RULE_FORMATS).map((x) => `\`${x}\``).join(', ')}, or \`{ "block": "AGENTS.md" }\``,
     `- reviewer: ${Object.keys(REVIEWER_FORMATS).map((x) => `\`${x}\``).join(', ')}`,
     `- mcp: ${MCP_FORMATS.map((x) => `\`${x}\``).join(', ')}, or a \`register\` note for tools that keep MCP servers in their own config`,
     `- hooks (the push guard): ${HOOK_FORMATS.map((x) => `\`${x}\``).join(', ')}`,
     `- commands: as ${COMMAND_KINDS.map((x) => `\`${x}\``).join(' or ')}`, '',
-    'A tool that reads a format not listed here needs its writer in `src/controllers.js` (or `src/guard.js` for hooks), and a test against the real tool before conductor claims it works: hook and permission formats are where tools differ most.', '');
+    'A tool that reads a format not listed here needs its writer in `src/controllers.js` (or `src/guard.js` for hooks), and a test against the real tool before conductor-ai claims it works: hook and permission formats are where tools differ most.', '');
   return L.join('\n');
 }

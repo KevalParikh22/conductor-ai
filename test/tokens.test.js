@@ -93,6 +93,6 @@ test('help: short by default, everything with help all', () => {
   const short = execFileSync(process.execPath, [bin, '--help']).toString();
   const all = execFileSync(process.execPath, [bin, 'help', 'all']).toString();
   assert.ok(short.split('\n').length < 25, 'short help fits on one screen');
-  assert.match(all, /conductor cooldown/);
+  assert.match(all, /conductor-ai cooldown/);
   assert.ok(all.length > short.length * 2);
 });

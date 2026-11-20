@@ -1,5 +1,5 @@
 ---
-description: Show conductor providers (ready / missing / cooling down), role chains and repo state
+description: Show conductor-ai providers (ready / missing / cooling down), role chains and repo state
 disable-model-invocation: true
 allowed-tools: Bash(conductor-ai status:*), Bash(conductor-ai doctor:*)
 ---

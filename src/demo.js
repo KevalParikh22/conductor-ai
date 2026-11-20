@@ -1,4 +1,4 @@
-// conductor demo: see conductor work end to end in about 2 minutes, without touching your projects. It makes a
+// conductor-ai demo: see conductor-ai work end to end in about 2 minutes, without touching your projects. It makes a
 // throwaway project (a tiny Node library and a plan of two independent tasks), hands both tasks to your workers in
 // parallel (each in its own worktree, every check applied), merges what passed, runs the project's tests, and
 // removes the project unless you keep it.
@@ -13,7 +13,7 @@ import { runBatch } from './batch.js';
 import { run } from './util.js';
 import { worktreesDir } from './worktree.js';
 
-export const DEMO_PLAN = `# Plan: text helpers (conductor demo)
+export const DEMO_PLAN = `# Plan: text helpers (conductor-ai demo)
 
 **Goal:** two small, independent helpers with tests.
 
@@ -59,7 +59,7 @@ export function makeDemoProject(parent = os.tmpdir()) {
   fs.writeFileSync(path.join(dir, 'test', 'index.test.js'), "import { test } from 'node:test';\nimport assert from 'node:assert/strict';\nimport { name } from '../src/index.js';\n\ntest('the project loads', () => assert.equal(name, 'conductor-demo'));\n");
   fs.writeFileSync(path.join(dir, 'docs', 'plan', 'demo.md'), DEMO_PLAN);
   git(dir, 'init', '-q', '-b', 'main');
-  git(dir, 'config', 'user.email', 'demo@conductor.local'); git(dir, 'config', 'user.name', 'conductor demo');
+  git(dir, 'config', 'user.email', 'demo@conductor.local'); git(dir, 'config', 'user.name', 'conductor-ai demo');
   initProject(dir, { controller: 'claude-code', mcp: false });
   git(dir, 'add', '-A'); git(dir, 'commit', '-qm', 'demo start');
   git(dir, 'switch', '-qc', 'feat/demo');
@@ -72,7 +72,7 @@ const demoAgents = (cfg) => (cfg.roles.build || []);
 /**
  * A stranger's first run (npx conductor-ai demo) has no coding agent installed, and the build chain is agents only.
  * Then the demo hands its two tasks to the free API models that are ready (kilo-free needs no key), so it still shows
- * conductor working. → the free routes to use, or null when an agent in the build chain is ready.
+ * conductor-ai working. → the free routes to use, or null when an agent in the build chain is ready.
  */
 export function demoFallback(cfg) {
   if (demoAgents(cfg).some((n) => ready(cfg, n))) return null;
@@ -106,7 +106,7 @@ export async function runDemo({ keep = false, provider, say = () => {}, onEvent,
       say(`   No coding agent is ready (${demoAgents(cfg).join(', ')}), so the demo uses free API models: ${fallback.join(', ')}`);
       cfg.roles = { ...cfg.roles, build: fallback }; // this run only: nothing is written to your config
     } else if (fallback) {
-      say('   No coding agent and no free API model is ready. Run: conductor setup (or conductor doctor to see why)');
+      say('   No coding agent and no free API model is ready. Run: conductor-ai setup (or conductor-ai doctor to see why)');
     }
     const opts = { planPath: 'docs/plan/demo.md', provider, noReview: true, replace: true, onEvent };
     let batch = await runBatch(cfg, { ...opts, tasks: ['T1', 'T2'] });
@@ -130,9 +130,9 @@ export async function runDemo({ keep = false, provider, say = () => {}, onEvent,
     return { dir, batch, merged, verify, kept: keep };
   } finally {
     if (!keep) {
-      // the task worktrees live in conductor's home, not in the project: remove them first, then the project
+      // the task worktrees live in conductor-ai's home, not in the project: remove them first, then the project
       try { for (const l of git(dir, 'worktree', 'list', '--porcelain').split('\n').filter((x) => x.startsWith('worktree ')).map((x) => x.slice(9)).filter((p) => p !== fs.realpathSync(dir))) git(dir, 'worktree', 'remove', '--force', l); } catch { /* best effort */ }
-      try { fs.rmSync(worktreesDir(dir), { recursive: true, force: true }); } catch { /* none */ } // conductor's notes on the demo's worktrees
+      try { fs.rmSync(worktreesDir(dir), { recursive: true, force: true }); } catch { /* none */ } // conductor-ai's notes on the demo's worktrees
       fs.rmSync(dir, { recursive: true, force: true });
     }
   }

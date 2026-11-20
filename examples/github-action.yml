@@ -1,4 +1,4 @@
-# Have Claude (controller) execute a conductor plan in CI, delegating to cloud API workers.
+# Have Claude (controller) execute a conductor-ai plan in CI, delegating to cloud API workers.
 # Copy to .github/workflows/conduct.yml in your project. Needs repo secrets for the keys you use.
 name: conduct
 on:

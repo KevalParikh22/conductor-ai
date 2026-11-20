@@ -35,7 +35,7 @@ test('one rule source, written the way each controller reads it, plus the review
   assert.match(read(dir, '.codex/agents/conductor-reviewer.toml'), /^name = "conductor-reviewer"\ndescription = ".*"\ndeveloper_instructions = '''\n/);
   C.syncControllerFiles(dir, 'opencode');
   const oc = read(dir, '.opencode/agents/conductor-reviewer.md');
-  assert.match(oc, /mode: subagent\npermissions:\n  - action: edit\n    resource: "\*"\n    effect: deny\n  - action: shell\n    resource: "\*"\n    effect: deny\n  - action: shell\n    resource: "conductor diff\*"\n    effect: allow/, 'catch-all deny first: OpenCode 2 applies the last match');
+  assert.match(oc, /mode: subagent\npermissions:\n  - action: edit\n    resource: "\*"\n    effect: deny\n  - action: shell\n    resource: "\*"\n    effect: deny\n  - action: shell\n    resource: "conductor-ai diff\*"\n    effect: allow/, 'catch-all deny first: OpenCode 2 applies the last match');
 });
 
 test('sync is idempotent, removes rules you deleted, and only ever touches conductor-* files', () => {

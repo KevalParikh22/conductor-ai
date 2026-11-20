@@ -1,4 +1,4 @@
-// conductor's files out of git (but in worktrees and protected), and the shared skill library.
+// conductor-ai's files out of git (but in worktrees and protected), and the shared skill library.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -21,7 +21,7 @@ const { dispatch, clearCooldowns } = await import('../src/core.js');
 const { loadConfig } = await import('../src/config.js');
 const bin = fileURLToPath(new URL('../bin/conductor.js', import.meta.url));
 
-test('init keeps conductor files out of git: creates .gitignore, lists only files it created, --share removes the block', () => {
+test('init keeps conductor-ai files out of git: creates .gitignore, lists only files it created, --share removes the block', () => {
   const { dir, git } = makeRepo();
   fs.writeFileSync(path.join(dir, 'AGENTS.md'), '# my own rules\n'); git('add', '-A'); git('commit', '-qm', 'mine');
   initProject(dir, { controller: 'claude-code' });
@@ -43,7 +43,7 @@ test('worktrees get the ignored files, never commit them, and a worker edit to A
   clearCooldowns();
   const { dir, git } = makeRepo({ files: { 'docs/plan/p.md': PLAN } });
   initProject(dir, {});
-  git('add', '.gitignore'); git('commit', '-qm', 'ignore conductor files');
+  git('add', '.gitignore'); git('commit', '-qm', 'ignore conductor-ai files');
   const cfg = loadConfig(dir);
   cfg.providers.meddle = { type: 'cli', enabled: true, bin: 'agent-meddle', write: ['{prompt}'], read: ['{prompt}'] };
   cfg.settings.autoVerify = false;
@@ -120,7 +120,7 @@ test('UI keeps a Skills page (coming soon, points to the CLI) and the server kee
   const html = fs.readFileSync(new URL('../src/ui/index.html', import.meta.url), 'utf8');
   assert.match(html, /\['skills', 'Skills'\]/);
   assert.match(html, /Coming soon/);
-  assert.ok(html.includes("cmd('conductor skills')"));
+  assert.ok(html.includes("cmd('conductor-ai skills')"));
   const server = fs.readFileSync(new URL('../src/ui/server.js', import.meta.url), 'utf8');
   for (const r of ["'GET /api/skills'", "'POST /api/skills/toggle'"]) assert.ok(server.includes(r), r);
 });
@@ -130,7 +130,7 @@ test('synced skills reach the worker inside a worktree too', async () => {
   clearCooldowns();
   const { dir, git } = makeRepo({ files: { 'docs/plan/p.md': PLAN } });
   initProject(dir, {});
-  git('add', '.gitignore'); git('commit', '-qm', 'ignore conductor files');
+  git('add', '.gitignore'); git('commit', '-qm', 'ignore conductor-ai files');
   newSkill(dir, 'php-style', { description: 'PHP conventions' });
   syncSkills(dir);
   assert.equal(git('status', '--porcelain').trim(), '', 'syncing a skill leaves the tree clean');

@@ -35,15 +35,15 @@ templates/              AGENTS.md, controller block, playbook, plan template, sl
 
 ## Smart selector
 
-`src/selector.js` reorders the role's chain before a run; it never adds or removes providers. A task is **small** when it lists 1–2 files and its text is short (or, for reviews, the diff is under 40 kB), and **large** otherwise. Small tasks try free API models first, since they cost nothing and get the files in the prompt. Large ones try agents first, which find and edit files themselves instead of an API model rewriting whole files. Paid APIs come after both. A provider whose recent work on that role and task size mostly failed (under 60% passed, last 14 days) goes after the reliable ones, whatever its group: a write worker's attempt counts as passed only when its work also passes conductor's checks (verify, acceptance checks, repro), so a model that replies quickly with broken code isn't ranked as reliable. A provider whose last three attempts (last 24 hours) all failed for reasons other than rate limits goes last; cooldowns already handle rate limits. Under priority `speed`, measured speed decides before the free-first rule. The order inside each group is yours. `--chain`, `--provider` or `smartSelect: false` turn it off.
+`src/selector.js` reorders the role's chain before a run; it never adds or removes providers. A task is **small** when it lists 1–2 files and its text is short (or, for reviews, the diff is under 40 kB), and **large** otherwise. Small tasks try free API models first, since they cost nothing and get the files in the prompt. Large ones try agents first, which find and edit files themselves instead of an API model rewriting whole files. Paid APIs come after both. A provider whose recent work on that role and task size mostly failed (under 60% passed, last 14 days) goes after the reliable ones, whatever its group: a write worker's attempt counts as passed only when its work also passes conductor-ai's checks (verify, acceptance checks, repro), so a model that replies quickly with broken code isn't ranked as reliable. A provider whose last three attempts (last 24 hours) all failed for reasons other than rate limits goes last; cooldowns already handle rate limits. Under priority `speed`, measured speed decides before the free-first rule. The order inside each group is yours. `--chain`, `--provider` or `smartSelect: false` turn it off.
 
 ## Parallel runs (worktrees)
 
-With `--worktree` (or `conductor batch`, which always uses it), step 1 changes: instead of checking your branch and tree, conductor creates a git worktree from your last commit on a new branch `conductor/<task-id>`. The checkout lives outside the repo, in `~/.config/conductor/worktrees/<repo>-<hash>/<id>`, so test runners and file watchers in your project never see it. Ignored dependency folders (`node_modules`, `vendor`, `.venv`, `venv`) are symlinked in, so verify works without a reinstall.
+With `--worktree` (or `conductor-ai batch`, which always uses it), step 1 changes: instead of checking your branch and tree, conductor-ai creates a git worktree from your last commit on a new branch `conductor/<task-id>`. The checkout lives outside the repo, in `~/.config/conductor/worktrees/<repo>-<hash>/<id>`, so test runners and file watchers in your project never see it. Ignored dependency folders (`node_modules`, `vendor`, `.venv`, `venv`) are symlinked in, so verify works without a reinstall.
 
-The worker, file-block writes, stash-on-failure and verify all run inside that worktree. On success conductor commits the result on the branch (with `--no-verify`, since conductor's own verify already ran). On total failure the empty worktree is removed. Plan Design notes are copied into the prompt, because the plan file may not be committed yet. The task's own `verify:` line from the plan is used when present, because the other parallel tasks' code is missing from this checkout; run the full verify after merging. Prompt files go to a folder outside the repo, workers get `PWD` set to the worktree (OpenCode reads it), and conductor compares `git status` of your main checkout before and after, warning if anything appeared there.
+The worker, file-block writes, stash-on-failure and verify all run inside that worktree. On success conductor-ai commits the result on the branch (with `--no-verify`, since conductor-ai's own verify already ran). On total failure the empty worktree is removed. Plan Design notes are copied into the prompt, because the plan file may not be committed yet. The task's own `verify:` line from the plan is used when present, because the other parallel tasks' code is missing from this checkout; run the full verify after merging. Prompt files go to a folder outside the repo, workers get `PWD` set to the worktree (OpenCode reads it), and conductor-ai compares `git status` of your main checkout before and after, warning if anything appeared there.
 
-`conductor batch` checks the tasks first (they must exist, must not depend on each other, and shared files trigger a warning), gives task *n* of a role the *n*-th ready provider in that role's chain as its first choice, and runs up to `--concurrency` tasks at once. The controller then reviews and merges each `conductor/<id>` branch and removes the worktree with `conductor worktree rm`.
+`conductor-ai batch` checks the tasks first (they must exist, must not depend on each other, and shared files trigger a warning), gives task *n* of a role the *n*-th ready provider in that role's chain as its first choice, and runs up to `--concurrency` tasks at once. The controller then reviews and merges each `conductor/<id>` branch and removes the worktree with `conductor-ai worktree rm`.
 
 Everything for a run lives in `.conductor/runs/<timestamp>-<role>-<task>/`: the prompt, each provider's log, the report, `verify.log` and `summary.json`. That folder is gitignored.
 
@@ -58,14 +58,14 @@ Everything for a run lives in `.conductor/runs/<timestamp>-<role>-<task>/`: the 
 | Path traversal from model output | File blocks must resolve inside the repo |
 | Worker runs dangerous commands | Every CLI gets permission rules for that run only (agy `--settings` + `--sandbox`, Codex OS sandbox, OpenCode `OPENCODE_CONFIG_CONTENT`, Claude `--disallowedTools`): project-only edits, no push/commit/reset/sudo, no "skip permissions" flags. See [Providers → Permissions](PROVIDERS.md#permissions-what-each-agent-may-do) |
 | "Read-only" worker edits files | Enforced by the CLI where it can be (agy, Codex, OpenCode, Claude); a warning when the agent can't be held to read-only (Kimi, custom CLIs); the tree is also hashed before and after, with a warning in the summary |
-| Worker reads your API keys | Keys conductor loaded from `secrets.env` / `.conductor/.env` are removed from CLI workers' environment, except the one that CLI needs (`passEnv`); agy is also denied conductor's config, secrets, state and usage files and `.env`-type files |
+| Worker reads your API keys | Keys conductor-ai loaded from `secrets.env` / `.conductor/.env` are removed from CLI workers' environment, except the one that CLI needs (`passEnv`); agy is also denied conductor-ai's config, secrets, state and usage files and `.env`-type files |
 | Fake success | Verify runs independently of the worker's claim, and the controller reviews `git diff` |
 | Keys leaking | Keys only in env or `secrets.env` (0600); config stores env var *names* |
 | Settings UI abused by other sites | Binds 127.0.0.1 only, Host-header check (anti DNS rebinding), per-launch token required for the API |
 
 ## Inspiration
 
-conductor borrows proven ideas:
+conductor-ai borrows proven ideas:
 
 - **PAL MCP server** (formerly Zen MCP): a key-gated provider registry, and `clink`, which runs other CLIs as isolated sub-agents and returns only their final answer.
 - **Task Master AI:** assigning models to roles (main / research / fallback) in config.
@@ -76,7 +76,7 @@ conductor borrows proven ideas:
 - **Ouroboros:** settle ambiguity before any code is written (here: the plan's Open questions gate), and don't take a worker's word for what it did (the evidence check).
 - **llm-use:** per-run cost tracking with a breakdown by provider.
 
-What conductor adds: a controller that stays in charge of quality (plan → delegate → verify → review), mixed agent and chat providers in the same chain, rate-limit cooldowns shared across projects, and per-project setup for several controllers.
+What conductor-ai adds: a controller that stays in charge of quality (plan → delegate → verify → review), mixed agent and chat providers in the same chain, rate-limit cooldowns shared across projects, and per-project setup for several controllers.
 
 ## Extending
 

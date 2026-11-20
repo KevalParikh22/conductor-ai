@@ -1,5 +1,5 @@
-// conductor's own files in a project (AGENTS.md, CLAUDE.md, .conductor/, plans, skills…) stay out of git by default:
-// `init` lists them in a marked block in .gitignore. Because git can't see them then, conductor itself copies them
+// conductor-ai's own files in a project (AGENTS.md, CLAUDE.md, .conductor/, plans, skills…) stay out of git by default:
+// `init` lists them in a marked block in .gitignore. Because git can't see them then, conductor-ai itself copies them
 // into task worktrees and puts them back if a worker changes them.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -8,16 +8,16 @@ import { execFileSync } from 'node:child_process';
 export const BLOCK_START = '# >>> conductor: local files, not committed (conductor init --share keeps them in git)';
 export const BLOCK_END = '# <<< conductor';
 
-// always ignored when conductor manages a project; created files are added on top of these
+// always ignored when conductor-ai manages a project; created files are added on top of these
 export const BASE_ENTRIES = ['.conductor/', 'docs/plan/', '.claude/commands/conduct-*', '.agents/skills/conduct-*/',
-  // per-controller files conductor generates from .conductor/rules and its reviewer subagent (Q8)
+  // per-controller files conductor-ai generates from .conductor/rules and its reviewer subagent (Q8)
   '.claude/rules/conductor-*', '.agents/rules/conductor-*', '.claude/agents/conductor-*', '.agents/agents/conductor-*', '.codex/agents/conductor-*', '.opencode/agents/conductor-*'];
-// files conductor writes for a controller: ignored only when conductor created them (never your own existing file)
+// files conductor-ai writes for a controller: ignored only when conductor-ai created them (never your own existing file)
 export const CREATED_FILES = ['AGENTS.md', 'CLAUDE.md', 'GEMINI.md', 'HANDOFF.md', 'docs/architecture.md', '.mcp.json', 'opencode.json', '.agents/mcp_config.json', '.vscode/mcp.json'];
-// not copied into worktrees: conductor's own state, plans (inlined into the prompt) and MCP configs
+// not copied into worktrees: conductor-ai's own state, plans (inlined into the prompt) and MCP configs
 const NOT_IN_WORKTREES = ['.conductor/', 'docs/plan/', '.mcp.json', 'opencode.json', '.agents/mcp_config.json', '.vscode/mcp.json', '.agents/hooks.json', '.claude/settings.local.json'];
 
-/** Entries in the conductor block of .gitignore ([] when there is none). */
+/** Entries in the conductor-ai block of .gitignore ([] when there is none). */
 export function readBlock(root) {
   let text = '';
   try { text = fs.readFileSync(path.join(root, '.gitignore'), 'utf8'); } catch { return []; }
@@ -26,7 +26,7 @@ export function readBlock(root) {
   return text.slice(i + BLOCK_START.length, j).split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'));
 }
 
-/** Write (or replace) the conductor block. Creates .gitignore when missing. Returns 'added' | 'updated' | 'kept'. */
+/** Write (or replace) the conductor-ai block. Creates .gitignore when missing. Returns 'added' | 'updated' | 'kept'. */
 export function writeBlock(root, entries) {
   const file = path.join(root, '.gitignore');
   const existed = fs.existsSync(file);
@@ -39,7 +39,7 @@ export function writeBlock(root, entries) {
   return existed ? 'updated' : 'added';
 }
 
-/** Remove the conductor block (init --share). */
+/** Remove the conductor-ai block (init --share). */
 export function removeBlock(root) {
   const file = path.join(root, '.gitignore');
   let cur; try { cur = fs.readFileSync(file, 'utf8'); } catch { return false; }
@@ -82,7 +82,7 @@ function files(root, rels, limit = 2000) {
   return out;
 }
 
-/** Skill folders conductor synced into .claude/skills and .agents/skills (they carry a marker file). */
+/** Skill folders conductor-ai synced into .claude/skills and .agents/skills (they carry a marker file). */
 export function syncedSkillDirs(root) {
   const out = [];
   for (const t of ['.claude/skills', '.agents/skills']) {
@@ -100,7 +100,7 @@ export function worktreeFiles(root) {
   return [...new Set([...expand(root, ignored.filter((e) => !NOT_IN_WORKTREES.includes(e))), ...syncedSkillDirs(root)])];
 }
 
-/** Copy conductor's ignored files into a fresh worktree. Returns the relative paths copied. */
+/** Copy conductor-ai's ignored files into a fresh worktree. Returns the relative paths copied. */
 export function copyIntoWorktree(root, dir) {
   const copied = [];
   for (const rel of worktreeFiles(root)) {
@@ -114,7 +114,7 @@ export function copyIntoWorktree(root, dir) {
 }
 
 /**
- * Snapshot conductor's local files in `work` (entries from `root`'s .gitignore), so a worker's edits can be undone
+ * Snapshot conductor-ai's local files in `work` (entries from `root`'s .gitignore), so a worker's edits can be undone
  * even though git can't see them. Returns restore() → the paths that were put back.
  */
 export function snapshot(root, work) {

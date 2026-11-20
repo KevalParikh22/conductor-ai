@@ -47,7 +47,7 @@ test('a lesson seen 3 times is offered as a rule (the user promotes it), in the 
   cfg.providers = { cx: { type: 'cli', preset: 'codex', enabled: true, bin: 'v1-good2' } };
   const s = await dispatch(cfg, { role: 'build', planPath: 'docs/plan/p.md', taskId: 'T1', chain: ['cx'] });
   assert.deepEqual(s.promotable.map((x) => x.id), [l.id]);
-  assert.match(formatSummary(s), new RegExp(`promote\\?: +seen 3×: "Use the existing helpers in src/" → make it a rule: conductor lessons promote ${l.id}`));
+  assert.match(formatSummary(s), new RegExp(`promote\\?: +seen 3×: "Use the existing helpers in src/" → make it a rule: conductor-ai lessons promote ${l.id}`));
   L.promoteLesson(dir, l.id);
   assert.deepEqual(L.promotable(L.readLessons(dir)), [], 'once promoted, not offered again');
 });

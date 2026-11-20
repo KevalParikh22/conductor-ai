@@ -264,7 +264,7 @@ function shouldEscalate(s, opts, settings) {
 }
 
 /**
- * For the usage log: did the winner's work fail conductor's checks? → {} when it passed (or wasn't checked), else
+ * For the usage log: did the winner's work fail conductor-ai's checks? → {} when it passed (or wasn't checked), else
  * { ok: false, reason }. Failures the starting commit already had don't count against the worker.
  */
 export function workFailure(s) {
@@ -293,7 +293,7 @@ async function dispatchOnce(cfg, opts) {
   }
   { const mp = cfg.providers[opts.provider];
     // the web bridge is experimental and off by default: asking for it should not quietly hand the task to another worker
-    if (mp?.type === 'manual' && !mp.enabled) throw new UsageError(`"${opts.provider}" (the web chat bridge, experimental) is off: turn it on in conductor ui → Providers, then run this again`); }
+    if (mp?.type === 'manual' && !mp.enabled) throw new UsageError(`"${opts.provider}" (the web chat bridge, experimental) is off: turn it on in conductor-ai ui → Providers, then run this again`); }
   if (useWorktree && mode !== 'write') throw new UsageError(`--worktree is for write roles (build, fix, test, docs); ${role} is read-only and can already run in parallel`);
   const preWarnings = [];
 
@@ -349,7 +349,7 @@ async function dispatchOnce(cfg, opts) {
     if (mode === 'write') planGate = settings.planGate === false ? { status: 'off' } : opts.allowWeakPlan ? { status: 'waived' } : { status: 'pass' };
     if (mode === 'write' && settings.planGate !== false && !opts.allowWeakPlan) {
       const problems = checkTask(section, { verifyCmd: detectVerify(root, settings), maxFiles: settings.maxTaskFiles || 4 });
-      if (problems.length) throw new UsageError(`${opts.taskId} isn't ready to hand to a worker:\n  - ${problems.join('\n  - ')}\nFix the task in ${opts.planPath} (conductor plan check ${opts.planPath}), or pass --allow-weak-plan`);
+      if (problems.length) throw new UsageError(`${opts.taskId} isn't ready to hand to a worker:\n  - ${problems.join('\n  - ')}\nFix the task in ${opts.planPath} (conductor-ai plan check ${opts.planPath}), or pass --allow-weak-plan`);
     }
     const notes = useWorktree ? extractSection(planText, 'Design notes') : '';
     body = useWorktree
@@ -361,12 +361,12 @@ async function dispatchOnce(cfg, opts) {
   } else {
     throw new UsageError(role === 'ask' ? 'ask needs a question' : `${role} needs a task: --plan <file> --task <id>, or a task description`);
   }
-  // Q4: a fix starts from the bug. With a repro command, conductor runs it before and after; without one, the worker
-  // writes a test that fails on the original code, and conductor checks that it really does
+  // Q4: a fix starts from the bug. With a repro command, conductor-ai runs it before and after; without one, the worker
+  // writes a test that fails on the original code, and conductor-ai checks that it really does
   const reproCmd = mode === 'write' ? ((section.match(/\*\*repro:\*\*\s*`([^`]+)`/i) || [])[1] || '').trim() : '';
   const wantsRegression = role === 'fix' && !reproCmd && settings.requireRepro !== false;
-  if (reproCmd) body += `\n## Reproduce\nconductor runs \`${reproCmd}\`. It fails now (that is the bug) and must pass after your fix.\n`;
-  else if (wantsRegression) body += '\n## Regression test first\nWrite a test that fails because of this bug, then fix the code so it passes. conductor runs your new test against the ORIGINAL code: it must fail there, or it proves nothing.\n';
+  if (reproCmd) body += `\n## Reproduce\nconductor-ai runs \`${reproCmd}\`. It fails now (that is the bug) and must pass after your fix.\n`;
+  else if (wantsRegression) body += '\n## Regression test first\nWrite a test that fails because of this bug, then fix the code so it passes. conductor-ai runs your new test against the ORIGINAL code: it must fail there, or it proves nothing.\n';
   if (opts.note) body += `\n## Orchestrator note (important)\n${opts.note}\n`;
   let continueNote = '';
 
@@ -521,7 +521,7 @@ async function dispatchOnce(cfg, opts) {
   let winnerText = '', lastPromptChars = 0, pendingUsage = null;
   // hooks and .git/config can run programs: snapshot them so whatever a worker writes there is undone
   const control = inRepo ? git.snapshotControl(work) : null;
-  // conductor's git-ignored files (AGENTS.md, plans, skills): git can't see a worker's edits there, so keep a copy
+  // conductor-ai's git-ignored files (AGENTS.md, plans, skills): git can't see a worker's edits there, so keep a copy
   const restoreLocal = snapshotLocal(root, work);
   const headBefore = inRepo ? git.head(work) : '';
   const hooksRel = inRepo ? git.repoHooksPath(work) : null;
@@ -584,8 +584,8 @@ async function dispatchOnce(cfg, opts) {
       }
       const tampered = control ? git.restoreControl(control) : [];
       const putBack = restoreLocal();
-      if (putBack.length) summary.warnings.push(`${c.name} changed conductor's own files, which workers must not edit. conductor put them back: ${putBack.join(', ')}`);
-      if (tampered.length) summary.warnings.push(`${c.name} changed git hooks or config, which can run programs. conductor put them back: ${tampered.join(', ')}`);
+      if (putBack.length) summary.warnings.push(`${c.name} changed conductor-ai's own files, which workers must not edit. conductor-ai put them back: ${putBack.join(', ')}`);
+      if (tampered.length) summary.warnings.push(`${c.name} changed git hooks or config, which can run programs. conductor-ai put them back: ${tampered.join(', ')}`);
       if (headBefore && git.head(work) !== headBefore) summary.warnings.push(`${c.name} made git commits itself (HEAD moved from ${headBefore.slice(0, 8)}). Check them with git log before merging`);
       fs.writeFileSync(path.join(runDir, `${c.name}${mi ? `.${mi + 1}` : ''}.log`), res.log || '');
 
@@ -632,7 +632,7 @@ async function dispatchOnce(cfg, opts) {
       if (res.tokens) { attempt.tokens = res.tokens; attempt.cost = estimateCost(c.p, res.tokens); }
       if (res.denied?.length) attempt.denied = res.denied;
       if (res.ok && res.warnings?.length) summary.warnings.push(...res.warnings);
-      // W1: the prompt is ready for you to paste into a web chat; the run waits for `conductor import`
+      // W1: the prompt is ready for you to paste into a web chat; the run waits for `conductor-ai import`
       if (res.waiting) {
         fs.copyFileSync(res.promptFile, path.join(runDir, 'prompt.md'));
         const keep = ['role', 'task', 'planPath', 'taskId', 'files', 'note', 'base', 'focus', 'save', 'worktree', 'worktreeId', 'noVerify', 'allowUnverified', 'allowScope', 'allowWeakPlan', 'allowNoRepro', 'allowDirty', 'allowOpenQuestions', 'noReview', 'review', 'timeoutMs', 'priority'];
@@ -676,7 +676,7 @@ async function dispatchOnce(cfg, opts) {
       // one more model after a timeout; a second timeout means the provider itself is hanging, so move on
       // V8: two models whose quotas reset at the same moment share one quota (the account's): stop trying models
       // …but only once no family is left untried: agy's Claude and GPT-OSS models share one quota and reset together,
-      // while its Gemini models have their own (found 2026-11-14: conductor called the account empty, Gemini had 93%)
+      // while its Gemini models have their own (found 2026-11-14: conductor-ai called the account empty, Gemini had 93%)
       if (quota) quotaFams.add(famOf(model));
       if (quota && mi === models.length - 1 && auto) { models = [...models, ...(await auto())]; auto = null; }
       const untried = models.slice(mi + 1).some((m) => !quotaFams.has(famOf(m)));
@@ -857,7 +857,7 @@ async function dispatchOnce(cfg, opts) {
     if (useWorktree) {
       const v = summary.verify ? `verify ${summary.verify.status}` : 'not verified';
       writeWorktreeMeta(root, summary.worktree.id, { winner: summary.winner, model: summary.model });
-      summary.worktree.commit = commitWorktree(work, `conductor: ${opts.taskId || role}${summary.worktree.continued ? ' (continued)' : ''} by ${summary.winner} (${v})\n\n${(summary.status || '').replace(/^#+\s*/, '')}`);
+      summary.worktree.commit = commitWorktree(work, `conductor-ai: ${opts.taskId || role}${summary.worktree.continued ? ' (continued)' : ''} by ${summary.winner} (${v})\n\n${(summary.status || '').replace(/^#+\s*/, '')}`);
     }
   }
   if (opts.save) {

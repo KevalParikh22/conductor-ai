@@ -8,7 +8,7 @@
     {
       "name": "conductor-ai",
       "source": "./",
-      "description": "Plan, delegate, review and hand off work to cheaper worker LLMs with conductor"
+      "description": "Plan, delegate, review and hand off work to cheaper worker LLMs with conductor-ai"
     }
   ],
   "description": "conductor-ai: one controller plans and reviews, cheaper worker LLMs do the coding"

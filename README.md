@@ -33,7 +33,7 @@ Your best agent's quota runs out fast when it types every line, and its strength
 npm install -g conductor-ai     # Node 20+; or try it first: npx conductor-ai demo
 ```
 
-**Measured, not claimed** ([benchmark](docs/BENCHMARK.md)): on five multi-file tasks, three runs each, Claude Code with conductor spent **88% less** Claude quota than Claude alone ($0.09 vs $0.75), finished **13% faster** (131 s vs 150 s) and passed **15/15** hidden tests against 14/15. Codex did the winning work there; with other workers, your numbers will differ.
+**Measured, not claimed** ([benchmark](docs/BENCHMARK.md)): on five multi-file tasks, three runs each, Claude Code with conductor-ai spent **88% less** Claude quota than Claude alone ($0.09 vs $0.75), finished **13% faster** (131 s vs 150 s) and passed **15/15** hidden tests against 14/15. Codex did the winning work there; with other workers, your numbers will differ.
 
 ### 🎯 Why conductor-ai
 
@@ -51,19 +51,19 @@ npm install -g conductor-ai     # Node 20+; or try it first: npx conductor-ai de
 - **Quota-aware fallback.** A rate-limited model first falls back to the provider's next model (`fallbackModels`); when none is left, the provider cools down (honouring `Retry-After`) and the next one starts on a clean tree. A worker that runs past its time limit (20 min, or 2× a task's `eta`) is stopped with everything it started. If every provider fails, the controller does the task itself.
 - **Free first.** Default chains lean on Kilo Gateway (no key needed), OpenCode's free models, OpenRouter `:free`, Gemini API and other free tiers, so your paid quota goes to planning and review.
 - **Every agent under its own rules.** Each CLI gets permission rules for that run: write roles edit only the project and can't push; read roles can't edit; your API keys stay out of their environment. Your own CLI settings are never touched.
-- **The whole plan in one call.** `conductor batch --all` starts each task as soon as the tasks it depends on are merged, each in its own git worktree on a different provider, checks it, merges it and runs verify on the merged code. A slow task gets a second attempt on the fastest idle worker. You choose `save`, `balanced` or `speed` (`--priority`).
+- **The whole plan in one call.** `conductor-ai batch --all` starts each task as soon as the tasks it depends on are merged, each in its own git worktree on a different provider, checks it, merges it and runs verify on the merged code. A slow task gets a second attempt on the fastest idle worker. You choose `save`, `balanced` or `speed` (`--priority`).
 - **No proof, no "done".** Your tests and lint run after every write task, acceptance criteria like `` `add(2, 3)` returns `5` `` are run as checks, a fix must make its repro pass, and the worker's changed files are compared with what git shows and with the task's scope. Plans are checked before any task is handed out.
-- **Usage and budgets.** Every run is logged with time, tokens and known cost; paid APIs stop at a daily budget ($2 by default; change it in `conductor ui` → Settings). `conductor runs` and the Runs page show who did what.
-- **One skill library.** Write a skill once in conductor; every controller (Claude Code, Antigravity, Codex, OpenCode) loads it, and each worker gets the skills that match its task. Switch skills off per project. `conductor skills` or the Skills page.
-- **Stays out of your git.** `conductor init` puts conductor's own files in `.gitignore`. Workers still see them in their worktrees, and edits to them are undone.
-- **Works everywhere.** Install once, `conductor init` in any repo. CLI and MCP server. Settings page in the browser. Zero dependencies, no telemetry.
+- **Usage and budgets.** Every run is logged with time, tokens and known cost; paid APIs stop at a daily budget ($2 by default; change it in `conductor-ai ui` → Settings). `conductor-ai runs` and the Runs page show who did what.
+- **One skill library.** Write a skill once in conductor-ai; every controller (Claude Code, Antigravity, Codex, OpenCode) loads it, and each worker gets the skills that match its task. Switch skills off per project. `conductor-ai skills` or the Skills page.
+- **Stays out of your git.** `conductor-ai init` puts conductor-ai's own files in `.gitignore`. Workers still see them in their worktrees, and edits to them are undone.
+- **Works everywhere.** Install once, `conductor-ai init` in any repo. CLI and MCP server. Settings page in the browser. Zero dependencies, no telemetry.
 
 ### 🧭 How it works
 
 ```mermaid
 flowchart LR
   you([you]) --> C["Controller<br/>Claude Code, agy, Codex or OpenCode"]
-  C -- "plan: small tasks" --> R{{"conductor<br/>role chains"}}
+  C -- "plan: small tasks" --> R{{"conductor-ai<br/>role chains"}}
   R -- "build / fix" --> A["CLI agents<br/>agy, Codex, OpenCode"]
   R -- "test / docs" --> F["free APIs<br/>Kilo, OpenRouter, Zen"]
   R -- "review / ask" --> V["second opinion<br/>Codex, agy, Gemini API"]
@@ -76,7 +76,7 @@ flowchart LR
 
 1. **Plan.** `/conduct-plan` first settles open questions (asking you when the code can't answer them), then writes `docs/plan/<feature>.md`: design notes plus small tasks (1–3 files each), each with a role, acceptance criteria and a verify command.
 2. **Delegate.** `/conduct-run` sends each task to the first ready provider in its role's chain; independent tasks run in parallel worktrees.
-3. **Verify.** conductor runs your verify command, checks the worker's claimed changes against git, and reports who did the work, changed files, PASS/FAIL and any mismatch.
+3. **Verify.** conductor-ai runs your verify command, checks the worker's claimed changes against git, and reports who did the work, changed files, PASS/FAIL and any mismatch.
 4. **Review and commit.** The controller reads the diff, fixes small issues, retries with another provider, or does the task itself after two failures. A second model reviews the branch at the end.
 
 ### 🖥️ See it
@@ -109,26 +109,26 @@ flowchart LR
 </tr>
 </table>
 
-`conductor ui` opens this page on `127.0.0.1` (per-launch token, never exposed to the network).
+`conductor-ai ui` opens this page on `127.0.0.1` (per-launch token, never exposed to the network).
 
 ### ⚡ Quick start
 
 ```bash
 npm install -g conductor-ai     # Node 20+ (or the latest from GitHub: npm install -g github:KevalParikh22/conductor-ai)
-conductor setup                 # guided: finds your agents and keys, adds a free provider, tests
-cd my-app && conductor init     # rules, commands, MCP entry
-conductor add groq              # add any of 45 chat APIs: key, model, test, roles
+conductor-ai setup                 # guided: finds your agents and keys, adds a free provider, tests
+cd my-app && conductor-ai init     # rules, commands, MCP entry
+conductor-ai add groq              # add any of 45 chat APIs: key, model, test, roles
 ```
 
-Then set it up for the agent you work in (`conductor init --controller <name>` writes its rules, skills and MCP entry; [what each one gets](docs/CONTROLLERS.md)):
+Then set it up for the agent you work in (`conductor-ai init --controller <name>` writes its rules, skills and MCP entry; [what each one gets](docs/CONTROLLERS.md)):
 
 | Your controller | Set up | Then, in it |
 |---|---|---|
-| **Claude Code** | `conductor init` (or the plugin: `/plugin install conductor-ai --marketplace KevalParikh22/conductor-ai`) | `/conduct-plan add password reset by email`, then `/conduct-run docs/plan/password-reset.md` |
-| **Codex CLI** | `conductor init --controller codex-cli`, then once: `codex mcp add conductor -- conductor-ai mcp` | "Use the conduct-plan skill to plan password reset by email", then "use conduct-run on docs/plan/password-reset.md" |
-| **Antigravity CLI** | `conductor init --controller antigravity` (or `agy plugin install "$(npm root -g)/conductor-ai"`), then once: `agy mcp add conductor conductor-ai mcp` | the same `conduct-plan` and `conduct-run` skills |
-| **OpenCode** | `conductor init --controller opencode` (the MCP entry goes in `opencode.json`) | the same `conduct-plan` and `conduct-run` skills |
-| **Another agent** | `conductor controller add <name> --like <one above>` | see [Controllers](docs/CONTROLLERS.md) |
+| **Claude Code** | `conductor-ai init` (or the plugin: `/plugin install conductor-ai --marketplace KevalParikh22/conductor-ai`) | `/conduct-plan add password reset by email`, then `/conduct-run docs/plan/password-reset.md` |
+| **Codex CLI** | `conductor-ai init --controller codex-cli`, then once: `codex mcp add conductor-ai -- conductor-ai mcp` | "Use the conduct-plan skill to plan password reset by email", then "use conduct-run on docs/plan/password-reset.md" |
+| **Antigravity CLI** | `conductor-ai init --controller antigravity` (or `agy plugin install "$(npm root -g)/conductor-ai"`), then once: `agy mcp add conductor-ai conductor-ai mcp` | the same `conduct-plan` and `conduct-run` skills |
+| **OpenCode** | `conductor-ai init --controller opencode` (the MCP entry goes in `opencode.json`) | the same `conduct-plan` and `conduct-run` skills |
+| **Another agent** | `conductor-ai controller add <name> --like <one above>` | see [Controllers](docs/CONTROLLERS.md) |
 
 <details>
 <summary><b>Install the worker agents</b> (at least one)</summary>
@@ -140,7 +140,7 @@ npm install -g @openai/codex && codex login
 curl -fsSL https://opencode.ai/install | bash                          # free models
 ```
 
-Free API providers need no install: `kilo-free` works without a key; add more with `conductor add <name>` (45 chat APIs: [setup guides](docs/providers/README.md)). Full guide: [docs/GUIDE.md](docs/GUIDE.md).
+Free API providers need no install: `kilo-free` works without a key; add more with `conductor-ai add <name>` (45 chat APIs: [setup guides](docs/providers/README.md)). Full guide: [docs/GUIDE.md](docs/GUIDE.md).
 
 </details>
 
@@ -149,9 +149,9 @@ Free API providers need no install: `kilo-free` works without a key; add more wi
 <br>
 
 ```bash
-conductor init --controller antigravity   # GEMINI.md + skills in .agents/skills; then once: agy mcp add conductor conductor-ai mcp
-conductor init --controller codex-cli     # AGENTS.md + skills in .agents/skills; then once: codex mcp add conductor -- conductor-ai mcp
-conductor init --controller opencode      # AGENTS.md + skills in .agents/skills + opencode.json MCP entry
+conductor-ai init --controller antigravity   # GEMINI.md + skills in .agents/skills; then once: agy mcp add conductor-ai conductor-ai mcp
+conductor-ai init --controller codex-cli     # AGENTS.md + skills in .agents/skills; then once: codex mcp add conductor-ai -- conductor-ai mcp
+conductor-ai init --controller opencode      # AGENTS.md + skills in .agents/skills + opencode.json MCP entry
 ```
 
 </details>
@@ -159,25 +159,25 @@ conductor init --controller opencode      # AGENTS.md + skills in .agents/skills
 ### 💸 Built to save tokens
 
 - **Smart selector.** Every task tries the cheapest provider that can do it: free API models for small tasks with known files, agents for bigger ones, paid APIs last. Providers that keep failing drop to the end.
-- **Compact diffs.** `conductor diff` is what the controller reviews: whitespace-only changes, lockfiles and build output are left out, and long files are cut. It prints how much smaller than `git diff` it was, every time.
+- **Compact diffs.** `conductor-ai diff` is what the controller reviews: whitespace-only changes, lockfiles and build output are left out, and long files are cut. It prints how much smaller than `git diff` it was, every time.
 - **Short reports.** The controller reads only the worker's RESULT block; tool transcripts stay in the run folder.
-- **See what it kept out.** Every run's summary, `conductor usage` and the Runs page show an estimate of the context kept out of each model (counted from characters, not measured Claude usage).
+- **See what it kept out.** Every run's summary, `conductor-ai usage` and the Runs page show an estimate of the context kept out of each model (counted from characters, not measured Claude usage).
 
 ### 🔀 You decide who does what
 
 - **Per task:** add `- **provider:** codex-cli` to a plan task.
 - **By rule:** `"routes": [{ "files": "src/frontend/**", "provider": "grok-cli" }]`, matched on files, task text or role.
-- **Ready-made rules:** `conductor route --add starter` adds a starter set (security and database work to your strongest agent, docs and small edits to free models). There are 12 rules in the library; see the [routing guide](docs/ROUTING.md).
-- **Preview:** `conductor route "task" --files a.tsx`, or Roles → Routing in the UI, shows where a task would go before anything runs.
-- **Local models:** `conductor local` finds Ollama, LM Studio, llama.cpp and others running on your machine and turns them on.
+- **Ready-made rules:** `conductor-ai route --add starter` adds a starter set (security and database work to your strongest agent, docs and small edits to free models). There are 12 rules in the library; see the [routing guide](docs/ROUTING.md).
+- **Preview:** `conductor-ai route "task" --files a.tsx`, or Roles → Routing in the UI, shows where a task would go before anything runs.
+- **Local models:** `conductor-ai local` finds Ollama, LM Studio, llama.cpp and others running on your machine and turns them on.
 
 ### 🛡️ Every agent runs under its own rules
 
-conductor passes each CLI its permission rules **for that run only**, through the CLI's own sandbox or permission system. No "skip all permissions" flags.
+conductor-ai passes each CLI its permission rules **for that run only**, through the CLI's own sandbox or permission system. No "skip all permissions" flags.
 
 | Agent | Write roles (`build`, `fix`, `test`, `docs`) | Read roles (`review`, `ask`) |
 |---|---|---|
-| **Antigravity** (`agy`) | `--sandbox`: commands run without network, home folder read-only; build and test commands (`npx tsc`, `npx jest`, your verify command…) run without asking; `.git`, `.env` files and conductor's secrets denied | writes to the project denied |
+| **Antigravity** (`agy`) | `--sandbox`: commands run without network, home folder read-only; build and test commands (`npx tsc`, `npx jest`, your verify command…) run without asking; `.git`, `.env` files and conductor-ai's secrets denied | writes to the project denied |
 | **Codex** | OS sandbox `workspace-write`, no network, never asks | OS sandbox `read-only` |
 | **OpenCode** | edits inside the project; outside folders denied (shell not OS-sandboxed) | edits, web and mutating shell commands denied |
 | **Claude Code** | edits auto-approved; other commands that would ask are refused | edit tools disabled |
@@ -188,9 +188,9 @@ conductor passes each CLI its permission rules **for that run only**, through th
 | **Goose** | no permission control: use in a throwaway worktree | tool-less chat mode |
 | **Kimi**, custom CLIs | no permission control: use in a throwaway worktree | ⚠ not enforced, runs warn |
 
-For every agent: no `git push`, `commit`, `reset`, `checkout`, `rebase`, `stash`, `clean` or `sudo`; only the API key that CLI needs is passed to it. conductor adds its own guards on top: clean tree and non-protected branch for write roles, failed attempts stashed (never lost), and changes to `AGENTS.md`, plans and controller files reverted. Details and the exact flags: [Providers → Permissions](docs/PROVIDERS.md#permissions-what-each-agent-may-do).
+For every agent: no `git push`, `commit`, `reset`, `checkout`, `rebase`, `stash`, `clean` or `sudo`; only the API key that CLI needs is passed to it. conductor-ai adds its own guards on top: clean tree and non-protected branch for write roles, failed attempts stashed (never lost), and changes to `AGENTS.md`, plans and controller files reverted. Details and the exact flags: [Providers → Permissions](docs/PROVIDERS.md#permissions-what-each-agent-may-do).
 
-**Is it safe?** Read [SECURITY.md](SECURITY.md): what conductor guards (sandboxes, scrubbed keys, git hooks and config restored after every worker, checked model output), what it can't (tests run code the worker wrote; agents can read what you can read; free routes may log prompts), and a checklist for sensitive projects.
+**Is it safe?** Read [SECURITY.md](SECURITY.md): what conductor-ai guards (sandboxes, scrubbed keys, git hooks and config restored after every worker, checked model output), what it can't (tests run code the worker wrote; agents can read what you can read; free routes may log prompts), and a checklist for sensitive projects.
 
 ### 🔌 Providers
 
@@ -204,9 +204,9 @@ For every agent: no `git push`, `commit`, `reset`, `checkout`, `rebase`, `stash`
 | **Clouds** | Azure OpenAI · Amazon Bedrock · anything else through a LiteLLM proxy |
 | **Local models** | Ollama · LM Studio · llama.cpp · vLLM · LocalAI · Jan |
 
-Chat APIs can't run your tests, so conductor applies the files they return (refusing paths outside the repo) and runs verify for them. `conductor models <provider>` lists current models; free lists change weekly.
+Chat APIs can't run your tests, so conductor-ai applies the files they return (refusing paths outside the repo) and runs verify for them. `conductor-ai models <provider>` lists current models; free lists change weekly.
 
-Every one has a setup guide: **[docs/providers](docs/providers/README.md)**. See them all with `conductor providers`; add one with `conductor add <name>` or the **Add a provider** gallery in `conductor ui`. Any other OpenAI-compatible endpoint works too.
+Every one has a setup guide: **[docs/providers](docs/providers/README.md)**. See them all with `conductor-ai providers`; add one with `conductor-ai add <name>` or the **Add a provider** gallery in `conductor-ai ui`. Any other OpenAI-compatible endpoint works too.
 
 <details>
 <summary><b>Commands</b></summary>
@@ -225,18 +225,18 @@ Every one has a setup guide: **[docs/providers](docs/providers/README.md)**. See
 
 | CLI | |
 |---|---|
-| `conductor run <role> [task] [--plan f --task T1] [--provider p] [--chain a,b] [--note …] [--files a,b] [--json]` | Delegate with fallback |
-| `conductor build\|fix\|test\|docs\|review\|ask …` | Shortcuts for `run <role>`; add `--worktree` to run on branch `conductor/<id>` |
-| `conductor batch --plan f --tasks T2,T3 [--concurrency 4]` | Independent tasks in parallel, one worktree each |
-| `conductor diff [branch]` | Compact diff to review: lockfiles and whitespace left out, new files included |
-| `conductor route "task" [--files a,b]` · `conductor local [--enable]` | Where a task would go and why; find and turn on local models |
-| `conductor retry <task> --note "…" [--provider p]` | The task's worker continues in its existing worktree with your note, instead of starting over |
-| `conductor worktree [list]` · `conductor worktree rm <id>\|--all [--force]` | See and clean up worktrees |
-| `conductor setup` · `conductor add <provider>` · `conductor providers` · `conductor keys` | Guided setup; add any of 45 chat APIs; list them; manage keys |
-| `conductor init [--controller claude-code\|antigravity\|codex-cli\|opencode]` | Set up a project |
-| `conductor ui` · `conductor status` · `conductor doctor [--live] [--details]` · `conductor verify` | Manage and check |
-| `conductor runs [show <run>]` · `conductor usage [--days 7]` | Run history; runs, tokens and cost per provider |
-| `conductor models [provider]` · `conductor cooldown [--clear]` · `conductor mcp` | Model lists, rate-limit state, MCP server |
+| `conductor-ai run <role> [task] [--plan f --task T1] [--provider p] [--chain a,b] [--note …] [--files a,b] [--json]` | Delegate with fallback |
+| `conductor-ai build\|fix\|test\|docs\|review\|ask …` | Shortcuts for `run <role>`; add `--worktree` to run on branch `conductor/<id>` |
+| `conductor-ai batch --plan f --tasks T2,T3 [--concurrency 4]` | Independent tasks in parallel, one worktree each |
+| `conductor-ai diff [branch]` | Compact diff to review: lockfiles and whitespace left out, new files included |
+| `conductor-ai route "task" [--files a,b]` · `conductor-ai local [--enable]` | Where a task would go and why; find and turn on local models |
+| `conductor-ai retry <task> --note "…" [--provider p]` | The task's worker continues in its existing worktree with your note, instead of starting over |
+| `conductor-ai worktree [list]` · `conductor-ai worktree rm <id>\|--all [--force]` | See and clean up worktrees |
+| `conductor-ai setup` · `conductor-ai add <provider>` · `conductor-ai providers` · `conductor-ai keys` | Guided setup; add any of 45 chat APIs; list them; manage keys |
+| `conductor-ai init [--controller claude-code\|antigravity\|codex-cli\|opencode]` | Set up a project |
+| `conductor-ai ui` · `conductor-ai status` · `conductor-ai doctor [--live] [--details]` · `conductor-ai verify` | Manage and check |
+| `conductor-ai runs [show <run>]` · `conductor-ai usage [--days 7]` | Run history; runs, tokens and cost per provider |
+| `conductor-ai models [provider]` · `conductor-ai cooldown [--clear]` · `conductor-ai mcp` | Model lists, rate-limit state, MCP server |
 
 Exit codes: `0` ok · `2` usage or unsafe repo state · `3` every provider failed (the controller takes over) · `4` code written but not verified (no verify command; `--allow-unverified` accepts it).
 

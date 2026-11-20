@@ -1,4 +1,4 @@
-// Checks conductor enforces around a write task (by code, not by asking the model):
+// Checks conductor-ai enforces around a write task (by code, not by asking the model):
 //   base check (H4): run verify on the starting commit first, so failures that were already there aren't blamed on
 //                    the worker. Cached per commit + command; parallel tasks on the same commit share one run.
 //   scope gate (Q5): files the worker changed that the task doesn't list.
@@ -285,7 +285,7 @@ const NAMED_EXPORT = (n) => new RegExp(`export\\s+(?:declare\\s+)?(?:async\\s+)?
   `|export\\s*\\{[^}]*\\b(?:\\w+\\s+as\\s+)?${esc(n)}\\b[^}]*\\}|(?:module\\.)?exports\\.${esc(n)}\\s*=|module\\.exports\\s*=\\s*\\{[^}]*\\b${esc(n)}\\b`);
 
 /**
- * Names the task needs as named exports: what its acceptance checks call directly (conductor imports them to run
+ * Names the task needs as named exports: what its acceptance checks call directly (conductor-ai imports them to run
  * the check) and what it explicitly says to export ("exporting `toQuery(params)`"). Methods (`keys()`) aren't.
  */
 export function exportNames(section, checkExprs = []) {

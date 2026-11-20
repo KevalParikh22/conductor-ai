@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# conductor-ai installer: checks Node, installs conductor globally from npm (or GitHub), runs first-time setup.
+# conductor-ai installer: checks Node, installs conductor-ai globally from npm (or GitHub), runs first-time setup.
 #   curl -fsSL https://raw.githubusercontent.com/KevalParikh22/conductor-ai/main/scripts/install.sh | bash
 # Options (environment): CONDUCTOR_REF=<branch|tag|commit> installs that version from GitHub instead of npm.
 set -euo pipefail
@@ -22,18 +22,18 @@ say "Installing conductor-ai ($SRC) with npm"
 if ! npm install -g "$SRC"; then
   die "npm install failed. If it was a permissions error, use a Node version manager (nvm, fnm) instead of sudo."
 fi
-command -v conductor >/dev/null 2>&1 || die "installed, but 'conductor' is not on your PATH. Add \"\$(npm prefix -g)/bin\" to PATH."
+command -v conductor-ai >/dev/null 2>&1 || die "installed, but 'conductor-ai' is not on your PATH. Add \"\$(npm prefix -g)/bin\" to PATH."
 
 say "First-time setup"
-conductor setup
+conductor-ai setup
 
 cat <<'NEXT'
 
 Done. Next:
-  conductor providers --free     free chat APIs you can add (kilo-free already works, no key)
-  conductor add <name>           add one: key, model, test, roles (guides: docs/providers/)
-  cd my-app && conductor init    set up a project
-  conductor doctor --live        check everything
-  conductor ui                   settings page
+  conductor-ai providers --free     free chat APIs you can add (kilo-free already works, no key)
+  conductor-ai add <name>           add one: key, model, test, roles (guides: docs/providers/)
+  cd my-app && conductor-ai init    set up a project
+  conductor-ai doctor --live        check everything
+  conductor-ai ui                   settings page
 Coding agents (optional): see docs/providers/README.md (Antigravity, Codex, OpenCode, Copilot, Grok, Kiro, Aider, Goose, Kimi, Claude Code).
 NEXT

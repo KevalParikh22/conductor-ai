@@ -76,7 +76,7 @@ export function routeErrors(routes, providers) {
   return errors;
 }
 
-// Rule library: ready-made rules you can add with `conductor route --add <id>` or in the UI (Roles → Routing).
+// Rule library: ready-made rules you can add with `conductor-ai route --add <id>` or in the UI (Roles → Routing).
 // Each names the kind of worker it wants; `resolveTemplate` fills in your enabled providers of that kind.
 // Listed in the order they should sit in `routes`: risky work first, so it wins over the broader rules below it.
 const STRONG = ['claude-cli', 'codex-cli', 'antigravity-cli', 'kiro-cli', 'copilot-cli', 'opencode', 'grok-cli', 'goose', 'aider', 'kimi-cli'];

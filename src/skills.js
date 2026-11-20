@@ -5,7 +5,7 @@
 //
 // A skill is the standard SKILL.md (name + description frontmatter, Markdown body, optional extra files), the format
 // Claude Code, Antigravity, Codex and OpenCode all read. `sync` copies the active ones into .claude/skills/ and
-// .agents/skills/ so each controller loads them natively. For workers, conductor adds only the skills that match the
+// .agents/skills/ so each controller loads them natively. For workers, conductor-ai adds only the skills that match the
 // task: optional `metadata` in the frontmatter says when (roles, files, text), the same way routing rules match.
 //
 //   ---
@@ -28,7 +28,7 @@ export const globalSkillsDir = () => path.join(GLOBAL_DIR, 'skills');
 export const projectSkillsDir = (root) => path.join(root, PROJECT_DIRNAME, 'skills');
 // where controllers load skills from; Antigravity, Codex, OpenCode and Copilot read .agents/skills
 export const TARGETS = [...new Set(Object.values(CONTROLLERS).map((c) => c.skills).filter(Boolean))]; // from the controller registry (V6)
-const MARK = '.conductor-skill'; // marks a synced copy, so conductor only ever removes its own
+const MARK = '.conductor-skill'; // marks a synced copy, so conductor-ai only ever removes its own
 const NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const INLINE_MAX = 6000; // characters of skill text inlined for API workers, which can't open files
 
@@ -123,7 +123,7 @@ export function saveSkill(root, name, text) {
 
 /**
  * Copy the active skills into .claude/skills/ and .agents/skills/, remove copies of skills that are off or gone, and
- * keep the copies out of git. Only folders conductor made (marked) are ever replaced or removed.
+ * keep the copies out of git. Only folders conductor-ai made (marked) are ever replaced or removed.
  */
 export function syncSkills(root) {
   const active = listSkills(root).filter((s) => s.on);
@@ -137,7 +137,7 @@ export function syncSkills(root) {
       if (fs.existsSync(dst) && !ours) { report.skipped.push(`${t}/${s.name} (your own skill is there)`); continue; }
       fs.rmSync(dst, { recursive: true, force: true });
       fs.cpSync(s.dir, dst, { recursive: true });
-      fs.writeFileSync(path.join(dst, MARK), `managed by conductor: edit ${s.file} instead, then run conductor skills sync\n`);
+      fs.writeFileSync(path.join(dst, MARK), `managed by conductor-ai: edit ${s.file} instead, then run conductor-ai skills sync\n`);
       (ours ? report.updated : report.added).push(`${t}/${s.name}`);
     }
     let names = [];
@@ -147,7 +147,7 @@ export function syncSkills(root) {
     }
   }
   // keep synced copies out of git through git's local exclude file, so adding or switching a skill never changes
-  // .gitignore (only when conductor manages this project's ignores: not with init --share)
+  // .gitignore (only when conductor-ai manages this project's ignores: not with init --share)
   const block = readBlock(root);
   if (block.length) {
     const stale = block.filter((e) => TARGETS.some((t) => e.startsWith(`${t}/`)) && !e.includes('conduct-'));
@@ -158,7 +158,7 @@ export function syncSkills(root) {
 }
 
 const EX_START = '# >>> conductor skills (synced copies)', EX_END = '# <<< conductor skills';
-/** Replace conductor's block in .git/info/exclude (local to this clone, never committed). */
+/** Replace conductor-ai's block in .git/info/exclude (local to this clone, never committed). */
 function writeExclude(root, entries) {
   let dir;
   try { dir = execFileSync('git', ['rev-parse', '--git-common-dir'], { cwd: root, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { return; }

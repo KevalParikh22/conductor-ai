@@ -7,7 +7,7 @@ A coding agent that runs on your machine: it reads the repo, edits files and run
 | | |
 |---|---|
 | Kind | Local agent (`kimi`) |
-| conductor name | `kimi-cli` |
+| conductor-ai name | `kimi-cli` |
 | Docs | https://www.kimi.com/code/docs/en/kimi-code-cli/getting-started.html |
 
 ## Set up
@@ -18,14 +18,14 @@ A coding agent that runs on your machine: it reads the repo, edits files and run
    ```
    Or: `uv tool install --python 3.13 kimi-cli`
 2. Sign in once: `kimi, then /login`
-3. Enable `kimi-cli` in `conductor ui` → Providers (or run `conductor setup`, which finds installed agents), then check it:
+3. Enable `kimi-cli` in `conductor-ai ui` → Providers (or run `conductor-ai setup`, which finds installed agents), then check it:
    ```bash
-   conductor doctor --live
+   conductor-ai doctor --live
    ```
 
-## What it may do under conductor
+## What it may do under conductor-ai
 
 - **Write roles:** no permission control in print mode: it can run any command. Only use it in a container or a worktree you can throw away
-- **Read roles:** NOT enforced: read-only is only asked for in the prompt (**not enforced** by the CLI: conductor warns and checks git afterwards)
+- **Read roles:** NOT enforced: read-only is only asked for in the prompt (**not enforced** by the CLI: conductor-ai warns and checks git afterwards)
 
-conductor passes these rules on the command line for each run; your own settings for the CLI are not changed. Details: [Providers → Permissions](../PROVIDERS.md#permissions-what-each-agent-may-do).
+conductor-ai passes these rules on the command line for each run; your own settings for the CLI are not changed. Details: [Providers → Permissions](../PROVIDERS.md#permissions-what-each-agent-may-do).

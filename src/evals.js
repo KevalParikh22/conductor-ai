@@ -1,16 +1,16 @@
-// Harness eval suite (H9): measure conductor itself on fixed tasks with hidden tests, so every change to prompts,
+// Harness eval suite (H9): measure conductor-ai itself on fixed tasks with hidden tests, so every change to prompts,
 // gates or routing is judged by numbers, not impressions.
 //
 // evals/<id>/
 //   eval.json    title, role, difficulty, tags; score: "hidden" (default) or "mutants"; protect: files the worker
 //                must not change (restored before scoring)
-//   plan.md      a plan with one task, T1 (passes conductor plan check)
+//   plan.md      a plan with one task, T1 (passes conductor-ai plan check)
 //   repo/        the starting project
 //   hidden/      tests the worker never sees: copied in after it finishes (score "hidden")
 //   mutants/<m>/ buggy versions of the code: the worker's own tests must fail on each (score "mutants")
 //   solution/    a reference solution, used only by the self-check
 //
-// The self-check (`conductor eval check`, also a CI test) proves each task is fair without any LLM: the score must be
+// The self-check (`conductor-ai eval check`, also a CI test) proves each task is fair without any LLM: the score must be
 // a fail on the starting project and a pass on the reference solution.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -52,7 +52,7 @@ export function prepareEval(task, dest) {
   fs.copyFileSync(path.join(task.dir, 'plan.md'), path.join(dest, 'docs', 'plan', 'eval.md'));
   fs.writeFileSync(path.join(dest, '.gitignore'), 'node_modules/\n.conductor/\n');
   git(dest, 'init', '-q', '-b', 'main');
-  git(dest, 'config', 'user.email', 'eval@conductor.local'); git(dest, 'config', 'user.name', 'conductor eval');
+  git(dest, 'config', 'user.email', 'eval@conductor.local'); git(dest, 'config', 'user.name', 'conductor-ai eval');
   git(dest, 'add', '-A'); git(dest, 'commit', '-qm', `eval: ${task.id} start`);
   git(dest, 'switch', '-qc', `eval/${task.id}`);
   return dest;
@@ -115,7 +115,7 @@ export async function checkEvals({ ids, dir } = {}) {
       prepareEval(task, work);
       if ((await scoreEval(task, work)).pass) problems.push('already passes on the starting project: the task tests nothing');
       // the reference solutions ship only in the git repository, not the npm package (V10): the check needs them
-      if (!fs.existsSync(path.join(task.dir, 'solution'))) throw new Error('no reference solution in this install: run conductor eval check from a clone of the repository');
+      if (!fs.existsSync(path.join(task.dir, 'solution'))) throw new Error('no reference solution in this install: run conductor-ai eval check from a clone of the repository');
       fs.cpSync(path.join(task.dir, 'solution'), work, { recursive: true });
       const own = await nodeTest(work);
       if (own.code !== 0) problems.push(`the reference solution fails the project's own tests:\n${tail(own)}`);
@@ -134,8 +134,8 @@ export async function checkEvals({ ids, dir } = {}) {
 }
 
 /**
- * Run conductor on each task the way a user would (plan → run → gates → verify), then score the result against the
- * hidden truth. Compares conductor's verdict (outcome) with reality (pass): a "done" that fails is the worst case.
+ * Run conductor-ai on each task the way a user would (plan → run → gates → verify), then score the result against the
+ * hidden truth. Compares conductor-ai's verdict (outcome) with reality (pass): a "done" that fails is the worst case.
  */
 /**
  * V1: lessons across eval runs. Each eval task is a fresh repo, so its lessons would be lost; with a store file they
@@ -182,13 +182,13 @@ export async function runEvals({ ids, dir, chain, provider, samples, keep = fals
         cost: s.samplesCost?.cost ?? s.attempts.reduce((t, a) => t + (a.cost || 0), 0),
         acceptance: s.acceptance ? `${s.acceptance.met}/${s.acceptance.total}` : null,
         outside: s.scope?.outside || [],
-        suspectTests: s.verify?.suspectTests || null, // conductor judged the code right and the worker's tests wrong
+        suspectTests: s.verify?.suspectTests || null, // conductor-ai judged the code right and the worker's tests wrong
         handedOn: (s.escalated || []).length,
         lessonsInPrompt: (s.lessons || []).length,
       });
       const sc = await scoreEval(task, work);
       row.pass = sc.pass; row.detail = sc.detail;
-      // no model was reached at all (DNS, offline): the run says nothing about conductor, so it doesn't count
+      // no model was reached at all (DNS, offline): the run says nothing about conductor-ai, so it doesn't count
       const tried = s.attempts.filter((a) => !a.skipped);
       if (!s.winner && tried.length && tried.every((a) => /^network|ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET/i.test(a.reason || ''))) {
         row.outcome = 'error'; row.detail = `no provider could be reached (${tried[0].reason}): not counted`;
@@ -219,9 +219,9 @@ export function summarize(results) {
     passed: count((r) => r.pass),
     // errors (no provider reachable, broken setup) say nothing about conductor: left out of the rate
     passRate: n - count((r) => r.outcome === 'error') ? Math.round((count((r) => r.pass) / (n - count((r) => r.outcome === 'error'))) * 100) : 0,
-    // conductor's verdict against the hidden truth
+    // conductor-ai's verdict against the hidden truth
     rightDone: count((r) => done(r) && r.pass), // said done, really done
-    falseDone: count((r) => done(r) && !r.pass), // said done, but broken: the case conductor exists to prevent
+    falseDone: count((r) => done(r) && !r.pass), // said done, but broken: the case conductor-ai exists to prevent
     caught: count((r) => !done(r) && !r.pass && r.outcome !== 'error'), // said not done, and it wasn't
     falseAlarm: count((r) => !done(r) && r.pass && r.outcome !== 'error'), // said not done, but it was fine
     errors: count((r) => r.outcome === 'error'),
@@ -243,11 +243,11 @@ export function loadResult(which, exclude) {
 export function formatEvals(report, prev) {
   const s = report.summary;
   const L = ['', '====================== CONDUCTOR EVAL ======================'];
-  L.push(`conductor ${report.version}${report.samples > 1 ? ` · ${report.samples} attempts per task` : ''}${report.label ? ` · ${report.label}` : ''}${report.provider ? ` · provider ${report.provider}` : report.chain ? ` · chain ${report.chain.join(',')}` : ' · your routing'}`);
+  L.push(`conductor-ai ${report.version}${report.samples > 1 ? ` · ${report.samples} attempts per task` : ''}${report.label ? ` · ${report.label}` : ''}${report.provider ? ` · provider ${report.provider}` : report.chain ? ` · chain ${report.chain.join(',')}` : ' · your routing'}`);
   for (const r of report.results) {
     const mark = r.pass ? '✓' : '✗';
     const tags = `${r.suspectTests ? '  [said: code looks right, tests wrong]' : ''}${r.handedOn ? `  [handed on ×${r.handedOn}]` : ''}`;
-    const verdict = r.outcome === 'done' && !r.pass ? '  ← conductor said done, hidden tests fail' : r.outcome !== 'done' && r.pass && r.outcome !== 'error' ? '  ← work was fine, conductor flagged it' : '';
+    const verdict = r.outcome === 'done' && !r.pass ? '  ← conductor-ai said done, hidden tests fail' : r.outcome !== 'done' && r.pass && r.outcome !== 'error' ? '  ← work was fine, conductor-ai flagged it' : '';
     L.push(`${mark} ${r.id.padEnd(22)} ${String(r.outcome || '-').padEnd(13)} ${(r.winner || '-').padEnd(16)} ${String(r.seconds).padStart(4)}s${r.acceptance ? `  acc ${r.acceptance}` : ''}${r.lessonsInPrompt ? `  [${r.lessonsInPrompt} lesson(s) in prompt]` : ''}${tags}${verdict}`);
     if (!r.pass && r.detail) L.push(`    ${r.detail.split('\n')[0].slice(0, 150)}`);
   }

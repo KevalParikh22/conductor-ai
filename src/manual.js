@@ -1,4 +1,4 @@
-// W1: the manual web bridge. You paste a run's prompt into any web chat and bring the answer back; conductor never
+// W1: the manual web bridge. You paste a run's prompt into any web chat and bring the answer back; conductor-ai never
 // drives a browser, holds cookies or logs into an account (decided 2026-11-11). The answer is replayed through the
 // normal pipeline as the manual provider's reply: for write roles its file blocks are applied with the same protected
 // file rules, then verify, the scope gate and every other check run, exactly as for an API worker.
@@ -16,7 +16,7 @@ export class ImportError extends Error {}
  */
 export async function importAnswer(cfg, runId, text, { dispatch, onEvent } = {}) {
   const r = readRun(cfg.root, runId);
-  if (!r) throw new ImportError(`no run "${runId}" (see conductor runs)`);
+  if (!r) throw new ImportError(`no run "${runId}" (see conductor-ai runs)`);
   const s = r.summary;
   if (!s.waiting) throw new ImportError(`run ${r.id} isn't waiting for an answer (only runs with --provider manual are)`);
   if (s.importedAs) throw new ImportError(`run ${r.id} already has its answer: run ${s.importedAs}`);
@@ -44,6 +44,6 @@ export function importResearch(root, file, save) {
     text = execFileSync('pdftotext', ['-layout', file, '-'], { maxBuffer: 64 << 20 }).toString();
   } else text = fs.readFileSync(file, 'utf8');
   fs.mkdirSync(path.dirname(dest), { recursive: true });
-  fs.writeFileSync(dest, `<!-- imported by conductor from ${path.basename(file)} on ${new Date().toISOString().slice(0, 10)}: a web chat's research, check it before relying on it -->\n${text.trimEnd()}\n`);
+  fs.writeFileSync(dest, `<!-- imported by conductor-ai from ${path.basename(file)} on ${new Date().toISOString().slice(0, 10)}: a web chat's research, check it before relying on it -->\n${text.trimEnd()}\n`);
   return path.relative(root, dest).split(path.sep).join('/');
 }

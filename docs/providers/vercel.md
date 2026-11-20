@@ -6,34 +6,34 @@ Vercel's gateway to models from many labs.
 
 | | |
 |---|---|
-| Kind | Chat API (OpenAI-compatible): returns code that conductor applies |
+| Kind | Chat API (OpenAI-compatible): returns code that conductor-ai applies |
 | Cost | Some preview models are free; otherwise credits. |
 | Key | `AI_GATEWAY_API_KEY` from https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fai%2Fapi-keys |
 | Endpoint | `https://ai-gateway.vercel.sh/v1` |
-| Default model | picked automatically from the live list (coding models first); choose your own with `conductor models vercel --all` |
-| conductor name | `vercel` |
+| Default model | picked automatically from the live list (coding models first); choose your own with `conductor-ai models vercel --all` |
+| conductor-ai name | `vercel` |
 | Provider docs | https://vercel.com/docs/ai-gateway/sdks-and-apis/openai-chat-completions |
 | Checked | 2026-11 |
 
 ## Set up
 
 1. Create an API key: https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fai%2Fapi-keys
-2. Add it to conductor. It asks for the key (hidden input), lets you pick a model, sends one test prompt and adds it to the `docs`, `test`, `review` and `ask` roles:
+2. Add it to conductor-ai. It asks for the key (hidden input), lets you pick a model, sends one test prompt and adds it to the `docs`, `test`, `review` and `ask` roles:
    ```bash
-   conductor add vercel
+   conductor-ai add vercel
    ```
 3. Check it any time:
    ```bash
-   conductor doctor --live
+   conductor-ai doctor --live
    ```
 
-Or click **Add** on its card in `conductor ui` → Providers.
+Or click **Add** on its card in `conductor-ai ui` → Providers.
 
 ## Without the wizard
 
 Save the key (hidden input; or pipe it in):
 ```bash
-conductor keys set AI_GATEWAY_API_KEY
+conductor-ai keys set AI_GATEWAY_API_KEY
 ```
 
 Then add this to `~/.config/conductor/config.json` (all projects) or `.conductor/config.json` (one project):
@@ -50,13 +50,13 @@ Then add this to `~/.config/conductor/config.json` (all projects) or `.conductor
   }
 }
 ```
-List models: `conductor models vercel --all`. Put `vercel` in any role's chain in `conductor ui` → Roles & fallback.
+List models: `conductor-ai models vercel --all`. Put `vercel` in any role's chain in `conductor-ai ui` → Roles & fallback.
 
-The variable name only tells conductor where to find the key; the provider never sees it. To use a key you already keep under another name, set `"apiKeyEnv": "YOUR_VAR"` on `vercel`.
+The variable name only tells conductor-ai where to find the key; the provider never sees it. To use a key you already keep under another name, set `"apiKeyEnv": "YOUR_VAR"` on `vercel`.
 
 ## Troubleshooting
 
-- **401 / 403**: the key is wrong, expired, or still a placeholder. Run `conductor keys` to see where it comes from, then `conductor keys set AI_GATEWAY_API_KEY`.
-- **404 or "model not found"**: the model id changed. Pick a current one with `conductor models vercel --all`.
-- **429**: rate limit. conductor puts the provider on cooldown and moves to the next one in the chain; `conductor cooldown --clear vercel` resets it.
-- **Empty reply**: some free routes return nothing now and then; conductor retries once, then falls back.
+- **401 / 403**: the key is wrong, expired, or still a placeholder. Run `conductor-ai keys` to see where it comes from, then `conductor-ai keys set AI_GATEWAY_API_KEY`.
+- **404 or "model not found"**: the model id changed. Pick a current one with `conductor-ai models vercel --all`.
+- **429**: rate limit. conductor-ai puts the provider on cooldown and moves to the next one in the chain; `conductor-ai cooldown --clear vercel` resets it.
+- **Empty reply**: some free routes return nothing now and then; conductor-ai retries once, then falls back.

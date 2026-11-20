@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for helping! conductor has **no runtime dependencies**. Please keep it that way.
+Thanks for helping! conductor-ai has **no runtime dependencies**. Please keep it that way.
 
 ```bash
 git clone https://github.com/KevalParikh22/conductor-ai && cd conductor-ai
@@ -17,7 +17,7 @@ Guidelines: small PRs; add a test in `test/` for behaviour changes; never log or
 
 ## Licensing of contributions
 
-conductor's core is MIT licensed, and it stays MIT. Paid add-ons may come later under a separate licence (the Functional Source License), in their own folder or package; they build on the core and never change its licence.
+conductor-ai's core is MIT licensed, and it stays MIT. Paid add-ons may come later under a separate licence (the Functional Source License), in their own folder or package; they build on the core and never change its licence.
 
 By sending a contribution (a pull request, patch or suggested change), you agree that:
 - you wrote it, or have the right to submit it;

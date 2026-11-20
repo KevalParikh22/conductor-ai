@@ -13,8 +13,8 @@ const cli = (args, env = {}) => spawnSync(process.execPath, [BIN, ...args], { en
 const longest = (text) => Math.max(...text.split('\n').map((l) => [...l].length));
 
 test('wrapping: at words, continuing under the text column; short lines, trailing spaces and long words handled', () => {
-  const line = '  conductor setup                 guided setup: finds your agents and keys, adds a free provider';
-  assert.equal(wrapForTerminal(line, 80), '  conductor setup                 guided setup: finds your agents and keys, adds\n                                  a free provider');
+  const line = '  conductor-ai setup                 guided setup: finds your agents and keys, adds a free provider';
+  assert.equal(wrapForTerminal(line, 80), '  conductor-ai setup                 guided setup: finds your agents and keys,\n                                     adds a free provider');
   assert.equal(wrapForTerminal('short', 80), 'short');
   assert.equal(wrapForTerminal('a    \nb', 80), 'a    \nb', 'a short line keeps its spaces');
   assert.equal(longest(wrapForTerminal(`path: ${'x'.repeat(200)}`, 80)), 80, 'a word longer than the line is cut');
@@ -33,9 +33,9 @@ test('on an 80-column terminal no line of help, help all or status is wider; pip
 
 test('typos: the newer commands are suggested, a tie names both, a swapped pair of letters counts as one edit', () => {
   const guess = (w) => cli([w]).stderr.split('\n')[0];
-  assert.match(guess('lesons'), /Did you mean: conductor lessons\?/);
-  assert.match(guess('gaurd'), /Did you mean: conductor guard\?/);
-  assert.match(guess('runz'), /Did you mean: conductor run or conductor runs\?/);
-  assert.match(guess('stauts'), /conductor status/);
+  assert.match(guess('lesons'), /Did you mean: conductor-ai lessons\?/);
+  assert.match(guess('gaurd'), /Did you mean: conductor-ai guard\?/);
+  assert.match(guess('runz'), /Did you mean: conductor-ai run or conductor-ai runs\?/);
+  assert.match(guess('stauts'), /conductor-ai status/);
   assert.equal(cli(['xyzzy']).status, 2);
 });

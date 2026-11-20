@@ -6,28 +6,28 @@ Run open models locally. Install, then `ollama pull <model>`.
 
 | | |
 |---|---|
-| Kind | Chat API (OpenAI-compatible): returns code that conductor applies |
+| Kind | Chat API (OpenAI-compatible): returns code that conductor-ai applies |
 | Cost | Free: runs on your machine. |
 | Key | None (runs on your machine) |
 | Endpoint | `http://localhost:11434/v1` |
 | Default model | `qwen3-coder` |
-| conductor name | `ollama` |
+| conductor-ai name | `ollama` |
 | Provider docs | https://docs.ollama.com/api/openai-compatibility |
 | Checked | 2026-11 |
 
 ## Set up
 
 1. Install and start it: https://ollama.com/download. Install, then `ollama pull <model>`.
-2. Add it to conductor. It asks for nothing, lets you pick a model, sends one test prompt and adds it to the `docs`, `test`, `review` and `ask` roles:
+2. Add it to conductor-ai. It asks for nothing, lets you pick a model, sends one test prompt and adds it to the `docs`, `test`, `review` and `ask` roles:
    ```bash
-   conductor add ollama
+   conductor-ai add ollama
    ```
 3. Check it any time:
    ```bash
-   conductor doctor --live
+   conductor-ai doctor --live
    ```
 
-Or click **Add** on its card in `conductor ui` → Providers.
+Or click **Add** on its card in `conductor-ai ui` → Providers.
 
 ## Without the wizard
 
@@ -42,12 +42,12 @@ Then add this to `~/.config/conductor/config.json` (all projects) or `.conductor
   }
 }
 ```
-List models: `conductor models ollama --all`. Put `ollama` in any role's chain in `conductor ui` → Roles & fallback.
+List models: `conductor-ai models ollama --all`. Put `ollama` in any role's chain in `conductor-ai ui` → Roles & fallback.
 
 ## Troubleshooting
 
-- **401 / 403**: the key is wrong, expired, or still a placeholder. Run `conductor keys` to see where it comes from.
-- **404 or "model not found"**: the model id changed. Pick a current one with `conductor models ollama --all`.
-- **429**: rate limit. conductor puts the provider on cooldown and moves to the next one in the chain; `conductor cooldown --clear ollama` resets it.
+- **401 / 403**: the key is wrong, expired, or still a placeholder. Run `conductor-ai keys` to see where it comes from.
+- **404 or "model not found"**: the model id changed. Pick a current one with `conductor-ai models ollama --all`.
+- **429**: rate limit. conductor-ai puts the provider on cooldown and moves to the next one in the chain; `conductor-ai cooldown --clear ollama` resets it.
 - **Connection refused**: the local server isn't running at `http://localhost:11434/v1`.
-- **Empty reply**: some free routes return nothing now and then; conductor retries once, then falls back.
+- **Empty reply**: some free routes return nothing now and then; conductor-ai retries once, then falls back.

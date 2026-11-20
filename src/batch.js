@@ -1,4 +1,4 @@
-// `conductor batch`: run several independent plan tasks at the same time, each in its own worktree,
+// `conductor-ai batch`: run several independent plan tasks at the same time, each in its own worktree,
 // spreading them across different providers so no single quota takes all the load.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -51,7 +51,7 @@ export function planBatch(cfg, { planPath, tasks, role, allowOpenQuestions, allo
   if (cfg.settings?.planGate !== false && !allowWeakPlan) {
     const verifyCmd = detectVerify(cfg.root, cfg.settings || {});
     const bad = items.map((t) => ({ id: t.id, problems: checkTask(t.section, { verifyCmd, maxFiles: cfg.settings?.maxTaskFiles || 4 }) })).filter((x) => x.problems.length);
-    if (bad.length) throw new UsageError(`not ready to hand to workers:\n${bad.map((b) => `  ${b.id}:\n    - ${b.problems.join('\n    - ')}`).join('\n')}\nFix the tasks in ${planPath} (conductor plan check ${planPath}), or pass --allow-weak-plan`);
+    if (bad.length) throw new UsageError(`not ready to hand to workers:\n${bad.map((b) => `  ${b.id}:\n    - ${b.problems.join('\n    - ')}`).join('\n')}\nFix the tasks in ${planPath} (conductor-ai plan check ${planPath}), or pass --allow-weak-plan`);
   }
   for (const t of items) {
     const inBatch = t.deps.filter((d) => ids.includes(d));
@@ -130,7 +130,7 @@ export function hedgeAllowed(cfg, name, priority) {
 
 const gitIn = (root, args) => execFileSync('git', args, { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] }).toString();
 
-/** S2: merging into your branch needs a clean checkout (tracked files): conductor won't mix its merges with your edits. */
+/** S2: merging into your branch needs a clean checkout (tracked files): conductor-ai won't mix its merges with your edits. */
 export function assertCleanCheckout(root) {
   let dirty;
   try { dirty = gitIn(root, ['status', '--porcelain', '--untracked-files=no']).trim(); } catch (e) { throw new UsageError(`--merge needs a git repository: ${e.message}`); }
@@ -148,7 +148,7 @@ export async function mergeTask(cfg, s, { emit, keepWorktree } = {}) {
   if (!wt?.commit) { if (wt?.id && !keepWorktree) removeWorktree(cfg.root, wt.id, { force: true }); return { status: 'no-changes' }; }
   emit?.({ type: 'merge', branch: wt.branch });
   try {
-    gitIn(cfg.root, ['merge', '--no-ff', '--no-edit', '-m', `conductor: merge ${String(wt.id).replace(/-(s\d+|h\d*)$/, '')} (${s.winner})`, wt.branch]);
+    gitIn(cfg.root, ['merge', '--no-ff', '--no-edit', '-m', `conductor-ai: merge ${String(wt.id).replace(/-(s\d+|h\d*)$/, '')} (${s.winner})`, wt.branch]);
   } catch (e) {
     let files = [];
     try { files = gitIn(cfg.root, ['diff', '--name-only', '--diff-filter=U']).trim().split('\n').filter(Boolean); } catch { /* none */ }
@@ -174,7 +174,7 @@ export function markDone(root, planPath, ids) {
   fs.writeFileSync(abs, text);
   try {
     gitIn(root, ['ls-files', '--error-unmatch', planPath]);
-    gitIn(root, ['commit', '-q', '-m', `conductor: ${changed.join(', ')} done in ${planPath}`, '--', planPath]);
+    gitIn(root, ['commit', '-q', '-m', `conductor-ai: ${changed.join(', ')} done in ${planPath}`, '--', planPath]);
   } catch { /* untracked or ignored plan: the edit stays in the file */ }
   return changed;
 }
@@ -189,7 +189,7 @@ export async function runBatch(cfg, { planPath, tasks, role, provider, concurren
   const prio = priority || cfg.settings?.priority || 'balanced';
   if (prio === 'speed') {
     const routes = [...new Set(work.flatMap((t) => t.chain))].filter((n) => hedgeAllowed(cfg, n, 'speed'));
-    if (routes.length < 2) warnings.push(`priority speed: ${routes.length} route(s) can take a second attempt (${routes.join(', ') || 'none'}); hedging needs 2. Add a free route (conductor providers --free) or enable another agent`);
+    if (routes.length < 2) warnings.push(`priority speed: ${routes.length} route(s) can take a second attempt (${routes.join(', ') || 'none'}); hedging needs 2. Add a free route (conductor-ai providers --free) or enable another agent`);
   }
   // S1: hedge stragglers. Once a task in this batch has finished, a task still running past 1.5× the finished ones'
   // median (and at least hedgeAfterSec) gets a second attempt on the idle route its priority allows that is expected to
@@ -272,7 +272,7 @@ export async function runBatch(cfg, { planPath, tasks, role, provider, concurren
     if (win.result.e) throw win.result.e;
     return win.result.s;
   };
-  // S2/S3: tasks start when their in-batch dependencies are merged; with merge, conductor merges each task that passed
+  // S2/S3: tasks start when their in-batch dependencies are merged; with merge, conductor-ai merges each task that passed
   // (one at a time, in the order they finish), runs verify on the merged result, and stops at the first conflict or
   // failing verify. Without merge, tasks are independent (planBatch refused dependencies) and all start at once.
   const accepts = (r) => r.summary && (outcome(r.summary) === 'done' || (outcome(r.summary) === 'unverified' && !unverifiedBlocks(r.summary, { allowUnverified: allowUnverified || cfg.settings?.allowUnverified })));
@@ -339,7 +339,7 @@ export async function runBatch(cfg, { planPath, tasks, role, provider, concurren
   if (monitor) clearInterval(monitor);
   await Promise.allSettled(reviews);
   await merging;
-  // conductor marks merged tasks done in the plan (one commit), so the controller doesn't spend turns on it
+  // conductor-ai marks merged tasks done in the plan (one commit), so the controller doesn't spend turns on it
   let marked = [];
   if (merge && cfg.settings?.markDone !== false) {
     marked = results.filter((r) => r.merge?.status === 'merged' || r.merge?.status === 'no-changes').map((r) => r.task);
@@ -382,12 +382,12 @@ export function formatBatch(b) {
   L.push(`result:    ${b.merge ? `${b.merged}/${b.results.length} merged · ` : ''}${b.ok} done, ${b.partial ? `${b.partial} partial, ` : ''}${b.outOfScope ? `${b.outOfScope} out of scope, ` : ''}${b.unverified ? `${b.unverified} unverified, ` : ''}${b.failed} failed${b.blocked ? `, ${b.blocked} not started` : ''}`);
   if (b.marked?.length) L.push(`plan:      marked ${b.marked.join(', ')} status: done in the plan`);
   if (b.stopped) L.push(`stopped:   after ${b.stopped}; tasks after it were not started or merged`);
-  if (b.results.some((r) => r.summary?.verify?.scope === 'task')) L.push('verify:    "(task)" = the task\'s own verify line from the plan; run `conductor verify` after merging');
+  if (b.results.some((r) => r.summary?.verify?.scope === 'task')) L.push('verify:    "(task)" = the task\'s own verify line from the plan; run `conductor-ai verify` after merging');
   if (b.merge) L.push(b.merged === b.results.length ? 'next:      everything is merged into your branch. Review it: git log --oneline, git diff <start>..HEAD' : 'next:      merged tasks are on your branch; for the rest see their lines above.');
-  else L.push('next:      for each ✓: review `conductor diff conductor/<id>`, then `git merge --no-ff conductor/<id>`; afterwards `conductor worktree rm <id>` (or run the batch with --merge).');
+  else L.push('next:      for each ✓: review `conductor-ai diff conductor/<id>`, then `git merge --no-ff conductor/<id>`; afterwards `conductor-ai worktree rm <id>` (or run the batch with --merge).');
   if (b.results.some((r) => r.summary?.hedged && /-h\d*$/.test(r.summary.worktree?.id || ''))) L.push('           A hedged task that the second attempt won lives on conductor/<id>-h… (the branch on its line).');
-  if (b.unverified) L.push('           For each ?: no verify ran, so nothing proves it works. Set a verify command (conductor init --verify "<cmd>"), or check it yourself before merging.');
+  if (b.unverified) L.push('           For each ?: no verify ran, so nothing proves it works. Set a verify command (conductor-ai init --verify "<cmd>"), or check it yourself before merging.');
   if (b.partial) L.push('           For each ⚠: the worker did only part of it. Read its report.md, then finish it or retry the rest.');
-  if (b.failed || b.results.some((r) => r.merge && !['merged', 'no-changes'].includes(r.merge.status))) L.push('           For each ✗: retry it alone with `conductor run <role> --plan … --task <id> --worktree --provider <other>`, or do it yourself.');
+  if (b.failed || b.results.some((r) => r.merge && !['merged', 'no-changes'].includes(r.merge.status))) L.push('           For each ✗: retry it alone with `conductor-ai run <role> --plan … --task <id> --worktree --provider <other>`, or do it yourself.');
   return L.join('\n');
 }

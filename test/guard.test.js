@@ -77,7 +77,7 @@ test('turning guards on and off keeps your own hooks; bad JSON is never overwrit
   G.setGuards(dir, 'antigravity', true);
   assert.ok(JSON.parse(fs.readFileSync(path.join(dir, '.agents/hooks.json'), 'utf8'))['conductor-guard'].PreToolUse[0].matcher === 'run_command');
   G.setGuards(dir, 'antigravity', false);
-  assert.ok(!fs.existsSync(path.join(dir, '.agents/hooks.json')), 'a file conductor emptied is removed');
+  assert.ok(!fs.existsSync(path.join(dir, '.agents/hooks.json')), 'a file conductor-ai emptied is removed');
   fs.writeFileSync(f, '{ broken');
   assert.throws(() => G.setGuards(dir, 'claude-code', true), /not valid JSON/);
   assert.equal(G.setGuards(dir, 'codex-cli', true).unsupported, true);

@@ -18,29 +18,29 @@ The full order, highest first:
 
 | # | What decides | Example |
 |---|---|---|
-| 1 | `--chain` on the command | `conductor build "…" --chain codex-cli,opencode` |
-| 2 | `--provider` on the command | `conductor fix "…" --provider claude-cli` |
+| 1 | `--chain` on the command | `conductor-ai build "…" --chain codex-cli,opencode` |
+| 2 | `--provider` on the command | `conductor-ai fix "…" --provider claude-cli` |
 | 3 | The plan task's `provider:` line | `- **provider:** grok-cli` |
 | 4 | The first matching rule in `routes` | `{ "files": "*.sql", "provider": "codex-cli" }` |
 | 5 | The smart selector | reorders the role's chain by task size |
 
-Each run's summary says which step decided (`route: route 1: files *.sql → codex-cli`), and so does the Runs page in `conductor ui`.
+Each run's summary says which step decided (`route: route 1: files *.sql → codex-cli`), and so does the Runs page in `conductor-ai ui`.
 
 ## Quick start
 
 Add the starter set: security, database, CI/infrastructure, small edits, docs files and the docs role. Run this inside your project:
 
 ```bash
-conductor route --add starter
+conductor-ai route --add starter
 ```
 
 The providers are filled in from the ones you have enabled. A "strong agent" rule gets your best agent CLIs (Claude Code, Codex, Antigravity…), and a "free or local" rule gets Ollama or LM Studio if they're on, then kilo-free and openrouter-free. Then try a task without running anything:
 
 ```bash
-conductor route "fix the login redirect" --files src/Login.tsx
+conductor-ai route "fix the login redirect" --files src/Login.tsx
 ```
 
-In the UI it's the same. Open `conductor ui` → **Roles** → **Routing**:
+In the UI it's the same. Open `conductor-ai ui` → **Roles** → **Routing**:
 - **Add starter set** adds the starter rules.
 - **Add** adds one rule.
 - **Customize** copies a rule into the form so you can change it first.
@@ -50,7 +50,7 @@ Then **Save**.
 
 ## The rule library
 
-★ marks the starter set. Add any rule by its id: `conductor route --add tests,frontend`.
+★ marks the starter set. Add any rule by its id: `conductor-ai route --add tests,frontend`.
 
 | Id | Rule | Matches | Goes to | Why |
 |---|---|---|---|---|
@@ -67,22 +67,22 @@ Then **Save**.
 | `ask-role` | Questions | role `ask` | a local model, else a free one | Questions about your code stay on your machine when a local model is on. |
 | `review-role` | Reviews | role `review` | your strongest agent | A careful reviewer catches what the writer missed. |
 
-When you add several rules, conductor keeps them in this table's order (risky first), whatever order you add them in. Your own rules stay where you put them.
+When you add several rules, conductor-ai keeps them in this table's order (risky first), whatever order you add them in. Your own rules stay where you put them.
 
 ## Managing rules from the terminal
 
 ```bash
-conductor route --templates
+conductor-ai route --templates
 ```
 Lists the library with the providers each rule would get on this machine, and marks the ones already added.
 
 ```bash
-conductor route --rules
+conductor-ai route --rules
 ```
 Shows your rules, numbered, in the order they're checked.
 
 ```bash
-conductor route --rm 3
+conductor-ai route --rm 3
 ```
 Removes rule 3.
 
@@ -110,7 +110,7 @@ A rule is a JSON object in `routes`:
 | `role` | the task's role is this one | A string or a list: `"build"`, `["build", "fix"]`. |
 | `provider` | (required) who goes first | One name or a list. Each must be a provider in your config. |
 
-A rule needs at least one of `files`, `text` or `role`. `conductor doctor` and the UI flag unknown providers and broken regexes. Rules added from the library also carry `"from": "<id>"`, which conductor uses to avoid adding one twice. You can delete it.
+A rule needs at least one of `files`, `text` or `role`. `conductor-ai doctor` and the UI flag unknown providers and broken regexes. Rules added from the library also carry `"from": "<id>"`, which conductor-ai uses to avoid adding one twice. You can delete it.
 
 A ready-made file with every library rule (using the default providers) is in [templates/routes.example.json](../templates/routes.example.json). Copy the rules you want into your project's `.conductor/config.json`.
 
@@ -127,10 +127,10 @@ For a one-off decision, put a `provider:` line under the plan task. It beats eve
 
 A list works too: `- **provider:** grok-cli, antigravity-cli`. Check it with:
 ```bash
-conductor route --plan docs/plan/booking.md --task T3
+conductor-ai route --plan docs/plan/booking.md --task T3
 ```
 
-`conductor batch` keeps routed tasks on their provider. Tasks with no route are still spread across providers so they run in parallel.
+`conductor-ai batch` keeps routed tasks on their provider. Tasks with no route are still spread across providers so they run in parallel.
 
 ## Tips
 
@@ -138,4 +138,4 @@ conductor route --plan docs/plan/booking.md --task T3
 - **Preview before you trust a rule.** Try one task that should match and one that shouldn't.
 - **List files in your tasks** (`--files` or the plan's `files:` line). `files` rules can't match a task that names no files.
 - **Keep sensitive work away from free models.** Free tiers may log prompts, so put the `security` rule at the top.
-- **Turn on a local model** (`conductor local --enable`). The `docs-role` and `ask-role` rules then use it, and those tasks stay on your machine.
+- **Turn on a local model** (`conductor-ai local --enable`). The `docs-role` and `ask-role` rules then use it, and those tasks stay on your machine.
