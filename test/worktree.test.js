@@ -69,6 +69,7 @@ test('--worktree runs on its own branch, commits there, and leaves the main chec
   const live = JSON.parse(fs.readFileSync(path.join(dir, s.runDir, 'live.json'), 'utf8'));
   assert.deepEqual([live.role, live.task], ['build', 'T1']);
   assert.match(live.step, /verify|checks|repro/);
+  assert.deepEqual(fs.readdirSync(path.join(dir, s.runDir)).filter((f) => f.endsWith('.live.log')), [], 'a finished worker\'s live output is replaced by its full log');
   assert.match(s.worktree.commit, /^[0-9a-f]{7,}$/);
   assert.deepEqual(s.worktree.linked, ['node_modules']);
   assert.ok(s.warnings.some((w) => w.includes('uncommitted changes')));
