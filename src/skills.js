@@ -17,6 +17,7 @@
 //   ---
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { GLOBAL_DIR, legacyMarkers } from './util.js';
 import { PROJECT_DIRNAME, readScope, writeScope } from './config.js';
 import { globToRegex } from './routing.js';
@@ -24,6 +25,7 @@ import { execFileSync } from 'node:child_process';
 import { readBlock, writeBlock } from './localfiles.js';
 import { CONTROLLERS } from './presets.js';
 
+export const builtinSkillsDir = () => fileURLToPath(new URL('../defaults/skills/', import.meta.url));
 export const globalSkillsDir = () => path.join(GLOBAL_DIR, 'skills');
 export const projectSkillsDir = (root) => path.join(root, PROJECT_DIRNAME, 'skills');
 // where controllers load skills from; Antigravity, Codex, OpenCode and Copilot read .agents/skills
@@ -62,7 +64,8 @@ function readDir(dir, scope) {
 export function listSkills(root) {
   const off = new Set(readScope('project', root).skills?.off || []);
   const byName = new Map();
-  for (const s of readDir(globalSkillsDir(), 'global')) byName.set(s.name, s);
+  for (const s of readDir(builtinSkillsDir(), 'builtin')) byName.set(s.name, s);
+  for (const s of readDir(globalSkillsDir(), 'global')) byName.set(s.name, { ...s, overrides: byName.has(s.name) });
   for (const s of readDir(projectSkillsDir(root), 'project')) byName.set(s.name, { ...s, overrides: byName.has(s.name) });
   return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name)).map((s) => ({ ...s, on: !off.has(s.name) }));
 }
@@ -107,6 +110,7 @@ export function addSkill(root, src, { scope = 'global', name } = {}) {
 export function removeSkill(root, name, { scope } = {}) {
   const s = listSkills(root).find((x) => x.name === name && (!scope || x.scope === scope));
   if (!s) throw new Error(`no skill "${name}"${scope ? ` in the ${scope} library` : ''}`);
+  if (s.scope === 'builtin') throw new Error(`"${name}" is built in: switch it off instead (conductor-ai skills off ${name})`);
   fs.rmSync(s.dir, { recursive: true, force: true });
   syncSkills(root);
   return s;
@@ -116,6 +120,7 @@ export function removeSkill(root, name, { scope } = {}) {
 export function saveSkill(root, name, text) {
   const s = listSkills(root).find((x) => x.name === name);
   if (!s) throw new Error(`no skill "${name}"`);
+  if (s.scope === 'builtin') throw new Error(`"${name}" is built in: copy it to your library to edit it`);
   if (!/^---\r?\n[\s\S]*?\r?\n---/.test(text)) throw new Error('SKILL.md must start with --- frontmatter (name, description) ---');
   fs.writeFileSync(s.file, text);
   return s;
