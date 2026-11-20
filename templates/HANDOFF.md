@@ -13,7 +13,7 @@ Read this first in every session, whatever the tool. The controller keeps it cur
 -
 
 ## Next up
-- (exact commands, e.g. `conductor run build --plan docs/plan/x.md --task T4`)
+- (exact commands, e.g. `conductor-ai run build --plan docs/plan/x.md --task T4`)
 
 ## Problems / blockers
 -

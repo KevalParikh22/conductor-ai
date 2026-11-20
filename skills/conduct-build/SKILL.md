@@ -10,9 +10,9 @@ You are the controller (see `.conductor/ORCHESTRATOR.md`). Arguments: `the argum
 
 1. Read only that task in the plan. If its role is `controller`, do it yourself and go to step 4. Otherwise its role (build/fix/test/docs) is the conductor role.
 2. Make sure the tree is clean and you are not on main. Then run it **in the background** (Bash `run_in_background: true`):
-   `conductor run <role> --plan <plan> --task <id> [--provider <provider>]`
+   `conductor-ai run <role> --plan <plan> --task <id> [--provider <provider>]`
    When it finishes, read the CONDUCTOR RESULT summary.
-3. Check it yourself. Don't trust the report: `conductor diff` (in scope? matches the Design notes and acceptance criteria? no invented APIs or shortcuts?) and the verify line.
+3. Check it yourself. Don't trust the report: `conductor-ai diff` (in scope? matches the Design notes and acceptance criteria? no invented APIs or shortcuts?) and the verify line.
 4. Decide:
    - **Good:** `git add -A && git commit -m "<slug>: <id> <title>"`, then set `status: done` in the plan.
    - **Small issue (<10 lines):** fix it, run `conductor verify`, commit.
@@ -20,6 +20,6 @@ You are the controller (see `.conductor/ORCHESTRATOR.md`). Arguments: `the argum
    - **A `review:` line** (a second model's findings on risky work): check each `!`/high finding against the code before committing. Fix the real ones yourself or with `--note`; ignore the false positives.
    - **Outcome OUT OF SCOPE:** look at the files it lists in the diff. Keep them only if the task really needs them; otherwise revert them (`git checkout -- <files>`) before committing.
    - **Outcome NOT PROVEN** (verify already failed on the starting commit): judge by the new failure lines it lists, not by the verify status.
-   - **Outcome UNVERIFIED (exit 4):** nothing proved it works. Run the project's checks yourself before committing, and ask the user for a verify command (`conductor init --verify "<cmd>"`).
+   - **Outcome UNVERIFIED (exit 4):** nothing proved it works. Run the project's checks yourself before committing, and ask the user for a verify command (`conductor-ai init --verify "<cmd>"`).
    - **Second failure, or exit code 3:** do it yourself.
 5. Tell the user in 2–3 lines: who did it, verify result, commit, any concern.
