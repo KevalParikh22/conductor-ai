@@ -156,6 +156,9 @@ test('built-in skills: karpathy-guidelines is built in, active by default, overr
   assert.equal(builtin.scope, 'builtin');
   assert.equal(builtin.on, true);
 
+  // a second sync with unchanged skills changes nothing (init stays idempotent)
+  assert.deepEqual(syncSkills(dir), { added: [], updated: [], removed: [], skipped: [] });
+
   // skillsForTask for any task includes it
   assert.ok(skillsForTask(dir, { role: 'build', files: ['src/index.js'] }).names.includes('karpathy-guidelines'));
 

@@ -126,6 +126,24 @@ export function saveSkill(root, name, text) {
   return s;
 }
 
+/** Compare a skill folder with its synced copy, ignoring the marker conductor-ai writes into the copy. */
+function sameSkillCopy(src, dst) {
+  const entries = (dir, base = '') => {
+    let out = [];
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const rel = path.join(base, e.name);
+      if (rel === MARK) continue;
+      if (e.isDirectory()) out = out.concat(entries(path.join(dir, e.name), rel));
+      else if (e.isFile()) out.push(`${rel}\0${fs.readFileSync(path.join(dir, e.name)).toString('base64')}`);
+    }
+    return out.sort();
+  };
+  try {
+    const a = entries(src), b = entries(dst);
+    return a.length === b.length && a.every((x, i) => x === b[i]);
+  } catch { return false; }
+}
+
 /**
  * Copy the active skills into .claude/skills/ and .agents/skills/, remove copies of skills that are off or gone, and
  * keep the copies out of git. Only folders conductor-ai made (marked) are ever replaced or removed.
@@ -140,6 +158,7 @@ export function syncSkills(root) {
       const dst = path.join(base, s.name);
       const ours = fs.existsSync(path.join(dst, MARK));
       if (fs.existsSync(dst) && !ours) { report.skipped.push(`${t}/${s.name} (your own skill is there)`); continue; }
+      if (ours && sameSkillCopy(s.dir, dst)) continue; // an identical copy is already there: rewriting it breaks init's idempotence
       fs.rmSync(dst, { recursive: true, force: true });
       fs.cpSync(s.dir, dst, { recursive: true });
       fs.writeFileSync(path.join(dst, MARK), `managed by conductor-ai: edit ${s.file} instead, then run conductor-ai skills sync\n`);
