@@ -311,7 +311,12 @@ async function main() {
   if (cols && cmd !== 'mcp' && cmd !== 'hook' && !o.json) { const log = console.log; console.log = (...a) => log(...a.map((x) => (typeof x === 'string' ? wrapForTerminal(x, cols) : x))); }
   if (useColor() && cmd !== 'mcp' && !o.json) { const log = console.log; console.log = (...a) => log(...a.map((x) => (typeof x === 'string' ? colorize(x) : x))); }
   if (o.version) { console.log(VERSION); return 0; }
-  if (o.help || cmd === 'help') { console.log(o._[0] === 'all' || o.all ? HELP_ALL : HELP); return 0; }
+  if (o.help || cmd === 'help') {
+    // show commands under the name the user typed: `conductor-ai` users may not have `conductor` on PATH
+    const name = path.basename(process.argv[1] || '', '.js') === 'conductor-ai' ? 'conductor-ai' : 'conductor';
+    console.log((o._[0] === 'all' || o.all ? HELP_ALL : HELP).replace(/\bconductor(-ai)?\b(?!-)/g, name));
+    return 0;
+  }
   if (ROLES[cmd]) { o._.unshift(cmd); cmd = 'run'; }
   if (cmd === 'retry') {
     // conductor retry T3 --note "…": the task's worker continues in its existing worktree with your note
