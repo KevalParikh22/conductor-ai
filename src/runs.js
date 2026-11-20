@@ -90,13 +90,34 @@ const tail = (root, rel, max) => {
   try { const t = fs.readFileSync(abs, 'utf8'); return t.length > max ? `…\n${t.slice(-max)}` : t; } catch { return null; }
 };
 
+/**
+ * What CLI workers have printed so far (<provider>.live.log, deleted once the worker ends and its full log is saved),
+ * newest first, as plain text: colour codes dropped, a line redrawn with \r (spinners, progress) shows its last state.
+ */
+export function liveOutput(dir, max = 8000) {
+  let files = [];
+  try { files = fs.readdirSync(dir).filter((f) => f.endsWith('.live.log')); } catch { return []; }
+  return files.map((f) => {
+    const abs = path.join(dir, f);
+    let st, text = '';
+    try {
+      st = fs.statSync(abs);
+      const fd = fs.openSync(abs, 'r'), n = Math.min(st.size, max * 2), buf = Buffer.alloc(n);
+      fs.readSync(fd, buf, 0, n, st.size - n); fs.closeSync(fd);
+      text = buf.toString('utf8');
+    } catch { return null; }
+    text = text.replace(/\x1b\[[0-9;?]*[ -\/]*[@-~]|\x1b\][^\x07]*\x07/g, '').split('\n').map((l) => l.split('\r').filter(Boolean).pop() || '').join('\n');
+    return { worker: f.replace(/\.live\.log$/, ''), at: st.mtime.toISOString(), text: (st.size > max * 2 || text.length > max ? '…\n' : '') + text.slice(-max) };
+  }).filter(Boolean).sort((a, b) => b.at.localeCompare(a.at));
+}
+
 /** Everything the run page shows: outcome, the checklist, attempts with next steps, report, logs, and the diff of a kept branch. */
 export function runDetail(root, id) {
   const r = readRun(root, id);
   if (!r) {
     // still going: no summary.json until the end, only the step it is on (live.json)
     const l = id && !/[\\/]/.test(id) ? readJSON(path.join(runsDir(root), id, 'live.json'), null) : null;
-    return l && { id, state: 'running', role: l.role, task: l.task, startedAt: l.startedAt, step: l.step, since: l.since, limitMs: l.limitMs || 0 };
+    return l && { id, state: 'running', role: l.role, task: l.task, startedAt: l.startedAt, step: l.step, since: l.since, limitMs: l.limitMs || 0, output: liveOutput(path.join(runsDir(root), id)) };
   }
   const s = r.summary;
   const gates = runGates(s);

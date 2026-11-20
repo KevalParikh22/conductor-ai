@@ -509,7 +509,10 @@ function runPage() {
   if (d.state === 'running') return `<div class="head">${back}<h1>${esc(d.role)}${d.task ? ` · ${esc(d.task)}` : ''}</h1>
     <p class="sub"><span class="mono">${esc(d.id)}</span> · <span class="pill warn">running</span>${d.startedAt ? ` · started ${esc(new Date(d.startedAt).toLocaleString())}` : ''}</p></div>
     <div class="card"><h2>Now</h2><p><b>${esc(d.step || 'working')}</b> · ${ticker(d.since || d.startedAt)}${d.limitMs ? ` <span class="note">of ${Math.round(d.limitMs / 60000)} min</span>` : ''}</p>
-      <p class="note">This page follows the run. The checks, attempts, report and diff appear here when it finishes.</p></div>`;
+      <p class="note">This page follows the run. The checks, attempts, report and diff appear here when it finishes.</p></div>
+    ${(d.output || []).map((o) => `<div class="card"><h2>${esc(o.worker)}: output so far <span class="note">(updated ${ticker(o.at)} ago)</span></h2>
+      <pre class="cmd live-out" style="max-height:480px">${esc(o.text || '(nothing printed yet)')}</pre></div>`).join('')
+      || `<p class="note">${/is working/.test(d.step || '') ? 'This worker prints nothing until it finishes (API providers answer in one reply), or hasn\'t printed anything yet.' : ''}</p>`}`;
   const det = (title, body, open = false) => body ? `<details class="card" ${open ? 'open' : ''}><summary><b>${title}</b></summary><pre class="cmd" style="max-height:480px">${esc(body)}</pre></details>` : '';
   const next = d.branch ? [`conductor-ai diff ${d.branch}`, `git merge --no-ff ${d.branch}`, `conductor-ai worktree rm ${d.worktreeId}`, `conductor-ai worktree rm ${d.worktreeId} --force`] : [];
   return `<div class="head">${back}<h1>${esc(d.role)}${d.task ? ` · ${esc(d.task)}` : ''}</h1>
@@ -854,6 +857,9 @@ function render() {
   const was = new Map(same ? [...document.querySelectorAll('#main details > summary')].map((x) => [x.textContent, x.parentElement.open]) : []);
   $('#main').innerHTML = views[tab]();
   if (was.size) document.querySelectorAll('#main details > summary').forEach((x) => { if (was.has(x.textContent)) x.parentElement.open = was.get(x.textContent); });
+  // live output follows its end, unless you scrolled up in it to read
+  document.querySelectorAll('#main .live-out').forEach((el, i) => { const k = `${page}|${i}`, w = render.tail?.[k]; el.scrollTop = w === undefined || w.atEnd ? el.scrollHeight : w.top;
+    el.onscroll = () => { (render.tail ||= {})[k] = { atEnd: el.scrollTop + el.clientHeight >= el.scrollHeight - 8, top: el.scrollTop }; }; });
   bindCopy(); bind();
 }
 

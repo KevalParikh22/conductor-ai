@@ -160,7 +160,7 @@ export async function runCli(name, p, opts) {
   return res;
 }
 
-async function runCliOnce(name, p, { mode, prompt, cwd, timeoutMs, idleTimeoutMs = 0, runDir, quotaRe, allowCommands = [], signal }) {
+async function runCliOnce(name, p, { mode, prompt, cwd, timeoutMs, idleTimeoutMs = 0, runDir, quotaRe, allowCommands = [], signal, liveLog }) {
   const preset = { ...(CLI_PRESETS[p.preset] || {}), ...p };
   if (!which(preset.bin)) return { ok: false, text: '', reason: 'not installed', log: '' };
   const promptFile = path.join(runDir, `${name}.prompt.md`);
@@ -181,7 +181,8 @@ async function runCliOnce(name, p, { mode, prompt, cwd, timeoutMs, idleTimeoutMs
   const args = expandArgs(template, { prompt: promptArg, promptFile, outFile, ioDir: path.dirname(promptFile), cwd: realCwd, model: p.model, sessionSettings,
     timeout: timeoutMs ? `${Math.max(1, Math.round(timeoutMs / 60_000))}m` : '0' }, preset.modelArgs || []);
   const env = workerEnv(preset, mode, realCwd);
-  const r = await run(preset.bin, args, { cwd, input: preset.stdin ? prompt : undefined, timeoutMs, idleTimeoutMs, env, signal });
+  const onData = liveLog ? (d) => { try { fs.appendFileSync(liveLog, d); } catch { /* the page just shows less */ } } : undefined;
+  const r = await run(preset.bin, args, { cwd, input: preset.stdin ? prompt : undefined, timeoutMs, idleTimeoutMs, env, signal, onData });
   if (r.cancelled) return { ok: false, text: '', reason: 'cancelled', log: `$ ${preset.bin} (stopped: another attempt finished first)` };
   const log = `$ ${preset.bin} ${args.map((a) => (a.length > 80 ? JSON.stringify(a.slice(0, 77) + '...') : a)).join(' ')}\n` +
     `--- exit ${r.code}${r.timedOut ? (r.idle ? ' (stopped: no output)' : ' (stopped: time limit)') : ''}\n--- stdout\n${r.stdout}\n--- stderr\n${r.stderr}`;

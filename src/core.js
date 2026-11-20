@@ -578,12 +578,14 @@ async function dispatchOnce(cfg, opts) {
       const win = local && p.model && settings.localContextCheck !== false ? await localWindow(p) : null;
       const tooBig = win && promptTokens + (p.maxTokens || 2048) > win.window;
       // one call at a time per local server (it shares one machine); a provider's own maxParallel wins
+      // a CLI worker's output as it arrives, for the running run's page (src/runs.js runDetail)
+      const liveLog = path.join(runDir, `${c.name}${mi ? `.${mi + 1}` : ''}.live.log`);
       const slotKey = local ? `local:${(() => { try { return new URL(c.p.baseUrl).host; } catch { return c.name; } })()}` : c.name;
       let res = kind === 'chat' && !p.model
         ? { ok: false, text: '', reason: 'no model set, and its model list could not be fetched', log: '' }
         : tooBig ? { ok: false, text: '', reason: `context too small: the prompt needs ~${promptTokens + (p.maxTokens || 2048)} tokens with the answer, ${p.model} runs with ${win.window} (${win.server})`, log: '' }
         : await withSlot(slotKey, c.p.maxParallel ?? CLI_PRESETS[c.p.preset]?.maxParallel ?? (local ? 1 : undefined), () => runProvider(c.name, p, { mode, prompt: userPrompt, system: chatSystem, cwd: work, runDir: ioDir, quotaRe,
-          allowCommands: buildCommands(settings), ...limitFor(c.p, kind), signal: opts.signal, manualAnswer: opts.manualAnswer }), () => emit({ type: 'wait', provider: c.name }));
+          allowCommands: buildCommands(settings), ...limitFor(c.p, kind), signal: opts.signal, manualAnswer: opts.manualAnswer, liveLog }), () => emit({ type: 'wait', provider: c.name }));
       if (p !== c.p && p.model && !res.model) res.model = p.model;
       // V13: the server counted far fewer prompt tokens than were sent: it cut the prompt (any server, window known or not)
       if (local && res.ok && res.tokens?.input && res.tokens.input < promptTokens * 0.5) {
@@ -595,6 +597,7 @@ async function dispatchOnce(cfg, opts) {
       if (tampered.length) summary.warnings.push(`${c.name} changed git hooks or config, which can run programs. conductor-ai put them back: ${tampered.join(', ')}`);
       if (headBefore && git.head(work) !== headBefore) summary.warnings.push(`${c.name} made git commits itself (HEAD moved from ${headBefore.slice(0, 8)}). Check them with git log before merging`);
       fs.writeFileSync(path.join(runDir, `${c.name}${mi ? `.${mi + 1}` : ''}.log`), res.log || '');
+      fs.rmSync(liveLog, { force: true }); // the full log above replaces it
 
       // H7: a chat reply without file blocks gets one repair turn that shows the model what it said and what is needed
       if (res.ok && kind === 'chat' && mode === 'write' && !parseFileBlocks(res.text).length && settings.chatRepair !== false && c.p.type !== 'manual') {
