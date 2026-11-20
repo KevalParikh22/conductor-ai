@@ -12,7 +12,7 @@ export const ACTIONS = [
   { id: 'plan-check', title: 'Check a plan before handing it out', cli: 'conductor-ai plan check <file>', mcp: 'conductor_plan_check', ui: { na: 'plans are files in your editor; the controller checks them' }, skill: '/conduct-plan' },
   { id: 'verify', title: "Run the project's verify command", cli: 'conductor-ai verify', mcp: 'conductor_verify', ui: { na: 'runs project commands; use the terminal or your controller' } },
   // ---- reviewing results
-  { id: 'runs', title: 'Recent runs, and one run in full (checks, attempts, report)', cli: 'conductor-ai runs [show <run>]', mcp: 'conductor_runs', ui: 'GET /api/run' },
+  { id: 'runs', title: 'Recent runs, and one run in full (checks, attempts, report)', cli: 'conductor-ai runs [show <run> | recheck]', mcp: 'conductor_runs', ui: 'GET /api/run' },
   { id: 'import', title: 'Import your answer from a web chat for a waiting run (or a research report)', cli: 'conductor-ai import <run> <file>', mcp: 'conductor_import', ui: 'POST /api/import' },
   { id: 'diff', title: 'Compact diff to review', cli: 'conductor-ai diff [branch]', mcp: 'conductor_diff', ui: 'GET /api/run' },
   { id: 'stats', title: 'Quality numbers: first-try accept rate, alpha gate, failure causes', cli: 'conductor-ai stats [--failures]', mcp: 'conductor_stats', ui: 'GET /api/stats' },

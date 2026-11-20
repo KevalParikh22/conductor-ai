@@ -4,6 +4,7 @@
 
 - **One command name: `conductor-ai`.** The short `conductor` command is gone (other tools ship a `conductor` too). Help, messages, the settings page, the README, the docs and generated files all say `conductor-ai`. If you typed `conductor …`, type `conductor-ai …`; your config, projects and MCP setup keep working as they are.
 - **Fixed: skills and slash commands now allow `Bash(conductor-ai:*)`.** They allowed `conductor:*`, which doesn't match `conductor-ai` commands, so Claude Code asked before each one.
+- **`conductor-ai runs recheck`: run verify again for failed runs.** A run whose verify failed for a reason outside its code (a package not installed yet, a service that was down) stayed red for good. `runs recheck` checks out each failed run's commit in a throwaway folder and runs its verify again; the new result shows in `conductor-ai runs` and on the run page, marked ↻, and the first result is kept. It exits 1 while any still fail, so it can run from cron.
 - Doctor no longer checks whether another program owns `conductor` on PATH; it checks for `conductor-ai`.
 
 ## 0.11.3 (2026-11-18)
