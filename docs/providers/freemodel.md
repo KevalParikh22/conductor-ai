@@ -8,7 +8,7 @@
 |---|---|
 | Kind | Chat API (OpenAI-compatible): returns code that conductor-ai applies |
 | Cost | 1M tokens a month, no card; requests stop with HTTP 402 when they run out. |
-| Key | `FREEMODEL_API_KEY` from https://freemodel.in/register (the provider's docs name no variable; this is conductor-ai's name for it) |
+| Key | `FREEMODEL_API_KEY` from https://freemodel.in/register?ref=FM-77C741 (the provider's docs name no variable; this is conductor-ai's name for it) |
 | Endpoint | `https://freemodel.in/v1` |
 | Default model | picked automatically from the live list (coding models first); choose your own with `conductor-ai models freemodel --all` |
 | conductor-ai name | `freemodel` |
@@ -18,7 +18,7 @@
 
 ## Set up
 
-1. Create an API key: https://freemodel.in/register
+1. Create an API key: https://freemodel.in/register?ref=FM-77C741
 2. Add it to conductor-ai. It asks for the key (hidden input), lets you pick a model, sends one test prompt and adds it to the `docs`, `test`, `review` and `ask` roles:
    ```bash
    conductor-ai add freemodel

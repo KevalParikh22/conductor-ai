@@ -8,7 +8,7 @@ Free coding gateway (GPT, Claude Opus, GLM, DeepSeek) for Claude Code, Codex and
 |---|---|
 | Kind | Chat API (OpenAI-compatible): returns code that conductor-ai applies |
 | Cost | Free credit for coding use ($50 on sign-up); the model list changes as capacity comes and goes. |
-| Key | `AGENTROUTER_API_KEY` from https://agentrouter.org/register (the provider's docs name no variable; this is conductor-ai's name for it) |
+| Key | `AGENTROUTER_API_KEY` from https://agentrouter.org/register?aff=Baf4 (the provider's docs name no variable; this is conductor-ai's name for it) |
 | Endpoint | `https://agentrouter.org/v1` |
 | Default model | `glm-5.3` |
 | conductor-ai name | `agentrouter` |
@@ -18,7 +18,7 @@ Free coding gateway (GPT, Claude Opus, GLM, DeepSeek) for Claude Code, Codex and
 
 ## Set up
 
-1. Create an API key: https://agentrouter.org/register
+1. Create an API key: https://agentrouter.org/register?aff=Baf4
 2. Add it to conductor-ai. It asks for the key (hidden input), lets you pick a model, sends one test prompt and adds it to the `docs`, `test`, `review` and `ask` roles:
    ```bash
    conductor-ai add agentrouter
