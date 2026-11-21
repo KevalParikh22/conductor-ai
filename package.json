@@ -45,6 +45,7 @@
   "files": [
     "bin",
     "src",
+    "defaults",
     "templates",
     "README.md",
     "CHANGELOG.md",
