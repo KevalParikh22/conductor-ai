@@ -39,7 +39,8 @@ export function formatSummary(s) {
     L.push(`usage:     ${tin} tokens in / ${tout} out${known.length ? ` · $${cost.toFixed(4)}` : ' · cost unknown (no price set)'}`);
   }
   L.push(`report:    ${s.report}`);
-  L.push(`status:    ${s.status || '(no RESULT/VERDICT line, so read the report)'}`);
+  // ask has no RESULT/VERDICT line by design: its answer is the report
+  L.push(`status:    ${s.status || (s.role === 'ask' ? 'answered (read the report)' : '(no RESULT/VERDICT line, so read the report)')}`);
   const out = outcome(s);
   const acc = s.acceptance;
   const accShort = acc && !acc.waived && (!acc.answered || acc.met < acc.total);

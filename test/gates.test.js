@@ -53,3 +53,9 @@ test('outcome and summary: out of scope, and verify that already failed on the b
   assert.match(formatSummary(broken), /NOT PROVEN[\s\S]*No new failure lines/);
   assert.match(formatSummary(broken), /base: +verify FAIL on the starting commit abc1234/);
 });
+
+test('summary: an ask has no RESULT line by design, so its status says answered; a build without one still warns', () => {
+  const s = { winner: 'w', mode: 'read', role: 'ask', status: null, changed: [], applied: [], rejected: [], warnings: [], attempts: [{ provider: 'w', reason: 'ok' }] };
+  assert.match(formatSummary(s), /status: +answered \(read the report\)/);
+  assert.match(formatSummary({ ...s, mode: 'write', role: 'build' }), /status: +\(no RESULT\/VERDICT line/);
+});
