@@ -51,6 +51,39 @@ test('every catalog entry is complete and safe', () => {
   assert.deepEqual(urlFields({ baseUrl: 'https://x/{ACCOUNT_ID}/v1/{REGION}' }), ['ACCOUNT_ID', 'REGION']);
 });
 
+test('FreeModel and AgentRouter follow groq in the free catalog with the documented fields', () => {
+  const ids = Object.keys(CATALOG);
+  assert.deepEqual(ids.slice(ids.indexOf('groq') + 1, ids.indexOf('groq') + 3), ['freemodel', 'agentrouter']);
+  assert.deepEqual(CATALOG.freemodel, {
+    label: 'FreeModel',
+    category: 'free',
+    baseUrl: 'https://freemodel.in/v1',
+    apiKeyEnv: 'FREEMODEL_API_KEY',
+    keyNameOwn: true,
+    keyUrl: 'https://freemodel.in/register?ref=FM-77C741',
+    docsUrl: 'https://freemodel.in/docs/getting-started',
+    model: '',
+    free: '1M tokens a month, no card; requests stop with HTTP 402 when they run out.',
+    privacy: 'Says it does not store prompts or replies, but they go to the upstream model provider, whose retention applies.',
+    about: '29 models (Claude, GPT, DeepSeek, Kimi and more) behind one OpenAI-compatible endpoint.',
+    verified: '2026-11',
+  });
+  assert.deepEqual(CATALOG.agentrouter, {
+    label: 'AgentRouter',
+    category: 'free',
+    baseUrl: 'https://agentrouter.org/v1',
+    apiKeyEnv: 'AGENTROUTER_API_KEY',
+    keyNameOwn: true,
+    keyUrl: 'https://agentrouter.org/register?aff=Baf4',
+    docsUrl: 'https://agentrouter.org/docs/index.html',
+    model: 'glm-5.3',
+    free: 'Free credit for coding use ($50 on sign-up); the model list changes as capacity comes and goes.',
+    privacy: 'Community gateway that relays to upstream providers; its terms forbid using outputs to train models and non-coding bulk use.',
+    about: 'Free coding gateway (GPT, Claude Opus, GLM, DeepSeek) for Claude Code, Codex and OpenCode users.',
+    verified: '2026-11',
+  });
+});
+
 test('built-in providers keep their names and defaults', () => {
   for (const name of ['kilo-free', 'openrouter-free', 'gemini-api']) assert.equal(DEFAULT_PROVIDERS[name].enabled, true, name);
   assert.equal(DEFAULT_PROVIDERS['opencode-zen'].enabled, false, 'its free models only work inside the OpenCode app');

@@ -2,7 +2,7 @@
 
 # Provider setup guides
 
-conductor-ai can use **45 chat APIs** and **10 coding agents**. Each has a guide below. The quickest way to add any of them:
+conductor-ai can use **47 chat APIs** and **10 coding agents**. Each has a guide below. The quickest way to add any of them:
 
 ```bash
 conductor-ai setup            # finds what you have, adds a free provider, tests
@@ -35,6 +35,8 @@ Not listed? Any OpenAI-compatible endpoint works: see [Adding your own](../PROVI
 | OVHcloud AI Endpoints | optional | Works without a key at 2 requests a minute per model; a key | `conductor-ai add ovh` | [guide](ovh.md) |
 | Google Gemini API | `GEMINI_API_KEY` | Free tier on most models, with daily limits shown in AI Studio | `conductor-ai add gemini` | [guide](gemini.md) |
 | Groq | `GROQ_API_KEY` | Free plan with per-model limits, e | `conductor-ai add groq` | [guide](groq.md) |
+| FreeModel | `FREEMODEL_API_KEY` | 1M tokens a month, no card; requests stop with HTTP 402 when they run out | `conductor-ai add freemodel` | [guide](freemodel.md) |
+| AgentRouter | `AGENTROUTER_API_KEY` | Free credit for coding use | `conductor-ai add agentrouter` | [guide](agentrouter.md) |
 | Cerebras | `CEREBRAS_API_KEY` | Free accounts with lower per-minute limits | `conductor-ai add cerebras` | [guide](cerebras.md) |
 | NVIDIA NIM | `NVIDIA_API_KEY` | Free for prototyping | `conductor-ai add nvidia` | [guide](nvidia.md) |
 | Cohere | `COHERE_API_KEY` | Trial key: 1000 calls a month, 20 a minute | `conductor-ai add cohere` | [guide](cohere.md) |
