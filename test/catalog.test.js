@@ -76,10 +76,11 @@ test('FreeModel and AgentRouter follow groq in the free catalog with the documen
     keyNameOwn: true,
     keyUrl: 'https://agentrouter.org/register?aff=Baf4',
     docsUrl: 'https://agentrouter.org/docs/index.html',
-    model: 'glm-5.3',
+    via: 'codex',
+    model: 'gpt-6.1-sol',
     free: 'Free credit for coding use ($50 on sign-up); the model list changes as capacity comes and goes.',
     privacy: 'Community gateway that relays to upstream providers; its terms forbid using outputs to train models and non-coding bulk use.',
-    about: 'Free coding gateway (GPT, Claude Opus, GLM, DeepSeek) for Claude Code, Codex and OpenCode users.',
+    about: 'Free coding gateway (GPT models) for Claude Code, Codex and OpenCode users. conductor-ai runs it through the Codex CLI, which it requires.',
     verified: '2026-11',
   });
 });

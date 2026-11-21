@@ -81,9 +81,9 @@ export const CLI_PRESETS = {
     stdin: true, // "-" = read prompt from stdin
     // codex exec never prompts; its OS sandbox decides. workspace-write keeps .git read-only and has no network.
     // --json: events on stdout with token usage (turn.completed); -o still writes the final answer.
-    write: ['exec', '--skip-git-repo-check', '--json', '--sandbox', 'workspace-write', '-c', 'approval_policy="never"',
+    write: ['exec', '--skip-git-repo-check', '--json', '{gatewayArgs}', '--sandbox', 'workspace-write', '-c', 'approval_policy="never"',
       '-c', 'sandbox_workspace_write.network_access=false', '{modelArgs}', '-o', '{outFile}', '-'],
-    read: ['exec', '--skip-git-repo-check', '--json', '--sandbox', 'read-only', '-c', 'approval_policy="never"', '{modelArgs}', '-o', '{outFile}', '-'],
+    read: ['exec', '--skip-git-repo-check', '--json', '{gatewayArgs}', '--sandbox', 'read-only', '-c', 'approval_policy="never"', '{modelArgs}', '-o', '{outFile}', '-'],
     output: 'codex-json',
     idleTimeoutMin: 10, // --json prints an event per step: silence this long means it hangs
     modelArgs: ['-m', '{model}'],
