@@ -2,15 +2,15 @@
 
 # AgentRouter
 
-Free coding gateway (GPT, Claude Opus, GLM, DeepSeek) for Claude Code, Codex and OpenCode users.
+Free coding gateway (GPT models) for Claude Code, Codex and OpenCode users. conductor-ai runs it through the Codex CLI, which it requires.
 
 | | |
 |---|---|
-| Kind | Chat API (OpenAI-compatible): returns code that conductor-ai applies |
+| Kind | Runs through the Codex CLI (`codex`), pointed at this endpoint with your key: the provider only answers coding-agent clients |
 | Cost | Free credit for coding use ($50 on sign-up); the model list changes as capacity comes and goes. |
 | Key | `AGENTROUTER_API_KEY` from https://agentrouter.org/register?aff=Baf4 (the provider's docs name no variable; this is conductor-ai's name for it) |
 | Endpoint | `https://agentrouter.org/v1` |
-| Default model | `glm-5.3` |
+| Default model | `gpt-6.1-sol` |
 | conductor-ai name | `agentrouter` |
 | Privacy | Community gateway that relays to upstream providers; its terms forbid using outputs to train models and non-coding bulk use. |
 | Provider docs | https://agentrouter.org/docs/index.html |
@@ -18,12 +18,13 @@ Free coding gateway (GPT, Claude Opus, GLM, DeepSeek) for Claude Code, Codex and
 
 ## Set up
 
-1. Create an API key: https://agentrouter.org/register?aff=Baf4
-2. Add it to conductor-ai. It asks for the key (hidden input), lets you pick a model, sends one test prompt and adds it to the `docs`, `test`, `review` and `ask` roles:
+1. Install the Codex CLI: `npm install -g @openai/codex` (no OpenAI login needed for this provider)
+2. Create an API key: https://agentrouter.org/register?aff=Baf4
+3. Add it to conductor-ai. It asks for the key (hidden input), lets you pick a model, sends one test prompt and adds it to the `docs`, `test`, `review` and `ask` roles:
    ```bash
    conductor-ai add agentrouter
    ```
-3. Check it any time:
+4. Check it any time:
    ```bash
    conductor-ai doctor --live
    ```
@@ -42,11 +43,17 @@ Then add this to `~/.config/conductor-ai/config.json` (all projects) or `.conduc
 {
   "providers": {
     "agentrouter": {
-      "type": "openai",
+      "type": "cli",
       "enabled": true,
+      "catalog": "agentrouter",
       "baseUrl": "https://agentrouter.org/v1",
       "apiKeyEnv": "AGENTROUTER_API_KEY",
-      "model": "glm-5.3"
+      "model": "gpt-6.1-sol",
+      "preset": "codex",
+      "gateway": true,
+      "passEnv": [
+        "AGENTROUTER_API_KEY"
+      ]
     }
   }
 }
@@ -57,6 +64,8 @@ The variable name only tells conductor-ai where to find the key; the provider ne
 
 ## Troubleshooting
 
+- **401 "unauthorized client detected"**: the request did not come through Codex. Check the provider has `"type": "cli"`, `"preset": "codex"` and `"gateway": true`, and that `codex` is installed.
+- **503 "no available channel"**: the model is not offered to your account right now. Use one AgentRouter lists at https://agentrouter.org/pricing.
 - **401 / 403**: the key is wrong, expired, or still a placeholder. Run `conductor-ai keys` to see where it comes from, then `conductor-ai keys set AGENTROUTER_API_KEY`.
 - **404 or "model not found"**: the model id changed. Pick a current one with `conductor-ai models agentrouter --all`.
 - **429**: rate limit. conductor-ai puts the provider on cooldown and moves to the next one in the chain; `conductor-ai cooldown --clear agentrouter` resets it.

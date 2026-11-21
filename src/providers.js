@@ -17,6 +17,7 @@ function expandArgs(template, vars, modelArgs) {
       if (vars.model) out.push(...modelArgs.map((m) => m.replaceAll('{model}', vars.model)));
       continue;
     }
+    if (a === '{gatewayArgs}') { out.push(...(vars.gatewayArgs || [])); continue; }
     // {sessionSettings} is one whole JSON argument
     if (a === '{sessionSettings}') { out.push(vars.sessionSettings || '{}'); continue; }
     out.push(a.replaceAll('{prompt}', vars.prompt).replaceAll('{promptFile}', vars.promptFile)
@@ -178,7 +179,12 @@ async function runCliOnce(name, p, { mode, prompt, cwd, timeoutMs, idleTimeoutMs
     ? withCommands(withLinkedFolders(fillPaths(preset.sessionSettings[mode], realCwd), realCwd), mode === 'write' ? allowCommands : [])
     : null;
   const sessionSettings = settings ? JSON.stringify(settings) : '';
-  const args = expandArgs(template, { prompt: promptArg, promptFile, outFile, ioDir: path.dirname(promptFile), cwd: realCwd, model: p.model, sessionSettings,
+  // gateway: point Codex at the provider's own endpoint and key instead of the user's OpenAI login
+  const gw = preset.gateway ? (p.catalog || name).replace(/[^\w-]/g, '') : '';
+  const gatewayArgs = gw ? ['-c', `model_provider="${gw}"`, '-c', `model_providers.${gw}.name=${JSON.stringify(p.label || gw)}`,
+    '-c', `model_providers.${gw}.base_url=${JSON.stringify(p.baseUrl)}`, '-c', `model_providers.${gw}.env_key=${JSON.stringify(p.apiKeyEnv)}`,
+    '-c', `model_providers.${gw}.wire_api="responses"`] : [];
+  const args = expandArgs(template, { prompt: promptArg, promptFile, outFile, ioDir: path.dirname(promptFile), cwd: realCwd, model: p.model, sessionSettings, gatewayArgs,
     timeout: timeoutMs ? `${Math.max(1, Math.round(timeoutMs / 60_000))}m` : '0' }, preset.modelArgs || []);
   const env = workerEnv(preset, mode, realCwd);
   const onData = liveLog ? (d) => { try { fs.appendFileSync(liveLog, d); } catch { /* the page just shows less */ } } : undefined;

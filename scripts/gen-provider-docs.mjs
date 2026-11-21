@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CATALOG, CATEGORIES, BUILTIN_ALIASES, urlFields } from '../src/catalog.js';
+import { CATALOG, CATEGORIES, BUILTIN_ALIASES, urlFields, providerFromCatalog } from '../src/catalog.js';
 import { CLI_PRESETS, DEFAULT_PROVIDERS } from '../src/presets.js';
 
 const OUT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'docs', 'providers');
@@ -20,7 +20,9 @@ export function apiGuide(id, e) {
   const flags = fields.map((f) => ` --${f.toLowerCase().replaceAll('_', '-')} <${f.toLowerCase()}>`).join('');
   const L = [HEADER, `# ${e.label}`, '', e.about, ''];
   L.push('| | |', '|---|---|');
-  L.push(`| Kind | Chat API (${e.type === 'anthropic' ? 'Anthropic Messages format' : 'OpenAI-compatible'}): returns code that conductor-ai applies |`);
+  L.push(e.via === 'codex'
+    ? '| Kind | Runs through the Codex CLI (`codex`), pointed at this endpoint with your key: the provider only answers coding-agent clients |'
+    : `| Kind | Chat API (${e.type === 'anthropic' ? 'Anthropic Messages format' : 'OpenAI-compatible'}): returns code that conductor-ai applies |`);
   L.push(`| Cost | ${e.free || 'Paid, per token'} |`);
   L.push(`| Key | ${keyed ? `\`${e.apiKeyEnv}\` from ${e.keyUrl}${e.keyNameOwn ? ' (the provider\'s docs name no variable; this is conductor-ai\'s name for it)' : ''}` : e.apiKeyEnv ? `Optional (\`${e.apiKeyEnv}\`, from ${e.keyUrl}) — works without one` : `None${isLocal(e) ? ' (runs on your machine)' : ''}`} |`);
   L.push(`| Endpoint | \`${e.baseUrl}\` |`);
@@ -31,6 +33,7 @@ export function apiGuide(id, e) {
 
   L.push('## Set up', '');
   let n = 1;
+  if (e.via === 'codex') L.push(`${n++}. Install the Codex CLI: \`${CLI_PRESETS.codex.install.split(/\s+\(or: /)[0]}\` (no OpenAI login needed for this provider)`);
   if (isLocal(e)) L.push(`${n++}. Install and start it: ${e.keyUrl}. ${e.about.split('. ').slice(1).join('. ')}`.trimEnd());
   else if (keyed) L.push(`${n++}. Create an API key: ${e.keyUrl}`);
   L.push(`${n++}. Add it to conductor-ai. It asks for ${[keyed && 'the key (hidden input)', ...fields.map((f) => f.replaceAll('_', ' ').toLowerCase())].filter(Boolean).join(', ') || 'nothing'}, lets you pick a model, sends one test prompt and adds it to the \`docs\`, \`test\`, \`review\` and \`ask\` roles:`);
@@ -41,12 +44,14 @@ export function apiGuide(id, e) {
   L.push('## Without the wizard', '');
   if (keyed) L.push('Save the key (hidden input; or pipe it in):', '```bash', `conductor-ai keys set ${e.apiKeyEnv}`, '```', '');
   L.push('Then add this to `~/.config/conductor-ai/config.json` (all projects) or `.conductor-ai/config.json` (one project):', '```json');
-  const p = { ...(DEFAULT_PROVIDERS[name] ? { enabled: true } : { type: e.type || 'openai', enabled: true, baseUrl: e.baseUrl, apiKeyEnv: e.apiKeyEnv || '', ...(e.apiKeyOptional ? { apiKeyOptional: true } : {}) }), model: e.model || '<model id>' };
+  const p = e.via ? { ...providerFromCatalog(id), enabled: true } : { ...(DEFAULT_PROVIDERS[name] ? { enabled: true } : { type: e.type || 'openai', enabled: true, baseUrl: e.baseUrl, apiKeyEnv: e.apiKeyEnv || '', ...(e.apiKeyOptional ? { apiKeyOptional: true } : {}) }), model: e.model || '<model id>' };
   L.push(JSON.stringify({ providers: { [name]: p } }, null, 2), '```');
   L.push(`List models: \`conductor-ai models ${name} --all\`. Put \`${name}\` in any role's chain in \`conductor-ai ui\` → Roles & fallback.`, '');
 
   if (e.apiKeyEnv) L.push(`The variable name only tells conductor-ai where to find the key; the provider never sees it. To use a key you already keep under another name, set \`"apiKeyEnv": "YOUR_VAR"\` on \`${name}\`.`, '');
   L.push('## Troubleshooting', '');
+  if (e.via === 'codex') L.push('- **401 "unauthorized client detected"**: the request did not come through Codex. Check the provider has `"type": "cli"`, `"preset": "codex"` and `"gateway": true`, and that `codex` is installed.');
+  if (e.via === 'codex') L.push('- **503 "no available channel"**: the model is not offered to your account right now. Use one AgentRouter lists at https://agentrouter.org/pricing.');
   L.push(`- **401 / 403**: the key is wrong, expired, or still a placeholder. Run \`conductor-ai keys\` to see where it comes from${keyed ? `, then \`conductor-ai keys set ${e.apiKeyEnv}\`` : ''}.`);
   L.push('- **404 or "model not found"**: the model id changed. Pick a current one with `conductor-ai models ' + name + ' --all`.');
   L.push('- **429**: rate limit. conductor-ai puts the provider on cooldown and moves to the next one in the chain; `conductor-ai cooldown --clear ' + name + '` resets it.');
