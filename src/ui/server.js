@@ -27,6 +27,8 @@ import { clearCooldowns, getCooldowns, chooseChain } from '../core.js';
 import { deepMerge, isPlainObject, which, loadEnvFile } from '../util.js';
 import { VERSION } from '../version.js';
 import * as git from '../git.js';
+import { ACCOUNT_KINDS, providersWithAccounts, accountStatus, addAccount, renameAccount, removeAccount, orderAccounts, setAccountEnabled, checkAccount } from '../accounts.js';
+import { UsageError } from '../core.js';
 
 /** Minimal override: only what differs from `base`. */
 export { deepDiff } from '../util.js';
@@ -137,6 +139,25 @@ export function createUiServer({ cwd = process.cwd(), token = crypto.randomBytes
       const route = `${req.method} ${url.pathname}`;
       switch (route) {
         case 'GET /api/state': return send(200, stateFor(root));
+        case 'GET /api/accounts': {
+          const cfg = loadConfig(root);
+          const providers = Object.fromEntries(providersWithAccounts(cfg).map((provider) => [provider, accountStatus(cfg, provider)]));
+          return send(200, { providers });
+        }
+        case 'POST /api/accounts/add': addAccount(String(body.provider || ''), String(body.label || '')); return send(200, accountList(body.provider));
+        case 'POST /api/accounts/rename': renameAccount(String(body.provider || ''), String(body.from || ''), String(body.to || '')); return send(200, accountList(body.provider));
+        case 'POST /api/accounts/remove': {
+          if (body.confirm !== true) return send(400, { error: 'confirm must be true to remove an account and its login folder' });
+          removeAccount(String(body.provider || ''), String(body.label || '')); return send(200, accountList(body.provider));
+        }
+        case 'POST /api/accounts/order': orderAccounts(String(body.provider || ''), body.labels); return send(200, accountList(body.provider));
+        case 'POST /api/accounts/toggle': setAccountEnabled(String(body.provider || ''), String(body.label || ''), !!body.enabled); return send(200, accountList(body.provider));
+        case 'POST /api/accounts/check': {
+          const provider = String(body.provider || ''), cfg = loadConfig(root);
+          if (body.label) await checkAccount(cfg, provider, String(body.label));
+          else await Promise.all((cfg.providers[provider]?.accounts || []).map((a) => checkAccount(cfg, provider, a.label)));
+          return send(200, accountList(provider));
+        }
         case 'PUT /api/config': {
           const scope = body.scope === 'global' ? 'global' : 'project';
           const eff = body.effective || {};
@@ -244,9 +265,14 @@ export function createUiServer({ cwd = process.cwd(), token = crypto.randomBytes
         default: return send(404, { error: 'not found' });
       }
     } catch (e) {
-      return send(500, { error: String(e.message || e) });
+      return send(e instanceof UsageError ? 400 : 500, { error: String(e.message || e) });
     }
   });
+
+  function accountList(provider) {
+    const cfg = loadConfig(root);
+    return { provider, accounts: accountStatus(cfg, String(provider || '')), providers: providersWithAccounts(cfg) };
+  }
 
   return {
     server, token, root,
