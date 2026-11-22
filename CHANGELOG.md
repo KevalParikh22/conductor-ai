@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Several accounts for one CLI (`conductor-ai accounts`).** Codex CLI and Claude Code providers can hold an ordered list of signed-in accounts in the global config: a quota hit cools that account down until its reported reset and the run moves to the next account before the next provider. You add and sign in each account yourself with `conductor-ai accounts add …` and `conductor-ai accounts login …` (the CLI's own flow, terminal attached; conductor-ai never reads login files or automates a web sign-in). The Providers page has an Accounts block, `conductor-ai accounts` and `conductor-ai cooldown` show state, and `conductor_ai_status` only reads it. Antigravity is not included (keyring login, no folder override). See docs/PROVIDERS.md for the vendor links.
+
 ## 0.12.0 (2026-11-22)
 
 **Breaking: everything is named `conductor-ai` now.** The first npm release since 0.11.1, so it also carries 0.11.2 and 0.11.3. After updating, run `conductor-ai init` once in each project (see the rename notes below).

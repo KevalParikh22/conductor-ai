@@ -135,3 +135,60 @@ Then add the name to a role chain, either in the UI or in `roles`.
 - **APIs:** HTTP 429 or 402 count as `quota` (honouring `Retry-After`), 401/403 as `auth`, 5xx as `server`. OpenRouter's 200-with-error responses are detected too.
 - **CLIs:** a non-zero exit whose output matches `settings.quotaPattern`, or a short exit-0 reply that is only a limit message.
 - A `quota` result puts the provider on cooldown, so later runs skip it straight away.
+
+## Several accounts for one CLI
+
+Codex CLI (`codex-cli`) and Claude Code (`claude-cli`) can each keep several signed-in accounts. The provider stays once in your role chains; conductor-ai expands it into one rotation entry per enabled account, in the order you set. An account is the same CLI pointed at its own config folder, with its own login, cooldown and parallel slot. Antigravity (`antigravity-cli`) has no accounts: its login is in the OS keyring and the CLI has no folder override, so conductor-ai cannot point it at a second login.
+
+Accounts are per person, so they are stored in your global config (`~/.config/conductor-ai/config.json`), not in a project. This is what `accounts add`, `order` and `off` write:
+
+```json
+"providers": {
+  "codex-cli": {
+    "accounts": [
+      { "label": "default" },
+      { "label": "work2" },
+      { "label": "spare", "enabled": false }
+    ]
+  }
+}
+```
+
+`default` means your normal login (no separate folder or sign-in); the first account you add keeps it first. Other labels are 1–32 characters, lowercase letters, digits, `-` and `_`, starting with a letter or digit, and must be unique for that provider.
+
+Add an account, then sign in yourself in a terminal:
+
+```bash
+conductor-ai accounts add codex-cli work2
+conductor-ai accounts login codex-cli work2          # Codex CLI's own sign-in, terminal attached
+conductor-ai accounts login codex-cli work2 --device # Codex only: device authentication
+```
+
+conductor-ai prepares the account's folder, runs the CLI's own `login` command with the terminal attached (the CLI talks to you directly), then runs its own `status` command and saves only a yes/no. It never opens a browser for you.
+
+| Command | What it does |
+|---|---|
+| `conductor-ai accounts [<provider>]` | List provider, label and state: ready, cooling down until a time, needs sign-in, off or not checked, with the until/reason |
+| `conductor-ai accounts add <provider> <label>` | Add an account and create its folder |
+| `conductor-ai accounts login <provider> <label> [--device]` | Sign in via the CLI itself, then check (`--device` applies to Codex only) |
+| `conductor-ai accounts check <provider> [<label>]` | Ask the CLI's status command (all accounts when no label is given) |
+| `conductor-ai accounts rename <provider> <from> <to>` | Rename the label and move its folder |
+| `conductor-ai accounts rm <provider> <label> [--yes]` | Delete the account, its folder and its login; asks first unless `--yes` (`default` cannot be removed) |
+| `conductor-ai accounts order <provider> <label,label,…>` | Set the rotation order |
+| `conductor-ai accounts on|off <provider> <label>` | Turn an account on or off without deleting it |
+
+When an account hits a quota, it cools down until the reset time the CLI reported (when it gives one; capped at 7 days), or for `settings.cooldownMinutes` (30 by default). The next enabled account of the same CLI takes over; only when those are used does the run move on to the next provider in the chain. `conductor-ai cooldown` lists each account's cooldown as `codex-cli [work2]` (and `codex-cli [work2]@<model>` for a model cooldown). Clear one with `conductor-ai cooldown --clear codex-cli#work2`, or a provider and all its accounts with `conductor-ai cooldown --clear codex-cli`.
+
+`conductor-ai ui` → Providers has an **Accounts** block under Codex CLI and Claude Code: rows show the label, state (ready, cooling down until a time, needs sign-in, off or not checked) and buttons for Check, Rename, Remove (with confirmation), reordering and on/off; **Add account** asks for a label. Since sign-in needs a terminal, each row shows the exact `conductor-ai accounts login …` command with a copy button.
+
+conductor-ai never reads, copies or prints what a CLI keeps in an account folder (such as `auth.json` or `.credentials.json`), never sends it anywhere, and never automates a web sign-in. It creates the folder, uses the CLI's own commands and reads only their exit codes.
+
+### Vendor terms
+
+No vendor we checked explicitly allows rotating accounts to get past a usage limit. Use only accounts you own, and read the current terms before adding several:
+
+- OpenAI — https://openai.com/policies/terms-of-use/
+- Anthropic — https://www.anthropic.com/legal/consumer-terms · https://www.anthropic.com/legal/aup
+- Claude Code — https://code.claude.com/docs/en/legal-and-compliance
+
+The first `conductor-ai accounts add` prints a short version of this note once.
