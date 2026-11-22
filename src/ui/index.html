@@ -626,13 +626,13 @@ function accountsBlock(n) {
       const login = `conductor-ai accounts login ${n} ${a.label}`;
       return `<tr><td><b>${esc(a.label)}</b>${a.label === 'default' ? ' <span class="note">normal login</span>' : ''}</td>
         <td>${accountPill(a)}${a.state === 'cooling' && a.reason ? `<div class="note">${esc(a.reason)}</div>` : ''}</td>
-        <td style="text-align:right;white-space:nowrap"><label class="switch" title="${a.enabled ? 'On' : 'Off'}"><input type="checkbox" data-account-on="${esc(n)}|${esc(a.label)}" ${a.enabled ? 'checked' : ''} aria-label="Enable ${esc(a.label)}"><span></span></label>
+        <td style="text-align:right;white-space:nowrap"><label class="switch" style="display:inline-block;vertical-align:middle;margin-right:6px" title="${a.enabled ? 'On' : 'Off'}"><input type="checkbox" data-account-on="${esc(n)}|${esc(a.label)}" ${a.enabled ? 'checked' : ''} aria-label="Enable ${esc(a.label)}"><span></span></label>
           <button class="btn icon ghost small" data-account-mv="${esc(n)}|${i}|-1" ${i ? '' : 'disabled'} aria-label="Move up">${icon('up')}</button>
           <button class="btn icon ghost small" data-account-mv="${esc(n)}|${i}|1" ${i < rows.length - 1 ? '' : 'disabled'} aria-label="Move down">${icon('down')}</button>
           <button class="btn small" data-account-check="${esc(n)}|${esc(a.label)}">Check</button>
-          <button class="btn small ghost" data-account-rename="${esc(n)}|${esc(a.label)}">Rename</button>
+          <button class="btn small ghost" data-account-rename="${esc(n)}|${esc(a.label)}" ${a.label === 'default' ? 'disabled' : ''}>Rename</button>
           <button class="btn small ghost" data-account-rm="${esc(n)}|${esc(a.label)}" ${a.label === 'default' ? 'disabled' : ''}>Remove</button></td></tr>
-        <tr><td colspan="3" class="note">Sign in in a terminal: <span class="mono">${esc(login)}</span>${copyIcon(login, 'Sign-in command copied', 'Copy the sign-in command')}</td></tr>`;
+        ${a.label === 'default' ? '' : `<tr><td colspan="3" class="note">Sign in in a terminal: <span class="mono">${esc(login)}</span>${copyIcon(login, 'Sign-in command copied', 'Copy the sign-in command')}</td></tr>`}`;
     }).join('')}</table>` : '<p class="note">No accounts yet: runs use your normal login.</p>'}
     <div class="row" style="margin-top:10px"><input type="text" id="account-label-${esc(n)}" placeholder="Account label" style="max-width:220px"><button class="btn small" data-account-add="${esc(n)}">${icon('plus')} Add account</button></div></div>`;
 }

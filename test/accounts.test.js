@@ -106,6 +106,8 @@ test('sign-in runs the CLI with the account folder, then checks it', async () =>
   addAccount('codex-cli', 'w');
   assert.deepEqual(await loginAccount(config.loadConfig(), 'codex-cli', 'w'), { signedIn: true });
   assert.equal(accountStatus(config.loadConfig(), 'codex-cli').find((x) => x.label === 'w').state, 'ready');
+  // the user's normal login is never signed in or out by conductor-ai
+  await assert.rejects(loginAccount(config.loadConfig(), 'codex-cli', 'default'), /leaves it alone/);
 });
 
 test('status shows cooling with its end, needs sign-in and disabled', async () => {

@@ -186,6 +186,8 @@ export async function checkAccount(cfg, provider, label) {
 export async function loginAccount(cfg, provider, label, { device = false } = {}) {
   const p = providerInfo(provider);
   assertLabel(label);
+  // the user's own login is theirs to manage: conductor-ai never signs it in or out
+  if (label === 'default') throw new UsageError(`default is your normal ${CLI_PRESETS[p.preset].bin} login: conductor-ai leaves it alone (sign in with \`${CLI_PRESETS[p.preset].bin}\` yourself if you need to)`);
   mustExist(savedAccounts(provider), label);
   const kind = ACCOUNT_KINDS[p.preset], bin = CLI_PRESETS[p.preset].bin;
   if (!which(bin)) throw new UsageError(`"${bin}" is not installed`);
