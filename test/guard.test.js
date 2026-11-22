@@ -16,8 +16,9 @@ test('commit detection: git commit in any position of a shell line, nothing else
 });
 
 test('push detection: git push in any position of a shell line, nothing else', () => {
-  for (const c of ['git push', 'git push origin main', 'cd a && git push --force-with-lease', 'git -C sub push', 'x; git push']) assert.equal(G.isPush(c), true, c);
-  for (const c of ['git commit -m push', 'echo git push', 'git pushx', '', undefined]) assert.equal(G.isPush(c), false, String(c));
+  for (const c of ['git push', 'git push origin main', 'cd a && git push --force-with-lease', 'git -C sub push', 'x; git push',
+    '/usr/bin/git push', 'env git push', 'env -i FOO=1 git push', 'command git push', 'FOO=1 git push', 'C:\\Git\\bin\\git.exe push']) assert.equal(G.isPush(c), true, c);
+  for (const c of ['git commit -m push', 'echo git push', 'git pushx', 'mygit push', 'legit push', '', undefined]) assert.equal(G.isPush(c), false, String(c));
 });
 
 test('a failed verify blocks pushes (not commits) until a verify passes or allow is used for this commit', () => {

@@ -9,7 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
-import { run } from './util.js';
+import { run, codeEnv } from './util.js';
 
 const KEYWORDS = new Set(['true', 'false', 'null', 'undefined', 'new', 'typeof', 'void', 'NaN', 'Infinity', 'this', 'in', 'of', 'instanceof',
   'async', 'await', 'function', 'return']);
@@ -118,8 +118,7 @@ export async function runAcceptanceChecks(work, criteria, taskFiles, { dir, time
   ];
   const file = path.join(dir || work, `acceptance-checks-${process.pid}-${Date.now()}.mjs`);
   fs.writeFileSync(file, lines.join('\n') + '\n');
-  const env = { ...process.env }; delete env.NODE_TEST_CONTEXT;
-  const r = await run(process.execPath, [file], { cwd: work, timeoutMs, env });
+  const r = await run(process.execPath, [file], { cwd: work, timeoutMs, env: codeEnv() });
   if (!dir) fs.rmSync(file, { force: true });
   const m = r.stdout.match(/__CONDUCTOR_CHECKS__(.*)$/m);
   let results = null; try { results = m && JSON.parse(m[1]); } catch { /* bad output */ }

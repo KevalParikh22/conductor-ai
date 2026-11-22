@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+Security fixes from an external review:
+
+- **Symlinks can't move a model's files.** A symlink in the repo could send a file outside it (or a secrets file) to an API model as context, or let a model's file block write outside the repo or onto a protected file. Both now check the real path.
+- **`--save` stays in the repo.** `run ask --save` (and MCP `save`) now refuses paths outside the repo and protected files, like a model's file blocks.
+- **Protected paths match in any case**, so `agents.md` can't overwrite `AGENTS.md` on macOS or Windows.
+- **Keys stay out of more places.** A key in conductor-ai's secrets file is scrubbed from workers even when your shell exports it too, and keys are now also removed from plan `repro:` commands and acceptance checks (verify already had this).
+- **`.git/info/exclude` and `.git/info/attributes` are restored after each worker**, like hooks and `.git/config`, so a worker can't hide its files from `git status` or its changes from `git diff`.
+- **The push guard spots more forms**: `/usr/bin/git push`, `env git push`, `command git push`, `FOO=1 git push`.
+
 ## 0.12.0 (2026-11-22)
 
 **Breaking: everything is named `conductor-ai` now.** The first npm release since 0.11.1, so it also carries 0.11.2 and 0.11.3. After updating, run `conductor-ai init` once in each project (see the rename notes below).

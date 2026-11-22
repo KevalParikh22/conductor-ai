@@ -23,8 +23,8 @@ For every agent, `git push`, `commit`, `reset`, `checkout`, `rebase`, `stash`, `
 ### 2. Your keys stay yours
 
 - API keys live in `~/.config/conductor-ai/secrets.env` (mode 600), never in config files or the repo.
-- Keys loaded from there are removed from each worker's environment, except the one key that CLI needs. They are also removed from the verify command's environment.
-- Files that look like secrets (`.env*`, `auth.json`, `secrets.env`, `.npmrc`, SSH keys, `*.pem`/`*.key`, and anything in `protectedPaths`) are never sent to an API model as context, even if a task asks for them.
+- Keys loaded from there are removed from each worker's environment, except the one key that CLI needs, even when your shell exports the same key. They are also removed from the environment of verify, a plan's `repro:` command and acceptance checks.
+- Files that look like secrets (`.env*`, `auth.json`, `secrets.env`, `.npmrc`, SSH keys, `*.pem`/`*.key`, and anything in `protectedPaths`) are never sent to an API model as context, even if a task asks for them. A symlink is judged by where it points, and one pointing outside the repo is not sent at all.
 - `.env*`, `auth.json`, `app/etc/env.php` and conductor-ai's own `secrets.env`, `config.json`, `state.json` and `usage.jsonl` are unreadable through Antigravity's file tools. (Task worktrees live in conductor-ai's folder too, so the folder as a whole stays open to the worker working there.)
 - Antigravity may run the usual build, lint and test commands and your verify command without asking, still inside its sandbox with no network. Add others with `settings.allowCommands`.
 
@@ -32,12 +32,12 @@ For every agent, `git push`, `commit`, `reset`, `checkout`, `rebase`, `stash`, `
 
 - Write roles refuse to run on protected branches (`main`, `master` by default) or a dirty tree, unless you allow it. Parallel tasks run in their own worktrees on `conductor-ai/<id>` branches.
 - A failed attempt's changes are stashed, never deleted.
-- **Git hooks and `.git/config` are snapshotted before every worker and restored right after it**, before conductor-ai runs git again. A worker that plants a `pre-commit` hook, an `fsmonitor` program, a filter or a diff driver is undone, and the run shows a warning. conductor-ai's own git commands also run with `core.fsmonitor` disabled.
+- **Git hooks, `.git/config`, `.git/info/exclude` and `.git/info/attributes` are snapshotted before every worker and restored right after it**, before conductor-ai runs git again. A worker that plants a `pre-commit` hook, an `fsmonitor` program, a filter or a diff driver, or hides files from `git status` or `git diff`, is undone, and the run shows a warning. conductor-ai's own git commands also run with `core.fsmonitor` disabled.
 - Hook folders kept in the repo (`.husky/`, `.githooks/`, or your `core.hooksPath`) count as protected files.
 
 ### 4. Model output is checked before it touches disk
 
-API models (Kilo, OpenRouter, Gemini…) don't touch your files themselves; they return file blocks, and conductor-ai writes them. Paths outside the repo are rejected, and so are protected files: `AGENTS.md`, `CLAUDE.md`, plans, `.git/`, `.claude/`, `.conductor-ai/`, MCP configs, hook folders, `.env*`, `node_modules/`, and your `protectedPaths`.
+API models (Kilo, OpenRouter, Gemini…) don't touch your files themselves; they return file blocks, and conductor-ai writes them. Paths outside the repo are rejected, also through a symlink in the repo, and so are protected files (matched in any case, since macOS and Windows treat `agents.md` as `AGENTS.md`): `AGENTS.md`, `CLAUDE.md`, plans, `.git/`, `.claude/`, `.conductor-ai/`, MCP configs, hook folders, `.env*`, `node_modules/`, and your `protectedPaths`. `--save` (the `save` argument over MCP) gets the same checks.
 
 After every write task, conductor-ai also:
 
@@ -57,12 +57,12 @@ conductor-ai has **zero npm dependencies**. It's installed straight from this Gi
 
 Be clear on these before you use it on sensitive code.
 
-1. **Verify runs code the worker wrote.** Tests are code, and a worker can change both the tests and `package.json` scripts. When conductor-ai runs verify (`npm test` and so on), that code runs as you, outside any sandbox, exactly as if you ran `npm test` yourself. conductor-ai removes its API keys from that environment, but nothing else. For untrusted providers, set `"autoVerify": false` and review the diff before running tests.
+1. **Verify runs code the worker wrote.** So do a plan's `repro:` command and its acceptance checks: plans are the controller's own input and are trusted like a command you type. Tests are code, and a worker can change both the tests and `package.json` scripts. When conductor-ai runs verify (`npm test` and so on), that code runs as you, outside any sandbox, exactly as if you ran `npm test` yourself. conductor-ai removes its API keys from that environment, but nothing else. For untrusted providers, set `"autoVerify": false` and review the diff before running tests.
 2. **Agents can read what your user can read.** Sandboxes block writes and network, not reads. Anything a worker reads, like `~/.ssh` or other projects, can end up in what it sends to its model provider. Keep real secrets out of reach (see the setup below).
 3. **Some agents are not fully contained.** OpenCode's shell is not OS-sandboxed, and Kimi and custom CLIs can't be held to read-only. Prefer Antigravity or Codex for sensitive work.
 4. **Free API routes may log your prompts.** Kilo free, OpenRouter `:free` and similar routes can keep what you send, including your code, for training or abuse checks. Don't use them on private or client code.
 5. **Prompt injection is not solved.** Text in the repo, issues or fetched pages can steer a model. conductor-ai limits what a steered worker can do; it can't stop the model from writing bad code. **Review every diff before you commit**, especially changes to CI workflows (`.github/workflows`), build scripts, dependencies and auth code.
-6. **The controller has your access.** Claude Code, or whichever controller you use, runs conductor-ai with its own permissions. conductor-ai doesn't sandbox the controller.
+6. **The controller has your access.** Claude Code, or whichever controller you use, runs conductor-ai with its own permissions. conductor-ai doesn't sandbox the controller. The `guard` push hook is a check against mistakes, not a boundary: it spots `git push` also as `/usr/bin/git push`, after `VAR=value` or `env`/`command`, but not inside `bash -c "…"` or another interpreter.
 
 ## Recommended setup for sensitive projects
 
