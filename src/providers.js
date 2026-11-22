@@ -4,6 +4,7 @@ import os from 'node:os';
 import { CLI_PRESETS } from './presets.js';
 import { run, which, GLOBAL_DIR, SECRET_VARS, keyValue } from './util.js';
 import { DEFAULT_LINKS } from './worktree.js';
+import { accountEnv } from './accounts.js';
 
 /**
  * Result of one provider attempt.
@@ -67,11 +68,13 @@ export function withCommands(settings, commands) {
  * Environment for a CLI worker: the user's shell environment, minus the secrets conductor-ai loaded from
  * secrets.env / .conductor-ai/.env (except those this CLI needs, `passEnv`), plus the mode's own variables.
  */
-export function workerEnv(preset, mode, cwd) {
+export function workerEnv(preset, mode, cwd, acctEnv = { set: {}, drop: [] }) {
   const env = { ...process.env };
   const pass = new Set(preset.passEnv || []);
   for (const k of SECRET_VARS) if (!pass.has(k)) delete env[k];
+  for (const k of acctEnv.drop || []) delete env[k];
   for (const [k, v] of Object.entries(fillPaths(preset.modeEnv?.[mode] || {}, cwd))) env[k] = typeof v === 'string' ? v : JSON.stringify(v);
+  Object.assign(env, acctEnv.set || {});
   // PWD must match cwd: some CLIs (OpenCode) take the project folder from $PWD, not from their real working directory
   return { ...env, ...(preset.env || {}), PWD: cwd };
 }
@@ -187,7 +190,7 @@ export async function runCli(name, p, opts) {
   return res;
 }
 
-async function runCliOnce(name, p, { mode, prompt, cwd, timeoutMs, idleTimeoutMs = 0, runDir, quotaRe, allowCommands = [], signal, liveLog }) {
+async function runCliOnce(name, p, { mode, prompt, cwd, timeoutMs, idleTimeoutMs = 0, runDir, quotaRe, allowCommands = [], signal, liveLog, account }) {
   const preset = { ...(CLI_PRESETS[p.preset] || {}), ...p };
   if (!which(preset.bin)) return { ok: false, text: '', reason: 'not installed', log: '' };
   const promptFile = path.join(runDir, `${name}.prompt.md`);
@@ -212,7 +215,7 @@ async function runCliOnce(name, p, { mode, prompt, cwd, timeoutMs, idleTimeoutMs
     '-c', `model_providers.${gw}.wire_api="responses"`] : [];
   const args = expandArgs(template, { prompt: promptArg, promptFile, outFile, ioDir: path.dirname(promptFile), cwd: realCwd, model: p.model, sessionSettings, gatewayArgs,
     timeout: timeoutMs ? `${Math.max(1, Math.round(timeoutMs / 60_000))}m` : '0' }, preset.modelArgs || []);
-  const env = workerEnv(preset, mode, realCwd);
+  const env = workerEnv(preset, mode, realCwd, accountEnv(p.preset, account));
   const onData = liveLog ? (d) => { try { fs.appendFileSync(liveLog, d); } catch { /* the page just shows less */ } } : undefined;
   const r = await run(preset.bin, args, { cwd, input: preset.stdin ? prompt : undefined, timeoutMs, idleTimeoutMs, env, signal, onData });
   if (r.cancelled) return { ok: false, text: '', reason: 'cancelled', log: `$ ${preset.bin} (stopped: another attempt finished first)` };
@@ -256,6 +259,8 @@ async function runCliOnce(name, p, { mode, prompt, cwd, timeoutMs, idleTimeoutMs
   if (r.timedOut) return { ok: false, text, reason: r.idle ? `idle (no output for ${fmtMin(idleTimeoutMs)})` : `timeout (${fmtMin(timeoutMs)})`, log, ...extra };
   if (r.error) return { ok: false, text, reason: 'spawn error', log };
   if (r.code !== 0) {
+    if (account && /not logged in|authentication required|please (?:log|sign) in|401 unauthorized|invalid.*token|token.*expired/i.test(`${r.stdout}\n${r.stderr}`))
+      return { ok: false, text, reason: 'needs sign-in', log, ...extra };
     return { ok: false, text, reason: quotaRe.test(r.stdout + r.stderr) ? 'quota' : `exit ${r.code}`, log, ...extra };
   }
   if (text.trim().length < 20) return { ok: false, text, reason: 'empty output', log, ...extra };
