@@ -395,7 +395,7 @@ export const DEFAULT_SETTINGS = {
   maxReportBytes: 8000, // report.md the controller reads; the full output is kept in report.full.md
   smartSelect: true, // reorder each chain for the cheapest capable provider (see src/selector.js)
   maxContextBytes: 60000,
-  quotaPattern: 'quota|rate.?limit|usage limit|RESOURCE_EXHAUSTED|too many requests|\\b429\\b|limit reached|exceeded your|insufficient (credit|balance)|try again (later|in )',
+  quotaPattern: 'quota|rate.?limit|usage limit|RESOURCE_EXHAUSTED|too many requests|\\b429\\b|limit reached|exceeded your|insufficient (credit|balance)|try again (later|in )|hit your .{0,24}limit|out of usage credits|exhausted your quota|usage_limit_reached',
 };
 
 export const DEFAULT_CONFIG = {
