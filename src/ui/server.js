@@ -142,7 +142,9 @@ export function createUiServer({ cwd = process.cwd(), token = crypto.randomBytes
         case 'GET /api/state': return send(200, stateFor(root));
         case 'GET /api/accounts': {
           const cfg = loadConfig(root);
-          const providers = Object.fromEntries(providersWithAccounts(cfg).map((provider) => [provider, accountStatus(cfg, provider)]));
+          // every CLI provider that can have accounts, so the page can offer "Add account" before there are any
+          const names = Object.keys(cfg.providers).filter((n) => cfg.providers[n].type === 'cli' && ACCOUNT_KINDS[cfg.providers[n].preset]);
+          const providers = Object.fromEntries(names.map((provider) => [provider, accountStatus(cfg, provider)]));
           return send(200, { providers });
         }
         case 'POST /api/accounts/add': addAccount(String(body.provider || ''), String(body.label || '')); return send(200, accountList(body.provider));
