@@ -35,6 +35,7 @@ import { compactDiff } from '../src/diffview.js';
 import { runProgress, batchProgress } from '../src/progress.js';
 import { runDemo } from '../src/demo.js';
 import { importAnswer, importResearch, ImportError } from '../src/manual.js';
+import { accountStatus, addAccount, checkAccount, loginAccount, orderAccounts, providersWithAccounts, removeAccount, renameAccount, setAccountEnabled } from '../src/accounts.js';
 
 const HELP = `conductor-ai ${VERSION}: your coding agent (Claude Code, Codex, Antigravity, OpenCode) plans and reviews; cheaper models do the work.
 
@@ -64,6 +65,7 @@ Setup
   conductor-ai providers [--free] [--search x] [--json]   every provider conductor-ai can add (${Object.keys(CATALOG).length}), with status
   conductor-ai add <provider> [--model m] [--yes] [--project]   add one: key, model, test, role chains
   conductor-ai keys [set NAME | rm NAME]  list, set (hidden input or stdin) or remove API keys
+  conductor-ai accounts [<provider>] | add|login|check|rename|rm|order|on|off   manage CLI logins
   conductor-ai local [--enable]           find local model servers (Ollama, LM Studio, llama.cpp…) and turn them on
   conductor-ai init [--controller <c>] [--verify "<cmd>"] [--guards] [--vscode] [--no-mcp] [--share]   add conductor-ai to the current project (its files go in .gitignore unless --share)
                                        controllers: ${Object.keys(CONTROLLERS).join(', ')} (or your own: conductor-ai controller add)
@@ -234,7 +236,7 @@ function routeRules(cfg, o) {
 /** A controller entry, built-in or your own (V6). */
 const ctrl = (n) => allControllers(findProjectRoot())[n] || {};
 
-const COMMANDS = ['import', 'demo', 'controller', 'lessons', 'stats', 'guard', 'rules', 'eval', 'plan', 'skills', 'setup', 'providers', 'add', 'keys', 'local', 'route', 'diff', 'init', 'ui', 'mcp', 'status', 'doctor', 'verify', 'run', 'models', 'batch', 'worktree', 'runs', 'usage', 'cooldown', 'config', 'retry', 'help'];
+const COMMANDS = ['import', 'demo', 'controller', 'lessons', 'stats', 'guard', 'rules', 'eval', 'plan', 'skills', 'setup', 'providers', 'add', 'keys', 'accounts', 'local', 'route', 'diff', 'init', 'ui', 'mcp', 'status', 'doctor', 'verify', 'run', 'models', 'batch', 'worktree', 'runs', 'usage', 'cooldown', 'config', 'retry', 'help'];
 /** The command closest to a typo (edit distance ≤ 2), or null. */
 function closest(word, options) {
   // edit distance where swapping two neighbouring letters (stauts → status) counts as one edit
@@ -288,7 +290,7 @@ function timeoutOpt(o) {
 
 function parseArgs(argv) {
   const opts = { _: [] };
-  const flags = new Set(['no-verify', 'allow-dirty', 'json', 'live', 'no-open', 'no-mcp', 'all', 'clear', 'global', 'help', 'version', 'worktree', 'replace', 'force', 'allow-open-questions', 'vscode', 'yes', 'free', 'project', 'details', 'enable', 'rules', 'templates', 'continue', 'share', 'allow-unverified', 'allow-scope', 'allow-weak-plan', 'keep', 'failures', 'no-escalate', 'allow-no-repro', 'review', 'no-review', 'guards', 'no-lessons', 'race', 'no-race', 'merge']);
+  const flags = new Set(['no-verify', 'allow-dirty', 'json', 'live', 'no-open', 'no-mcp', 'all', 'clear', 'global', 'help', 'version', 'worktree', 'replace', 'force', 'allow-open-questions', 'vscode', 'yes', 'device', 'free', 'project', 'details', 'enable', 'rules', 'templates', 'continue', 'share', 'allow-unverified', 'allow-scope', 'allow-weak-plan', 'keep', 'failures', 'no-escalate', 'allow-no-repro', 'review', 'no-review', 'guards', 'no-lessons', 'race', 'no-race', 'merge']);
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '-h') { opts.help = true; continue; }
@@ -347,6 +349,7 @@ async function main() {
       return 0;
     }
     case 'keys': return keys(o);
+    case 'accounts': return accounts(o);
     case 'local': {
       const root = findProjectRoot();
       const local = await detectLocal();
@@ -723,10 +726,21 @@ async function main() {
       return 0;
     }
     case 'cooldown': {
-      if (o.clear) { clearCooldowns(o._[0] || (typeof o.clear === 'string' ? o.clear : undefined)); console.log('cooldowns cleared'); return 0; }
+      if (o.clear) {
+        const name = o._[0] || (typeof o.clear === 'string' ? o.clear : undefined);
+        if (name) {
+          const cd = getCooldowns();
+          for (const key of Object.keys(cd)) if (key === name || key.startsWith(`${name}#`)) clearCooldowns(key);
+        } else clearCooldowns();
+        console.log('cooldowns cleared'); return 0;
+      }
       const c = getCooldowns();
       if (!Object.keys(c).length) console.log('no providers cooling down');
-      for (const [n, v] of Object.entries(c)) console.log(`${n.padEnd(18)} until ${untilText(v.until)}  (${v.reason})`);
+      for (const [n, v] of Object.entries(c)) {
+        const m = n.match(/^(.*?)#([^@]+)(.*)$/);
+        const label = m ? `${m[1]} [${m[2]}]${m[3]}` : n;
+        console.log(`${label.padEnd(24)} until ${untilText(v.until)}  (${v.reason})`);
+      }
       return 0;
     }
     case 'config': {
@@ -811,6 +825,67 @@ async function setup(o) {
   return 0;
 }
 
+async function accounts(o) {
+  const [sub, provider, ...args] = o._;
+  const cfg = loadConfig();
+  const listing = (name) => {
+    const providers = name ? [name] : providersWithAccounts(cfg);
+    const rows = providers.flatMap((n) => accountStatus(cfg, n).map((a) => ({ provider: n, ...a })));
+    if (o.json) { console.log(JSON.stringify(rows, null, 2)); return; }
+    if (!rows.length) { console.log(name ? `no accounts for ${name}` : 'no CLI accounts'); return; }
+    for (const a of rows) {
+      const state = a.state === 'disabled' ? 'off' : a.state === 'unchecked' ? 'not checked' : a.state === 'needs-sign-in' ? 'needs sign-in' : a.state === 'cooling' ? `cooling down until ${untilText(a.until)}` : 'ready';
+      console.log(`${a.provider.padEnd(16)} ${a.label.padEnd(16)} ${state}${a.reason && a.state !== 'needs-sign-in' ? ` (${a.reason})` : ''}`);
+    }
+  };
+  if (!sub || sub === 'list' || sub === 'ls' || (sub !== 'add' && sub !== 'login' && sub !== 'check' && sub !== 'rename' && sub !== 'rm' && sub !== 'order' && sub !== 'on' && sub !== 'off')) {
+    listing(sub || undefined);
+    return 0;
+  }
+  if (sub === 'add') {
+    const [name, label] = [provider, args[0]];
+    if (!name || !label) throw new UsageError('usage: conductor-ai accounts add <provider> <label>');
+    const first = providersWithAccounts(cfg).length === 0;
+    addAccount(name, label);
+    console.log(`✓ added ${name} ${label}`);
+    if (first) console.log('Use only accounts you are authorized to use, and review the providers’ terms: https://openai.com/policies/terms-of-use/ · https://www.anthropic.com/legal/consumer-terms · https://www.anthropic.com/legal/aup');
+    return 0;
+  }
+  if (sub === 'login') {
+    if (!provider || !args[0]) throw new UsageError('usage: conductor-ai accounts login <provider> <label> [--device]');
+    const r = await loginAccount(cfg, provider, args[0], { device: o.device });
+    console.log(r.signedIn ? `ready: ${provider} ${args[0]}` : `needs sign-in: ${provider} ${args[0]}${r.reason ? ` (${r.reason})` : ''}`);
+    return r.signedIn ? 0 : 1;
+  }
+  if (sub === 'check') {
+    if (!provider) throw new UsageError('usage: conductor-ai accounts check <provider> [<label>]');
+    const targets = args[0] ? [args[0]] : accountStatus(cfg, provider).map((a) => a.label);
+    for (const label of targets) {
+      const r = await checkAccount(cfg, provider, label);
+      console.log(`${provider} ${label}: ${r.signedIn ? 'ready' : 'needs sign-in'}${r.reason ? ` (${r.reason})` : ''}`);
+    }
+    return 0;
+  }
+  if (sub === 'rename') {
+    if (!provider || !args[0] || !args[1]) throw new UsageError('usage: conductor-ai accounts rename <provider> <from> <to>');
+    renameAccount(provider, args[0], args[1]); console.log(`✓ renamed ${provider} ${args[0]} to ${args[1]}`); return 0;
+  }
+  if (sub === 'rm') {
+    if (!provider || !args[0]) throw new UsageError('usage: conductor-ai accounts rm <provider> <label> [--yes]');
+    if (!o.yes && !await confirm(`Delete ${provider} ${args[0]}? The folder and its login will be deleted.`, false)) { console.log('cancelled'); return 0; }
+    removeAccount(provider, args[0]); console.log(`✓ removed ${provider} ${args[0]}`); return 0;
+  }
+  if (sub === 'order') {
+    if (!provider || !args[0]) throw new UsageError('usage: conductor-ai accounts order <provider> <label,label,…>');
+    orderAccounts(provider, args[0].split(',').map((x) => x.trim())); console.log(`✓ reordered ${provider}`); return 0;
+  }
+  if (sub === 'on' || sub === 'off') {
+    if (!provider || !args[0]) throw new UsageError(`usage: conductor-ai accounts ${sub} <provider> <label>`);
+    setAccountEnabled(provider, args[0], sub === 'on'); console.log(`✓ ${provider} ${args[0]} ${sub}`); return 0;
+  }
+  return 0;
+}
+
 function providers(o) {
   const rows = catalogStatus(loadConfig()).filter((c) => (!o.free || c.free) && (!o.search || `${c.id} ${c.label} ${c.about}`.toLowerCase().includes(String(o.search).toLowerCase())));
   if (o.json) { console.log(JSON.stringify(rows, null, 2)); return 0; }
@@ -849,4 +924,4 @@ async function keys(o) {
 }
 
 main().then((code) => { if (code !== null) process.exitCode = code; })
-  .catch((e) => { console.error(`conductor-ai: ${e.message}`); process.exitCode = e instanceof UsageError ? 2 : 1; });
+  .catch((e) => { console.error(`conductor-ai: ${e.message}`); process.exitCode = e instanceof UsageError ? (/^invalid account label /.test(e.message) ? 1 : 2) : 1; });
