@@ -5,12 +5,13 @@ import * as git from './git.js';
 import { expandBraces } from './plan.js';
 
 // Files workers must never touch (agents are told; chat output is filtered).
-const PROTECTED = [/^AGENTS\.md$/, /^CLAUDE\.md$/, /^GEMINI\.md$/, /^HANDOFF\.md$/, /^docs\/plan\//, /^\.claude\//, /^\.gemini\//, /^\.agents\//,
-  /^\.conductor-ai\//, /^\.git\//, /^\.husky\//, /^\.githooks\//, /^\.vscode\/mcp\.json$/, /^\.mcp\.json$/, /(^|\/)node_modules\//, /(^|\/)\.env(\.|$)/, /(^|\/)auth\.json$/];
+// Case-insensitive: on macOS and Windows `agents.md` is the same file as `AGENTS.md`.
+const PROTECTED = [/^AGENTS\.md$/i, /^CLAUDE\.md$/i, /^GEMINI\.md$/i, /^HANDOFF\.md$/i, /^docs\/plan\//i, /^\.claude\//i, /^\.gemini\//i, /^\.agents\//i,
+  /^\.conductor-ai\//i, /^\.git\//i, /^\.husky\//i, /^\.githooks\//i, /^\.vscode\/mcp\.json$/i, /^\.mcp\.json$/i, /(^|\/)node_modules\//i, /(^|\/)\.env(\.|$)/i, /(^|\/)auth\.json$/i];
 /** `extra`: regex strings from settings.protectedPaths (e.g. "^app/etc/env\\.php$"). */
 export const isProtected = (p, extra = []) => {
   const norm = p.replaceAll('\\', '/');
-  return PROTECTED.some((re) => re.test(norm)) || extra.some((src) => new RegExp(src).test(norm));
+  return PROTECTED.some((re) => re.test(norm)) || extra.some((src) => new RegExp(src, 'i').test(norm));
 };
 
 /**
@@ -54,13 +55,33 @@ export function parseFileBlocks(text) {
   return blocks;
 }
 
+/**
+ * Why writing `p` (relative to `root`) must be refused, or null. The real path is checked too, so a symlink in the
+ * repo can't send the write outside it or onto a protected file.
+ */
+export function writeRefusal(root, p, extra = []) {
+  const norm = path.normalize(p).replaceAll('\\', '/');
+  const abs = path.resolve(root, norm);
+  if (path.isAbsolute(p) || norm.startsWith('..') || !abs.startsWith(path.resolve(root) + path.sep)) return 'outside repo';
+  if (isProtected(norm, extra)) return 'protected';
+  // the nearest part of the path that exists, through its symlinks; the rest is created as plain folders and a file
+  let at = abs; const rest = [];
+  while (true) {
+    try { fs.lstatSync(at); } catch { rest.unshift(path.basename(at)); at = path.dirname(at); continue; }
+    try { at = fs.realpathSync(at); break; } catch { return 'symlink to a missing target'; } // a write would create it, anywhere
+  }
+  const real = path.relative(fs.realpathSync(root), path.join(at, ...rest));
+  if (!real || /^\.\.([\\/]|$)/.test(real) || path.isAbsolute(real)) return 'outside repo (symlink)';
+  return isProtected(real, extra) ? 'protected (symlink)' : null;
+}
+
 export function applyFileBlocks(root, blocks, extraProtected = []) {
   const applied = [], rejected = [];
   for (const b of blocks) {
     const norm = path.normalize(b.path).replaceAll('\\', '/');
     const abs = path.resolve(root, norm);
-    if (path.isAbsolute(b.path) || norm.startsWith('..') || !abs.startsWith(path.resolve(root) + path.sep)) { rejected.push(`${b.path} (outside repo)`); continue; }
-    if (isProtected(norm, extraProtected)) { rejected.push(`${b.path} (protected)`); continue; }
+    const why = writeRefusal(root, b.path, extraProtected);
+    if (why) { rejected.push(`${b.path} (${why})`); continue; }
     fs.mkdirSync(path.dirname(abs), { recursive: true });
     fs.writeFileSync(abs, b.content);
     applied.push(norm);

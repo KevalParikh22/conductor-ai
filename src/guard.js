@@ -37,8 +37,13 @@ export function allowCommit(root) {
   fs.writeFileSync(stateFile(root), JSON.stringify({ ...st, allowedHead: head(root) }));
 }
 
-export const isPush = (cmd) => /(^\s*|[;&|(]\s*)git(\s+-[\w-]+(=\S+|\s+\S+)?)*\s+push(?=$|[\s;&|)])/.test(String(cmd || ''));
-export const isCommit = (cmd) => /(^\s*|[;&|(]\s*)git(\s+-[\w-]+(=\S+|\s+\S+)?)*\s+commit(?=$|[\s;&|)])/.test(String(cmd || ''));
+// A git command at the start of a shell command, also as /usr/bin/git, after VAR=value or env/command/exec. A guard
+// against honest mistakes, not a sandbox: `bash -c "git push"` and other interpreters are not parsed.
+const GIT = String.raw`(^\s*|[;&|(]\s*)(\w+=\S*\s+)*((env|command|exec|nohup|time)(\s+-\S+)*\s+(\w+=\S*\s+)*)*(\S*[\\/])?git(\.exe)?(\s+-[\w-]+(=\S+|\s+\S+)?)*\s+`;
+const gitCmd = (sub) => new RegExp(`${GIT}${sub}(?=$|[\\s;&|)])`);
+const PUSH = gitCmd('push'), COMMIT = gitCmd('commit');
+export const isPush = (cmd) => PUSH.test(String(cmd || ''));
+export const isCommit = (cmd) => COMMIT.test(String(cmd || ''));
 
 /** Why a push must wait, or null. A commit made since doesn't count: only a verify that passes (or allow) does. */
 export function pushBlock(root) {

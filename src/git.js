@@ -74,6 +74,9 @@ export const failedStashCount = (root) =>
 // `git status`, so a worker that wrote them would go unnoticed and its code would run on the next git command.
 // conductor-ai snapshots them before a worker runs and puts them back afterwards, before it runs git again.
 
+// info/exclude can hide a worker's new files from git status (and so from the scope and evidence checks), and
+// info/attributes can mark files -diff to hide their changes from review
+const CONTROL = ['config', 'config.worktree', 'info/exclude', 'info/attributes'];
 function controlFiles(root) {
   const dirs = new Set();
   for (const a of ['--git-dir', '--git-common-dir']) {
@@ -82,7 +85,7 @@ function controlFiles(root) {
   }
   const files = [];
   for (const d of dirs) {
-    files.push(path.join(d, 'config'), path.join(d, 'config.worktree'));
+    files.push(...CONTROL.map((f) => path.join(d, f)));
     const hooks = path.join(d, 'hooks');
     try { for (const f of fs.readdirSync(hooks)) files.push(path.join(hooks, f)); } catch { /* no hooks folder */ }
   }
@@ -101,7 +104,7 @@ export function restoreControl(snap) {
   const changed = [];
   const now = new Set();
   for (const d of snap.dirs) {
-    now.add(path.join(d, 'config')); now.add(path.join(d, 'config.worktree'));
+    for (const f of CONTROL) now.add(path.join(d, f));
     try { for (const f of fs.readdirSync(path.join(d, 'hooks'))) now.add(path.join(d, 'hooks', f)); } catch { /* none */ }
   }
   for (const f of new Set([...snap.files.keys(), ...now])) {

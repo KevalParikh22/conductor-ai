@@ -31,7 +31,7 @@ import { nextStep } from './nextsteps.js';
 import { extractTask, extractSection, openQuestions, taskFiles, expandBraces, notesForFiles, parseDuration } from './plan.js';
 import { getCooldowns, setCooldown, modelKey, withSlot } from './cooldowns.js';
 import { outcome, EXIT_UNVERIFIED, EXIT_WAITING, unverifiedBlocks } from './outcome.js';
-import { isProtected, trimReport, parseFileBlocks, applyFileBlocks, checkEvidence } from './files.js';
+import { isProtected, trimReport, parseFileBlocks, applyFileBlocks, checkEvidence, writeRefusal } from './files.js';
 import { localWindow, estimateTokens } from './local.js';
 // moved out unchanged (V12); re-exported so every importer of core.js keeps working
 export { extractTask, extractSection, openQuestions, taskFiles, expandBraces, notesForFiles, parseDuration } from './plan.js';
@@ -132,7 +132,7 @@ export function resolveChain(cfg, role, { provider, chain } = {}) {
 }
 
 // never sent to an API model as context, even when asked to
-const SECRET_PATHS = [/(^|\/)\.env(\.|$)/, /(^|\/)auth\.json$/, /(^|\/)secrets?\.env$/, /(^|\/)\.npmrc$/, /(^|\/)id_(rsa|ed25519|ecdsa)/, /\.(pem|key|p12|pfx)$/];
+const SECRET_PATHS = [/(^|\/)\.env(\.|$)/i, /(^|\/)auth\.json$/i, /(^|\/)secrets?\.env$/i, /(^|\/)\.npmrc$/i, /(^|\/)id_(rsa|ed25519|ecdsa)/i, /\.(pem|key|p12|pfx)$/i];
 
 function readContextFiles(root, files, budget, extraSecret = []) {
   let out = '', used = 0;
@@ -140,7 +140,11 @@ function readContextFiles(root, files, budget, extraSecret = []) {
     const abs = path.resolve(root, f);
     if (!abs.startsWith(path.resolve(root) + path.sep)) continue;
     const norm = rel(root, abs);
-    if (SECRET_PATHS.some((re) => re.test(norm)) || extraSecret.some((src) => new RegExp(src).test(norm))) { out += `\n### ${f}\n(withheld: looks like a secrets file)\n`; continue; }
+    // a symlink is judged by where it points: one to ~/.ssh or to secrets.env must not reach an API model
+    let real = norm;
+    try { real = path.relative(fs.realpathSync(root), fs.realpathSync(abs)).replaceAll('\\', '/'); } catch { /* missing: a new file */ }
+    const secret = (p) => SECRET_PATHS.some((re) => re.test(p)) || extraSecret.some((src) => new RegExp(src, 'i').test(p));
+    if (!real || /^\.\.(\/|$)/.test(real) || path.isAbsolute(real) || secret(norm) || secret(real)) { out += `\n### ${f}\n(withheld: looks like a secrets file)\n`; continue; }
     let body;
     try { body = fs.readFileSync(abs, 'utf8'); } catch { out += `\n### ${f}\n(does not exist yet: new file)\n`; continue; }
     if (used + body.length > budget) { out += `\n### ${f}\n(omitted: context budget reached)\n`; continue; }
@@ -280,6 +284,8 @@ async function dispatchOnce(cfg, opts) {
   const role = opts.role;
   const meta = ROLES[role];
   if (!meta) throw new UsageError(`unknown role "${role}". Roles: ${Object.keys(ROLES).join(', ')}`);
+  const saveRefused = opts.save && writeRefusal(root, opts.save, settings.protectedPaths || []);
+  if (saveRefused) throw new UsageError(`--save ${opts.save}: ${saveRefused}. Save inside the repository, outside conductor-ai's protected files`);
   const mode = meta.mode;
   const onEvent = opts.onEvent || (() => {});
   let live = () => {}; // set once the run folder exists: the UI's Runs page reads its live.json
@@ -871,10 +877,16 @@ async function dispatchOnce(cfg, opts) {
     }
   }
   if (opts.save) {
-    const dest = path.resolve(root, opts.save);
-    fs.mkdirSync(path.dirname(dest), { recursive: true });
-    fs.writeFileSync(dest, winnerText);
-    summary.saved = rel(root, dest);
+    // the text is model output: it gets the same path checks as a chat model's file blocks (checked again here: a
+    // worker could have made the path a symlink during the run)
+    const why = writeRefusal(root, opts.save, settings.protectedPaths || []);
+    if (why) summary.warnings.push(`--save ${opts.save} refused (${why}); the answer is in ${summary.runDir}`);
+    else {
+      const dest = path.resolve(root, opts.save);
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      fs.writeFileSync(dest, winnerText);
+      summary.saved = rel(root, dest);
+    }
   }
   if (pendingUsage) recordUsage({ ...pendingUsage, ...workFailure(summary) });
   summary.outcome = outcome(summary);
