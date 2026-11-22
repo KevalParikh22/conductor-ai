@@ -145,10 +145,30 @@ export function opencodeSessionTokens(exported) {
  * Seconds until a rate limit resets, read from a provider's message, or 0. agy says "Resets in 118h3m13s"; others
  * say "try again in 30s", "retry after 120 seconds" or "resets in 5 minutes". Capped at 7 days.
  */
-export function resetSeconds(text) {
+export function resetSeconds(text, now = new Date()) {
   const t = String(text || '');
   const m = t.match(/(?:resets?|try again|retry)(?: after| in)\s+((?:\d+(?:\.\d+)?\s*(?:h(?:ours?|rs?)?|m(?:in(?:ute)?s?)?|s(?:ec(?:ond)?s?)?)(?![a-z])\s*)+)/i);
-  if (!m) return 0;
+  if (!m) {
+    const iso = t.match(/resets?\s+at\s+(\d{4}-\d\d-\d\dT\d\d:\d\d(?::\d\d(?:\.\d+)?)?(?:Z|[+-]\d\d:\d\d))/i);
+    let target;
+    if (iso) target = Date.parse(iso[1]);
+    else {
+      const dateTime = t.match(/(?:try again at|resets?\s+)\s*(?:(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})\s+)?(\d{1,2})(?::(\d\d))?\s*(AM|PM)\b/i);
+      if (!dateTime) return 0;
+      const [, month, day, year, hourText, minuteText = '0', ampm] = dateTime;
+      let hour = Number(hourText) % 12 + (ampm.toLowerCase() === 'pm' ? 12 : 0);
+      const minute = Number(minuteText);
+      if (minute > 59) return 0;
+      if (month) target = new Date(Number(year), ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].indexOf(month.slice(0,3)) , Number(day), hour, minute).getTime();
+      else {
+        const d = new Date(now);
+        target = new Date(d.getFullYear(), d.getMonth(), d.getDate(), hour, minute).getTime();
+        if (target <= now.getTime()) target += 86_400_000;
+      }
+    }
+    if (!Number.isFinite(target) || target <= now.getTime()) return 0;
+    return Math.min(Math.round((target - now.getTime()) / 1000), 7 * 86_400);
+  }
   let sec = 0;
   for (const [, n, u] of m[1].matchAll(/(\d+(?:\.\d+)?)\s*([hms])/gi)) sec += Number(n) * { h: 3600, m: 60, s: 1 }[u.toLowerCase()];
   return Math.min(Math.round(sec), 7 * 86_400);
