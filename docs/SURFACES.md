@@ -24,6 +24,7 @@ A dash means the action is left out of that surface on purpose, with the reason.
 | Check installs, keys, live answers and permissions | `conductor-ai doctor [--live]` | `conductor_ai_doctor` | `POST /api/test` |
 | Block the controller's commit while verify fails | `conductor-ai guard [on\|off\|status]` | — *a controller must not be able to switch off its own guard* | `GET /api/guard` |
 | Add a provider from the catalog | `conductor-ai add <id> · conductor-ai providers` | — *needs an API key: never through a model* | `POST /api/providers/add` |
+| Several signed-in accounts for one CLI (Codex, Claude Code): add, sign in, check, order | `conductor-ai accounts [add\|login\|check\|rename\|rm\|order\|on\|off]` | — *accounts are your own logins: conductor_ai_status shows them, only you change them* | `GET /api/accounts` |
 | Set or remove API keys | `conductor-ai keys` | — *secrets never pass through a model* | `PUT /api/secrets` |
 | A provider's current models | `conductor-ai models <provider>` | — *part of setup, not of a task* | `POST /api/provider-models` |
 | Find local model servers | `conductor-ai local` | — *part of setup, not of a task* | `GET /api/local` |
