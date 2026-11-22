@@ -197,7 +197,7 @@ For every agent: no `git push`, `commit`, `reset`, `checkout`, `rebase`, `stash`
 | | Built in |
 |---|---|
 | **Local agents** | Antigravity CLI · Codex CLI · OpenCode · Claude Code · any CLI you add. **Beta** (off until you turn them on): GitHub Copilot CLI · Grok Build · Kiro · Aider · Goose · Kimi CLI |
-| **Free APIs** | Kilo Gateway and OVHcloud (no key) · OpenRouter `:free` · Gemini API · Groq · Cerebras · Cohere trial · NVIDIA NIM · Hugging Face credits |
+| **Free APIs** | Kilo Gateway and OVHcloud (no key) · OpenRouter `:free` · Gemini API · Groq · Cerebras · Cohere trial · NVIDIA NIM · Hugging Face credits · FreeModel · AgentRouter (runs through the Codex CLI) |
 | **Gateways** | OpenRouter · Requesty · Vercel AI Gateway · Hugging Face · Cloudflare Workers AI · Poe · AI/ML API |
 | **Model makers** | OpenAI · Claude API · Gemini · xAI · Mistral · DeepSeek · Kimi · Qwen · GLM · MiniMax |
 | **Fast hosts** | Groq · Cerebras · SambaNova · Together · Fireworks · DeepInfra · Novita · Nebius · Baseten · and more |
@@ -207,6 +207,8 @@ For every agent: no `git push`, `commit`, `reset`, `checkout`, `rebase`, `stash`
 Chat APIs can't run your tests, so conductor-ai applies the files they return (refusing paths outside the repo) and runs verify for them. `conductor-ai models <provider>` lists current models; free lists change weekly.
 
 Every one has a setup guide: **[docs/providers](docs/providers/README.md)**. See them all with `conductor-ai providers`; add one with `conductor-ai add <name>` or the **Add a provider** gallery in `conductor-ai ui`. Any other OpenAI-compatible endpoint works too.
+
+**Referral links:** the sign-up links for FreeModel and AgentRouter carry a referral code from conductor-ai's maintainer. Nothing else changes for you; each guide also gives the plain link.
 
 <details>
 <summary><b>Commands</b></summary>

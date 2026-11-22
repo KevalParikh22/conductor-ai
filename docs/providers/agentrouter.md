@@ -19,7 +19,7 @@ Free coding gateway (GPT models) for Claude Code, Codex and OpenCode users. cond
 ## Set up
 
 1. Install the Codex CLI: `npm install -g @openai/codex` (no OpenAI login needed for this provider)
-2. Create an API key: https://agentrouter.org/register?aff=Baf4
+2. Create an API key: https://agentrouter.org/register?aff=Baf4 (a referral link from conductor-ai's maintainer; signing up at https://agentrouter.org/register works the same)
 3. Add it to conductor-ai. It asks for the key (hidden input), lets you pick a model, sends one test prompt and adds it to the `docs`, `test`, `review` and `ask` roles:
    ```bash
    conductor-ai add agentrouter

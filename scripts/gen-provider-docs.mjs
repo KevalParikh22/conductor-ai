@@ -35,7 +35,7 @@ export function apiGuide(id, e) {
   let n = 1;
   if (e.via === 'codex') L.push(`${n++}. Install the Codex CLI: \`${CLI_PRESETS.codex.install.split(/\s+\(or: /)[0]}\` (no OpenAI login needed for this provider)`);
   if (isLocal(e)) L.push(`${n++}. Install and start it: ${e.keyUrl}. ${e.about.split('. ').slice(1).join('. ')}`.trimEnd());
-  else if (keyed) L.push(`${n++}. Create an API key: ${e.keyUrl}`);
+  else if (keyed) L.push(`${n++}. Create an API key: ${e.keyUrl}${e.referral ? ` (a referral link from conductor-ai's maintainer; signing up at ${e.referral} works the same)` : ''}`);
   L.push(`${n++}. Add it to conductor-ai. It asks for ${[keyed && 'the key (hidden input)', ...fields.map((f) => f.replaceAll('_', ' ').toLowerCase())].filter(Boolean).join(', ') || 'nothing'}, lets you pick a model, sends one test prompt and adds it to the \`docs\`, \`test\`, \`review\` and \`ask\` roles:`);
   L.push('   ```bash', `   conductor-ai add ${id}${flags}`, '   ```');
   L.push(`${n++}. Check it any time:`, '   ```bash', '   conductor-ai doctor --live', '   ```', '');

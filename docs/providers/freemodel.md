@@ -18,7 +18,7 @@
 
 ## Set up
 
-1. Create an API key: https://freemodel.in/register?ref=FM-77C741
+1. Create an API key: https://freemodel.in/register?ref=FM-77C741 (a referral link from conductor-ai's maintainer; signing up at https://freemodel.in/register works the same)
 2. Add it to conductor-ai. It asks for the key (hidden input), lets you pick a model, sends one test prompt and adds it to the `docs`, `test`, `review` and `ask` roles:
    ```bash
    conductor-ai add freemodel

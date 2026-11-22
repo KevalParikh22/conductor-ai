@@ -6,8 +6,18 @@ import path from 'node:path';
 const CONFIG_ROOT = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
 export const GLOBAL_DIR = process.env.CONDUCTOR_HOME || path.join(CONFIG_ROOT, 'conductor-ai');
 // shortcut: one-time move of the pre-rename folder ~/.config/conductor; drop this once nobody has the old name
+// Other tools are called "conductor" too (the reason for the rename), so ~/.config/conductor moves only when it holds
+// our own files: a config.json shaped like ours, or our secrets.env.
+export function isOurOldDir(dir) {
+  try {
+    if (fs.existsSync(path.join(dir, 'secrets.env'))) return true;
+    const c = JSON.parse(fs.readFileSync(path.join(dir, 'config.json'), 'utf8'));
+    return c !== null && typeof c === 'object' && typeof c.version === 'number' && ['providers', 'roles', 'settings', 'controller', 'routes'].some((k) => k in c);
+  } catch { return false; }
+}
 if (!process.env.CONDUCTOR_HOME) {
-  try { if (!fs.existsSync(GLOBAL_DIR) && fs.existsSync(path.join(CONFIG_ROOT, 'conductor'))) fs.renameSync(path.join(CONFIG_ROOT, 'conductor'), GLOBAL_DIR); } catch { /* keep going without the old settings */ }
+  const old = path.join(CONFIG_ROOT, 'conductor');
+  try { if (!fs.existsSync(GLOBAL_DIR) && isOurOldDir(old)) fs.renameSync(old, GLOBAL_DIR); } catch { /* keep going without the old settings */ }
 }
 
 /** Marker lines older versions wrote into user files (.gitignore, AGENTS.md, CLAUDE.md, .git/info/exclude), in the new spelling. */

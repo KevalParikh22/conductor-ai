@@ -78,6 +78,7 @@ export const CATALOG = {
     apiKeyEnv: 'FREEMODEL_API_KEY',
     keyNameOwn: true,
     keyUrl: 'https://freemodel.in/register?ref=FM-77C741',
+    referral: 'https://freemodel.in/register', // keyUrl carries the maintainer's referral code; this is the plain page
     docsUrl: 'https://freemodel.in/docs/getting-started',
     model: '',
     free: '1M tokens a month, no card; requests stop with HTTP 402 when they run out.',
@@ -92,6 +93,7 @@ export const CATALOG = {
     apiKeyEnv: 'AGENTROUTER_API_KEY',
     keyNameOwn: true,
     keyUrl: 'https://agentrouter.org/register?aff=Baf4',
+    referral: 'https://agentrouter.org/register', // keyUrl carries the maintainer's referral code; this is the plain page
     docsUrl: 'https://agentrouter.org/docs/index.html',
     // It answers only coding-agent clients (plain API calls get 401 "unauthorized client"), so it runs through Codex
     via: 'codex',

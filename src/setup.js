@@ -22,7 +22,7 @@ export function catalogStatus(cfg) {
     const p = cfg.providers[name];
     return {
       id, name, label: e.label, category: e.category, categoryLabel: CATEGORIES[e.category], about: e.about, free: e.free, privacy: e.privacy,
-      keyUrl: e.keyUrl, docsUrl: e.docsUrl, apiKeyEnv: e.apiKeyEnv, apiKeyOptional: !!e.apiKeyOptional, fields: urlFields(e), model: e.model,
+      keyUrl: e.keyUrl, referral: e.referral || null, docsUrl: e.docsUrl, apiKeyEnv: e.apiKeyEnv, apiKeyOptional: !!e.apiKeyOptional, fields: urlFields(e), model: e.model,
       keySet: !e.apiKeyEnv || !!keyValue(e.apiKeyEnv), added: !!p, enabled: !!p?.enabled,
     };
   });
@@ -142,7 +142,7 @@ export async function runAdd(root, id, o = {}) {
   if (e.apiKeyEnv && !keyValue(e.apiKeyEnv)) {
     if (e.apiKeyOptional) console.log(`\nNo ${e.apiKeyEnv} needed to start (it raises limits). Get one at ${e.keyUrl}`);
     else {
-      console.log(`\n1. Get a key: ${e.keyUrl}`);
+      console.log(`\n1. Get a key: ${e.keyUrl}${e.referral ? `\n   (a referral link from conductor-ai's maintainer; ${e.referral} works the same)` : ''}`);
       if (!ask_) throw new Error(`${e.apiKeyEnv} is not set. Run in a terminal to paste it, or: conductor-ai keys set ${e.apiKeyEnv}`);
       key = await askSecret(`2. Paste your ${e.apiKeyEnv} (hidden): `);
       if (!key) throw new Error('no key entered; nothing changed');

@@ -1,7 +1,15 @@
 # Changelog
 
-## Unreleased
+## 0.12.0 (2026-11-22)
 
+**Breaking: everything is named `conductor-ai` now.** The first npm release since 0.11.1, so it also carries 0.11.2 and 0.11.3. After updating, run `conductor-ai init` once in each project (see the rename notes below).
+
+- **Folders, branches and MCP names are `conductor-ai` too.** Settings move from `~/.config/conductor` to `~/.config/conductor-ai` and a project's `.conductor/` to `.conductor-ai/` on first use (keys keep their owner-only permissions). Task branches are `conductor-ai/<id>`; old `conductor/*` branches still list and remove. The MCP server is `conductor-ai` and its tools are `conductor_ai_*` (were `conductor_*`). Run `conductor-ai init` in each project: it moves the MCP entry and rewrites the instruction files, which still name the old tools until then.
+- **The old settings folder moves only if it's ours.** Other tools are called "conductor" too; `~/.config/conductor` moves only when it holds conductor's config or secrets file, so another tool's settings stay put.
+- **If you linked a checkout** (`npm link`): the program is now `bin/conductor-ai.js`, so run `npm link` again in the checkout. An npm install updates itself.
+- **New free providers: FreeModel and AgentRouter.** FreeModel: 1M tokens a month, many models behind one endpoint. AgentRouter answers only coding-agent clients, so conductor-ai runs it through the Codex CLI pointed at its endpoint with its own key (never your OpenAI login); a plain API call got 401. Their sign-up links carry a referral code from conductor-ai's maintainer, and the CLI, the UI and each guide say so and give the plain link.
+- **A built-in skill: karpathy-guidelines** (MIT, with its notice) is available in every project; switch it off with `conductor-ai skills off karpathy-guidelines`.
+- **An `ask` says "answered"** instead of warning about a missing RESULT line: an answer has no RESULT line by design.
 - **One command name: `conductor-ai`.** The short `conductor` command is gone (other tools ship a `conductor` too). Help, messages, the settings page, the README, the docs and generated files all say `conductor-ai`. If you typed `conductor …`, type `conductor-ai …`; your config, projects and MCP setup keep working as they are.
 - **Fixed: skills and slash commands now allow `Bash(conductor-ai:*)`.** They allowed `conductor:*`, which doesn't match `conductor-ai` commands, so Claude Code asked before each one.
 - **`conductor-ai runs recheck`: run verify again for failed runs.** A run whose verify failed for a reason outside its code (a package not installed yet, a service that was down) stayed red for good. `runs recheck` checks out each failed run's commit in a throwaway folder and runs its verify again; the new result shows in `conductor-ai runs` and on the run page, marked ↻, and the first result is kept. It exits 1 while any still fail, so it can run from cron.
