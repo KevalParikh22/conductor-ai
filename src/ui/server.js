@@ -62,6 +62,7 @@ function stateFor(root) {
     notices: cfg.notices || [], // kept out of `effective`: that object is sent back on save
     bases: { global: DEFAULT_CONFIG, project: deepMerge(DEFAULT_CONFIG, globalScope) },
     builtinProviders: Object.keys(DEFAULT_CONFIG.providers),
+    accountKinds: Object.keys(ACCOUNT_KINDS),
     status: statusData(cfg), secrets: secretsState(cfg), cooldowns: getCooldowns(), errors: validateConfig(cfg),
     controllerPreset: cfg.providers[controllerWorker(cfg.controller)]?.preset || null, // the controller's own CLI: never suggested as a worker
     presets: Object.fromEntries(Object.entries(CLI_PRESETS).map(([k, v]) => [k, { label: v.label, bin: v.bin, install: v.install, login: v.login, docs: v.docs, permissions: v.permissions || null, takesModel: !!v.modelArgs?.length, installed: !!which(v.bin), beta: !!v.beta }])),
