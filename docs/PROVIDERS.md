@@ -154,7 +154,7 @@ Accounts are per person, so they are stored in your global config (`~/.config/co
 }
 ```
 
-`default` means your normal login (no separate folder or sign-in); the first account you add keeps it first. Other labels are 1–32 characters, lowercase letters, digits, `-` and `_`, starting with a letter or digit, and must be unique for that provider.
+`default` means your normal login (`~/.codex`, `~/.claude`): conductor-ai never signs it in or out and keeps no folder for it; the first account you add keeps it first. Turn it off if you want only the pool's accounts used. Other labels are 1–32 characters, lowercase letters, digits, `-` and `_`, starting with a letter or digit, and must be unique for that provider.
 
 Add an account, then sign in yourself in a terminal:
 
@@ -175,11 +175,11 @@ conductor-ai prepares the account's folder, runs the CLI's own `login` command w
 | `conductor-ai accounts rename <provider> <from> <to>` | Rename the label and move its folder |
 | `conductor-ai accounts rm <provider> <label> [--yes]` | Delete the account, its folder and its login; asks first unless `--yes` (`default` cannot be removed) |
 | `conductor-ai accounts order <provider> <label,label,…>` | Set the rotation order |
-| `conductor-ai accounts on|off <provider> <label>` | Turn an account on or off without deleting it |
+| `conductor-ai accounts on\|off <provider> <label>` | Turn an account on or off without deleting it |
 
 When an account hits a quota, it cools down until the reset time the CLI reported (when it gives one; capped at 7 days), or for `settings.cooldownMinutes` (30 by default). The next enabled account of the same CLI takes over; only when those are used does the run move on to the next provider in the chain. `conductor-ai cooldown` lists each account's cooldown as `codex-cli [work2]` (and `codex-cli [work2]@<model>` for a model cooldown). Clear one with `conductor-ai cooldown --clear codex-cli#work2`, or a provider and all its accounts with `conductor-ai cooldown --clear codex-cli`.
 
-`conductor-ai ui` → Providers has an **Accounts** block under Codex CLI and Claude Code: rows show the label, state (ready, cooling down until a time, needs sign-in, off or not checked) and buttons for Check, Rename, Remove (with confirmation), reordering and on/off; **Add account** asks for a label. Since sign-in needs a terminal, each row shows the exact `conductor-ai accounts login …` command with a copy button.
+`conductor-ai ui` → Providers has an **Accounts** block under Codex CLI and Claude Code: rows show the label, state (ready, cooling down until a time, needs sign-in, off or not checked) and buttons for Check, Rename, Remove (with confirmation), reordering and on/off; **Add account** asks for a label. Since sign-in needs a terminal, each added account shows the exact `conductor-ai accounts login …` command with a copy button.
 
 conductor-ai never reads, copies or prints what a CLI keeps in an account folder (such as `auth.json` or `.credentials.json`), never sends it anywhere, and never automates a web sign-in. It creates the folder, uses the CLI's own commands and reads only their exit codes.
 
