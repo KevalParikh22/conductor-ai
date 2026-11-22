@@ -24,7 +24,7 @@ import { compactDiff } from './diffview.js';
 import { snapshot as snapshotLocal } from './localfiles.js';
 import { skillsForTask } from './skills.js';
 import { createWorktree, openWorktree, commitWorktree, removeWorktree, readWorktreeMeta, writeWorktreeMeta } from './worktree.js';
-import { writeJSON, timestamp, rel, untilText, run as runCmd } from './util.js';
+import { writeJSON, timestamp, rel, untilText, run as runCmd, GLOBAL_DIR, readJSON } from './util.js';
 import { stepText } from './progress.js';
 import { budgetBlock, estimateCost, recordUsage, recordSaving } from './usage.js';
 import { nextStep } from './nextsteps.js';
@@ -33,6 +33,7 @@ import { getCooldowns, setCooldown, modelKey, withSlot } from './cooldowns.js';
 import { outcome, EXIT_UNVERIFIED, EXIT_WAITING, unverifiedBlocks } from './outcome.js';
 import { isProtected, trimReport, parseFileBlocks, applyFileBlocks, checkEvidence } from './files.js';
 import { localWindow, estimateTokens } from './local.js';
+import { listAccounts, markSignedIn } from './accounts.js';
 // moved out unchanged (V12); re-exported so every importer of core.js keeps working
 export { extractTask, extractSection, openQuestions, taskFiles, expandBraces, notesForFiles, parseDuration } from './plan.js';
 export { getCooldowns, setCooldown, clearCooldowns, withSlot } from './cooldowns.js';
@@ -118,16 +119,23 @@ export function resolveChain(cfg, role, { provider, chain } = {}) {
   let names = chain?.length ? chain : (cfg.roles[role] || []);
   if (provider) names = [provider, ...names.filter((n) => n !== provider)];
   const cooldowns = getCooldowns();
-  return names.map((name) => {
+  return names.flatMap((name) => {
     const p = cfg.providers[name];
-    if (!p) return { name, skip: 'unknown provider' };
+    if (!p) return [{ name, key: name, skip: 'unknown provider' }];
     const r = providerReadiness(name, p);
-    if (!r.ready) return { name, p, skip: r.reason };
-    const c = cooldowns[name];
-    if (c) return { name, p, skip: `cooling down until ${untilText(c.until)} (${c.reason})` };
-    const over = budgetBlock(name, p, cfg.settings);
-    if (over) return { name, p, skip: over };
-    return { name, p };
+    const accounts = listAccounts(cfg, name).filter((a) => a.enabled);
+    const entries = accounts.length ? accounts : [{ key: name }];
+    return entries.map((account) => {
+      const key = account.key || name;
+      if (!r.ready) return { name, p, account: account.label ? account : undefined, key, skip: r.reason };
+      const c = cooldowns[key];
+      if (c) return { name, p, account: account.label ? account : undefined, key, skip: `${account.label ? 'account ' : ''}cooling down until ${untilText(c.until)} (${c.reason})` };
+      if (account.label && readJSON(path.join(GLOBAL_DIR, 'state.json'), {}).accounts?.[key]?.signedIn === false)
+        return { name, p, account, key, skip: `needs sign-in: conductor-ai accounts login ${name} ${account.label}` };
+      const over = budgetBlock(name, p, cfg.settings);
+      if (over) return { name, p, account: account.label ? account : undefined, key, skip: over };
+      return { name, p, account: account.label ? account : undefined, key };
+    });
   });
 }
 
@@ -552,14 +560,14 @@ async function dispatchOnce(cfg, opts) {
       ? `${chatContext({ small: local && settings.localPromptProfile !== false })}\n---\n# TASK (role: ${role})\n${chatBody}${skillsChat.text ? `\n${skillsChat.text}` : ''}${extra}${recite}${mode === 'write' ? CHAT_CLOSE : ''}`
       : agentPrompt + (mode === 'write' ? packFor('agent') : '') + extra + recite;
     // the provider's model, then its fallback models: a model that is rate-limited is skipped until its cooldown ends
-    let { models, auto } = await modelsToTry(c.name, c.p, kind);
+    let { models, auto } = await modelsToTry(c.key || c.name, c.p, kind);
     let timeouts = 0;
     const resets = []; // V8: quota reset times seen on this provider's models in this run
     // families whose quota ran out in this run ('' = the CLI's default model, so its default family)
     const quotaFams = new Set();
     const famOf = (m) => modelFamily(m) || c.p.defaultFamily || CLI_PRESETS[c.p.preset]?.defaultFamily || '';
     // its own model is cooling down, but it can list others (agy: another model family may still have quota)
-    if (!models.length && auto && !getCooldowns()[c.name]) { models = await auto(); auto = null; }
+    if (!models.length && auto && !getCooldowns()[c.key || c.name]) { models = await auto(); auto = null; }
     if (!models.length) {
       const reason = 'every model is cooling down';
       summary.attempts.push({ provider: c.name, ok: false, reason, skipped: true }); emit({ type: 'skip', provider: c.name, reason });
@@ -580,11 +588,11 @@ async function dispatchOnce(cfg, opts) {
       // one call at a time per local server (it shares one machine); a provider's own maxParallel wins
       // a CLI worker's output as it arrives, for the running run's page (src/runs.js runDetail)
       const liveLog = path.join(runDir, `${c.name}${mi ? `.${mi + 1}` : ''}.live.log`);
-      const slotKey = local ? `local:${(() => { try { return new URL(c.p.baseUrl).host; } catch { return c.name; } })()}` : c.name;
+      const slotKey = local ? `local:${(() => { try { return new URL(c.p.baseUrl).host; } catch { return c.name; } })()}` : (c.key || c.name);
       let res = kind === 'chat' && !p.model
         ? { ok: false, text: '', reason: 'no model set, and its model list could not be fetched', log: '' }
         : tooBig ? { ok: false, text: '', reason: `context too small: the prompt needs ~${promptTokens + (p.maxTokens || 2048)} tokens with the answer, ${p.model} runs with ${win.window} (${win.server})`, log: '' }
-        : await withSlot(slotKey, c.p.maxParallel ?? CLI_PRESETS[c.p.preset]?.maxParallel ?? (local ? 1 : undefined), () => runProvider(c.name, p, { mode, prompt: userPrompt, system: chatSystem, cwd: work, runDir: ioDir, quotaRe,
+        : await withSlot(slotKey, c.p.maxParallel ?? CLI_PRESETS[c.p.preset]?.maxParallel ?? (local ? 1 : undefined), () => runProvider(c.name, p, { mode, prompt: userPrompt, system: chatSystem, cwd: work, runDir: ioDir, quotaRe, account: c.account,
           allowCommands: buildCommands(settings), ...limitFor(c.p, kind), signal: opts.signal, manualAnswer: opts.manualAnswer, liveLog }), () => emit({ type: 'wait', provider: c.name }));
       if (p !== c.p && p.model && !res.model) res.model = p.model;
       // V13: the server counted far fewer prompt tokens than were sent: it cut the prompt (any server, window known or not)
@@ -636,6 +644,7 @@ async function dispatchOnce(cfg, opts) {
         }
       }
       const attempt = { provider: c.name, kind, ok: res.ok, reason: res.ok ? 'ok' : res.reason, seconds: Math.round((Date.now() - t0) / 100) / 10 };
+      if (c.account) attempt.account = c.account.label;
       if (p.model) attempt.model = p.model;
       if (res.repaired) attempt.repaired = true;
       if (guard) attempt.guard = guard;
@@ -662,7 +671,7 @@ async function dispatchOnce(cfg, opts) {
       }
       // a call stopped because another attempt won the race says nothing about this provider's speed or reliability
       if (res.reason !== 'cancelled' && c.p.type !== 'manual') {
-        const entry = { provider: c.name, model: res.model || p.model || null, kind: kind === 'agent' ? 'agent' : 'chat', role, size: runSize, project: path.basename(root),
+        const entry = { provider: c.name, account: c.account?.label, model: res.model || p.model || null, kind: kind === 'agent' ? 'agent' : 'chat', role, size: runSize, project: path.basename(root),
           ok: res.ok, reason: attempt.reason, seconds: attempt.seconds, tokens: res.tokens || null, cost: attempt.cost ?? null };
         // a write worker's reply is only a success once its work passes the checks: recorded after them (below)
         if (res.ok && mode === 'write') pendingUsage = entry; else recordUsage(entry);
@@ -672,17 +681,24 @@ async function dispatchOnce(cfg, opts) {
 
       if (res.ok) {
         summary.attempts.push(attempt);
-        summary.winner = c.name; summary.model = res.model || p.model || '(default)';
+        summary.winner = c.name; summary.account = c.account?.label; summary.model = res.model || p.model || '(default)';
         winnerText = res.text;
         emit({ type: 'ok', provider: c.name });
         break providers;
       }
       const quota = res.reason === 'quota';
+      if (res.reason === 'needs sign-in' && c.account) {
+        markSignedIn(c.key, false);
+        attempt.next = nextStep(attempt.reason, { name: c.name });
+        summary.attempts.push(attempt);
+        emit({ type: 'fail', provider: c.name, reason: attempt.reason });
+        continue providers;
+      }
       // another model can help when this one is rate-limited, or (for APIs) when it stalled or answered nothing
       const timedOut = /^timeout/.test(res.reason || '');
       if (timedOut) timeouts++;
       // a free route that hung twice is cooled down, so the next call (the next task, a review) doesn't wait on it again
-      if (timedOut && timeouts === 2 && kind === 'chat' && settings.hangCooldownMin !== 0) setCooldown(c.name, settings.hangCooldownMin ?? 15, 'timed out twice');
+      if (timedOut && timeouts === 2 && kind === 'chat' && settings.hangCooldownMin !== 0) setCooldown(c.key || c.name, settings.hangCooldownMin ?? 15, 'timed out twice');
       // one more model after a timeout; a second timeout means the provider itself is hanging, so move on
       // V8: two models whose quotas reset at the same moment share one quota (the account's): stop trying models
       // …but only once no family is left untried: agy's Claude and GPT-OSS models share one quota and reset together,
@@ -698,9 +714,9 @@ async function dispatchOnce(cfg, opts) {
       const tryNext = nextModel !== undefined && modelProblem;
       if (quota) {
         const mins = res.retryAfterSec ? Math.max(1, Math.ceil(res.retryAfterSec / 60)) : (settings.cooldownMinutes || 30);
-        if (models.length > 1 || mi) setCooldown(modelKey(c.name, p.model), mins, 'rate limited');
+        if (models.length > 1 || mi) setCooldown(modelKey(c.key || c.name, p.model), mins, 'rate limited');
         // the provider itself cools down only when it has no other model left to try
-        if (!tryNext) setCooldown(c.name, mins, accountWide ? 'quota used up for the whole account' : 'rate limited');
+        if (!tryNext) setCooldown(c.key || c.name, mins, accountWide ? 'quota used up for the whole account' : 'rate limited');
         attempt.reason += ` (cooldown ${mins}m)`;
       }
       attempt.next = nextStep(attempt.reason, { name: c.name, p: c.p, log: rel(root, path.join(runDir, `${c.name}${mi ? `.${mi + 1}` : ''}.log`)) });
