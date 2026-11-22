@@ -10,6 +10,8 @@ Security fixes from an external review:
 - **Keys stay out of more places.** A key in conductor-ai's secrets file is scrubbed from workers even when your shell exports it too, and keys are now also removed from plan `repro:` commands and acceptance checks (verify already had this).
 - **`.git/info/exclude` and `.git/info/attributes` are restored after each worker**, like hooks and `.git/config`, so a worker can't hide its files from `git status` or its changes from `git diff`.
 - **The push guard spots more forms**: `/usr/bin/git push`, `env git push`, `command git push`, `FOO=1 git push`.
+- **Submodules' git folders are restored after each worker too.** A worker could plant an `fsmonitor` program or a hook in `.git/modules/<name>/`; the fsmonitor would run on your next plain `git status` in the parent repo.
+- **The push guard also spots `sudo git push` (with flags such as `-u root`) and a quoted `"git" push`.**
 
 ## 0.12.0 (2026-11-22)
 
