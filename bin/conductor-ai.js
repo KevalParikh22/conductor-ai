@@ -848,7 +848,13 @@ async function accounts(o) {
     const first = providersWithAccounts(cfg).length === 0;
     addAccount(name, label);
     console.log(`✓ added ${name} ${label}`);
-    if (first) console.log('Use only accounts you are authorized to use, and review the providers’ terms: https://openai.com/policies/terms-of-use/ · https://www.anthropic.com/legal/consumer-terms · https://www.anthropic.com/legal/aup');
+    // shown once: no vendor explicitly allows rotating accounts past usage limits (docs/PROVIDERS.md has the details)
+    if (first) {
+      console.log(`Next: conductor-ai accounts login ${name} ${label}   (signs in with ${name}'s own login; conductor-ai never sees the token)`);
+      console.log('Note: conductor-ai moves to your next account when one runs out. Use only your own accounts, and check each vendor\'s terms on usage limits first:');
+      console.log('  OpenAI  https://openai.com/policies/terms-of-use/');
+      console.log('  Anthropic  https://www.anthropic.com/legal/consumer-terms · https://code.claude.com/docs/en/legal-and-compliance');
+    } else console.log(`Next: conductor-ai accounts login ${name} ${label}`);
     return 0;
   }
   if (sub === 'login') {
@@ -924,4 +930,4 @@ async function keys(o) {
 }
 
 main().then((code) => { if (code !== null) process.exitCode = code; })
-  .catch((e) => { console.error(`conductor-ai: ${e.message}`); process.exitCode = e instanceof UsageError ? (/^invalid account label /.test(e.message) ? 1 : 2) : 1; });
+  .catch((e) => { console.error(`conductor-ai: ${e.message}`); process.exitCode = e instanceof UsageError ? 2 : 1; });

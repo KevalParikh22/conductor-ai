@@ -1,74 +1,88 @@
+// `conductor-ai accounts` and the account-aware `cooldown` and status, run as the real CLI against fake `codex`.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { isolateHome, fakeBins } from './helpers.js';
 
 const home = isolateHome();
 fakeBins({ codex: `if (args[0]==='login' && args[1]==='status') process.exit(fs.existsSync(require('path').join(process.env.CODEX_HOME||'/nonexistent','ok'))?0:1);` });
-const accounts = await import('../src/accounts.js');
-const config = await import('../src/config.js');
-const { setCooldown, getCooldowns, clearCooldowns } = await import('../src/cooldowns.js');
-const { GLOBAL_DIR } = await import('../src/util.js');
+const CLI = fileURLToPath(new URL('../bin/conductor-ai.js', import.meta.url));
+const { setCooldown, getCooldowns } = await import('../src/cooldowns.js');
 const { statusReport } = await import('../src/status.js');
-const dir = (label) => path.join(GLOBAL_DIR, 'accounts', 'codex-cli', label);
-const reset = () => {
-  fs.rmSync(path.join(home, 'config.json'), { force: true });
-  fs.rmSync(path.join(home, 'state.json'), { force: true });
-  fs.rmSync(path.join(home, 'accounts'), { recursive: true, force: true });
-};
+const config = await import('../src/config.js');
+const dir = (label) => path.join(home, 'accounts', 'codex-cli', label);
+const cli = (args, input = '') => spawnSync(process.execPath, [CLI, ...args], { cwd: home, env: process.env, input, encoding: 'utf8' });
+const reset = () => { for (const f of ['config.json', 'state.json', 'accounts']) fs.rmSync(path.join(home, f), { recursive: true, force: true }); };
 
-test('account add supports codex-cli and listing starts unchecked', () => {
+test('add, then list: the new account is not checked yet, and the first add shows the terms note once', () => {
   reset();
-  accounts.addAccount('codex-cli', 'work2');
-  assert.match(statusReport(config.loadConfig()), /codex-cli \[work2\] not checked/);
+  const r = cli(['accounts', 'add', 'codex-cli', 'work2']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /https:\/\/openai\.com\/policies\/terms-of-use\//);
+  assert.match(r.stdout, /conductor-ai accounts login codex-cli work2/);
+  const again = cli(['accounts', 'add', 'codex-cli', 'w3']);
+  assert.doesNotMatch(again.stdout, /terms-of-use/);
+  const list = cli(['accounts', 'codex-cli']);
+  assert.match(list.stdout, /work2\s+not checked/);
+  assert.match(list.stdout, /default\s+not checked/);
 });
 
-test('invalid labels are rejected with the allowed characters in the message', () => {
+test('a bad label is refused with the allowed characters', () => {
   reset();
-  assert.throws(() => accounts.addAccount('codex-cli', '../x'), /lowercase letters, digits, - and _/);
+  const r = cli(['accounts', 'add', 'codex-cli', '../x']);
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /lowercase letters, digits, - and _/);
 });
 
-test('remove deletes its folder and declining a confirmation leaves it present', () => {
+test('rm asks first: "n" keeps the folder, --yes deletes it', () => {
   reset();
-  accounts.addAccount('codex-cli', 'work2');
+  cli(['accounts', 'add', 'codex-cli', 'work2']);
+  const no = cli(['accounts', 'rm', 'codex-cli', 'work2'], 'n\n');
+  assert.equal(no.status, 0);
   assert.ok(fs.existsSync(dir('work2')));
-  // The CLI's y/N prompt owns this decision; removeAccount is called only after confirmation.
-  assert.ok(fs.existsSync(dir('work2')));
-  accounts.removeAccount('codex-cli', 'work2');
+  const yes = cli(['accounts', 'rm', 'codex-cli', 'work2', '--yes']);
+  assert.equal(yes.status, 0, yes.stderr);
   assert.equal(fs.existsSync(dir('work2')), false);
 });
 
-test('account order is preserved in status output', () => {
+test('order changes the listing', () => {
   reset();
-  accounts.addAccount('codex-cli', 'work2');
-  accounts.orderAccounts('codex-cli', ['work2', 'default']);
-  const report = statusReport(config.loadConfig());
-  assert.ok(report.indexOf('codex-cli [work2]') < report.indexOf('codex-cli [default]'));
+  cli(['accounts', 'add', 'codex-cli', 'work2']);
+  assert.equal(cli(['accounts', 'order', 'codex-cli', 'work2,default']).status, 0);
+  const out = cli(['accounts', 'codex-cli']).stdout;
+  assert.ok(out.indexOf('work2') < out.indexOf('default'), out);
 });
 
-test('check reports ready and needs sign-in from the status command exit code', async () => {
+test('check prints ready or needs sign-in from the status exit code', () => {
   reset();
-  accounts.addAccount('codex-cli', 'work2');
+  cli(['accounts', 'add', 'codex-cli', 'work2']);
+  assert.match(cli(['accounts', 'check', 'codex-cli', 'work2']).stdout, /work2: needs sign-in/);
   fs.writeFileSync(path.join(dir('work2'), 'ok'), '');
-  assert.equal((await accounts.checkAccount(config.loadConfig(), 'codex-cli', 'work2')).signedIn, true);
-  fs.rmSync(path.join(dir('work2'), 'ok'));
-  assert.equal((await accounts.checkAccount(config.loadConfig(), 'codex-cli', 'work2')).signedIn, false);
+  assert.match(cli(['accounts', 'check', 'codex-cli', 'work2']).stdout, /work2: ready/);
+  assert.match(cli(['accounts', 'codex-cli']).stdout, /work2\s+ready/);
 });
 
-test('provider cooldown clear removes account cooldowns', () => {
+test('cooldown lists accounts and --clear <provider> clears its accounts too', () => {
   reset();
-  setCooldown('codex-cli#work2', 60, 'test');
-  for (const key of Object.keys(getCooldowns())) if (key === 'codex-cli' || key.startsWith('codex-cli#')) {
-    clearCooldowns(key);
-  }
-  assert.equal(getCooldowns()['codex-cli#work2'], undefined);
+  cli(['accounts', 'add', 'codex-cli', 'work2']);
+  setCooldown('codex-cli#work2', 60, 'rate limited');
+  setCooldown('codex-cli', 60, 'rate limited');
+  setCooldown('opencode', 60, 'rate limited');
+  assert.match(cli(['cooldown']).stdout, /codex-cli \[work2\]/);
+  assert.equal(cli(['cooldown', '--clear', 'codex-cli']).status, 0);
+  const cd = getCooldowns();
+  assert.equal(cd['codex-cli#work2'], undefined);
+  assert.equal(cd['codex-cli'], undefined);
+  assert.ok(cd.opencode);
 });
 
-test('status report includes provider accounts and account state', () => {
+test('status lists each account with its state', () => {
   reset();
-  accounts.addAccount('codex-cli', 'work2');
-  const report = statusReport(config.loadConfig());
-  assert.match(report, /codex-cli \[work2\]/);
-  assert.match(report, /codex-cli \[work2\] not checked/);
+  cli(['accounts', 'add', 'codex-cli', 'work2']);
+  setCooldown('codex-cli#work2', 60, 'rate limited');
+  assert.match(statusReport(config.loadConfig()), /codex-cli \[work2\] cooling down until/);
+  assert.match(statusReport(config.loadConfig()), /codex-cli \[default\] not checked/);
 });
