@@ -11,7 +11,9 @@ export const READ_ONLY_COMMANDS = ['git diff', 'git log', 'git show', 'git statu
 // denying all of it locked agy out of the very files it was asked to edit.
 const SECRET_FILE_RULES = ['read_file({cwd}/.env)', 'read_file({cwd}/.conductor-ai/.env)', 'read_file({cwd}/auth.json)',
   'read_file({cwd}/app/etc/env.php)', 'read_file({conductorHome}/secrets.env)', 'read_file({conductorHome}/config.json)',
-  'read_file({conductorHome}/state.json)', 'read_file({conductorHome}/usage.jsonl)'];
+  'read_file({conductorHome}/state.json)', 'read_file({conductorHome}/usage.jsonl)',
+  // each account folder holds that account's login (src/accounts.js)
+  'read_file({conductorHome}/accounts)'];
 
 // Build, lint and test commands a write worker may run without asking (inside its sandbox: no network). Headless
 // runs can't answer a permission prompt, so an unlisted command is denied and the task fails. The project's
