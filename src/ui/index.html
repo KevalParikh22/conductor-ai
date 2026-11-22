@@ -265,6 +265,8 @@ body { overflow-x: hidden; }
 <div id="npanel" role="dialog" aria-label="Notifications" hidden></div>
 <dialog id="confirm" aria-labelledby="cf-title"><div class="dlg-b"><h2 id="cf-title">Save changes?</h2><div id="cf-body"></div></div>
   <div class="dlg-f"><button class="btn" id="cf-cancel">Cancel</button><button class="btn primary" id="cf-save">Save</button></div></dialog>
+<dialog id="account-remove" aria-labelledby="ar-title"><div class="dlg-b"><h2 id="ar-title">Remove account?</h2><div id="ar-body"></div></div>
+  <div class="dlg-f"><button class="btn" id="ar-cancel">Cancel</button><button class="btn primary" id="ar-remove">Remove account</button></div></dialog>
 <div id="offline" role="alert" hidden><b>conductor-ai ui has stopped.</b> Nothing you change here is saved. Run <code>conductor-ai ui</code> again in a terminal and open the new link it prints.</div>
 <div id="toast" role="status"></div>
 <script>
@@ -277,6 +279,7 @@ function go(page) {
   tab = page;
   const h = new URLSearchParams(location.hash.slice(1)); h.set('p', page); h.delete('run'); runOpen = null; runDet = null;
   history.pushState(null, '', `#${h}`);
+  if (page === 'providers') loadAccounts(true);
   render();
 }
 addEventListener('popstate', () => { tab = pageFromHash(); const r = new URLSearchParams(location.hash.slice(1)).get('run'); if (r !== runOpen) { runOpen = r; runDet = null; } if (S) render(); });
@@ -321,6 +324,12 @@ let localInfo = null, localAt = 0; // local model servers, refreshed at most eve
 function loadLocal() { if (Date.now() - localAt < 30000) return; localAt = Date.now(); api('GET', '/api/local').then((d) => { localInfo = d.local; if (tab === 'providers' || tab === 'setup') render(); }, () => {}); }
 let pAll = false, pAdd = false; const pOpen = new Set(); // providers page: show disabled, gallery open, expanded rows
 const provModels = {};
+let accountsData = null, accountsAt = 0, accountToRemove = null; // CLI accounts, loaded from the global config
+function loadAccounts(force = false) {
+  if (!force && accountsData && Date.now() - accountsAt < 30_000) return;
+  accountsAt = Date.now();
+  api('GET', '/api/accounts').then((d) => { accountsData = d; if (tab === 'providers') render(); }, (e) => toast(e.message));
+}
 const GUIDE = (id) => `https://github.com/KevalParikh22/conductor-ai/blob/main/docs/providers/${id}.md`;
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -603,6 +612,31 @@ function applyGalleryFilter() {
   const n = $('#g-count'); if (n) n.textContent = `${S.catalog.filter(gMatch).length} shown`;
 }
 
+function accountPill(a) {
+  const [cls, text] = { ready: ['ok', 'ready'], cooling: ['warn', `cooling down until ${new Date(a.until).toLocaleString()}`],
+    'needs-sign-in': ['bad', 'needs sign-in'], disabled: ['', 'off'], unchecked: ['warn', 'not checked'] }[a.state] || ['', a.state];
+  return `<span class="pill ${cls}" title="${esc(a.reason || '')}">${esc(text)}</span>`;
+}
+function accountsBlock(n) {
+  const rows = accountsData?.providers?.[n];
+  if (!rows) { loadAccounts(); return `<div class="card" style="margin-top:12px;padding:12px"><h3>Accounts</h3><p class="note">Loading accounts…</p></div>`; }
+  return `<div class="card" style="margin-top:12px;padding:12px"><h3>Accounts</h3>
+    <p class="note">Accounts share this CLI: when one runs out of quota the next in order takes over. <b>default</b> is your normal login.</p>
+    ${rows.length ? `<table><tr><th>Label</th><th>State</th><th></th></tr>${rows.map((a, i) => {
+      const login = `conductor-ai accounts login ${n} ${a.label}`;
+      return `<tr><td><b>${esc(a.label)}</b>${a.label === 'default' ? ' <span class="note">normal login</span>' : ''}</td>
+        <td>${accountPill(a)}${a.state === 'cooling' && a.reason ? `<div class="note">${esc(a.reason)}</div>` : ''}</td>
+        <td style="text-align:right;white-space:nowrap"><label class="switch" title="${a.enabled ? 'On' : 'Off'}"><input type="checkbox" data-account-on="${esc(n)}|${esc(a.label)}" ${a.enabled ? 'checked' : ''} aria-label="Enable ${esc(a.label)}"><span></span></label>
+          <button class="btn icon ghost small" data-account-mv="${esc(n)}|${i}|-1" ${i ? '' : 'disabled'} aria-label="Move up">${icon('up')}</button>
+          <button class="btn icon ghost small" data-account-mv="${esc(n)}|${i}|1" ${i < rows.length - 1 ? '' : 'disabled'} aria-label="Move down">${icon('down')}</button>
+          <button class="btn small" data-account-check="${esc(n)}|${esc(a.label)}">Check</button>
+          <button class="btn small ghost" data-account-rename="${esc(n)}|${esc(a.label)}">Rename</button>
+          <button class="btn small ghost" data-account-rm="${esc(n)}|${esc(a.label)}" ${a.label === 'default' ? 'disabled' : ''}>Remove</button></td></tr>
+        <tr><td colspan="3" class="note">Sign in in a terminal: <span class="mono">${esc(login)}</span>${copyIcon(login, 'Sign-in command copied', 'Copy the sign-in command')}</td></tr>`;
+    }).join('')}</table>` : '<p class="note">No accounts yet: runs use your normal login.</p>'}
+    <div class="row" style="margin-top:10px"><input type="text" id="account-label-${esc(n)}" placeholder="Account label" style="max-width:220px"><button class="btn small" data-account-add="${esc(n)}">${icon('plus')} Add account</button></div></div>`;
+}
+
 const views = {
   skills() {
     return `<div class="head"><h1>Skills</h1><p class="sub">One skill library for your controller and every worker.</p></div>
@@ -752,6 +786,7 @@ const views = {
         <div class="note" style="margin-top:8px">When a model is rate-limited (or, for APIs, stalls), the next fallback model runs on the same provider before the chain moves on. A worker that runs past its time limit is stopped and the next provider takes over.</div>
         ${provModels[n] ? `<datalist id="dl-m-${esc(n)}">${provModels[n].map((m) => `<option value="${esc(m.id)}">${m.free ? 'free' : ''}</option>`).join('')}</datalist>` : ''}
         <div class="row" style="margin-top:10px">${p.type !== 'cli' ? `<button class="btn small" data-lm="${esc(n)}">${icon('list')} ${provModels[n] ? `${provModels[n].length} models loaded` : 'Load models'}</button>` : ''}${n.startsWith('openrouter') ? `<button class="btn small" id="loadfree">${freeModels ? `${freeModels.length} free models loaded` : 'Load free models'}</button>` : ''}${p.catalog ? `<a class="btn small" href="${GUIDE(p.catalog)}" target="_blank" rel="noopener">${icon('guide')} Guide</a>` : ''}${builtin ? '' : `<button class="btn small" data-del="${esc(n)}">Remove</button>`}</div>
+        ${p.type === 'cli' && S.accountKinds?.includes(p.preset) ? accountsBlock(n) : ''}
       </div><div class="note" id="test-${esc(n)}" style="padding:0 18px"></div></div>`; };
     return `<div class="head"><h1>Providers</h1><span class="spacer"></span>
         <button class="btn ${pAdd ? '' : 'primary'}" id="padd">${icon(pAdd ? 'x' : 'plus')} ${pAdd ? 'Close' : 'Add provider'}</button>
@@ -934,6 +969,43 @@ function bind() {
     try { rPreview = { ...(await api('POST', '/api/route-preview', { ...input, routes: W.routes || [], roles: W.roles })), input }; render(); } catch (e) { toast(e.message); }
   };
   document.querySelectorAll('[data-popen]').forEach((b) => b.onclick = () => { const n = b.dataset.popen; pOpen.has(n) ? pOpen.delete(n) : pOpen.add(n); render(); });
+  // account changes are global and take effect at once, so their result replaces this provider's rows
+  const accountApply = (r, msg) => { (accountsData ||= { providers: {} }).providers[r.provider] = r.accounts; render(); toast(msg); };
+  document.querySelectorAll('[data-account-add]').forEach((b) => b.onclick = async () => {
+    const n = b.dataset.accountAdd, label = document.getElementById('account-label-' + n)?.value.trim();
+    if (!label) return toast('Enter a label first');
+    try { accountApply(await api('POST', '/api/accounts/add', { provider: n, label }), `Account ${label} added`); } catch (e) { toast(e.message); }
+  });
+  document.querySelectorAll('[data-account-rename]').forEach((b) => b.onclick = async () => {
+    const [n, label] = b.dataset.accountRename.split('|'), to = prompt(`Rename ${label} to`, label);
+    if (!to || to === label) return;
+    try { accountApply(await api('POST', '/api/accounts/rename', { provider: n, from: label, to }), `Renamed to ${to}`); } catch (e) { toast(e.message); }
+  });
+  document.querySelectorAll('[data-account-rm]').forEach((b) => b.onclick = () => {
+    const [provider, label] = b.dataset.accountRm.split('|');
+    accountToRemove = { provider, label };
+    $('#ar-body').innerHTML = `<p>Removing <b>${esc(label)}</b> deletes its folder and its login. You would need to sign in again to use it.</p>`;
+    $('#account-remove').showModal();
+  });
+  $('#ar-cancel').onclick = () => { accountToRemove = null; $('#account-remove').close(); };
+  $('#ar-remove').onclick = async () => {
+    if (!accountToRemove) return;
+    const { provider, label } = accountToRemove;
+    try { const r = await api('POST', '/api/accounts/remove', { provider, label, confirm: true }); accountToRemove = null; $('#account-remove').close(); accountApply(r, `Account ${label} removed`); } catch (e) { toast(e.message); }
+  };
+  document.querySelectorAll('[data-account-check]').forEach((b) => b.onclick = async () => {
+    const [provider, label] = b.dataset.accountCheck.split('|'); b.disabled = true;
+    try { accountApply(await api('POST', '/api/accounts/check', { provider, label }), `${label} checked`); } catch (e) { toast(e.message); b.disabled = false; }
+  });
+  document.querySelectorAll('[data-account-on]').forEach((c) => c.onchange = async () => {
+    const [provider, label] = c.dataset.accountOn.split('|'); c.disabled = true;
+    try { accountApply(await api('POST', '/api/accounts/toggle', { provider, label, enabled: c.checked }), `${label} ${c.checked ? 'on' : 'off'}`); } catch (e) { toast(e.message); c.disabled = false; }
+  });
+  document.querySelectorAll('[data-account-mv]').forEach((b) => b.onclick = async () => {
+    const [provider, i, d] = b.dataset.accountMv.split('|'), labels = (accountsData.providers[provider] || []).map((a) => a.label), j = +i + +d;
+    [labels[+i], labels[j]] = [labels[j], labels[+i]];
+    try { accountApply(await api('POST', '/api/accounts/order', { provider, labels }), 'Order updated'); } catch (e) { toast(e.message); }
+  });
   document.querySelectorAll('[data-pall]').forEach((b) => b.onclick = () => { pAll = b.dataset.pall === '1'; render(); });
   const pa = $('#padd'); if (pa) pa.onclick = () => { pAdd = !pAdd; gOpen = null; render(); if (pAdd) $('#g-q')?.focus(); };
   // the search and the category chip combine; neither resets the other
