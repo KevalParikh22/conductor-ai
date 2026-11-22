@@ -203,7 +203,7 @@ export function accountStatus(cfg, provider) {
     const base = { label: a.label, enabled: a.enabled, key: a.key };
     if (!a.enabled) return { ...base, state: 'disabled' };
     if (cooldowns[a.key]) return { ...base, state: 'cooling', until: cooldowns[a.key].until, reason: cooldowns[a.key].reason };
-    if (saved[a.key]?.signedIn === false) return { ...base, state: 'needs-sign-in', reason: `conductor-ai accounts login ${provider} ${a.label}` };
+    if (saved[a.key]?.signedIn === false) return { ...base, state: 'needs-sign-in', reason: `needs sign-in: conductor-ai accounts login ${provider} ${a.label}` };
     return { ...base, state: saved[a.key] ? 'ready' : 'unchecked' };
   });
 }

@@ -17,6 +17,8 @@ const RULES = [
     const url = Object.values(CATALOG).find((e) => e.apiKeyEnv === m[1])?.keyUrl;
     return `set the key: \`conductor-ai keys set ${m[1]}\`${url ? ` (get one at ${url})` : ''}`;
   }],
+  [/^account cooling down until ([^(]+)/, ({ name, account }, m) => `this account's quota resets at ${m[1].trim()}; conductor-ai used ${name}'s next account. To try it now: \`conductor-ai cooldown --clear ${name}#${account || '<label>'}\``],
+  [/^needs sign-in/, ({ name, account }) => `sign in to this account yourself: \`conductor-ai accounts login ${name} ${account || '<label>'}\` (conductor-ai never sees the token)`],
   [/^cooling down until ([^(]+)/, ({ name }, m) => `it waits until ${m[1].trim()}; to try it now: \`conductor-ai cooldown --clear ${name}\``],
   [/^every model is cooling down/, ({ name }) => `all of ${name}'s models hit their limits; \`conductor-ai cooldown\` shows when each resets (\`conductor-ai cooldown --clear ${name}\` to try now)`],
   [/daily budget reached/, () => `the paid daily budget is used up: wait until tomorrow, or raise dailyBudgetUSD in ${cfgFile}`],

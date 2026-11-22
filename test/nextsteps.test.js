@@ -16,6 +16,8 @@ const FALLBACK = /^read the worker log in the run folder, then/;
 // every reason the code writes, in the exact shape it writes it
 const REASONS = {
   'unknown provider': /isn't configured/,
+  'account cooling down until 3:05 PM (rate limited)': /quota resets at 3:05 PM.*cooldown --clear x#/,
+  'needs sign-in: conductor-ai accounts login x a': /conductor-ai accounts login x/,
   disabled: /turn x on/,
   '"agy" not installed': /install it: curl .*antigravity.*sign in: agy/,
   'not installed': /install it/,

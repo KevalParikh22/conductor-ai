@@ -118,7 +118,10 @@ export function workerTimeout(p, kind, settings, { etaMs = 0, timeoutMs = 0 } = 
 export function resolveChain(cfg, role, { provider, chain } = {}) {
   let names = chain?.length ? chain : (cfg.roles[role] || []);
   if (provider) names = [provider, ...names.filter((n) => n !== provider)];
+  // a chain rebuilt from an earlier run's names lists a provider once per account: expand each provider once
+  names = [...new Set(names)];
   const cooldowns = getCooldowns();
+  const saved = readJSON(path.join(GLOBAL_DIR, 'state.json'), {}).accounts || {};
   return names.flatMap((name) => {
     const p = cfg.providers[name];
     if (!p) return [{ name, key: name, skip: 'unknown provider' }];
@@ -130,7 +133,7 @@ export function resolveChain(cfg, role, { provider, chain } = {}) {
       if (!r.ready) return { name, p, account: account.label ? account : undefined, key, skip: r.reason };
       const c = cooldowns[key];
       if (c) return { name, p, account: account.label ? account : undefined, key, skip: `${account.label ? 'account ' : ''}cooling down until ${untilText(c.until)} (${c.reason})` };
-      if (account.label && readJSON(path.join(GLOBAL_DIR, 'state.json'), {}).accounts?.[key]?.signedIn === false)
+      if (account.label && saved[key]?.signedIn === false)
         return { name, p, account, key, skip: `needs sign-in: conductor-ai accounts login ${name} ${account.label}` };
       const over = budgetBlock(name, p, cfg.settings);
       if (over) return { name, p, account: account.label ? account : undefined, key, skip: over };
@@ -238,7 +241,8 @@ async function escalateIfNeeded(cfg, opts, first) {
   let s = first;
   const rounds = cfg.settings?.escalateRounds ?? 1;
   for (let round = 1; round <= rounds && shouldEscalate(s, opts, cfg.settings || {}); round++) {
-    const rest = (s.chain || []).slice((s.chain || []).indexOf(s.winner) + 1);
+    // another account of the winner's own CLI is the same model: escalate to a different provider
+    const rest = (s.chain || []).slice((s.chain || []).indexOf(s.winner) + 1).filter((n) => n !== s.winner);
     if (!rest.length) break;
     const prev = s;
     const note = `${opts.note ? `${opts.note}\n\n` : ''}A previous worker (${prev.winner}) did this task, and its changes are already in your working copy. They fail these checks:\n${prev.fixBrief}\nKeep what is right, fix what fails, and stay inside the task.`;
@@ -491,7 +495,8 @@ async function dispatchOnce(cfg, opts) {
   // Q7: a provider that failed this kind of work here twice goes to the back (never when the chain was given explicitly)
   if (mode === 'write' && !['chain', 'provider'].includes(picked.how) && cfg.settings?.lessons !== false) {
     const d = demoteByLessons(root, picked.chain.map((c) => c.name), { role, files: [...(opts.files || []), ...taskFiles(section)], after: settings.demoteAfter ?? 2 });
-    if (d.demoted.length) { picked.chain = d.chain.map((n) => picked.chain.find((c) => c.name === n)); summary.lessonsDemoted = d.demoted; }
+    // a provider with accounts has one entry per account: keep all of them, in their order
+    if (d.demoted.length) { picked.chain = [...new Set(d.chain)].flatMap((n) => picked.chain.filter((c) => c.name === n)); summary.lessonsDemoted = d.demoted; }
   }
   const chain = picked.chain;
   summary.chain = chain.filter((c) => !c.skip).map((c) => c.name);
@@ -544,7 +549,7 @@ async function dispatchOnce(cfg, opts) {
 
   providers: for (const c of chain) {
     if (opts.signal?.aborted) { summary.cancelled = true; break; } // V9: another attempt in the race already passed
-    if (c.skip) { summary.attempts.push({ provider: c.name, ok: false, reason: c.skip, skipped: true, next: nextStep(c.skip, { name: c.name, p: c.p }) }); emit({ type: 'skip', provider: c.name, reason: c.skip }); continue; }
+    if (c.skip) { summary.attempts.push({ provider: c.name, ...(c.account ? { account: c.account.label } : {}), ok: false, reason: c.skip, skipped: true, next: nextStep(c.skip, { name: c.name, p: c.p, account: c.account?.label }) }); emit({ type: 'skip', provider: c.name, reason: c.skip }); continue; }
     const kind = providerKind(c.p);
     if (mode === 'read' && kind === 'agent' && !readOnlyEnforced(c.p)) {
       summary.warnings.push(`${c.name} cannot be held to read-only (only the prompt asks it not to edit). Check git status after this run`);
@@ -573,6 +578,8 @@ async function dispatchOnce(cfg, opts) {
       summary.attempts.push({ provider: c.name, ok: false, reason, skipped: true }); emit({ type: 'skip', provider: c.name, reason });
       continue;
     }
+    // two accounts of one provider each keep their own log (codex-cli.work2.log), so a quota hit stays readable
+    const logStem = c.account && c.account.label !== 'default' ? `${c.name}.${c.account.label}` : c.name;
     for (let mi = 0; mi < models.length; mi++) {
       if (opts.signal?.aborted) { summary.cancelled = true; break providers; }
       const model = models[mi];
@@ -587,7 +594,7 @@ async function dispatchOnce(cfg, opts) {
       const tooBig = win && promptTokens + (p.maxTokens || 2048) > win.window;
       // one call at a time per local server (it shares one machine); a provider's own maxParallel wins
       // a CLI worker's output as it arrives, for the running run's page (src/runs.js runDetail)
-      const liveLog = path.join(runDir, `${c.name}${mi ? `.${mi + 1}` : ''}.live.log`);
+      const liveLog = path.join(runDir, `${logStem}${mi ? `.${mi + 1}` : ''}.live.log`);
       const slotKey = local ? `local:${(() => { try { return new URL(c.p.baseUrl).host; } catch { return c.name; } })()}` : (c.key || c.name);
       let res = kind === 'chat' && !p.model
         ? { ok: false, text: '', reason: 'no model set, and its model list could not be fetched', log: '' }
@@ -604,7 +611,7 @@ async function dispatchOnce(cfg, opts) {
       if (putBack.length) summary.warnings.push(`${c.name} changed conductor-ai's own files, which workers must not edit. conductor-ai put them back: ${putBack.join(', ')}`);
       if (tampered.length) summary.warnings.push(`${c.name} changed git hooks or config, which can run programs. conductor-ai put them back: ${tampered.join(', ')}`);
       if (headBefore && git.head(work) !== headBefore) summary.warnings.push(`${c.name} made git commits itself (HEAD moved from ${headBefore.slice(0, 8)}). Check them with git log before merging`);
-      fs.writeFileSync(path.join(runDir, `${c.name}${mi ? `.${mi + 1}` : ''}.log`), res.log || '');
+      fs.writeFileSync(path.join(runDir, `${logStem}${mi ? `.${mi + 1}` : ''}.log`), res.log || '');
       fs.rmSync(liveLog, { force: true }); // the full log above replaces it
 
       // H7: a chat reply without file blocks gets one repair turn that shows the model what it said and what is needed
@@ -614,7 +621,7 @@ async function dispatchOnce(cfg, opts) {
           history: [{ role: 'assistant', content: res.text.slice(0, 8000) }, { role: 'user', content: CHAT_REPAIR }] });
         const sum = (a, b) => (a || b ? { input: (a?.input || 0) + (b?.input || 0), output: (a?.output || 0) + (b?.output || 0) } : undefined);
         res = { ...(again.ok ? again : { ...res, text: res.text }), tokens: sum(res.tokens, again.tokens), log: `${res.log}\n\n==== repair turn ====\n${again.log || ''}`, repaired: true };
-        fs.writeFileSync(path.join(runDir, `${c.name}${mi ? `.${mi + 1}` : ''}.log`), res.log || '');
+        fs.writeFileSync(path.join(runDir, `${logStem}${mi ? `.${mi + 1}` : ''}.log`), res.log || '');
       }
       if (res.ok && kind === 'chat' && mode === 'write') {
         const blocks = parseFileBlocks(res.text);
@@ -689,7 +696,7 @@ async function dispatchOnce(cfg, opts) {
       const quota = res.reason === 'quota';
       if (res.reason === 'needs sign-in' && c.account) {
         markSignedIn(c.key, false);
-        attempt.next = nextStep(attempt.reason, { name: c.name });
+        attempt.next = nextStep(attempt.reason, { name: c.name, account: c.account.label });
         summary.attempts.push(attempt);
         emit({ type: 'fail', provider: c.name, reason: attempt.reason });
         continue providers;
@@ -719,7 +726,7 @@ async function dispatchOnce(cfg, opts) {
         if (!tryNext) setCooldown(c.key || c.name, mins, accountWide ? 'quota used up for the whole account' : 'rate limited');
         attempt.reason += ` (cooldown ${mins}m)`;
       }
-      attempt.next = nextStep(attempt.reason, { name: c.name, p: c.p, log: rel(root, path.join(runDir, `${c.name}${mi ? `.${mi + 1}` : ''}.log`)) });
+      attempt.next = nextStep(attempt.reason, { name: c.name, p: c.p, log: rel(root, path.join(runDir, `${logStem}${mi ? `.${mi + 1}` : ''}.log`)) });
       if (mode === 'write' && (useWorktree || !opts.allowDirty) && git.isDirty(work)) {
         if (git.stashPush(work, `conductor-ai: failed attempt by ${c.name} ${opts.taskId || role} ${timestamp()}`)) attempt.stashed = true;
       }
