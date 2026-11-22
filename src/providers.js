@@ -153,13 +153,19 @@ export function resetSeconds(text, now = new Date()) {
     let target;
     if (iso) target = Date.parse(iso[1]);
     else {
-      const dateTime = t.match(/(?:try again at|resets?\s+)\s*(?:(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})\s+)?(\d{1,2})(?::(\d\d))?\s*(AM|PM)\b/i);
+      // Codex: "Try again at Nov 24th, 2026 9:00 AM."; Claude: "resets Nov 24, 9am" (no year: the next such date)
+      const dateTime = t.match(/(?:try again at|resets?\s+)\s*(?:(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(?:(\d{4}),?\s+)?(?:at\s+)?)?(\d{1,2})(?::(\d\d))?\s*(AM|PM)\b/i);
       if (!dateTime) return 0;
       const [, month, day, year, hourText, minuteText = '0', ampm] = dateTime;
       let hour = Number(hourText) % 12 + (ampm.toLowerCase() === 'pm' ? 12 : 0);
       const minute = Number(minuteText);
       if (minute > 59) return 0;
-      if (month) target = new Date(Number(year), ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].indexOf(month.slice(0,3)) , Number(day), hour, minute).getTime();
+      const mon = month ? 'janfebmaraprmayjunjulaugsepoctnovdec'.indexOf(month.slice(0, 3).toLowerCase()) / 3 : -1;
+      if (month && year) target = new Date(Number(year), mon, Number(day), hour, minute).getTime();
+      else if (month) {
+        target = new Date(now.getFullYear(), mon, Number(day), hour, minute).getTime();
+        if (target <= now.getTime()) target = new Date(now.getFullYear() + 1, mon, Number(day), hour, minute).getTime();
+      }
       else {
         const d = new Date(now);
         target = new Date(d.getFullYear(), d.getMonth(), d.getDate(), hour, minute).getTime();
