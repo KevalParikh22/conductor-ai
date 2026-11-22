@@ -32,7 +32,7 @@ For every agent, `git push`, `commit`, `reset`, `checkout`, `rebase`, `stash`, `
 
 - Write roles refuse to run on protected branches (`main`, `master` by default) or a dirty tree, unless you allow it. Parallel tasks run in their own worktrees on `conductor-ai/<id>` branches.
 - A failed attempt's changes are stashed, never deleted.
-- **Git hooks, `.git/config`, `.git/info/exclude` and `.git/info/attributes` are snapshotted before every worker and restored right after it**, before conductor-ai runs git again. A worker that plants a `pre-commit` hook, an `fsmonitor` program, a filter or a diff driver, or hides files from `git status` or `git diff`, is undone, and the run shows a warning. conductor-ai's own git commands also run with `core.fsmonitor` disabled.
+- **Git hooks, `.git/config`, `.git/info/exclude` and `.git/info/attributes`, and the same files in submodules' git folders (`.git/modules/…`), are snapshotted before every worker and restored right after it**, before conductor-ai runs git again. A worker that plants a `pre-commit` hook, an `fsmonitor` program, a filter or a diff driver, or hides files from `git status` or `git diff`, is undone, and the run shows a warning. conductor-ai's own git commands also run with `core.fsmonitor` disabled.
 - Hook folders kept in the repo (`.husky/`, `.githooks/`, or your `core.hooksPath`) count as protected files.
 
 ### 4. Model output is checked before it touches disk
@@ -62,7 +62,7 @@ Be clear on these before you use it on sensitive code.
 3. **Some agents are not fully contained.** OpenCode's shell is not OS-sandboxed, and Kimi and custom CLIs can't be held to read-only. Prefer Antigravity or Codex for sensitive work.
 4. **Free API routes may log your prompts.** Kilo free, OpenRouter `:free` and similar routes can keep what you send, including your code, for training or abuse checks. Don't use them on private or client code.
 5. **Prompt injection is not solved.** Text in the repo, issues or fetched pages can steer a model. conductor-ai limits what a steered worker can do; it can't stop the model from writing bad code. **Review every diff before you commit**, especially changes to CI workflows (`.github/workflows`), build scripts, dependencies and auth code.
-6. **The controller has your access.** Claude Code, or whichever controller you use, runs conductor-ai with its own permissions. conductor-ai doesn't sandbox the controller. The `guard` push hook is a check against mistakes, not a boundary: it spots `git push` also as `/usr/bin/git push`, after `VAR=value` or `env`/`command`, but not inside `bash -c "…"` or another interpreter.
+6. **The controller has your access.** Claude Code, or whichever controller you use, runs conductor-ai with its own permissions. conductor-ai doesn't sandbox the controller. The `guard` push hook is a check against mistakes, not a boundary: it spots `git push` also as `/usr/bin/git push` or `"git" push`, after `VAR=value`, `env`, `command` or `sudo`, but not inside `bash -c "…"` or another interpreter.
 
 ## Recommended setup for sensitive projects
 
