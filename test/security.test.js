@@ -164,3 +164,19 @@ test('.git/info/exclude and attributes written by a worker are put back', async 
   assert.equal(fs.readFileSync(exclude, 'utf8'), '# conductor-ai skills block\n');
   assert.ok(!fs.existsSync(path.join(dir, '.git/info/attributes')));
 });
+
+test('a submodule\'s git config and hooks written by a worker are put back too', async () => {
+  const git = await import('../src/git.js');
+  const { dir: lib } = makeRepo({ branch: null });
+  const { dir, git: g } = makeRepo();
+  g('-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', lib, 'vendor/lib'); g('commit', '-qm', 'sub');
+  const mod = path.join(dir, '.git/modules/vendor/lib');
+  const configBefore = fs.readFileSync(path.join(mod, 'config'), 'utf8');
+  const snap = git.snapshotControl(dir);
+  fs.appendFileSync(path.join(mod, 'config'), '\n[core]\n\tfsmonitor = "touch FSMONITOR_RAN; echo"\n');
+  fs.mkdirSync(path.join(mod, 'hooks'), { recursive: true });
+  fs.writeFileSync(path.join(mod, 'hooks/pre-commit'), '#!/bin/sh\n', { mode: 0o755 });
+  assert.deepEqual(git.restoreControl(snap).sort(), ['.git/modules/vendor/lib/config', '.git/modules/vendor/lib/hooks/pre-commit']);
+  assert.equal(fs.readFileSync(path.join(mod, 'config'), 'utf8'), configBefore);
+  assert.ok(!fs.existsSync(path.join(mod, 'hooks/pre-commit')));
+});
