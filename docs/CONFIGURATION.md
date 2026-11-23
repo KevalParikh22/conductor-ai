@@ -68,6 +68,7 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | `apiKeyEnv` | api | Name of the env var holding the key; empty for local servers |
 | `apiKeyOptional` | api | `true` = send the key if set, but run without one too (e.g. `kilo-free`) |
 | `headers`, `maxTokens`, `temperature` | api | Optional request tuning |
+| `promptCache` | anthropic | `false` = no `cache_control` breakpoints. By default the system prompt and the project context are marked for Anthropic's prompt cache once they reach ~1,024 tokens, so retries and repair turns read them at a tenth of the price; a gateway that answers 400 to `cache_control` is retried once without it, and not sent it again in that process. Cache reads and writes show in `conductor-ai runs <id>` |
 | `fallbackModels` | api, cli | Models to try on this provider, in order, when `model` is rate-limited (APIs also switch when a model stalls or answers nothing). The limited model cools down alone; the provider is skipped only when every model is. Agents need a preset that takes a model (OpenCode, Codex, Claude, Kimi, Aider…). Free and auto-picked API providers find fallbacks from their live model list when this is unset; so does Antigravity (from `agy models`, another model family first, since agy's families have separate quotas) |
 | `autoFallback` | api, agy | `false` = don't look up fallback models automatically |
 | `location` | api | `local-model` or `cloud-api`: overrides the guess from the address (e.g. a remote server reached through localhost). Local models get the smaller prompt, the window check and one call at a time per server |
@@ -100,7 +101,7 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | `requireAcceptance` | true | A DONE task must answer every acceptance criterion with evidence; otherwise the outcome is `partial` |
 | `syntaxCheck` | true | Reject a worker's attempt when a changed file has a syntax error (JS, JSON, PHP, Python) |
 | `contractCheck` | true | Reject it when a function or class the task names in a code span isn't defined anywhere afterwards |
-| `chatRepair` | true | Give a chat model's reply with no file blocks one repair turn |
+| `chatRepair` | true | Give a chat model's reply one repair turn when it has no file blocks or an EDIT whose SEARCH did not match |
 | `repoMapBytes` | 6000 | Size of the project map chat models get |
 | `localPromptProfile` | true | Models on this machine get a smaller prompt: no project map, a shorter AGENTS.md and context pack, at most 20 KB of files |
 | `localContextCheck` | true | Ask a local server (Ollama, LM Studio) for the window the model runs with, and don't send a prompt that won't fit: a local server cuts it without an error |

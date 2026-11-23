@@ -31,7 +31,7 @@ import { nextStep } from './nextsteps.js';
 import { extractTask, extractSection, openQuestions, taskFiles, expandBraces, notesForFiles, parseDuration } from './plan.js';
 import { getCooldowns, setCooldown, modelKey, withSlot } from './cooldowns.js';
 import { outcome, EXIT_UNVERIFIED, EXIT_WAITING, unverifiedBlocks } from './outcome.js';
-import { isProtected, trimReport, parseFileBlocks, applyFileBlocks, checkEvidence } from './files.js';
+import { isProtected, trimReport, parseFileBlocks, applyFileBlocks, checkEvidence, writeRefusal } from './files.js';
 import { localWindow, estimateTokens } from './local.js';
 import { listAccounts, markSignedIn } from './accounts.js';
 // moved out unchanged (V12); re-exported so every importer of core.js keeps working
@@ -143,7 +143,7 @@ export function resolveChain(cfg, role, { provider, chain } = {}) {
 }
 
 // never sent to an API model as context, even when asked to
-const SECRET_PATHS = [/(^|\/)\.env(\.|$)/, /(^|\/)auth\.json$/, /(^|\/)secrets?\.env$/, /(^|\/)\.npmrc$/, /(^|\/)id_(rsa|ed25519|ecdsa)/, /\.(pem|key|p12|pfx)$/];
+const SECRET_PATHS = [/(^|\/)\.env(\.|$)/i, /(^|\/)auth\.json$/i, /(^|\/)secrets?\.env$/i, /(^|\/)\.npmrc$/i, /(^|\/)id_(rsa|ed25519|ecdsa)/i, /\.(pem|key|p12|pfx)$/i];
 
 function readContextFiles(root, files, budget, extraSecret = []) {
   let out = '', used = 0;
@@ -151,7 +151,11 @@ function readContextFiles(root, files, budget, extraSecret = []) {
     const abs = path.resolve(root, f);
     if (!abs.startsWith(path.resolve(root) + path.sep)) continue;
     const norm = rel(root, abs);
-    if (SECRET_PATHS.some((re) => re.test(norm)) || extraSecret.some((src) => new RegExp(src).test(norm))) { out += `\n### ${f}\n(withheld: looks like a secrets file)\n`; continue; }
+    // a symlink is judged by where it points: one to ~/.ssh or to secrets.env must not reach an API model
+    let real = norm;
+    try { real = path.relative(fs.realpathSync(root), fs.realpathSync(abs)).replaceAll('\\', '/'); } catch { /* missing: a new file */ }
+    const secret = (p) => SECRET_PATHS.some((re) => re.test(p)) || extraSecret.some((src) => new RegExp(src, 'i').test(p));
+    if (!real || /^\.\.(\/|$)/.test(real) || path.isAbsolute(real) || secret(norm) || secret(real)) { out += `\n### ${f}\n(withheld: looks like a secrets file)\n`; continue; }
     let body;
     try { body = fs.readFileSync(abs, 'utf8'); } catch { out += `\n### ${f}\n(does not exist yet: new file)\n`; continue; }
     if (used + body.length > budget) { out += `\n### ${f}\n(omitted: context budget reached)\n`; continue; }
@@ -177,8 +181,9 @@ const CHAT_REPORT = `After the file blocks, end with this report:
 - not run (no tool access)
 ## Notes
 - assumptions, open questions, problems you noticed`;
-const CHAT_CLOSE = '\n---\nReply now, in this message: the complete <<<FILE blocks for every file the task needs, then the report. You cannot read files or run commands; everything you need is above.\n';
+const CHAT_CLOSE = '\n---\nReply now, in this message: a <<<FILE block (whole file) or <<<EDIT block (SEARCH/REPLACE hunks, for an existing file over ~100 lines) for every file the task needs, then the report. You cannot read files or run commands; everything you need is above.\n';
 const CHAT_REPAIR = 'Your reply had no <<<FILE blocks, so nothing was applied. You have no tools: you cannot read files, search or run commands, and nobody will do it for you. Everything you need is in my first message. Reply now with the complete <<<FILE blocks for every file the task needs (exact format: a line "<<<FILE path", the whole file, then a line "FILE>>>"), then the report.';
+const chatEditRepair = (failed) => `These EDIT blocks were not applied, and nothing in those files changed: ${failed.join('; ')}. Your other files were applied. Each SEARCH must copy the current lines of the file exactly (same spaces and indentation) and match exactly one place: add surrounding lines to make it unique. Reply now with corrected blocks for only those files (<<<EDIT, or the whole file as <<<FILE), then the report.`;
 
 // ---------------- dispatch ----------------
 /**
@@ -292,6 +297,8 @@ async function dispatchOnce(cfg, opts) {
   const role = opts.role;
   const meta = ROLES[role];
   if (!meta) throw new UsageError(`unknown role "${role}". Roles: ${Object.keys(ROLES).join(', ')}`);
+  const saveRefused = opts.save && writeRefusal(root, opts.save, settings.protectedPaths || []);
+  if (saveRefused) throw new UsageError(`--save ${opts.save}: ${saveRefused}. Save inside the repository, outside conductor-ai's protected files`);
   const mode = meta.mode;
   const onEvent = opts.onEvent || (() => {});
   let live = () => {}; // set once the run folder exists: the UI's Runs page reads its live.json
@@ -561,8 +568,10 @@ async function dispatchOnce(cfg, opts) {
     const extra = c.p.promptExtra ? `\n## Note for this model\n${c.p.promptExtra}\n` : '';
     // V13: a model on this machine gets the small prompt (settings.localPromptProfile: false keeps the full one)
     const local = kind === 'chat' && providerLocation(c.p) === 'local-model';
+    // the context (same for every attempt and repair turn) comes first, so it can be cached as a prefix (H8)
+    const stable = inline ? chatContext({ small: local && settings.localPromptProfile !== false }) : '';
     const userPrompt = inline
-      ? `${chatContext({ small: local && settings.localPromptProfile !== false })}\n---\n# TASK (role: ${role})\n${chatBody}${skillsChat.text ? `\n${skillsChat.text}` : ''}${extra}${recite}${mode === 'write' ? CHAT_CLOSE : ''}`
+      ? `${stable}\n---\n# TASK (role: ${role})\n${chatBody}${skillsChat.text ? `\n${skillsChat.text}` : ''}${extra}${recite}${mode === 'write' ? CHAT_CLOSE : ''}`
       : agentPrompt + (mode === 'write' ? packFor('agent') : '') + extra + recite;
     // the provider's model, then its fallback models: a model that is rate-limited is skipped until its cooldown ends
     let { models, auto } = await modelsToTry(c.key || c.name, c.p, kind);
@@ -599,7 +608,7 @@ async function dispatchOnce(cfg, opts) {
       let res = kind === 'chat' && !p.model
         ? { ok: false, text: '', reason: 'no model set, and its model list could not be fetched', log: '' }
         : tooBig ? { ok: false, text: '', reason: `context too small: the prompt needs ~${promptTokens + (p.maxTokens || 2048)} tokens with the answer, ${p.model} runs with ${win.window} (${win.server})`, log: '' }
-        : await withSlot(slotKey, c.p.maxParallel ?? CLI_PRESETS[c.p.preset]?.maxParallel ?? (local ? 1 : undefined), () => runProvider(c.name, p, { mode, prompt: userPrompt, system: chatSystem, cwd: work, runDir: ioDir, quotaRe, account: c.account,
+        : await withSlot(slotKey, c.p.maxParallel ?? CLI_PRESETS[c.p.preset]?.maxParallel ?? (local ? 1 : undefined), () => runProvider(c.name, p, { mode, prompt: userPrompt, stableChars: stable.length, system: chatSystem, cwd: work, runDir: ioDir, quotaRe, account: c.account,
           allowCommands: buildCommands(settings), ...limitFor(c.p, kind), signal: opts.signal, manualAnswer: opts.manualAnswer, liveLog }), () => emit({ type: 'wait', provider: c.name }));
       if (p !== c.p && p.model && !res.model) res.model = p.model;
       // V13: the server counted far fewer prompt tokens than were sent: it cut the prompt (any server, window known or not)
@@ -614,20 +623,27 @@ async function dispatchOnce(cfg, opts) {
       fs.writeFileSync(path.join(runDir, `${logStem}${mi ? `.${mi + 1}` : ''}.log`), res.log || '');
       fs.rmSync(liveLog, { force: true }); // the full log above replaces it
 
-      // H7: a chat reply without file blocks gets one repair turn that shows the model what it said and what is needed
-      if (res.ok && kind === 'chat' && mode === 'write' && !parseFileBlocks(res.text).length && settings.chatRepair !== false && c.p.type !== 'manual') {
-        emit({ type: 'repair', provider: c.name });
-        const again = await runProvider(c.name, p, { mode, prompt: userPrompt, system: chatSystem, cwd: work, runDir: ioDir, quotaRe, ...limitFor(c.p, kind), signal: opts.signal,
-          history: [{ role: 'assistant', content: res.text.slice(0, 8000) }, { role: 'user', content: CHAT_REPAIR }] });
-        const sum = (a, b) => (a || b ? { input: (a?.input || 0) + (b?.input || 0), output: (a?.output || 0) + (b?.output || 0) } : undefined);
-        res = { ...(again.ok ? again : { ...res, text: res.text }), tokens: sum(res.tokens, again.tokens), log: `${res.log}\n\n==== repair turn ====\n${again.log || ''}`, repaired: true };
-        fs.writeFileSync(path.join(runDir, `${logStem}${mi ? `.${mi + 1}` : ''}.log`), res.log || '');
-      }
       if (res.ok && kind === 'chat' && mode === 'write') {
-        const blocks = parseFileBlocks(res.text);
-        const { applied, rejected } = applyFileBlocks(work, blocks, protectedExtra);
+        let { applied, rejected, edits } = applyFileBlocks(work, parseFileBlocks(res.text), protectedExtra);
+        // H7: a reply without file blocks, or with an EDIT whose SEARCH didn't match, gets one repair turn
+        const failedEdits = rejected.filter((r) => /\((SEARCH \d|EDIT )/.test(r));
+        if ((!parseFileBlocks(res.text).length || failedEdits.length) && settings.chatRepair !== false && c.p.type !== 'manual') {
+          emit({ type: 'repair', provider: c.name });
+          const again = await runProvider(c.name, p, { mode, prompt: userPrompt, stableChars: stable.length, system: chatSystem, cwd: work, runDir: ioDir, quotaRe, ...limitFor(c.p, kind), signal: opts.signal,
+            history: [{ role: 'assistant', content: res.text.slice(0, 8000) }, { role: 'user', content: failedEdits.length ? chatEditRepair(failedEdits) : CHAT_REPAIR }] });
+          const sum = (a, b) => (a || b ? Object.fromEntries([...new Set([...Object.keys(a || {}), ...Object.keys(b || {})])].map((k) => [k, (a?.[k] || 0) + (b?.[k] || 0)])) : undefined);
+          res = { ...(again.ok ? again : { ...res, text: res.text }), tokens: sum(res.tokens, again.tokens), log: `${res.log}\n\n==== repair turn ====\n${again.log || ''}`, repaired: true };
+          fs.writeFileSync(path.join(runDir, `${logStem}${mi ? `.${mi + 1}` : ''}.log`), res.log || '');
+          if (again.ok) {
+            const r2 = applyFileBlocks(work, parseFileBlocks(again.text), protectedExtra);
+            applied = [...new Set([...applied, ...r2.applied])];
+            rejected = [...rejected.filter((r) => !r2.applied.some((a) => r.startsWith(`${a} (`))), ...r2.rejected];
+            edits = [...edits, ...r2.edits];
+          }
+        }
         summary.rejected.push(...rejected);
-        if (!applied.length) res = { ...res, ok: false, reason: rejected.length ? 'only protected/outside files returned' : 'no file blocks in reply' };
+        if (edits.length) res.edits = edits;
+        if (!applied.length) res = { ...res, ok: false, reason: failedEdits.length && rejected.length ? `edit not applied: ${rejected[0]}` : rejected.length ? 'only protected/outside files returned' : 'no file blocks in reply' };
         else summary.applied = applied;
       }
       // H6: the edit guard. Broken syntax, or a function/class the task names that still doesn't exist anywhere,
@@ -654,6 +670,7 @@ async function dispatchOnce(cfg, opts) {
       if (c.account) attempt.account = c.account.label;
       if (p.model) attempt.model = p.model;
       if (res.repaired) attempt.repaired = true;
+      if (res.edits) attempt.edits = { files: res.edits.length, hunks: res.edits.reduce((t, e) => t + e.hunks, 0), savedChars: res.edits.reduce((t, e) => t + e.savedChars, 0) };
       if (guard) attempt.guard = guard;
       if (res.tokens) { attempt.tokens = res.tokens; attempt.cost = estimateCost(c.p, res.tokens); }
       if (res.denied?.length) attempt.denied = res.denied;
@@ -765,7 +782,7 @@ async function dispatchOnce(cfg, opts) {
   if (report !== winnerText) fs.writeFileSync(path.join(runDir, 'report.full.md'), winnerText);
   // estimated tokens kept out of a model's context by this run
   const proj = path.basename(root);
-  const saved = { report: recordSaving({ source: 'report', chars: winnerText.length - report.length, project: proj }), 'review-diff': recordSaving({ source: 'review-diff', chars: reviewSaved, project: proj }) };
+  const saved = { report: recordSaving({ source: 'report', chars: winnerText.length - report.length, project: proj }), 'review-diff': recordSaving({ source: 'review-diff', chars: reviewSaved, project: proj }), 'edit-blocks': recordSaving({ source: 'edit-blocks', chars: summary.attempts.at(-1)?.edits?.savedChars || 0, project: proj }) };
   const win = summary.attempts.at(-1);
   if (summary.selector && win && isFreeProvider(cfg.providers[win.provider]) && !isFreeProvider(cfg.providers[(cfg.roles[role] || []).find((n) => providerReadiness(n, cfg.providers[n] || {}).ready)] || {})) {
     saved['free-model'] = recordSaving({ source: 'free-model', tokens: (win.tokens?.input || 0) + (win.tokens?.output || 0) || Math.round((lastPromptChars + winnerText.length) / 4), project: proj });
@@ -894,10 +911,16 @@ async function dispatchOnce(cfg, opts) {
     }
   }
   if (opts.save) {
-    const dest = path.resolve(root, opts.save);
-    fs.mkdirSync(path.dirname(dest), { recursive: true });
-    fs.writeFileSync(dest, winnerText);
-    summary.saved = rel(root, dest);
+    // the text is model output: it gets the same path checks as a chat model's file blocks (checked again here: a
+    // worker could have made the path a symlink during the run)
+    const why = writeRefusal(root, opts.save, settings.protectedPaths || []);
+    if (why) summary.warnings.push(`--save ${opts.save} refused (${why}); the answer is in ${summary.runDir}`);
+    else {
+      const dest = path.resolve(root, opts.save);
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      fs.writeFileSync(dest, winnerText);
+      summary.saved = rel(root, dest);
+    }
   }
   if (pendingUsage) recordUsage({ ...pendingUsage, ...workFailure(summary) });
   summary.outcome = outcome(summary);

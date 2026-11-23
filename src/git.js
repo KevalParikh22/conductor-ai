@@ -74,19 +74,37 @@ export const failedStashCount = (root) =>
 // `git status`, so a worker that wrote them would go unnoticed and its code would run on the next git command.
 // conductor-ai snapshots them before a worker runs and puts them back afterwards, before it runs git again.
 
+// info/exclude can hide a worker's new files from git status (and so from the scope and evidence checks), and
+// info/attributes can mark files -diff to hide their changes from review
+const CONTROL = ['config', 'config.worktree', 'info/exclude', 'info/attributes'];
+// A git dir and the submodule git dirs inside it (modules/<name>, names may hold slashes, and nest): a planted
+// fsmonitor there runs on your next plain `git status` in the parent repo.
+function gitDirs(d) {
+  const out = [d];
+  const walk = (dir) => {
+    let ents = [];
+    try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of ents) {
+      if (!e.isDirectory()) continue;
+      const p = path.join(dir, e.name);
+      if (fs.existsSync(path.join(p, 'HEAD'))) out.push(...gitDirs(p)); else walk(p);
+    }
+  };
+  walk(path.join(d, 'modules'));
+  return out;
+}
+const filesIn = (d) => {
+  const files = CONTROL.map((f) => path.join(d, f));
+  try { for (const f of fs.readdirSync(path.join(d, 'hooks'))) files.push(path.join(d, 'hooks', f)); } catch { /* no hooks folder */ }
+  return files;
+};
 function controlFiles(root) {
   const dirs = new Set();
   for (const a of ['--git-dir', '--git-common-dir']) {
     const d = git(root, ['rev-parse', a], { allowFail: true }).trim();
     if (d) dirs.add(path.resolve(root, d));
   }
-  const files = [];
-  for (const d of dirs) {
-    files.push(path.join(d, 'config'), path.join(d, 'config.worktree'));
-    const hooks = path.join(d, 'hooks');
-    try { for (const f of fs.readdirSync(hooks)) files.push(path.join(hooks, f)); } catch { /* no hooks folder */ }
-  }
-  return { dirs: [...dirs], files };
+  return { dirs: [...dirs], files: [...dirs].flatMap(gitDirs).flatMap(filesIn) };
 }
 
 const readOrNull = (f) => { try { return { data: fs.readFileSync(f), mode: fs.statSync(f).mode }; } catch { return null; } };
@@ -96,14 +114,10 @@ export function snapshotControl(root) {
   return { root, dirs, files: new Map(files.map((f) => [f, readOrNull(f)])) };
 }
 
-/** Put .git/config and hooks back as they were. Returns what had changed (paths relative to the repo). */
+/** Put .git/config, hooks and info files (also submodules') back as they were. Returns what had changed (paths relative to the repo). */
 export function restoreControl(snap) {
   const changed = [];
-  const now = new Set();
-  for (const d of snap.dirs) {
-    now.add(path.join(d, 'config')); now.add(path.join(d, 'config.worktree'));
-    try { for (const f of fs.readdirSync(path.join(d, 'hooks'))) now.add(path.join(d, 'hooks', f)); } catch { /* none */ }
-  }
+  const now = new Set(snap.dirs.flatMap(gitDirs).flatMap(filesIn));
   for (const f of new Set([...snap.files.keys(), ...now])) {
     const was = snap.files.get(f) ?? null, cur = readOrNull(f);
     const same = was && cur ? was.data.equals(cur.data) && was.mode === cur.mode : was === cur;

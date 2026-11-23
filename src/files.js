@@ -5,12 +5,13 @@ import * as git from './git.js';
 import { expandBraces } from './plan.js';
 
 // Files workers must never touch (agents are told; chat output is filtered).
-const PROTECTED = [/^AGENTS\.md$/, /^CLAUDE\.md$/, /^GEMINI\.md$/, /^HANDOFF\.md$/, /^docs\/plan\//, /^\.claude\//, /^\.gemini\//, /^\.agents\//,
-  /^\.conductor-ai\//, /^\.git\//, /^\.husky\//, /^\.githooks\//, /^\.vscode\/mcp\.json$/, /^\.mcp\.json$/, /(^|\/)node_modules\//, /(^|\/)\.env(\.|$)/, /(^|\/)auth\.json$/];
+// Case-insensitive: on macOS and Windows `agents.md` is the same file as `AGENTS.md`.
+const PROTECTED = [/^AGENTS\.md$/i, /^CLAUDE\.md$/i, /^GEMINI\.md$/i, /^HANDOFF\.md$/i, /^docs\/plan\//i, /^\.claude\//i, /^\.gemini\//i, /^\.agents\//i,
+  /^\.conductor-ai\//i, /^\.git\//i, /^\.husky\//i, /^\.githooks\//i, /^\.vscode\/mcp\.json$/i, /^\.mcp\.json$/i, /(^|\/)node_modules\//i, /(^|\/)\.env(\.|$)/i, /(^|\/)auth\.json$/i];
 /** `extra`: regex strings from settings.protectedPaths (e.g. "^app/etc/env\\.php$"). */
 export const isProtected = (p, extra = []) => {
   const norm = p.replaceAll('\\', '/');
-  return PROTECTED.some((re) => re.test(norm)) || extra.some((src) => new RegExp(src).test(norm));
+  return PROTECTED.some((re) => re.test(norm)) || extra.some((src) => new RegExp(src, 'i').test(norm));
 };
 
 /**
@@ -40,32 +41,96 @@ export function trimReport(text, maxBytes = 8000) {
 }
 
 // ---------------- chat-model file blocks ----------------
+// <<<FILE path … FILE>>> is a whole file; <<<EDIT path … EDIT>>> holds SEARCH/REPLACE hunks for an existing file.
+const HUNK = /^<<<<<<< SEARCH[ \t]*\r?\n([\s\S]*?)^=======[ \t]*\r?\n([\s\S]*?)^>>>>>>> REPLACE[ \t]*$/gm;
 export function parseFileBlocks(text) {
   const blocks = [];
-  const re = /^<<<FILE[ \t]+(\S+)[ \t]*\r?\n([\s\S]*?)^FILE>>>[ \t]*$/gm;
+  const re = /^<<<(FILE|EDIT)[ \t]+(\S+)[ \t]*\r?\n([\s\S]*?)^\1>>>[ \t]*$/gm;
   let m;
   while ((m = re.exec(text))) {
-    let content = m[2];
+    let content = m[3];
+    if (m[1] === 'EDIT') { // text around the hunks (a code fence, a comment) is ignored
+      blocks.push({ path: m[2], edits: [...content.matchAll(HUNK)].map((h) => ({ search: h[1], replace: h[2] })), chars: m[0].length });
+      continue;
+    }
     // tolerate models that wrap the content in a code fence
     const fenced = content.match(/^```[\w.+-]*\r?\n([\s\S]*?)\r?\n```\s*$/);
     if (fenced) content = fenced[1] + '\n';
-    blocks.push({ path: m[1], content });
+    blocks.push({ path: m[2], content });
   }
   return blocks;
 }
 
+/**
+ * The file after every hunk, each matched exactly once against the text so far, or { error }. Matching ignores line
+ * endings; lines outside a hunk keep theirs, and replaced lines take the ending of the first line they replace.
+ */
+export function applyEdits(text, edits) {
+  if (!edits.length) return { error: 'EDIT block has no SEARCH/REPLACE hunks' };
+  const lf = (s) => s.replaceAll('\r\n', '\n');
+  const noEol = !text.endsWith('\n');
+  let out = noEol ? text + (text.includes('\r\n') ? '\r\n' : '\n') : text; // so a SEARCH that ends on the last line still matches
+  for (const [i, e] of edits.entries()) {
+    const search = lf(e.search);
+    if (!search.trim()) return { error: `SEARCH ${i + 1} is empty` };
+    if (/^=======[ \t]*$/m.test(e.replace)) return { error: `hunk ${i + 1} has two ======= lines` }; // can't tell where SEARCH ends
+    // the LF-only text, and for each of its characters where it starts in `out` (a \r\n maps to its \r)
+    const map = [];
+    for (let j = 0; j < out.length; j++) { map.push(j); if (out[j] === '\r' && out[j + 1] === '\n') j++; }
+    map.push(out.length);
+    const flat = lf(out);
+    const at = flat.indexOf(search);
+    if (at < 0) return { error: `SEARCH ${i + 1} not found` };
+    if (flat.indexOf(search, at + 1) >= 0) return { error: `SEARCH ${i + 1} matches more than once` };
+    const start = map[at], end = map[at + search.length], nl = out.indexOf('\n', start);
+    const eol = nl > 0 && out[nl - 1] === '\r' ? '\r\n' : '\n';
+    out = out.slice(0, start) + lf(e.replace).replaceAll('\n', eol) + out.slice(end);
+  }
+  if (noEol) out = out.replace(/\r?\n$/, '');
+  return { text: out };
+}
+
+/**
+ * Why writing `p` (relative to `root`) must be refused, or null. The real path is checked too, so a symlink in the
+ * repo can't send the write outside it or onto a protected file.
+ */
+export function writeRefusal(root, p, extra = []) {
+  const norm = path.normalize(p).replaceAll('\\', '/');
+  const abs = path.resolve(root, norm);
+  if (path.isAbsolute(p) || norm.startsWith('..') || !abs.startsWith(path.resolve(root) + path.sep)) return 'outside repo';
+  if (isProtected(norm, extra)) return 'protected';
+  // the nearest part of the path that exists, through its symlinks; the rest is created as plain folders and a file
+  let at = abs; const rest = [];
+  while (true) {
+    try { fs.lstatSync(at); } catch { rest.unshift(path.basename(at)); at = path.dirname(at); continue; }
+    try { at = fs.realpathSync(at); break; } catch { return 'symlink to a missing target'; } // a write would create it, anywhere
+  }
+  const real = path.relative(fs.realpathSync(root), path.join(at, ...rest));
+  if (!real || /^\.\.([\\/]|$)/.test(real) || path.isAbsolute(real)) return 'outside repo (symlink)';
+  return isProtected(real, extra) ? 'protected (symlink)' : null;
+}
+
 export function applyFileBlocks(root, blocks, extraProtected = []) {
-  const applied = [], rejected = [];
+  const applied = [], rejected = [], edits = [];
   for (const b of blocks) {
     const norm = path.normalize(b.path).replaceAll('\\', '/');
     const abs = path.resolve(root, norm);
-    if (path.isAbsolute(b.path) || norm.startsWith('..') || !abs.startsWith(path.resolve(root) + path.sep)) { rejected.push(`${b.path} (outside repo)`); continue; }
-    if (isProtected(norm, extraProtected)) { rejected.push(`${b.path} (protected)`); continue; }
-    fs.mkdirSync(path.dirname(abs), { recursive: true });
-    fs.writeFileSync(abs, b.content);
+    const why = writeRefusal(root, b.path, extraProtected);
+    if (why) { rejected.push(`${b.path} (${why})`); continue; }
+    if (b.edits) {
+      let cur;
+      try { cur = fs.readFileSync(abs, 'utf8'); } catch { rejected.push(`${b.path} (EDIT on a file that doesn't exist: send it as <<<FILE)`); continue; }
+      const r = applyEdits(cur, b.edits);
+      if (r.error) { rejected.push(`${b.path} (${r.error})`); continue; }
+      fs.writeFileSync(abs, r.text);
+      edits.push({ path: norm, hunks: b.edits.length, savedChars: Math.max(0, r.text.length - b.chars) });
+    } else {
+      fs.mkdirSync(path.dirname(abs), { recursive: true });
+      fs.writeFileSync(abs, b.content);
+    }
     applied.push(norm);
   }
-  return { applied, rejected };
+  return { applied, rejected, edits };
 }
 
 /**

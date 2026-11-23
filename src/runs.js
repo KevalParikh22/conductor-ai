@@ -44,7 +44,7 @@ export function listRuns(root, { limit = 20 } = {}) {
       base: s.base?.status || null,
       acceptance: s.acceptance ? { met: s.acceptance.met, total: s.acceptance.total, answered: s.acceptance.answered } : null,
       baseFailed: !!s.verify?.baseFailed,
-      attempts: tried.map((a) => ({ provider: a.provider, model: a.model, ok: a.ok, reason: a.reason, next: a.next, seconds: a.seconds })),
+      attempts: tried.map((a) => ({ provider: a.provider, model: a.model, ok: a.ok, reason: a.reason, next: a.next, seconds: a.seconds, edits: a.edits || null })),
       seconds: Math.round(tried.reduce((t, a) => t + (a.seconds || 0), 0)),
       cost: known.length ? known.reduce((t, a) => t + a.cost, 0) : null,
       branch: s.worktree?.commit ? s.worktree.branch : null,
@@ -75,7 +75,7 @@ export function formatRuns(rows) {
   const L = [`${'run'.padEnd(30)}${'result'.padEnd(10)}${'worker'.padEnd(18)}${'verify'.padEnd(8)}${'files'.padStart(6)}${'time'.padStart(7)}  notes`];
   for (const r of rows) {
     if (r.state === 'running') { L.push(`${r.id.padEnd(30)}running…${r.step ? `  ${r.step}` : ''}`); continue; }
-    const notes = [r.branch && `branch ${r.branch}`, r.warnings.length && `${r.warnings.length} warning(s)`, r.cost && `$${r.cost.toFixed(4)}`].filter(Boolean).join(' · ');
+    const notes = [r.branch && `branch ${r.branch}`, r.warnings.length && `${r.warnings.length} warning(s)`, r.attempts.at(-1)?.edits && `${r.attempts.at(-1).edits.hunks} edit hunk(s)`, r.cost && `$${r.cost.toFixed(4)}`].filter(Boolean).join(' · ');
     L.push(`${r.id.slice(0, 29).padEnd(30)}${({ done: '✓ done', partial: '⚠ partial', unverified: '? unverif', 'out-of-scope': '⚠ scope', 'verify-failed': '✗ verify', waiting: '… waiting', answered: '↳ answer' }[r.state] || '✗ failed').padEnd(10)}${(r.winner || '-').padEnd(18)}${((r.verify || '-') + (r.rechecked ? ' ↻' : '')).padEnd(8)}${String(r.changed).padStart(6)}${`${r.seconds}s`.padStart(7)}  ${notes}`);
     for (const f of r.fixes || []) L.push(`${''.padEnd(30)}fix: ${f}`);
   }
@@ -130,7 +130,7 @@ export function runDetail(root, id) {
     id: r.id, role: s.role, task: s.task, plan: s.plan, startedAt: s.startedAt, mode: s.mode || null,
     state: outcome(s), validated: gatesPass(gates), gates,
     winner: s.winner, model: s.model, status: s.status, changed: s.changed || [], warnings: s.warnings || [],
-    attempts: (s.attempts || []).map((a) => ({ provider: a.provider, model: a.model, ok: a.ok, reason: a.reason, next: a.next || '', seconds: a.seconds, tokens: a.tokens || null, skipped: !!a.skipped })),
+    attempts: (s.attempts || []).map((a) => ({ provider: a.provider, model: a.model, ok: a.ok, reason: a.reason, next: a.next || '', seconds: a.seconds, tokens: a.tokens || null, skipped: !!a.skipped, edits: a.edits || null })),
     fixes: fixLines(s.attempts || [], { won: !!s.winner }),
     branch: wt?.commit ? wt.branch : null, worktreeId: wt?.id || null, canRecheck: !!(wt?.commit && s.verify?.cmd),
     report: tail(root, s.report, 20_000),

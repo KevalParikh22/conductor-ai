@@ -60,7 +60,7 @@ export function deepDiff(base, eff) {
 /** Names of the variables conductor-ai loaded from its secret files (kept away from CLI workers). */
 export const SECRET_VARS = new Set();
 
-/** Parse a KEY=VALUE env file. Does not override variables already set. */
+/** Parse a KEY=VALUE env file. Does not override variables already set, but every key in it counts as a secret. */
 export function loadEnvFile(file) {
   let text;
   try { text = fs.readFileSync(file, 'utf8'); } catch { return {}; }
@@ -71,9 +71,21 @@ export function loadEnvFile(file) {
     let v = m[2];
     if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) v = v.slice(1, -1);
     vars[m[1]] = v;
-    if (process.env[m[1]] === undefined) { process.env[m[1]] = v; SECRET_VARS.add(m[1]); }
+    if (process.env[m[1]] === undefined) process.env[m[1]] = v;
+    SECRET_VARS.add(m[1]); // also when the shell exports it too: it is still one of conductor-ai's keys
   }
   return vars;
+}
+
+/**
+ * The environment for commands that run project code (verify, plan repro commands, acceptance checks): yours, minus
+ * conductor-ai's keys. NODE_TEST_CONTEXT is set when conductor-ai itself runs under node --test.
+ */
+export function codeEnv() {
+  const env = { ...process.env };
+  for (const k of SECRET_VARS) delete env[k];
+  delete env.NODE_TEST_CONTEXT;
+  return env;
 }
 
 export function which(bin) {

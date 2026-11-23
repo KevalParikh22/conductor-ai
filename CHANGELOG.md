@@ -3,6 +3,30 @@
 ## Unreleased
 
 - **Several accounts for one CLI (`conductor-ai accounts`).** Codex CLI, Claude Code and (on Linux only) Antigravity CLI providers can hold an ordered list of signed-in accounts in the global config: a quota hit cools that account down until its reported reset (durations up to 7 days, clock dates up to 31 days) and the run moves to the next account before the next provider. You add and sign in each account yourself with `conductor-ai accounts add …` and `conductor-ai accounts login …`: Codex and Claude use the CLI's own flow with the terminal attached, while Antigravity opens agy for `/login`, with a separate home folder and no keyring so each login stays apart and a worker there sees an empty home. conductor-ai never reads login files or automates a web sign-in. The Providers page marks each supporting CLI with a people badge and has an Accounts block with a Sign in dialog that copies the exact login command; `conductor-ai accounts` and `conductor-ai cooldown` show state, and `conductor_ai_status` only reads it. The first add prints the vendor terms note, including Google's links for Antigravity, whose terms forbid access through third-party tools. See docs/PROVIDERS.md for the links.
+- **The demo says whose quota it uses, before it runs.** `conductor-ai demo` used your first installed agent (Antigravity, Codex or OpenCode) without saying so. It now prints which workers it will use and that they spend a little of your own plan, quota or key on its 2 small tasks (Claude is not called).
+- **`conductor-ai demo --free`** uses only free models, even with an agent installed, so trying the demo costs nothing. If no free model is ready, it says so and never falls back to a paid worker.
+
+## 0.13.0 (2026-11-23)
+
+Chat models can edit long files without resending them, Anthropic providers cache the prompt, and a set of security fixes. One behaviour change: `--save` no longer writes outside the repository (e.g. `--save /tmp/answer.md`); the answer is always in the run folder too.
+
+- **Chat models can edit a long file without resending it.** For an existing file over about 100 lines, an API worker may reply with `<<<EDIT path` … `EDIT>>>` holding `<<<<<<< SEARCH` / `=======` / `>>>>>>> REPLACE` hunks. Each SEARCH must match the file exactly once (line endings don't matter), or nothing in that file changes and the model gets one repair turn that shows why. The run shows `edits:` and the output tokens saved.
+- **Prompt caching for Anthropic providers.** Providers of `type: "anthropic"` mark the system prompt and the project context (AGENTS.md, map, files) as `cache_control` breakpoints once they reach ~1,024 tokens, so retries and repair turns read them from the cache. Cache reads and writes are counted separately (`conductor-ai runs <id>`) and priced at 0.1x / 1.25x. Off with `"promptCache": false`; a gateway that rejects `cache_control` is retried once without it.
+
+Security fixes from an external review:
+
+- **Symlinks can't move a model's files.** A symlink in the repo could send a file outside it (or a secrets file) to an API model as context, or let a model's file block write outside the repo or onto a protected file. Both now check the real path.
+- **`--save` stays in the repo.** `run ask --save` (and MCP `save`) now refuses paths outside the repo and protected files, like a model's file blocks.
+- **Protected paths match in any case**, so `agents.md` can't overwrite `AGENTS.md` on macOS or Windows.
+- **Keys stay out of more places.** A key in conductor-ai's secrets file is scrubbed from workers even when your shell exports it too, and keys are now also removed from plan `repro:` commands and acceptance checks (verify already had this).
+- **`.git/info/exclude` and `.git/info/attributes` are restored after each worker**, like hooks and `.git/config`, so a worker can't hide its files from `git status` or its changes from `git diff`.
+- **The push guard spots more forms**: `/usr/bin/git push`, `env git push`, `command git push`, `FOO=1 git push`.
+- **Submodules' git folders are restored after each worker too.** A worker could plant an `fsmonitor` program or a hook in `.git/modules/<name>/`; the fsmonitor would run on your next plain `git status` in the parent repo.
+- **The push guard also spots `sudo git push` (with flags such as `-u root`) and a quoted `"git" push`.**
+
+Evals:
+
+- **`conductor-ai eval run --repeat N`** runs each task N independent times and reports passes/runs, pass@1 with a 95% Wilson interval, pass@k (`--pass-k`, unbiased estimator) and, with `--compare`, whether the change is **likely real** or **within noise**. Test-writing tasks also get a mutation score (planted bugs caught). `--samples` is unchanged: best-of-N inside one run. Old saved reports still load and compare.
 
 ## 0.12.0 (2026-11-22)
 

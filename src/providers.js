@@ -347,19 +347,52 @@ export async function runOpenAI(name, p, { system, prompt, timeoutMs, history = 
   return { ok: false, text: r.json?.error?.message || '', ...classifyHttp(r), log };
 }
 
+// Anthropic caches a prefix only from about 1,024 tokens (~4 characters each); a shorter one gets no breakpoint
+export const CACHE_MIN_CHARS = 4096;
+const noCacheControl = new Set(); // providers (this process) whose gateway answered 400 to cache_control
+
+/**
+ * Anthropic Messages body. H8: with a long enough prefix, `system` and the stable context (the first `stableChars`
+ * of the prompt) are cache breakpoints, so retries, repair turns and other tasks reuse them; below that, plain strings.
+ */
+export function anthropicBody(p, { system, prompt, stableChars = 0, history = [] }, cache = true) {
+  const sys = system || '';
+  const ctx = prompt.slice(0, stableChars);
+  const cc = { type: 'ephemeral' };
+  const big = cache && sys.length + ctx.length >= CACHE_MIN_CHARS;
+  const content = big && ctx ? [{ type: 'text', text: ctx, cache_control: cc }, { type: 'text', text: prompt.slice(stableChars) }] : prompt;
+  const body = { model: p.model, max_tokens: p.maxTokens || 16000, messages: [{ role: 'user', content }, ...history] };
+  if (sys) body.system = big && sys.length >= CACHE_MIN_CHARS ? [{ type: 'text', text: sys, cache_control: cc }] : sys;
+  return body;
+}
+
+/** Anthropic usage → { input (all prompt tokens, cached ones too), output, cacheRead?, cacheWrite? }. */
+export function anthropicTokens(u) {
+  if (!u) return undefined;
+  const read = u.cache_read_input_tokens || 0, write = u.cache_creation_input_tokens || 0;
+  return { input: (u.input_tokens || 0) + read + write, output: u.output_tokens, ...(read ? { cacheRead: read } : {}), ...(write ? { cacheWrite: write } : {}) };
+}
+
 /** Anthropic Messages API (Claude as a remote worker). */
-export async function runAnthropic(name, p, { system, prompt, timeoutMs, history = [], signal }) {
+export async function runAnthropic(name, p, { system, prompt, stableChars, timeoutMs, history = [], signal }) {
   const key = keyValue(p.apiKeyEnv || 'ANTHROPIC_API_KEY');
   if (!key) return { ok: false, text: '', reason: `${p.apiKeyEnv || 'ANTHROPIC_API_KEY'} not set`, log: '' };
   const url = (p.baseUrl || 'https://api.anthropic.com').replace(/\/+$/, '') + '/v1/messages';
-  const r = await httpJson(url, {
-    headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', ...(p.headers || {}) },
-    body: { model: p.model, max_tokens: p.maxTokens || 16000, system, messages: [{ role: 'user', content: prompt }, ...history] },
-    timeoutMs, signal,
-  });
-  const log = `POST ${url} model=${p.model}\n--- status ${r.status}${r.error ? ' ' + r.error : ''}\n${(r.raw || '').slice(0, 4000)}`;
+  const headers = { 'x-api-key': key, 'anthropic-version': '2023-06-01', ...(p.headers || {}) };
+  const req = { system, prompt, stableChars, history };
+  const cache = p.promptCache !== false && !noCacheControl.has(name);
+  const body = anthropicBody(p, req, cache);
+  let r = await httpJson(url, { headers, body, timeoutMs, signal });
+  let note = '';
+  // a gateway that speaks the Anthropic format but not cache_control: once more without it, and not again this session
+  if (r.status === 400 && /cache_control/i.test(r.raw || '') && JSON.stringify(body).includes('cache_control')) {
+    noCacheControl.add(name);
+    note = '(the provider refused cache_control: sent again without prompt caching)\n';
+    r = await httpJson(url, { headers, body: anthropicBody(p, req, false), timeoutMs, signal });
+  }
+  const log = `${note}POST ${url} model=${p.model}\n--- status ${r.status}${r.error ? ' ' + r.error : ''}\n${(r.raw || '').slice(0, 4000)}`;
   const text = (r.json?.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('\n');
-  const tokens = r.json?.usage ? { input: r.json.usage.input_tokens, output: r.json.usage.output_tokens } : undefined;
+  const tokens = anthropicTokens(r.json?.usage);
   if (r.status === 200 && text.trim()) return { ok: true, text, log, tokens };
   if (r.status === 529) return { ok: false, text: '', reason: 'server overloaded', log };
   return { ok: false, text: r.json?.error?.message || '', ...(r.status === 200 ? { reason: 'empty output' } : classifyHttp(r)), log };

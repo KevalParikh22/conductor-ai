@@ -3,7 +3,7 @@
 There are two kinds of provider:
 
 - **Agents** (`type: "cli"`) run on your machine. They read the repo, edit files and run tests themselves, which makes them best for `build` and `fix`.
-- **Chat APIs** (`type: "openai"` or `"anthropic"`) receive the task, `AGENTS.md`, the plan's design notes and the task's listed files. They return whole files in a `<<<FILE path … FILE>>>` format, which conductor-ai writes, refusing paths outside the repo and protected files. They're best for `docs`, `test`, `ask` and `review`. conductor-ai runs your verify command for them.
+- **Chat APIs** (`type: "openai"` or `"anthropic"`) receive the task, `AGENTS.md`, the plan's design notes and the task's listed files. They return whole files in a `<<<FILE path … FILE>>>` format, or, for an existing file over about 100 lines, `<<<EDIT path … EDIT>>>` blocks of `<<<<<<< SEARCH` / `=======` / `>>>>>>> REPLACE` hunks (each SEARCH must match the file exactly once, or that file is left alone and the model gets one repair turn showing why). conductor-ai writes them, refusing paths outside the repo and protected files. They're best for `docs`, `test`, `ask` and `review`. conductor-ai runs your verify command for them.
 
 ## All providers and their setup guides
 

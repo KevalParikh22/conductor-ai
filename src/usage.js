@@ -12,7 +12,10 @@ export function estimateCost(p, tokens) {
   if (!tokens || (tokens.input == null && tokens.output == null)) return null;
   if (p.free) return 0;
   if (!p.price) return null;
-  return ((tokens.input || 0) * (p.price.input || 0) + (tokens.output || 0) * (p.price.output || 0)) / 1e6;
+  // Anthropic prompt cache: reads cost 0.1x and writes 1.25x the input price (they are part of `input`)
+  const read = tokens.cacheRead || 0, write = tokens.cacheWrite || 0;
+  const input = (tokens.input || 0) - read - write + read * 0.1 + write * 1.25;
+  return (input * (p.price.input || 0) + (tokens.output || 0) * (p.price.output || 0)) / 1e6;
 }
 
 export function recordUsage(entry) {
