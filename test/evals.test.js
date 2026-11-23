@@ -3,10 +3,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { isolateHome, fakeBins, makeRepo } from './helpers.js';
+import { isolateHome, fakeBins, makeRepo, tmpdir } from './helpers.js';
 
 const home = isolateHome();
-const { listEvals, checkEvals, runEvals, formatEvals, loadResult, summarize, EVALS_DIR } = await import('../src/evals.js');
+const { listEvals, checkEvals, runEvals, formatEvals, loadResult, summarize, scoreEval, prepareEval, EVALS_DIR } = await import('../src/evals.js');
 const { failureKind, failureStats, formatFailureStats } = await import('../src/stats.js');
 
 test('every eval task is fair: fails on the starting project, passes with the reference solution, plan is ready', async () => {
@@ -33,6 +33,8 @@ test('eval run scores against hidden tests and compares conductor-ai\'s verdict 
     good: { type: 'cli', preset: 'codex', enabled: true, bin: 'evgood' }, liar: { type: 'cli', preset: 'codex', enabled: true, bin: 'evliar' } } }));
   const a = await runEvals({ ids: ['fix-paginate'], chain: ['good'], label: 'good' });
   assert.deepEqual([a.results[0].outcome, a.results[0].pass], ['done', true]);
+  assert.equal('killed' in a.results[0], false);
+  assert.equal('planted' in a.results[0], false);
   assert.deepEqual([a.summary.passRate, a.summary.rightDone, a.summary.falseDone], [100, 1, 0]);
   assert.ok(fs.existsSync(a.file), 'saved');
   // the liar ticks every criterion; conductor-ai runs them itself (H11) and catches it: not "done"
@@ -71,4 +73,69 @@ test('failure stats group attempts and runs by cause, biggest first', () => {
   assert.deepEqual(st.attempts.map((a) => [a.kind, a.count]), [['rate limit / quota', 2], ['exited with an error', 1]]);
   assert.deepEqual(st.causes.map((c) => [c.cause, c.count]), [['acceptance criteria not all met', 2], ['changed files outside the task', 1]]);
   assert.match(formatFailureStats(st), /2 +acceptance criteria not all met[\s\S]*2 +rate limit \/ quota +p1 1, p2 1/);
+});
+
+test('mutation scoring returns killed and planted counts, hidden tasks return neither', async () => {
+  const task = listEvals().find((t) => t.id === 'test-cart');
+  assert.ok(task, 'test-cart task found');
+  const mutantDirs = fs.readdirSync(path.join(task.dir, 'mutants')).filter((m) => fs.statSync(path.join(task.dir, 'mutants', m)).isDirectory());
+  const work = tmpdir('conductor-eval-test-cart-');
+  try {
+    prepareEval(task, work);
+    const start = await scoreEval(task, work);
+    assert.equal(start.killed, 0);
+    assert.equal(start.planted, mutantDirs.length);
+    assert.equal(start.planted, 5);
+
+    fs.cpSync(path.join(task.dir, 'solution'), work, { recursive: true });
+    const solved = await scoreEval(task, work);
+    assert.equal(solved.pass, true);
+    assert.equal(solved.killed, 5);
+    assert.equal(solved.planted, 5);
+    assert.equal(solved.killed, solved.planted);
+  } finally {
+    fs.rmSync(work, { recursive: true, force: true });
+  }
+
+  // worker's tests fail on the correct code
+  const workFail = tmpdir('conductor-eval-fail-');
+  try {
+    prepareEval(task, workFail);
+    fs.mkdirSync(path.join(workFail, 'test'), { recursive: true });
+    fs.writeFileSync(path.join(workFail, 'test', 'broken.test.js'), 'import test from "node:test"; import assert from "node:assert/strict"; test("broken", () => { assert.fail("broken"); });\\n');
+    const failed = await scoreEval(task, workFail);
+    assert.equal(failed.pass, false);
+    assert.equal(failed.killed, 0);
+    assert.equal(failed.planted, 5);
+    assert.match(failed.detail, /the worker's tests fail on the correct code/);
+  } finally {
+    fs.rmSync(workFail, { recursive: true, force: true });
+  }
+
+  // hidden-score tasks return no killed/planted keys
+  const hiddenTask = listEvals().find((t) => t.id === 'fix-paginate');
+  assert.ok(hiddenTask, 'hidden task found');
+  const hWork = tmpdir('conductor-eval-hidden-');
+  try {
+    prepareEval(hiddenTask, hWork);
+    const hScore = await scoreEval(hiddenTask, hWork);
+    assert.equal('killed' in hScore, false);
+    assert.equal('planted' in hScore, false);
+  } finally {
+    fs.rmSync(hWork, { recursive: true, force: true });
+  }
+
+  // runEvals copies killed/planted onto row when present
+  const solCart = fs.readFileSync(path.join(EVALS_DIR, 'test-cart/solution/test/cart.test.js'), 'utf8');
+  fakeBins({
+    cartGood: `let p='';process.stdin.on('data',d=>p+=d).on('end',()=>{const o=args[args.indexOf('-o')+1];fs.mkdirSync('test',{recursive:true});fs.writeFileSync('test/cart.test.js',${JSON.stringify(solCart)});fs.writeFileSync(o,'## RESULT: DONE\\\\n## Files changed\\\\n- test/cart.test.js\\\\n## Checks run\\\\n- npm test → pass\\\\n');});`,
+  });
+  const cfgPath = path.join(home, 'config.json');
+  const cfgData = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
+  cfgData.providers.cartGood = { type: 'cli', preset: 'codex', enabled: true, bin: 'cartGood' };
+  fs.writeFileSync(cfgPath, JSON.stringify(cfgData));
+  const rCart = await runEvals({ ids: ['test-cart'], chain: ['cartGood'], label: 'cart-test' });
+  assert.equal(rCart.results[0].killed, 5);
+  assert.equal(rCart.results[0].planted, 5);
+  assert.equal(rCart.results[0].pass, true);
 });
