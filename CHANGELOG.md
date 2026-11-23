@@ -1,8 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.12.1 (2026-11-23)
 
-Security fixes from an external review:
+Security fixes from an external review. One behaviour change: `--save` no longer writes outside the repository (e.g. `--save /tmp/answer.md`); the answer is always in the run folder too.
 
 - **Symlinks can't move a model's files.** A symlink in the repo could send a file outside it (or a secrets file) to an API model as context, or let a model's file block write outside the repo or onto a protected file. Both now check the real path.
 - **`--save` stays in the repo.** `run ask --save` (and MCP `save`) now refuses paths outside the repo and protected files, like a model's file blocks.
