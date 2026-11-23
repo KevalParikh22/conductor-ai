@@ -11,6 +11,7 @@ fakeBins({
   codex: `if (args[0]==='login' && args[1]==='status') { if (process.env.SLOW) setTimeout(()=>{}, 60000); else process.exit(fs.existsSync(require('path').join(process.env.CODEX_HOME||'/nonexistent','ok'))?0:1); }
 else if (args[0]==='login') { fs.writeFileSync(require('path').join(process.env.CODEX_HOME,'ok'), ''); }`,
   claude: `process.exit(fs.existsSync(require('path').join(process.env.CLAUDE_CONFIG_DIR||'/nonexistent','ok'))?0:1)`,
+  agy: `if (args[0]==='-p' && args[1]==='/usage') process.exit(fs.existsSync(require('path').join(process.env.HOME||'/nonexistent','ok'))?0:1);`,
 });
 const acc = await import('../src/accounts.js');
 const { validLabel, accountDir, addAccount, listAccounts, accountEnv, envFor, renameAccount, removeAccount, orderAccounts, setAccountEnabled, checkAccount, loginAccount, accountStatus } = acc;
@@ -30,6 +31,7 @@ test('labels, folders and the environment of an account', () => {
   assert.equal(accountDir('codex-cli', 'default'), null);
   assert.deepEqual(accountEnv('codex', { label: 'work2', dir: '/x' }), { set: { CODEX_HOME: '/x' }, drop: ['OPENAI_API_KEY', 'CODEX_API_KEY'] });
   assert.deepEqual(accountEnv('claude', { label: 'b', dir: '/y' }), { set: { CLAUDE_CONFIG_DIR: '/y' }, drop: ['ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN'] });
+  assert.deepEqual(accountEnv('antigravity', { label: 'g2', dir: '/x' }), { set: { HOME: '/x', DBUS_SESSION_BUS_ADDRESS: 'unix:path=/nonexistent' }, drop: ['GEMINI_API_KEY', 'GOOGLE_API_KEY', 'GOOGLE_APPLICATION_CREDENTIALS', 'AGY_ADC_AUTH'] });
   assert.deepEqual(accountEnv('codex', { label: 'default' }), { set: {}, drop: [] });
   // a removed key is deleted, not emptied: an empty OPENAI_API_KEY could still be picked over the login
   const env = envFor('codex', { label: 'w', dir: '/x' }, { OPENAI_API_KEY: 'k', PATH: '/bin' });
@@ -57,7 +59,29 @@ test('bad additions are refused with a plain message', () => {
   assert.throws(() => addAccount('codex-cli', '../x'), (e) => e instanceof UsageError && /lowercase letters, digits/.test(e.message));
   assert.throws(() => addAccount('nope', 'x'), (e) => e instanceof UsageError && /unknown provider/.test(e.message));
   assert.throws(() => addAccount('opencode', 'x'), (e) => e instanceof UsageError && /cannot have accounts/.test(e.message));
-  assert.throws(() => addAccount('antigravity-cli', 'x'), /cannot have accounts/);
+  assert.throws(() => addAccount('antigravity-cli', '../x'), /invalid account label/);
+});
+
+test('Antigravity accounts are isolated under HOME and checked through agy usage status', async () => {
+  reset();
+  if (process.platform !== 'linux') return;
+  addAccount('antigravity-cli', 'g2');
+  assert.deepEqual(labels('antigravity-cli'), ['default', 'g2']);
+  assert.ok(fs.existsSync(accountDir('antigravity-cli', 'g2')));
+  assert.deepEqual(await checkAccount(config.loadConfig(), 'antigravity-cli', 'g2'), { signedIn: false, reason: 'not signed in' });
+  fs.writeFileSync(path.join(accountDir('antigravity-cli', 'g2'), 'ok'), '');
+  assert.deepEqual(await checkAccount(config.loadConfig(), 'antigravity-cli', 'g2'), { signedIn: true });
+});
+
+test('Antigravity accounts are Linux only', async () => {
+  const descriptor = Object.getOwnPropertyDescriptor(process, 'platform');
+  const linuxOnly = (e) => e instanceof UsageError && /Linux only/.test(e.message);
+  try {
+    Object.defineProperty(process, 'platform', { value: 'darwin' });
+    assert.throws(() => addAccount('antigravity-cli', 'g3'), linuxOnly);
+    await assert.rejects(checkAccount(config.loadConfig(), 'antigravity-cli', 'g2'), linuxOnly);
+    await assert.rejects(loginAccount(config.loadConfig(), 'antigravity-cli', 'g2'), linuxOnly);
+  } finally { Object.defineProperty(process, 'platform', descriptor); }
 });
 
 test('an existing config.toml in an account folder is left alone', () => {

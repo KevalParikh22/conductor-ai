@@ -14,7 +14,6 @@ import { UsageError } from './core.js';
 /**
  * Per CLI preset: how one account is picked (env), what must not reach it (drop: an API key in the environment wins
  * over the account's login), how to prepare its folder, and the CLI's own sign-in and status commands.
- * agy has no home override (its login lives in the OS keyring), so it is not here.
  */
 export const ACCOUNT_KINDS = {
   codex: {
@@ -37,6 +36,15 @@ export const ACCOUNT_KINDS = {
     status: ['auth', 'status'],
     statusTimeoutMs: 15_000,
   },
+  antigravity: {
+    env: (dir) => ({ HOME: dir, DBUS_SESSION_BUS_ADDRESS: 'unix:path=/nonexistent' }),
+    drop: ['GEMINI_API_KEY', 'GOOGLE_API_KEY', 'GOOGLE_APPLICATION_CREDENTIALS', 'AGY_ADC_AUTH'],
+    login: ['auth', 'login'],
+    loginHint: 'Antigravity account login is supported on Linux only.',
+    status: ['-p', '/usage'],
+    statusTimeoutMs: 15_000,
+    linuxOnly: true,
+  },
 };
 
 const LABEL_RULE = 'a label is 1-32 characters: lowercase letters, digits, - and _, starting with a letter or digit';
@@ -55,6 +63,7 @@ function providerInfo(provider) {
   const p = { ...(DEFAULT_PROVIDERS[provider] || {}), ...(readScope('global', null).providers?.[provider] || {}) };
   if (!p.type) throw new UsageError(`unknown provider "${provider}" (accounts are for CLI providers in your global config)`);
   if (p.type !== 'cli' || !ACCOUNT_KINDS[p.preset]) throw new UsageError(`${provider} cannot have accounts: only ${Object.keys(ACCOUNT_KINDS).map((k) => `${k} CLI`).join(' and ')} providers can`);
+  if (ACCOUNT_KINDS[p.preset].linuxOnly && process.platform !== 'linux') throw new UsageError('Antigravity accounts are Linux only');
   return p;
 }
 function assertLabel(label) { if (!validLabel(label)) throw new UsageError(`invalid account label "${label}": ${LABEL_RULE}`); }
@@ -191,6 +200,7 @@ export async function loginAccount(cfg, provider, label, { device = false } = {}
   mustExist(savedAccounts(provider), label);
   const kind = ACCOUNT_KINDS[p.preset], bin = CLI_PRESETS[p.preset].bin;
   if (!which(bin)) throw new UsageError(`"${bin}" is not installed`);
+  if (kind.loginHint) process.stderr.write(`${kind.loginHint}\n`);
   const dir = makeDir(provider, label, p.preset);
   const args = device && kind.deviceLogin ? kind.deviceLogin : kind.login;
   // the terminal is attached: the sign-in prompt and its URL go straight to the user, never through conductor-ai
