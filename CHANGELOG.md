@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Prompt caching for Anthropic providers.** Providers of `type: "anthropic"` mark the system prompt and the project context (AGENTS.md, map, files) as `cache_control` breakpoints once they reach ~1,024 tokens, so retries and repair turns read them from the cache. Cache reads and writes are counted separately (`conductor-ai runs <id>`) and priced at 0.1x / 1.25x. Off with `"promptCache": false`; a gateway that rejects `cache_control` is retried once without it.
+
 Security fixes from an external review:
 
 - **Symlinks can't move a model's files.** A symlink in the repo could send a file outside it (or a secrets file) to an API model as context, or let a model's file block write outside the repo or onto a protected file. Both now check the real path.

@@ -36,7 +36,8 @@ export function formatSummary(s) {
   if (used.length) {
     const tin = used.reduce((t, a) => t + (a.tokens.input || 0), 0), tout = used.reduce((t, a) => t + (a.tokens.output || 0), 0);
     const known = used.filter((a) => a.cost != null), cost = known.reduce((t, a) => t + a.cost, 0);
-    L.push(`usage:     ${tin} tokens in / ${tout} out${known.length ? ` · $${cost.toFixed(4)}` : ' · cost unknown (no price set)'}`);
+    const cr = used.reduce((t, a) => t + (a.tokens.cacheRead || 0), 0), cw = used.reduce((t, a) => t + (a.tokens.cacheWrite || 0), 0);
+    L.push(`usage:     ${tin} tokens in${cr || cw ? ` (cache: ${cr} read, ${cw} written)` : ''} / ${tout} out${known.length ? ` · $${cost.toFixed(4)}` : ' · cost unknown (no price set)'}`);
   }
   L.push(`report:    ${s.report}`);
   // ask has no RESULT/VERDICT line by design: its answer is the report
