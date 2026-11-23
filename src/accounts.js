@@ -36,13 +36,17 @@ export const ACCOUNT_KINDS = {
     status: ['auth', 'status'],
     statusTimeoutMs: 15_000,
   },
+  // agy has no home or profile override and keeps its login in the OS keyring (over D-Bus). With the keyring out of
+  // reach it falls back to a token file under HOME, so a HOME per account keeps each login apart (checked on agy
+  // 1.5.13). Linux only: on macOS the keychain is not reached through D-Bus.
   antigravity: {
     env: (dir) => ({ HOME: dir, DBUS_SESSION_BUS_ADDRESS: 'unix:path=/nonexistent' }),
     drop: ['GEMINI_API_KEY', 'GOOGLE_API_KEY', 'GOOGLE_APPLICATION_CREDENTIALS', 'AGY_ADC_AUTH'],
-    login: ['auth', 'login'],
-    loginHint: 'Antigravity account login is supported on Linux only.',
+    login: [], // agy has no login command: its interactive screen has /login
+    loginHint: 'agy opens now: type /login, sign in with this account\'s Google account in your browser, then /quit.',
+    // signed out, agy prints a sign-in URL and waits, so a time-out means "not signed in"
     status: ['-p', '/usage'],
-    statusTimeoutMs: 15_000,
+    statusTimeoutMs: 30_000,
     linuxOnly: true,
   },
 };
