@@ -47,6 +47,14 @@ test('a CRLF file matches LF hunks and stays CRLF', () => {
   assert.equal(read(root, 'w.txt'), 'a\r\nB\r\nc\r\n');
 });
 
+test('a file with mixed line endings keeps them outside the hunk', () => {
+  // the unchanged CRLF and LF lines stay as they are; replaced lines take the ending of the line they start on
+  assert.deepEqual(applyEdits('a\r\nb\nc\r\nd\n', [{ search: 'c\nd\n', replace: 'C\nD\nE\n' }]), { text: 'a\r\nb\nC\r\nD\r\nE\r\n' });
+  assert.deepEqual(applyEdits('a\r\nb\nc\r\n', [{ search: 'b\n', replace: 'B\nB2\n' }]), { text: 'a\r\nB\nB2\nc\r\n' });
+  // a hunk that starts mid-line; the last line without a newline
+  assert.deepEqual(applyEdits('x = 1\r\ny = 2\nz', [{ search: '1\ny', replace: '9\nw' }, { search: 'z\n', replace: 'Z\n' }]), { text: 'x = 9\r\nw = 2\nZ' });
+});
+
 test('edits get the same path checks as whole files', () => {
   const root = repo({ 'AGENTS.md': 'rules\n', 'src/ok.js': 'x\n' });
   fs.writeFileSync(path.join(root, '..', 'outside-edit.js'), 'x\n');

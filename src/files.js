@@ -61,23 +61,33 @@ export function parseFileBlocks(text) {
   return blocks;
 }
 
-/** The file after every hunk, each matched exactly once against the text so far, or { error }. CRLF files stay CRLF. */
+/**
+ * The file after every hunk, each matched exactly once against the text so far, or { error }. Matching ignores line
+ * endings; lines outside a hunk keep theirs, and replaced lines take the ending of the first line they replace.
+ */
 export function applyEdits(text, edits) {
   if (!edits.length) return { error: 'EDIT block has no SEARCH/REPLACE hunks' };
-  const crlf = text.includes('\r\n'), lf = (s) => s.replaceAll('\r\n', '\n');
+  const lf = (s) => s.replaceAll('\r\n', '\n');
   const noEol = !text.endsWith('\n');
-  let out = lf(text) + (noEol ? '\n' : ''); // so a SEARCH that ends on the last line still matches
+  let out = noEol ? text + (text.includes('\r\n') ? '\r\n' : '\n') : text; // so a SEARCH that ends on the last line still matches
   for (const [i, e] of edits.entries()) {
     const search = lf(e.search);
     if (!search.trim()) return { error: `SEARCH ${i + 1} is empty` };
     if (/^=======[ \t]*$/m.test(e.replace)) return { error: `hunk ${i + 1} has two ======= lines` }; // can't tell where SEARCH ends
-    const at = out.indexOf(search);
+    // the LF-only text, and for each of its characters where it starts in `out` (a \r\n maps to its \r)
+    const map = [];
+    for (let j = 0; j < out.length; j++) { map.push(j); if (out[j] === '\r' && out[j + 1] === '\n') j++; }
+    map.push(out.length);
+    const flat = lf(out);
+    const at = flat.indexOf(search);
     if (at < 0) return { error: `SEARCH ${i + 1} not found` };
-    if (out.indexOf(search, at + 1) >= 0) return { error: `SEARCH ${i + 1} matches more than once` };
-    out = out.slice(0, at) + lf(e.replace) + out.slice(at + search.length);
+    if (flat.indexOf(search, at + 1) >= 0) return { error: `SEARCH ${i + 1} matches more than once` };
+    const start = map[at], end = map[at + search.length], nl = out.indexOf('\n', start);
+    const eol = nl > 0 && out[nl - 1] === '\r' ? '\r\n' : '\n';
+    out = out.slice(0, start) + lf(e.replace).replaceAll('\n', eol) + out.slice(end);
   }
-  if (noEol && out.endsWith('\n')) out = out.slice(0, -1);
-  return { text: crlf ? out.replaceAll('\n', '\r\n') : out };
+  if (noEol) out = out.replace(/\r?\n$/, '');
+  return { text: out };
 }
 
 /**
