@@ -68,11 +68,13 @@ const tail = (r) => `${r.stdout}\n${r.stderr}`.split('\n').filter((l) => /not ok
 export async function scoreEval(task, dir) {
   for (const f of task.protect || []) fs.copyFileSync(path.join(task.dir, 'repo', f), path.join(dir, f)); // the worker may not have changed it
   if (task.score === 'mutants') {
+    const mutantDirs = fs.readdirSync(path.join(task.dir, 'mutants')).filter((m) => fs.statSync(path.join(task.dir, 'mutants', m)).isDirectory()).sort();
+    const planted = mutantDirs.length;
     const base = await nodeTest(dir);
-    if (base.code !== 0) return { pass: false, detail: `the worker's tests fail on the correct code:\n${tail(base)}` };
-    if (!/^# tests [1-9]/m.test(base.stdout) && !/ℹ tests [1-9]/.test(base.stdout)) return { pass: false, detail: 'no tests ran' };
+    if (base.code !== 0) return { pass: false, detail: `the worker's tests fail on the correct code:\n${tail(base)}`, killed: 0, planted };
+    if (!/^# tests [1-9]/m.test(base.stdout) && !/ℹ tests [1-9]/.test(base.stdout)) return { pass: false, detail: 'no tests ran', killed: 0, planted };
     const survived = [];
-    for (const m of fs.readdirSync(path.join(task.dir, 'mutants')).sort()) {
+    for (const m of mutantDirs) {
       const mdir = path.join(task.dir, 'mutants', m);
       const files = listFiles(mdir);
       const saved = files.map((f) => [f, fs.readFileSync(path.join(dir, f))]);
@@ -81,7 +83,8 @@ export async function scoreEval(task, dir) {
       for (const [f, buf] of saved) fs.writeFileSync(path.join(dir, f), buf);
       if (r.code === 0) survived.push(m);
     }
-    return { pass: !survived.length, detail: survived.length ? `bugs the tests did not catch: ${survived.join(', ')}` : 'every planted bug was caught' };
+    const killed = planted - survived.length;
+    return { pass: !survived.length, detail: survived.length ? `bugs the tests did not catch: ${survived.join(', ')}` : 'every planted bug was caught', killed, planted };
   }
   const hiddenSrc = path.join(task.dir, 'hidden');
   const files = listFiles(hiddenSrc);
@@ -188,6 +191,7 @@ export async function runEvals({ ids, dir, chain, provider, samples, keep = fals
       });
       const sc = await scoreEval(task, work);
       row.pass = sc.pass; row.detail = sc.detail;
+      if (sc.planted != null) { row.killed = sc.killed; row.planted = sc.planted; }
       // no model was reached at all (DNS, offline): the run says nothing about conductor-ai, so it doesn't count
       const tried = s.attempts.filter((a) => !a.skipped);
       if (!s.winner && tried.length && tried.every((a) => /^network|ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET/i.test(a.reason || ''))) {
