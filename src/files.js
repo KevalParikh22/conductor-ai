@@ -41,18 +41,43 @@ export function trimReport(text, maxBytes = 8000) {
 }
 
 // ---------------- chat-model file blocks ----------------
+// <<<FILE path … FILE>>> is a whole file; <<<EDIT path … EDIT>>> holds SEARCH/REPLACE hunks for an existing file.
+const HUNK = /^<<<<<<< SEARCH[ \t]*\r?\n([\s\S]*?)^=======[ \t]*\r?\n([\s\S]*?)^>>>>>>> REPLACE[ \t]*$/gm;
 export function parseFileBlocks(text) {
   const blocks = [];
-  const re = /^<<<FILE[ \t]+(\S+)[ \t]*\r?\n([\s\S]*?)^FILE>>>[ \t]*$/gm;
+  const re = /^<<<(FILE|EDIT)[ \t]+(\S+)[ \t]*\r?\n([\s\S]*?)^\1>>>[ \t]*$/gm;
   let m;
   while ((m = re.exec(text))) {
-    let content = m[2];
+    let content = m[3];
+    if (m[1] === 'EDIT') { // text around the hunks (a code fence, a comment) is ignored
+      blocks.push({ path: m[2], edits: [...content.matchAll(HUNK)].map((h) => ({ search: h[1], replace: h[2] })), chars: m[0].length });
+      continue;
+    }
     // tolerate models that wrap the content in a code fence
     const fenced = content.match(/^```[\w.+-]*\r?\n([\s\S]*?)\r?\n```\s*$/);
     if (fenced) content = fenced[1] + '\n';
-    blocks.push({ path: m[1], content });
+    blocks.push({ path: m[2], content });
   }
   return blocks;
+}
+
+/** The file after every hunk, each matched exactly once against the text so far, or { error }. CRLF files stay CRLF. */
+export function applyEdits(text, edits) {
+  if (!edits.length) return { error: 'EDIT block has no SEARCH/REPLACE hunks' };
+  const crlf = text.includes('\r\n'), lf = (s) => s.replaceAll('\r\n', '\n');
+  const noEol = !text.endsWith('\n');
+  let out = lf(text) + (noEol ? '\n' : ''); // so a SEARCH that ends on the last line still matches
+  for (const [i, e] of edits.entries()) {
+    const search = lf(e.search);
+    if (!search.trim()) return { error: `SEARCH ${i + 1} is empty` };
+    if (/^=======[ \t]*$/m.test(e.replace)) return { error: `hunk ${i + 1} has two ======= lines` }; // can't tell where SEARCH ends
+    const at = out.indexOf(search);
+    if (at < 0) return { error: `SEARCH ${i + 1} not found` };
+    if (out.indexOf(search, at + 1) >= 0) return { error: `SEARCH ${i + 1} matches more than once` };
+    out = out.slice(0, at) + lf(e.replace) + out.slice(at + search.length);
+  }
+  if (noEol && out.endsWith('\n')) out = out.slice(0, -1);
+  return { text: crlf ? out.replaceAll('\n', '\r\n') : out };
 }
 
 /**
@@ -76,17 +101,26 @@ export function writeRefusal(root, p, extra = []) {
 }
 
 export function applyFileBlocks(root, blocks, extraProtected = []) {
-  const applied = [], rejected = [];
+  const applied = [], rejected = [], edits = [];
   for (const b of blocks) {
     const norm = path.normalize(b.path).replaceAll('\\', '/');
     const abs = path.resolve(root, norm);
     const why = writeRefusal(root, b.path, extraProtected);
     if (why) { rejected.push(`${b.path} (${why})`); continue; }
-    fs.mkdirSync(path.dirname(abs), { recursive: true });
-    fs.writeFileSync(abs, b.content);
+    if (b.edits) {
+      let cur;
+      try { cur = fs.readFileSync(abs, 'utf8'); } catch { rejected.push(`${b.path} (EDIT on a file that doesn't exist: send it as <<<FILE)`); continue; }
+      const r = applyEdits(cur, b.edits);
+      if (r.error) { rejected.push(`${b.path} (${r.error})`); continue; }
+      fs.writeFileSync(abs, r.text);
+      edits.push({ path: norm, hunks: b.edits.length, savedChars: Math.max(0, r.text.length - b.chars) });
+    } else {
+      fs.mkdirSync(path.dirname(abs), { recursive: true });
+      fs.writeFileSync(abs, b.content);
+    }
     applied.push(norm);
   }
-  return { applied, rejected };
+  return { applied, rejected, edits };
 }
 
 /**

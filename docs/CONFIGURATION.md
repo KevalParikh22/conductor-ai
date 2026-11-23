@@ -101,7 +101,7 @@ An empty chain means the controller does that role itself. For one run, `--provi
 | `requireAcceptance` | true | A DONE task must answer every acceptance criterion with evidence; otherwise the outcome is `partial` |
 | `syntaxCheck` | true | Reject a worker's attempt when a changed file has a syntax error (JS, JSON, PHP, Python) |
 | `contractCheck` | true | Reject it when a function or class the task names in a code span isn't defined anywhere afterwards |
-| `chatRepair` | true | Give a chat model's reply with no file blocks one repair turn |
+| `chatRepair` | true | Give a chat model's reply one repair turn when it has no file blocks or an EDIT whose SEARCH did not match |
 | `repoMapBytes` | 6000 | Size of the project map chat models get |
 | `localPromptProfile` | true | Models on this machine get a smaller prompt: no project map, a shorter AGENTS.md and context pack, at most 20 KB of files |
 | `localContextCheck` | true | Ask a local server (Ollama, LM Studio) for the window the model runs with, and don't send a prompt that won't fit: a local server cuts it without an error |
