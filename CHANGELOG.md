@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.13.0 (2026-11-23)
+
+Chat models can edit long files without resending them, Anthropic providers cache the prompt, and a set of security fixes. One behaviour change: `--save` no longer writes outside the repository (e.g. `--save /tmp/answer.md`); the answer is always in the run folder too.
 
 - **Chat models can edit a long file without resending it.** For an existing file over about 100 lines, an API worker may reply with `<<<EDIT path` … `EDIT>>>` holding `<<<<<<< SEARCH` / `=======` / `>>>>>>> REPLACE` hunks. Each SEARCH must match the file exactly once (line endings don't matter), or nothing in that file changes and the model gets one repair turn that shows why. The run shows `edits:` and the output tokens saved.
 - **Prompt caching for Anthropic providers.** Providers of `type: "anthropic"` mark the system prompt and the project context (AGENTS.md, map, files) as `cache_control` breakpoints once they reach ~1,024 tokens, so retries and repair turns read them from the cache. Cache reads and writes are counted separately (`conductor-ai runs <id>`) and priced at 0.1x / 1.25x. Off with `"promptCache": false`; a gateway that rejects `cache_control` is retried once without it.
