@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Chat models can edit a long file without resending it.** For an existing file over about 100 lines, an API worker may reply with `<<<EDIT path` … `EDIT>>>` holding `<<<<<<< SEARCH` / `=======` / `>>>>>>> REPLACE` hunks. Each SEARCH must match the file exactly once (line endings don't matter), or nothing in that file changes and the model gets one repair turn that shows why. The run shows `edits:` and the output tokens saved.
+
 Security fixes from an external review:
 
 - **Symlinks can't move a model's files.** A symlink in the repo could send a file outside it (or a secrets file) to an API model as context, or let a model's file block write outside the repo or onto a protected file. Both now check the real path.

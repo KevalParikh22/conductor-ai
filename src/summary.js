@@ -61,6 +61,8 @@ export function formatSummary(s) {
     ? 'outcome:   UNVERIFIED. Verify was skipped, so nothing proves this works: check it yourself before committing'
     : 'outcome:   UNVERIFIED (exit 4). No verify command, so nothing proves this works. Set one: conductor-ai init --verify "<cmd>" (or the Verify line in AGENTS.md), then run conductor-ai verify');
   if (s.applied.length) L.push(`applied:   ${s.applied.join(', ')}`);
+  const ed = s.attempts.at(-1)?.edits;
+  if (ed) L.push(`edits:     ${ed.files} file(s) changed by ${ed.hunks} SEARCH/REPLACE hunk(s) instead of whole files`);
   if (s.rejected.length) L.push(`rejected:  ${s.rejected.join(', ')}`);
   if (s.mode === 'write') L.push(`changed:   ${s.changed.join(', ') || '(nothing)'}`);
   if (s.base) L.push(`base:      verify ${s.base.status} on the starting commit ${s.base.head}${s.base.cached ? ' (cached)' : ''}${s.base.status === 'FAIL' ? `, log: ${s.base.log}` : ''}`);
@@ -88,7 +90,7 @@ export function formatSummary(s) {
     for (const f of rv.findings.slice(0, 6)) L.push(`           ${f.severity === 'high' || f.severity === 'critical' ? '!' : '·'} [${f.severity}${f.confidence === 'low' ? ', low confidence' : ''}] ${f.file}:${f.line} ${f.text.split('\n')[0].replace(/^`?[\w./@-]+:\d+`?:?\s*/, '').slice(0, 140)}`);
   }
   if (s.saved) L.push(`saved:     ${s.saved}`);
-  if (s.tokensSaved?.tokens) L.push(`context:   ~${s.tokensSaved.tokens.toLocaleString()} tokens kept out (estimate: ${Object.entries(s.tokensSaved).filter(([k]) => k !== 'tokens').map(([k, n]) => `${{ report: 'report trimmed', 'review-diff': 'compact review diff', 'free-model': 'free model chosen' }[k] || k} ~${n.toLocaleString()}`).join(', ')})`);
+  if (s.tokensSaved?.tokens) L.push(`context:   ~${s.tokensSaved.tokens.toLocaleString()} tokens kept out (estimate: ${Object.entries(s.tokensSaved).filter(([k]) => k !== 'tokens').map(([k, n]) => `${{ report: 'report trimmed', 'review-diff': 'compact review diff', 'free-model': 'free model chosen', 'edit-blocks': 'edit blocks, not whole files' }[k] || k} ~${n.toLocaleString()}`).join(', ')})`);
   if (s.worktree?.commit) L.push(`commit:    ${s.worktree.commit} on ${s.worktree.branch} (from ${s.worktree.base})`);
   for (const w of s.warnings) L.push(`WARNING:   ${w}`);
   for (const f of fixLines(s.attempts, { won: true })) L.push(`fix:       ${f}`);
