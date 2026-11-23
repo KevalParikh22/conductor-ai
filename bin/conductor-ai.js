@@ -120,7 +120,9 @@ Experimental (works, may change; not covered by the alpha's promises)
   run/batch --priority speed           races small tasks and gives slow batch tasks a second attempt; spends more tokens
   run --race / --no-race               the 2 fastest free routes together; the first to pass every check wins (settings.race)
   run --samples N                      N attempts on different providers in parallel, keep the best by checks
-  conductor-ai eval [list] | check | run [--tasks a,b] [--provider p | --chain a,b] [--samples N] [--label x] [--compare last|<file>] [--keep] [--lessons <file> | --no-lessons]
+  conductor-ai eval [list] | check | run [--tasks a,b] [--provider p | --chain a,b] [--repeat N] [--pass-k K] [--samples N] [--label x] [--compare last|<file>] [--keep] [--lessons <file> | --no-lessons]
+  eval run --repeat N                  N independent runs per task, for error bars (95% interval, pass@k, likely real / within noise)
+  eval run --samples N                 best of N attempts inside one run (not a repeat)
                                        measure conductor-ai on fixed tasks with hidden tests (check = prove the tasks are fair, no LLM)
   conductor-ai controller [list] | add <name> --like <existing> | check   controllers as data: add one that reads the same formats
   conductor-ai import <run> [file | -]    web chat bridge: your answer from a web chat for a run with --provider manual
@@ -510,10 +512,14 @@ async function main() {
         return rows.some((r) => r.problems.length) ? 1 : 0;
       }
       if (sub !== 'run') throw new UsageError('usage: conductor-ai eval [list | check | run]');
+      const whole = (name, v) => { const n = Number(v); if (!Number.isInteger(n) || n < 1) throw new UsageError(`--${name} takes a whole number of 1 or more`); return n; };
+      const repeat = o.repeat != null ? whole('repeat', o.repeat) : 1;
+      const passK = o['pass-k'] != null ? whole('pass-k', o['pass-k']) : repeat;
+      if (passK > repeat) throw new UsageError(`--pass-k ${passK} is more than --repeat ${repeat}: pass@k needs at least k runs per task`);
       const rep = await runEvals({
-        ids, samples: o.samples ? Number(o.samples) : undefined, provider: o.provider, chain: o.chain ? String(o.chain).split(',').map((x) => x.trim()).filter(Boolean) : undefined, keep: o.keep, label: o.label || '', lessons: o['no-lessons'] ? 'off' : o.lessons || undefined,
+        ids, repeat, passK, samples: o.samples ? Number(o.samples) : undefined, provider: o.provider, chain: o.chain ? String(o.chain).split(',').map((x) => x.trim()).filter(Boolean) : undefined, keep: o.keep, label: o.label || '', lessons: o['no-lessons'] ? 'off' : o.lessons || undefined,
         onEvent: o.json ? undefined : (e) => {
-          const m = { start: 'starting', wait: `waiting for ${e.provider} (one task at a time on it)…`, try: `trying ${e.provider}…`, fail: `${e.provider} failed: ${e.reason}`, ok: `${e.provider} finished`, verify: 'running verify…', isolate: 'checking the code alone against the original tests…', escalate: `verify failed: handing ${e.from}'s work to ${e.provider}…`, repair: `${e.provider} sent no files: asking once more…`, scored: `${e.pass ? 'PASS' : 'FAIL'} (conductor-ai said: ${e.outcome})` }[e.type];
+          const m = { start: `starting${e.run ? ` (run ${e.run}/${e.of})` : ''}`, wait: `waiting for ${e.provider} (one task at a time on it)…`, try: `trying ${e.provider}…`, fail: `${e.provider} failed: ${e.reason}`, ok: `${e.provider} finished`, verify: 'running verify…', isolate: 'checking the code alone against the original tests…', escalate: `verify failed: handing ${e.from}'s work to ${e.provider}…`, repair: `${e.provider} sent no files: asking once more…`, scored: `${e.pass ? 'PASS' : 'FAIL'} (conductor-ai said: ${e.outcome})` }[e.type];
           if (m) process.stderr.write(`eval [${e.task}]: ${m}\n`);
         },
       });

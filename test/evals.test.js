@@ -42,7 +42,13 @@ test('eval run scores against hidden tests and compares conductor-ai\'s verdict 
   assert.deepEqual([b.results[0].outcome, b.results[0].pass, b.summary.falseDone, b.summary.caught], ['partial', false, 0, 1]);
   const out = formatEvals(b, loadResult('last', b.file));
   assert.match(out, /✗ fix-paginate +partial/);
-  assert.match(out, /pass rate: +0\/1 = 0% \(-100 pts vs good\)/);
+  assert.match(out, /pass rate: +0\/1 = 0% \[95% CI 0–79%\] \(-100 pts vs good\) — within noise/);
+  // --repeat: independent runs, each one row
+  const r = await runEvals({ ids: ['fix-paginate'], chain: ['good'], repeat: 3, label: 'repeat' });
+  assert.deepEqual(r.results.map((x) => x.run), [1, 2, 3]);
+  assert.deepEqual([r.summary.runs, r.summary.tasks, r.summary.perTask[0].passes, r.summary.perTask[0].runs], [3, 1, 3, 3]);
+  assert.match(formatEvals(r), /fix-paginate +3\/3 = 100% \[44–100%\]  pass@3 100%/);
+  await assert.rejects(runEvals({ ids: ['fix-paginate'], repeat: 2, passK: 3 }), /pass-k/);
   // with the checks off, the same lie gets through: what the eval exists to measure
   fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ settings: { runAcceptance: false, escalate: false, requireRepro: false }, providers: {
     good: { type: 'cli', preset: 'codex', enabled: true, bin: 'evgood' }, liar: { type: 'cli', preset: 'codex', enabled: true, bin: 'evliar' } } }));
@@ -138,4 +144,32 @@ test('mutation scoring returns killed and planted counts, hidden tasks return ne
   assert.equal(rCart.results[0].killed, 5);
   assert.equal(rCart.results[0].planted, 5);
   assert.equal(rCart.results[0].pass, true);
+});
+
+test('summary adds up repeats: runs, tokens, cost, pass@k per task', () => {
+  const s = summarize([{ id: 'a', outcome: 'done', pass: true, tokens: 10, cost: 0.5 }, { id: 'a', outcome: 'done', pass: false, tokens: 5, cost: 0.25 }, { id: 'b', outcome: 'error', pass: false, tokens: 1 }], 2);
+  assert.deepEqual([s.tasks, s.runs, s.counted, s.tokens, s.cost, s.ci], [2, 3, 2, 16, 0.75, [9, 91]]);
+  assert.deepEqual(s.perTask.map((t) => [t.id, t.passes, t.runs, t.passK]), [['a', 1, 2, 100], ['b', 0, 0, null]]);
+  assert.deepEqual(s.passK, { k: 2, value: 100 }, 'tasks with fewer than k counted runs are left out');
+  assert.equal(s.mutants, null);
+  const m = summarize([{ id: 't', outcome: 'done', pass: false, killed: 3, planted: 5 }, { id: 't', outcome: 'done', pass: true, killed: 5, planted: 5 }, { id: 'h', outcome: 'done', pass: true }]);
+  assert.deepEqual(m.mutants, { killed: 8, planted: 10, score: 80 });
+  assert.deepEqual([m.perTask[0].killed, m.perTask[0].planted, 'killed' in m.perTask[1]], [8, 10, false]);
+  const out = formatEvals({ version: 'x', startedAt: '2026-11-23T00:00:00Z', repeat: 2, passK: 2, results: [{ id: 't', run: 1, outcome: 'done', pass: false, killed: 3, planted: 5, seconds: 1 }, { id: 't', run: 2, outcome: 'done', pass: true, killed: 5, planted: 5, seconds: 1 }], summary: summarize([{ id: 't', outcome: 'done', pass: false, killed: 3, planted: 5 }, { id: 't', outcome: 'done', pass: true, killed: 5, planted: 5 }], 2) });
+  assert.match(out, /2 runs per task/);
+  assert.match(out, /mutants 3\/5/);
+  assert.match(out, /t +1\/2 = 50% \[9–91%\]  pass@2 100%  mutants 8\/10 = 80%/);
+  assert.match(out, /mutation: +8\/10 bugs caught = 80%/);
+});
+
+test('an old saved report (no repeat, intervals or mutants) still loads and compares', () => {
+  const file = path.join(home, 'old-eval.json');
+  fs.writeFileSync(file, JSON.stringify({ version: '0.11.0', startedAt: '2026-10-01T00:00:00.000Z', label: 'old', results: [{ id: 'fix-paginate', outcome: 'done', pass: true }],
+    summary: { tasks: 10, passed: 2, passRate: 20, errors: 0, rightDone: 2, falseDone: 0, caught: 8, falseAlarm: 0, seconds: 1, tokens: 0, cost: 0 } }));
+  const old = loadResult(file);
+  const rows = (passes) => Array.from({ length: 10 }, (_, i) => ({ id: `t${i}`, outcome: 'done', pass: i < passes, seconds: 0 }));
+  const rep = (passes) => ({ version: 'x', startedAt: '2026-11-23T00:00:00Z', results: rows(passes), summary: summarize(rows(passes)) });
+  assert.match(formatEvals(rep(10), old), /10\/10 = 100% \[95% CI 72–100%\] \(\+80 pts vs old\) — likely real/);
+  assert.match(formatEvals(rep(3), old), /3\/10 = 30% \[95% CI 11–60%\] \(\+10 pts vs old\) — within noise/);
+  assert.match(formatEvals(old), /2\/10 = 20% \[95% CI 6–51%\]/, 'an old report formats on its own too');
 });

@@ -33,7 +33,7 @@ conductor-ai eval run --repeat 5 --label after --compare <before>
 
 - `--repeat N` runs each task N **independent** times, each in a fresh copy. `--samples N` is different: N attempts on different providers inside **one** run, keeping the best (best-of-N). The two combine.
 - Per task and overall the report shows passes/runs, the pass rate (pass@1) and its 95% Wilson interval, e.g. `7/10 = 70% [95% CI 40–89%]`. With `--repeat` above 1 it also shows pass@k (k = `--pass-k`, default N): the chance at least one of k runs passes, by the unbiased estimator 1 − C(n−c,k)/C(n,k).
-- `--compare` adds **likely real** when each run's pass rate lies outside the other's interval, else **within noise**. Old saved reports still compare.
+- `--compare` adds **likely real** when the two runs' 95% intervals don't overlap, else **within noise**. That is cautious on purpose: 1/1 against 0/1 is noise. Old saved reports still compare.
 - Test-writing tasks also get a **mutation score**: planted bugs caught / planted, so a test suite that catches 4 of 5 shows progress even though it fails.
 - With `--lessons <file>`, later repeats of a task see the lessons earlier repeats saved, so they are not fully independent; use the default per-task lessons or `--no-lessons` for clean error bars.
 

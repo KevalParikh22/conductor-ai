@@ -24,6 +24,7 @@ import { lessonsFile, readLessons } from './lessons.js';
 import { checkPlan, taskAcceptance } from './plancheck.js';
 import { runAcceptanceChecks } from './acceptcheck.js';
 import { VERSION } from './version.js';
+import { wilson, passAtK } from './evalstats.js';
 
 export const EVALS_DIR = fileURLToPath(new URL('../evals/', import.meta.url));
 export const resultsDir = () => path.join(GLOBAL_DIR, 'evals');
@@ -162,16 +163,19 @@ function lessonStore(file) {
   };
 }
 
-export async function runEvals({ ids, dir, chain, provider, samples, keep = false, label = '', lessons, onEvent = () => {} } = {}) {
+export async function runEvals({ ids, dir, chain, provider, samples, repeat = 1, passK = repeat, keep = false, label = '', lessons, onEvent = () => {} } = {}) {
+  if (!(Number.isInteger(repeat) && repeat >= 1 && Number.isInteger(passK) && passK >= 1 && passK <= repeat)) throw new Error(`--repeat and --pass-k must be whole numbers with 1 <= pass-k <= repeat (got repeat ${repeat}, pass-k ${passK})`);
   const store = lessons && lessons !== 'off' ? lessonStore(lessons) : null;
   const tasks = pick(ids, dir);
   const startedAt = new Date().toISOString();
   const results = [];
-  for (const task of tasks) {
+  // independent repeats: each run starts from a fresh copy (with a lesson store, later runs see earlier runs' lessons)
+  for (const task of tasks) for (let i = 1; i <= repeat; i++) {
+    const rep = repeat > 1 ? { run: i, of: repeat } : {};
     const work = fs.mkdtempSync(path.join(os.tmpdir(), `conductor-eval-${task.id}-`));
-    onEvent({ type: 'start', task: task.id });
+    onEvent({ type: 'start', task: task.id, ...rep });
     const t0 = Date.now();
-    const row = { id: task.id, role: task.role, difficulty: task.difficulty, pass: false };
+    const row = { id: task.id, run: i, role: task.role, difficulty: task.difficulty, pass: false };
     try {
       prepareEval(task, work);
       if (store) row.lessonsSeeded = store.seed(task.id, work);
@@ -205,21 +209,41 @@ export async function runEvals({ ids, dir, chain, provider, samples, keep = fals
       if (keep) row.dir = work; else fs.rmSync(work, { recursive: true, force: true });
     }
     results.push(row);
-    onEvent({ type: 'scored', task: task.id, pass: row.pass, outcome: row.outcome });
+    onEvent({ type: 'scored', task: task.id, pass: row.pass, outcome: row.outcome, ...rep });
   }
-  const report = { version: VERSION, startedAt, label, chain: chain || null, provider: provider || null, samples: samples || 1, lessons: lessons === 'off' ? 'off' : store ? 'store' : 'per-task', results, summary: summarize(results) };
+  const report = { version: VERSION, startedAt, label, chain: chain || null, provider: provider || null, samples: samples || 1, repeat, passK, lessons: lessons === 'off' ? 'off' : store ? 'store' : 'per-task', results, summary: summarize(results, passK) };
   fs.mkdirSync(resultsDir(), { recursive: true });
   const file = path.join(resultsDir(), `${startedAt.replace(/[:.]/g, '-')}${label ? `-${label.replace(/[^\w.-]/g, '')}` : ''}.json`);
   writeJSON(file, report);
   return { ...report, file };
 }
 
-export function summarize(results) {
+const pct = (x) => Math.round(x * 100);
+const ci = (passes, runs) => { const w = wilson(passes, runs); return [pct(w.low), pct(w.high)]; };
+const mutantsOf = (rows) => {
+  const m = rows.filter((r) => r.planted != null);
+  if (!m.length) return null;
+  const killed = m.reduce((t, r) => t + r.killed, 0), planted = m.reduce((t, r) => t + r.planted, 0);
+  return { killed, planted, score: planted ? pct(killed / planted) : 0 };
+};
+
+/** Every run is one row; repeats of a task share its id. Errors are left out of the rates. */
+export function summarize(results, passK = 1) {
   const n = results.length;
   const done = (r) => r.outcome === 'done';
   const count = (f) => results.filter(f).length;
+  const counted = n - count((r) => r.outcome === 'error');
+  const ids = [...new Set(results.map((r) => r.id))];
+  const perTask = ids.map((id) => {
+    const rows = results.filter((r) => r.id === id), ok = rows.filter((r) => r.outcome !== 'error');
+    const runs = ok.length, passes = ok.filter((r) => r.pass).length, m = mutantsOf(rows);
+    return { id, runs, passes, pass1: runs ? pct(passes / runs) : 0, ci: ci(passes, runs), passK: passK <= runs ? pct(passAtK(runs, passes, passK)) : null, ...(m && { killed: m.killed, planted: m.planted }) };
+  });
+  const ks = perTask.map((t) => t.passK).filter((v) => v != null);
   return {
-    tasks: n,
+    tasks: ids.length,
+    runs: n,
+    counted,
     passed: count((r) => r.pass),
     // errors (no provider reachable, broken setup) say nothing about conductor-ai: left out of the rate
     passRate: n - count((r) => r.outcome === 'error') ? Math.round((count((r) => r.pass) / (n - count((r) => r.outcome === 'error'))) * 100) : 0,
@@ -232,6 +256,10 @@ export function summarize(results) {
     seconds: results.reduce((t, r) => t + (r.seconds || 0), 0),
     tokens: results.reduce((t, r) => t + (r.tokens || 0), 0),
     cost: Math.round(results.reduce((t, r) => t + (r.cost || 0), 0) * 10000) / 10000,
+    ci: ci(count((r) => r.pass), counted),
+    passK: { k: passK, value: ks.length ? Math.round(ks.reduce((t, v) => t + v, 0) / ks.length) : null },
+    perTask,
+    mutants: mutantsOf(results),
   };
 }
 
@@ -247,16 +275,30 @@ export function loadResult(which, exclude) {
 export function formatEvals(report, prev) {
   const s = report.summary;
   const L = ['', '====================== CONDUCTOR EVAL ======================'];
-  L.push(`conductor-ai ${report.version}${report.samples > 1 ? ` · ${report.samples} attempts per task` : ''}${report.label ? ` · ${report.label}` : ''}${report.provider ? ` · provider ${report.provider}` : report.chain ? ` · chain ${report.chain.join(',')}` : ' · your routing'}`);
+  L.push(`conductor-ai ${report.version}${report.repeat > 1 ? ` · ${report.repeat} runs per task` : ''}${report.samples > 1 ? ` · best of ${report.samples} attempts per run` : ''}${report.label ? ` · ${report.label}` : ''}${report.provider ? ` · provider ${report.provider}` : report.chain ? ` · chain ${report.chain.join(',')}` : ' · your routing'}`);
   for (const r of report.results) {
     const mark = r.pass ? '✓' : '✗';
     const tags = `${r.suspectTests ? '  [said: code looks right, tests wrong]' : ''}${r.handedOn ? `  [handed on ×${r.handedOn}]` : ''}`;
     const verdict = r.outcome === 'done' && !r.pass ? '  ← conductor-ai said done, hidden tests fail' : r.outcome !== 'done' && r.pass && r.outcome !== 'error' ? '  ← work was fine, conductor-ai flagged it' : '';
-    L.push(`${mark} ${r.id.padEnd(22)} ${String(r.outcome || '-').padEnd(13)} ${(r.winner || '-').padEnd(16)} ${String(r.seconds).padStart(4)}s${r.acceptance ? `  acc ${r.acceptance}` : ''}${r.lessonsInPrompt ? `  [${r.lessonsInPrompt} lesson(s) in prompt]` : ''}${tags}${verdict}`);
+    L.push(`${mark} ${(report.repeat > 1 ? `${r.id} #${r.run}` : r.id).padEnd(22)} ${String(r.outcome || '-').padEnd(13)} ${(r.winner || '-').padEnd(16)} ${String(r.seconds).padStart(4)}s${r.acceptance ? `  acc ${r.acceptance}` : ''}${r.planted != null ? `  mutants ${r.killed}/${r.planted}` : ''}${r.lessonsInPrompt ? `  [${r.lessonsInPrompt} lesson(s) in prompt]` : ''}${tags}${verdict}`);
     if (!r.pass && r.detail) L.push(`    ${r.detail.split('\n')[0].slice(0, 150)}`);
   }
+  const k = s.passK?.k || 1;
+  if (report.repeat > 1) {
+    L.push('', 'per task:');
+    for (const t of s.perTask) L.push(`  ${t.id.padEnd(22)} ${t.passes}/${t.runs} = ${t.pass1}% [${t.ci[0]}–${t.ci[1]}%]${k > 1 && t.passK != null ? `  pass@${k} ${t.passK}%` : ''}${t.planted != null ? `  mutants ${t.killed}/${t.planted} = ${t.planted ? Math.round((t.killed / t.planted) * 100) : 0}%` : ''}`);
+  }
+  // old saved reports have no interval: work it out from their counts
+  const band = (sm) => sm.ci || ci(sm.passed, sm.counted ?? sm.tasks - sm.errors);
+  const noise = () => {
+    if (!prev?.summary) return '';
+    // the two 95% intervals don't overlap: deliberately cautious, so 1/1 vs 0/1 stays "within noise"
+    const [a, b] = [s, prev.summary].map(band);
+    return a[0] > b[1] || b[0] > a[1] ? ' — likely real' : ' — within noise';
+  };
   const delta = (k, unit = '') => (prev?.summary && prev.summary[k] != null ? ` (${s[k] - prev.summary[k] >= 0 ? '+' : ''}${s[k] - prev.summary[k]}${unit} vs ${prev.label || prev.startedAt.slice(0, 16)})` : '');
-  L.push('', `pass rate:   ${s.passed}/${s.tasks - s.errors} = ${s.passRate}%${s.errors ? ` (${s.errors} not counted: error)` : ''}${delta('passRate', ' pts')}`);
+  const [lo, hi] = band(s);
+  L.push('', `pass rate:   ${s.passed}/${s.counted ?? s.tasks - s.errors} = ${s.passRate}% [95% CI ${lo}–${hi}%]${k > 1 && s.passK.value != null ? ` · pass@${k} ${s.passK.value}%` : ''}${s.errors ? ` (${s.errors} not counted: error)` : ''}${delta('passRate', ' pts')}${noise()}`);
   L.push(`verdicts:    ${s.rightDone} done and right · ${s.falseDone} "done" but wrong${delta('falseDone')} · ${s.caught} caught · ${s.falseAlarm} false alarm${s.errors ? ` · ${s.errors} error` : ''}`);
   // V1: the tasks that had lessons in their prompt, against the same tasks in the compared run
   const withL = report.results.filter((r) => r.lessonsInPrompt);
@@ -265,6 +307,7 @@ export function formatEvals(report, prev) {
     const rate = (rs) => `${rs.filter((r) => r.pass).length}/${rs.length}`;
     L.push(`lessons:     ${report.lessons === 'off' ? 'off' : `${withL.length} task(s) had lessons in their prompt: ${rate(withL)} passed`}${prev?.results && withL.length ? `; the same tasks in ${prev.label || 'the compared run'} (lessons ${prev.lessons || 'per-task'}): ${rate(same(prev.results))}` : ''}`);
   }
+  if (s.mutants) L.push(`mutation:    ${s.mutants.killed}/${s.mutants.planted} bugs caught = ${s.mutants.score}%`);
   L.push(`cost:        ${s.seconds}s · ${s.tokens.toLocaleString()} tokens${s.cost ? ` · $${s.cost}` : ''}`);
   if (report.file) L.push(`saved:       ${report.file}`);
   return L.join('\n');
