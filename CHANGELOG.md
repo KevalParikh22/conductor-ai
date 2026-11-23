@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **The demo says whose quota it uses, before it runs.** `conductor-ai demo` used your first installed agent (Antigravity, Codex or OpenCode) without saying so. It now prints which workers it will use and that they spend a little of your own plan, quota or key on its 2 small tasks (Claude is not called).
+- **`conductor-ai demo --free`** uses only free models, even with an agent installed, so trying the demo costs nothing. If no free model is ready, it says so and never falls back to a paid worker.
+
 ## 0.13.0 (2026-11-23)
 
 Chat models can edit long files without resending them, Anthropic providers cache the prompt, and a set of security fixes. One behaviour change: `--save` no longer writes outside the repository (e.g. `--save /tmp/answer.md`); the answer is always in the run folder too.

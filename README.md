@@ -30,7 +30,7 @@
 Your best agent's quota runs out fast when it types every line, and its strength is judgement: planning, design and catching bugs. **conductor-ai** keeps the agent you work in (Claude Code, Codex CLI, Antigravity CLI or OpenCode) as the controller and quality gate, and hands the typing to Antigravity, Codex, OpenCode, free Kilo / OpenRouter / Groq / Gemini models, Kimi or local models. When one hits its limit, the next one takes over.
 
 ```bash
-npm install -g conductor-ai     # Node 20+; or try it first: npx conductor-ai demo
+npm install -g conductor-ai     # Node 20+; or try it first: npx conductor-ai demo (add --free to use only free models)
 ```
 
 **Measured, not claimed** ([benchmark](docs/BENCHMARK.md)): on five multi-file tasks, three runs each, Claude Code with conductor-ai spent **88% less** Claude quota than Claude alone ($0.09 vs $0.75), finished **13% faster** (131 s vs 150 s) and passed **15/15** hidden tests against 14/15. Codex did the winning work there; with other workers, your numbers will differ.

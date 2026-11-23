@@ -72,12 +72,25 @@ const demoAgents = (cfg) => (cfg.roles.build || []);
 /**
  * A stranger's first run (npx conductor-ai demo) has no coding agent installed, and the build chain is agents only.
  * Then the demo hands its two tasks to the free API models that are ready (kilo-free needs no key), so it still shows
- * conductor-ai working. → the free routes to use, or null when an agent in the build chain is ready.
+ * conductor-ai working. With free: true (demo --free) it uses only those, even when an agent is installed, so the
+ * demo costs nothing. → the free routes to use, or null when an agent in the build chain is ready and free is off.
  */
-export function demoFallback(cfg) {
-  if (demoAgents(cfg).some((n) => ready(cfg, n))) return null;
+export function demoFallback(cfg, { free = false } = {}) {
+  if (!free && demoAgents(cfg).some((n) => ready(cfg, n))) return null;
   const order = [...new Set([...Object.values(cfg.roles).flat(), ...Object.keys(cfg.providers)])];
   return order.filter((n) => isFree(cfg.providers[n]) && cfg.providers[n].type !== 'manual' && ready(cfg, n));
+}
+
+/**
+ * The line that says, before anything runs, whose quota the demo uses. A stranger trying "npx conductor-ai demo"
+ * shouldn't find out afterwards that it ran on their Codex plan or a paid key. → text, or '' when everything is free.
+ */
+export function demoUsageNotice(cfg, provider) {
+  const names = provider ? [provider] : demoAgents(cfg).filter((n) => ready(cfg, n));
+  const own = names.filter((n) => cfg.providers[n] && !isFree(cfg.providers[n]));
+  if (!own.length) return '';
+  return `   Workers: ${names.join(', ')}. ${own.join(' and ')} ${own.length > 1 ? 'use' : 'uses'} a little of your own plan, quota or key for these 2 small tasks (Claude is not called).\n` +
+    '   To use free models only: conductor-ai demo --free';
 }
 
 export const DEMO_RETRIES = 2;
@@ -95,18 +108,24 @@ export function combineBatches(first, retry, round) {
  * Run the demo. → { dir, batch, merged: [task ids], verify: { status, output }, kept }
  * say(text) prints a step; onEvent gets batch events (the CLI shows the live table).
  */
-export async function runDemo({ keep = false, provider, say = () => {}, onEvent, parent } = {}) {
+export async function runDemo({ keep = false, provider, free = false, say = () => {}, onEvent, parent } = {}) {
   const dir = makeDemoProject(parent);
   say(`1. A throwaway project: ${dir}\n   a tiny Node library and a plan with 2 independent tasks (docs/plan/demo.md)`);
   try {
     say(`2. Both tasks go to your workers in parallel, each in its own worktree; every check runs on each`);
     const cfg = loadConfig(dir);
-    const fallback = provider ? null : demoFallback(cfg);
+    const fallback = provider ? null : demoFallback(cfg, { free });
     if (fallback?.length) {
-      say(`   No coding agent is ready (${demoAgents(cfg).join(', ')}), so the demo uses free API models: ${fallback.join(', ')}`);
+      say(free ? `   Free models only (--free): ${fallback.join(', ')}. This uses none of your own quota.`
+        : `   No coding agent is ready (${demoAgents(cfg).join(', ')}), so the demo uses free API models: ${fallback.join(', ')}. This uses none of your own quota.`);
       cfg.roles = { ...cfg.roles, build: fallback }; // this run only: nothing is written to your config
     } else if (fallback) {
-      say('   No coding agent and no free API model is ready. Run: conductor-ai setup (or conductor-ai doctor to see why)');
+      say(free ? '   --free: no free model is ready. Run: conductor-ai setup (or conductor-ai doctor to see why)'
+        : '   No coding agent and no free API model is ready. Run: conductor-ai setup (or conductor-ai doctor to see why)');
+      if (free) cfg.roles = { ...cfg.roles, build: [] }; // never fall through to a paid worker after --free
+    } else {
+      const notice = demoUsageNotice(cfg, provider);
+      if (notice) say(notice);
     }
     const opts = { planPath: 'docs/plan/demo.md', provider, noReview: true, replace: true, onEvent };
     let batch = await runBatch(cfg, { ...opts, tasks: ['T1', 'T2'] });

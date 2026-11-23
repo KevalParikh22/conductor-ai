@@ -6,7 +6,7 @@ import path from 'node:path';
 import { isolateHome, fakeBins, tmpdir } from './helpers.js';
 
 const home = isolateHome();
-const { runDemo, DEMO_PLAN, demoFallback } = await import('../src/demo.js');
+const { runDemo, DEMO_PLAN, demoFallback, demoUsageNotice } = await import('../src/demo.js');
 const { checkPlan } = await import('../src/plancheck.js');
 
 // a fake worker that solves whichever demo task it is given, with a test
@@ -57,6 +57,43 @@ test('demo without a coding agent: falls back to the free API models that are re
   assert.equal(demoFallback({ roles: { build: ['good'] }, providers: { ...providers, good: { type: 'cli', preset: 'codex', enabled: true, bin: 'demo-worker' } } }), null);
   // nothing ready at all: an empty list, so the demo says to run conductor-ai setup
   assert.deepEqual(demoFallback({ roles: { build: ['agent'] }, providers: { agent: providers.agent, nokey: providers.nokey } }), []);
+});
+
+test('demo --free uses only free models, even with an agent installed', () => {
+  const providers = {
+    good: { type: 'cli', preset: 'codex', enabled: true, bin: 'demo-worker' },
+    freeapi: { type: 'openai', baseUrl: 'https://free.example', free: true, enabled: true },
+    paid: { type: 'openai', baseUrl: 'https://paid.example', enabled: true },
+  };
+  assert.deepEqual(demoFallback({ roles: { build: ['good', 'paid'], test: ['freeapi'] }, providers }, { free: true }), ['freeapi']);
+});
+
+test('the demo says before it runs whose quota it uses', () => {
+  const providers = {
+    good: { type: 'cli', preset: 'codex', enabled: true, bin: 'demo-worker' },
+    gone: { type: 'cli', preset: 'codex', enabled: true, bin: 'no-such-agent-bin' },
+    freeapi: { type: 'openai', baseUrl: 'https://free.example', free: true, enabled: true },
+  };
+  const notice = demoUsageNotice({ roles: { build: ['gone', 'good'] }, providers });
+  assert.match(notice, /Workers: good\. good uses a little of your own plan, quota or key/);
+  assert.match(notice, /Claude is not called/);
+  assert.match(notice, /conductor-ai demo --free/);
+  assert.equal(demoUsageNotice({ roles: { build: ['good'] }, providers }, 'freeapi'), '', 'a free worker needs no notice');
+});
+
+test('demo --free with no free model ready never falls back to the installed agent', async () => {
+  // switch off every built-in free model for this test, so it stays offline
+  const cfgFile = path.join(home, 'config.json');
+  const saved = fs.readFileSync(cfgFile, 'utf8');
+  const { loadConfig } = await import('../src/config.js');
+  const off = Object.fromEntries(Object.entries(loadConfig(tmpdir('conductor-demo-cfg-')).providers).filter(([, p]) => p.free).map(([n]) => [n, { enabled: false }]));
+  fs.writeFileSync(cfgFile, JSON.stringify({ ...JSON.parse(saved), providers: { ...JSON.parse(saved).providers, ...off } }));
+  const steps = [];
+  let d;
+  try { d = await runDemo({ free: true, parent: tmpdir('conductor-demo-parent-'), say: (m) => steps.push(m) }); } finally { fs.writeFileSync(cfgFile, saved); }
+  assert.ok(steps.some((m) => /--free: no free model is ready/.test(m)), steps.join('\n'));
+  assert.deepEqual(d.merged, []);
+  assert.ok(d.batch.results.every((r) => !r.provider || r.provider !== 'good'));
 });
 
 test('soft-launch defaults: beta agents are marked and not turned on by setup, the web bridge is off, paid APIs stop at $2 a day', async () => {
