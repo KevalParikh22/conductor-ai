@@ -8,7 +8,10 @@ import { fileURLToPath } from 'node:url';
 import { isolateHome, fakeBins } from './helpers.js';
 
 const home = isolateHome();
-fakeBins({ codex: `if (args[0]==='login' && args[1]==='status') process.exit(fs.existsSync(require('path').join(process.env.CODEX_HOME||'/nonexistent','ok'))?0:1);` });
+fakeBins({
+  codex: `if (args[0]==='login' && args[1]==='status') process.exit(fs.existsSync(require('path').join(process.env.CODEX_HOME||'/nonexistent','ok'))?0:1);`,
+  agy: `if (args[0]==='-p' && args[1]==='/usage') process.exit(fs.existsSync(require('path').join(process.env.HOME||'/nonexistent','ok'))?0:1);`,
+});
 const CLI = fileURLToPath(new URL('../bin/conductor-ai.js', import.meta.url));
 const { setCooldown, getCooldowns } = await import('../src/cooldowns.js');
 const { statusReport } = await import('../src/status.js');
@@ -28,6 +31,13 @@ test('add, then list: the new account is not checked yet, and the first add show
   const list = cli(['accounts', 'codex-cli']);
   assert.match(list.stdout, /work2\s+not checked/);
   assert.match(list.stdout, /default\s+not checked/);
+});
+
+test('first Antigravity account add includes Google terms', () => {
+  reset();
+  const r = cli(['accounts', 'add', 'antigravity-cli', 'g2']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /https:\/\/antigravity\.google\/terms/);
 });
 
 test('a bad label is refused with the allowed characters', () => {

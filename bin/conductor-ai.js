@@ -854,6 +854,7 @@ async function accounts(o) {
       console.log('Note: conductor-ai moves to your next account when one runs out. Use only your own accounts, and check each vendor\'s terms on usage limits first:');
       console.log('  OpenAI  https://openai.com/policies/terms-of-use/');
       console.log('  Anthropic  https://www.anthropic.com/legal/consumer-terms · https://code.claude.com/docs/en/legal-and-compliance');
+      if (cfg.providers?.[name]?.preset === 'antigravity') console.log('  Google  https://policies.google.com/terms · https://antigravity.google/terms');
     } else console.log(`Next: conductor-ai accounts login ${name} ${label}`);
     return 0;
   }
