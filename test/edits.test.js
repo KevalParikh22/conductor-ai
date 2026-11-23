@@ -37,6 +37,7 @@ test('no match, or two matches, rejects the whole file and writes nothing', () =
   assert.deepEqual(r.rejected, ['a.py (SEARCH 2 matches more than once)', 'b.py (SEARCH 1 not found)']);
   assert.equal(read(root, 'a.py'), before, 'the first hunk was not written either');
   assert.deepEqual(applyFileBlocks(root, parseFileBlocks('<<<EDIT b.py\njust text\nEDIT>>>\n')).rejected, ['b.py (EDIT block has no SEARCH/REPLACE hunks)']);
+  assert.deepEqual(applyFileBlocks(root, parseFileBlocks(edit('b.py', hunk('b\n=======\nc', 'x')))).rejected, ['b.py (hunk 1 has two ======= lines)']);
   assert.match(applyFileBlocks(root, parseFileBlocks(edit('new.py', hunk('a', 'b')))).rejected[0], /new\.py \(EDIT on a file that doesn't exist/);
 });
 

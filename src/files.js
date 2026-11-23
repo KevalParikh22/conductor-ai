@@ -70,6 +70,7 @@ export function applyEdits(text, edits) {
   for (const [i, e] of edits.entries()) {
     const search = lf(e.search);
     if (!search.trim()) return { error: `SEARCH ${i + 1} is empty` };
+    if (/^=======[ \t]*$/m.test(e.replace)) return { error: `hunk ${i + 1} has two ======= lines` }; // can't tell where SEARCH ends
     const at = out.indexOf(search);
     if (at < 0) return { error: `SEARCH ${i + 1} not found` };
     if (out.indexOf(search, at + 1) >= 0) return { error: `SEARCH ${i + 1} matches more than once` };
