@@ -63,3 +63,23 @@ test('UI account status shows cooldowns and the other account actions work', asy
     assert.equal(fs.existsSync(accountDir('codex-cli', 'worky')), false);
   } finally { ui.server.closeAllConnections?.(); ui.server.close(); }
 });
+
+test('the served UI page has the account badge and the terminal sign-in dialog', async () => {
+  const html = fs.readFileSync(new URL('../src/ui/index.html', import.meta.url), 'utf8');
+  assert.equal(html.includes('Sign in in a terminal'), false);
+  const dir = tmpdir('conductor-ui-accounts-page-');
+  const ui = createUiServer({ cwd: dir, token: 'tok' });
+  const port = await ui.listen(0);
+  try {
+    const r = await fetch(`http://127.0.0.1:${port}/`);
+    assert.equal(r.status, 200);
+    assert.match(r.headers.get('content-type') || '', /text\/html/);
+    const page = await r.text();
+    assert.equal(page, html); // the UI server serves this exact page
+    for (const text of ['Supports several accounts', 'data-account-signin', 'conductor-ai never sees your password or token']) {
+      assert.ok(page.includes(text), `the served page is missing: ${text}`);
+    }
+    assert.match(page, /<dialog id="account-signin"[\s\S]*conductor-ai never sees your password or token[\s\S]*<\/dialog>/);
+    assert.ok(page.includes('cmd(`conductor-ai accounts login ${provider} ${label}`)'));
+  } finally { ui.server.closeAllConnections?.(); ui.server.close(); }
+});
