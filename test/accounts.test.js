@@ -73,11 +73,14 @@ test('Antigravity accounts are isolated under HOME and checked through agy usage
   assert.deepEqual(await checkAccount(config.loadConfig(), 'antigravity-cli', 'g2'), { signedIn: true });
 });
 
-test('Antigravity account add is Linux only', () => {
+test('Antigravity accounts are Linux only', async () => {
   const descriptor = Object.getOwnPropertyDescriptor(process, 'platform');
+  const linuxOnly = (e) => e instanceof UsageError && /Linux only/.test(e.message);
   try {
     Object.defineProperty(process, 'platform', { value: 'darwin' });
-    assert.throws(() => addAccount('antigravity-cli', 'g3'), (e) => e instanceof UsageError && /Linux only/.test(e.message));
+    assert.throws(() => addAccount('antigravity-cli', 'g3'), linuxOnly);
+    await assert.rejects(checkAccount(config.loadConfig(), 'antigravity-cli', 'g2'), linuxOnly);
+    await assert.rejects(loginAccount(config.loadConfig(), 'antigravity-cli', 'g2'), linuxOnly);
   } finally { Object.defineProperty(process, 'platform', descriptor); }
 });
 

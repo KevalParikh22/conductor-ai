@@ -63,6 +63,7 @@ function providerInfo(provider) {
   const p = { ...(DEFAULT_PROVIDERS[provider] || {}), ...(readScope('global', null).providers?.[provider] || {}) };
   if (!p.type) throw new UsageError(`unknown provider "${provider}" (accounts are for CLI providers in your global config)`);
   if (p.type !== 'cli' || !ACCOUNT_KINDS[p.preset]) throw new UsageError(`${provider} cannot have accounts: only ${Object.keys(ACCOUNT_KINDS).map((k) => `${k} CLI`).join(' and ')} providers can`);
+  if (ACCOUNT_KINDS[p.preset].linuxOnly && process.platform !== 'linux') throw new UsageError('Antigravity accounts are Linux only');
   return p;
 }
 function assertLabel(label) { if (!validLabel(label)) throw new UsageError(`invalid account label "${label}": ${LABEL_RULE}`); }
@@ -107,7 +108,6 @@ function makeDir(provider, label, preset) {
 /** Add an account at the end. The first one added also keeps the user's normal login as `default`, first. */
 export function addAccount(provider, label) {
   const p = providerInfo(provider);
-  if (ACCOUNT_KINDS[p.preset].linuxOnly && process.platform !== 'linux') throw new UsageError('Antigravity accounts are Linux only');
   assertLabel(label);
   const entries = savedAccounts(provider);
   if (entries.some((a) => a.label === label)) throw new UsageError(`${provider} already has an account "${label}"`);
