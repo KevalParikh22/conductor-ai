@@ -13,6 +13,10 @@ Security fixes from an external review:
 - **Submodules' git folders are restored after each worker too.** A worker could plant an `fsmonitor` program or a hook in `.git/modules/<name>/`; the fsmonitor would run on your next plain `git status` in the parent repo.
 - **The push guard also spots `sudo git push` (with flags such as `-u root`) and a quoted `"git" push`.**
 
+Evals:
+
+- **`conductor-ai eval run --repeat N`** runs each task N independent times and reports passes/runs, pass@1 with a 95% Wilson interval, pass@k (`--pass-k`, unbiased estimator) and, with `--compare`, whether the change is **likely real** or **within noise**. Test-writing tasks also get a mutation score (planted bugs caught). `--samples` is unchanged: best-of-N inside one run. Old saved reports still load and compare.
+
 ## 0.12.0 (2026-11-22)
 
 **Breaking: everything is named `conductor-ai` now.** The first npm release since 0.11.1, so it also carries 0.11.2 and 0.11.3. After updating, run `conductor-ai init` once in each project (see the rename notes below).

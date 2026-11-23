@@ -102,7 +102,7 @@ test('mutation scoring returns killed and planted counts, hidden tasks return ne
   try {
     prepareEval(task, workFail);
     fs.mkdirSync(path.join(workFail, 'test'), { recursive: true });
-    fs.writeFileSync(path.join(workFail, 'test', 'broken.test.js'), 'import test from "node:test"; import assert from "node:assert/strict"; test("broken", () => { assert.fail("broken"); });\\n');
+    fs.writeFileSync(path.join(workFail, 'test', 'broken.test.js'), 'import test from "node:test"; import assert from "node:assert/strict"; test("broken", () => { assert.fail("broken"); });\n');
     const failed = await scoreEval(task, workFail);
     assert.equal(failed.pass, false);
     assert.equal(failed.killed, 0);
