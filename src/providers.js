@@ -146,7 +146,7 @@ export function opencodeSessionTokens(exported) {
 
 /**
  * Seconds until a rate limit resets, read from a provider's message, or 0. agy says "Resets in 118h3m13s"; others
- * say "try again in 30s", "retry after 120 seconds" or "resets in 5 minutes". Capped at 7 days.
+ * say "try again in 30s", "retry after 120 seconds" or "resets in 5 minutes". Durations cap at 7 days; dates at 31.
  */
 export function resetSeconds(text, now = new Date()) {
   const t = String(text || '');
@@ -176,7 +176,7 @@ export function resetSeconds(text, now = new Date()) {
       }
     }
     if (!Number.isFinite(target) || target <= now.getTime()) return 0;
-    return Math.min(Math.round((target - now.getTime()) / 1000), 7 * 86_400);
+    return Math.min(Math.round((target - now.getTime()) / 1000), 31 * 86_400);
   }
   let sec = 0;
   for (const [, n, u] of m[1].matchAll(/(\d+(?:\.\d+)?)\s*([hms])/gi)) sec += Number(n) * { h: 3600, m: 60, s: 1 }[u.toLowerCase()];
