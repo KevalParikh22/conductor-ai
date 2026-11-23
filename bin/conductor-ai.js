@@ -67,7 +67,8 @@ Setup
   conductor-ai local [--enable]           find local model servers (Ollama, LM Studio, llama.cpp…) and turn them on
   conductor-ai init [--controller <c>] [--verify "<cmd>"] [--guards] [--vscode] [--no-mcp] [--share]   add conductor-ai to the current project (its files go in .gitignore unless --share)
                                        controllers: ${Object.keys(CONTROLLERS).join(', ')} (or your own: conductor-ai controller add)
-  conductor-ai demo [--keep] [--provider p]   a throwaway project, 2 tasks handed out in parallel, merged and tested
+  conductor-ai demo [--keep] [--provider p] [--free]   a throwaway project, 2 tasks handed out in parallel, merged and tested;
+                                       --free: free models only, none of your own quota
   conductor-ai ui [--port 4545] [--no-open]   settings page
   conductor-ai doctor [--live] [--details] [--json]   check installs and keys (--live sends a test prompt)
 
@@ -417,7 +418,7 @@ async function main() {
       console.log('conductor-ai demo: see conductor-ai work end to end, without touching your projects.\n');
       const table = batchProgress(['T1', 'T2']);
       const t0 = Date.now();
-      const d = await runDemo({ keep: !!o.keep, provider: o.provider, say: (m) => console.log(m), onEvent: (e) => table.event(e) });
+      const d = await runDemo({ keep: !!o.keep, provider: o.provider, free: !!o.free, say: (m) => console.log(m), onEvent: (e) => table.event(e) });
       table.stop();
       // the batch summary without its "next: review, then merge" lines: the demo merged already
       console.log(`\n${formatBatch(d.batch).split('\n').filter((l, i, all) => !/^next:/.test(l) && !(/^\s/.test(l) && all.slice(0, i).reverse().find((x) => !/^\s/.test(x))?.startsWith('next:'))).join('\n')}`);
