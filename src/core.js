@@ -555,8 +555,10 @@ async function dispatchOnce(cfg, opts) {
     const extra = c.p.promptExtra ? `\n## Note for this model\n${c.p.promptExtra}\n` : '';
     // V13: a model on this machine gets the small prompt (settings.localPromptProfile: false keeps the full one)
     const local = kind === 'chat' && providerLocation(c.p) === 'local-model';
+    // the context (same for every attempt and repair turn) comes first, so it can be cached as a prefix (H8)
+    const stable = inline ? chatContext({ small: local && settings.localPromptProfile !== false }) : '';
     const userPrompt = inline
-      ? `${chatContext({ small: local && settings.localPromptProfile !== false })}\n---\n# TASK (role: ${role})\n${chatBody}${skillsChat.text ? `\n${skillsChat.text}` : ''}${extra}${recite}${mode === 'write' ? CHAT_CLOSE : ''}`
+      ? `${stable}\n---\n# TASK (role: ${role})\n${chatBody}${skillsChat.text ? `\n${skillsChat.text}` : ''}${extra}${recite}${mode === 'write' ? CHAT_CLOSE : ''}`
       : agentPrompt + (mode === 'write' ? packFor('agent') : '') + extra + recite;
     // the provider's model, then its fallback models: a model that is rate-limited is skipped until its cooldown ends
     let { models, auto } = await modelsToTry(c.name, c.p, kind);
@@ -591,7 +593,7 @@ async function dispatchOnce(cfg, opts) {
       let res = kind === 'chat' && !p.model
         ? { ok: false, text: '', reason: 'no model set, and its model list could not be fetched', log: '' }
         : tooBig ? { ok: false, text: '', reason: `context too small: the prompt needs ~${promptTokens + (p.maxTokens || 2048)} tokens with the answer, ${p.model} runs with ${win.window} (${win.server})`, log: '' }
-        : await withSlot(slotKey, c.p.maxParallel ?? CLI_PRESETS[c.p.preset]?.maxParallel ?? (local ? 1 : undefined), () => runProvider(c.name, p, { mode, prompt: userPrompt, system: chatSystem, cwd: work, runDir: ioDir, quotaRe,
+        : await withSlot(slotKey, c.p.maxParallel ?? CLI_PRESETS[c.p.preset]?.maxParallel ?? (local ? 1 : undefined), () => runProvider(c.name, p, { mode, prompt: userPrompt, stableChars: stable.length, system: chatSystem, cwd: work, runDir: ioDir, quotaRe,
           allowCommands: buildCommands(settings), ...limitFor(c.p, kind), signal: opts.signal, manualAnswer: opts.manualAnswer, liveLog }), () => emit({ type: 'wait', provider: c.name }));
       if (p !== c.p && p.model && !res.model) res.model = p.model;
       // V13: the server counted far fewer prompt tokens than were sent: it cut the prompt (any server, window known or not)
@@ -612,9 +614,9 @@ async function dispatchOnce(cfg, opts) {
         const failedEdits = rejected.filter((r) => /\((SEARCH \d|EDIT )/.test(r));
         if ((!parseFileBlocks(res.text).length || failedEdits.length) && settings.chatRepair !== false && c.p.type !== 'manual') {
           emit({ type: 'repair', provider: c.name });
-          const again = await runProvider(c.name, p, { mode, prompt: userPrompt, system: chatSystem, cwd: work, runDir: ioDir, quotaRe, ...limitFor(c.p, kind), signal: opts.signal,
+          const again = await runProvider(c.name, p, { mode, prompt: userPrompt, stableChars: stable.length, system: chatSystem, cwd: work, runDir: ioDir, quotaRe, ...limitFor(c.p, kind), signal: opts.signal,
             history: [{ role: 'assistant', content: res.text.slice(0, 8000) }, { role: 'user', content: failedEdits.length ? chatEditRepair(failedEdits) : CHAT_REPAIR }] });
-          const sum = (a, b) => (a || b ? { input: (a?.input || 0) + (b?.input || 0), output: (a?.output || 0) + (b?.output || 0) } : undefined);
+          const sum = (a, b) => (a || b ? Object.fromEntries([...new Set([...Object.keys(a || {}), ...Object.keys(b || {})])].map((k) => [k, (a?.[k] || 0) + (b?.[k] || 0)])) : undefined);
           res = { ...(again.ok ? again : { ...res, text: res.text }), tokens: sum(res.tokens, again.tokens), log: `${res.log}\n\n==== repair turn ====\n${again.log || ''}`, repaired: true };
           fs.writeFileSync(path.join(runDir, `${c.name}${mi ? `.${mi + 1}` : ''}.log`), res.log || '');
           if (again.ok) {
