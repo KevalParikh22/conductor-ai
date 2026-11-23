@@ -138,7 +138,7 @@ Then add the name to a role chain, either in the UI or in `roles`.
 
 ## Several accounts for one CLI
 
-Codex CLI (`codex-cli`) and Claude Code (`claude-cli`) can each keep several signed-in accounts. The provider stays once in your role chains; conductor-ai expands it into one rotation entry per enabled account, in the order you set. An account is the same CLI pointed at its own config folder, with its own login, cooldown and parallel slot. Antigravity (`antigravity-cli`) has no accounts: its login is in the OS keyring and the CLI has no folder override, so conductor-ai cannot point it at a second login.
+Codex CLI (`codex-cli`), Claude Code (`claude-cli`) and Antigravity CLI (`antigravity-cli`) can each keep several signed-in accounts. The provider stays once in your role chains; conductor-ai expands it into one rotation entry per enabled account, in the order you set. An account is the same CLI pointed at its own config folder, with its own login, cooldown and parallel slot. Antigravity accounts are **Linux only** (its keyring is reached over D-Bus there); on other systems `conductor-ai accounts add antigravity-cli …` is refused.
 
 Accounts are per person, so they are stored in your global config (`~/.config/conductor-ai/config.json`), not in a project. This is what `accounts add`, `order` and `off` write:
 
@@ -154,7 +154,7 @@ Accounts are per person, so they are stored in your global config (`~/.config/co
 }
 ```
 
-`default` means your normal login (`~/.codex`, `~/.claude`): conductor-ai never signs it in or out and keeps no folder for it; the first account you add keeps it first. Turn it off if you want only the pool's accounts used. Other labels are 1–32 characters, lowercase letters, digits, `-` and `_`, starting with a letter or digit, and must be unique for that provider.
+`default` means your normal login (`~/.codex`, `~/.claude`, or agy's usual home and keyring): conductor-ai never signs it in or out and keeps no folder for it; the first account you add keeps it first. Turn it off if you want only the pool's accounts used. Other labels are 1–32 characters, lowercase letters, digits, `-` and `_`, starting with a letter or digit, and must be unique for that provider.
 
 Add an account, then sign in yourself in a terminal:
 
@@ -165,6 +165,8 @@ conductor-ai accounts login codex-cli work2 --device # Codex only: device authen
 ```
 
 conductor-ai prepares the account's folder, runs the CLI's own `login` command with the terminal attached (the CLI talks to you directly), then runs its own `status` command and saves only a yes/no. It never opens a browser for you.
+
+Antigravity has no `login` command: `conductor-ai accounts login antigravity-cli work2` opens agy's own screen instead — type `/login`, sign in with this account's Google account in your browser, then `/quit`. Its account is a separate home folder with the keyring disabled (D-Bus points nowhere), so agy falls back to a token file under that home: each login stays apart, and tools a worker runs there see an empty home. conductor-ai then runs agy's status command (`-p /usage`) and reads only its exit code. `--device` applies to Codex only.
 
 | Command | What it does |
 |---|---|
@@ -177,11 +179,11 @@ conductor-ai prepares the account's folder, runs the CLI's own `login` command w
 | `conductor-ai accounts order <provider> <label,label,…>` | Set the rotation order |
 | `conductor-ai accounts on\|off <provider> <label>` | Turn an account on or off without deleting it |
 
-When an account hits a quota, it cools down until the reset time the CLI reported (when it gives one; capped at 7 days), or for `settings.cooldownMinutes` (30 by default). The next enabled account of the same CLI takes over; only when those are used does the run move on to the next provider in the chain. `conductor-ai cooldown` lists each account's cooldown as `codex-cli [work2]` (and `codex-cli [work2]@<model>` for a model cooldown). Clear one with `conductor-ai cooldown --clear codex-cli#work2`, or a provider and all its accounts with `conductor-ai cooldown --clear codex-cli`.
+When an account hits a quota, it cools down until the reset time the CLI reported — durations (`resets in 2h`) are capped at 7 days, clock dates (`Try again at 3:05 PM.`, `resets Nov 24, 9am`, agy's `resets at 2026-11-23T09:00:00Z`) at 31 days — or for `settings.cooldownMinutes` (30 by default). The next enabled account of the same CLI takes over; only when those are used does the run move on to the next provider in the chain. `conductor-ai cooldown` lists each account's cooldown as `codex-cli [work2]` (and `codex-cli [work2]@<model>` for a model cooldown). Clear one with `conductor-ai cooldown --clear codex-cli#work2`, or a provider and all its accounts with `conductor-ai cooldown --clear codex-cli`.
 
-`conductor-ai ui` → Providers has an **Accounts** block under Codex CLI and Claude Code: rows show the label, state (ready, cooling down until a time, needs sign-in, off or not checked) and buttons for Check, Rename, Remove (with confirmation), reordering and on/off; **Add account** asks for a label. Since sign-in needs a terminal, each added account shows the exact `conductor-ai accounts login …` command with a copy button.
+`conductor-ai ui` → Providers marks each CLI that can hold accounts with a small **people badge** (the count appears once there is more than one), and has an **Accounts** block under Codex CLI, Claude Code and Antigravity CLI (Linux): rows show the label, state (ready, cooling down until a time, needs sign-in, off or not checked) and buttons for Check, Rename, Remove (with confirmation), reordering and on/off; **Add account** asks for a label. Since sign-in needs a terminal, an unchecked or needs-sign-in account has a **Sign in** button: it opens a dialog with the exact `conductor-ai accounts login …` command, a copy button and **Check now** (for Antigravity the dialog also shows the `/login` hint).
 
-conductor-ai never reads, copies or prints what a CLI keeps in an account folder (such as `auth.json` or `.credentials.json`), never sends it anywhere, and never automates a web sign-in. It creates the folder, uses the CLI's own commands and reads only their exit codes.
+conductor-ai never reads, copies or prints what a CLI keeps in an account folder (such as `auth.json`, `.credentials.json` or agy's token file), never sends it anywhere, and never automates a web sign-in. It creates the folder, uses the CLI's own commands and reads only their exit codes.
 
 ### Vendor terms
 
@@ -190,5 +192,6 @@ No vendor we checked explicitly allows rotating accounts to get past a usage lim
 - OpenAI — https://openai.com/policies/terms-of-use/
 - Anthropic — https://www.anthropic.com/legal/consumer-terms · https://www.anthropic.com/legal/aup
 - Claude Code — https://code.claude.com/docs/en/legal-and-compliance
+- Google — https://policies.google.com/terms · https://antigravity.google/terms (Antigravity's terms forbid accessing the service through third-party tools)
 
-The first `conductor-ai accounts add` prints a short version of this note once.
+The first `conductor-ai accounts add` prints a short version of this note once; when that first account is for Antigravity, it prints Google's links too.
