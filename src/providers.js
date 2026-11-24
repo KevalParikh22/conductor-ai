@@ -4,6 +4,7 @@ import os from 'node:os';
 import { CLI_PRESETS } from './presets.js';
 import { run, which, GLOBAL_DIR, SECRET_VARS, keyValue } from './util.js';
 import { DEFAULT_LINKS } from './worktree.js';
+import { accountEnv } from './accounts.js';
 
 /**
  * Result of one provider attempt.
@@ -67,11 +68,13 @@ export function withCommands(settings, commands) {
  * Environment for a CLI worker: the user's shell environment, minus the secrets conductor-ai loaded from
  * secrets.env / .conductor-ai/.env (except those this CLI needs, `passEnv`), plus the mode's own variables.
  */
-export function workerEnv(preset, mode, cwd) {
+export function workerEnv(preset, mode, cwd, acctEnv = { set: {}, drop: [] }) {
   const env = { ...process.env };
   const pass = new Set(preset.passEnv || []);
   for (const k of SECRET_VARS) if (!pass.has(k)) delete env[k];
+  for (const k of acctEnv.drop || []) delete env[k];
   for (const [k, v] of Object.entries(fillPaths(preset.modeEnv?.[mode] || {}, cwd))) env[k] = typeof v === 'string' ? v : JSON.stringify(v);
+  Object.assign(env, acctEnv.set || {});
   // PWD must match cwd: some CLIs (OpenCode) take the project folder from $PWD, not from their real working directory
   return { ...env, ...(preset.env || {}), PWD: cwd };
 }
@@ -143,12 +146,38 @@ export function opencodeSessionTokens(exported) {
 
 /**
  * Seconds until a rate limit resets, read from a provider's message, or 0. agy says "Resets in 118h3m13s"; others
- * say "try again in 30s", "retry after 120 seconds" or "resets in 5 minutes". Capped at 7 days.
+ * say "try again in 30s", "retry after 120 seconds" or "resets in 5 minutes". Durations cap at 7 days; dates at 31.
  */
-export function resetSeconds(text) {
+export function resetSeconds(text, now = new Date()) {
   const t = String(text || '');
   const m = t.match(/(?:resets?|try again|retry)(?: after| in)\s+((?:\d+(?:\.\d+)?\s*(?:h(?:ours?|rs?)?|m(?:in(?:ute)?s?)?|s(?:ec(?:ond)?s?)?)(?![a-z])\s*)+)/i);
-  if (!m) return 0;
+  if (!m) {
+    const iso = t.match(/resets?\s+at\s+(\d{4}-\d\d-\d\dT\d\d:\d\d(?::\d\d(?:\.\d+)?)?(?:Z|[+-]\d\d:\d\d))/i);
+    let target;
+    if (iso) target = Date.parse(iso[1]);
+    else {
+      // Codex: "Try again at Nov 24th, 2026 9:00 AM."; Claude: "resets Nov 24, 9am" (no year: the next such date)
+      const dateTime = t.match(/(?:try again at|resets?\s+)\s*(?:(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(?:(\d{4}),?\s+)?(?:at\s+)?)?(\d{1,2})(?::(\d\d))?\s*(AM|PM)\b/i);
+      if (!dateTime) return 0;
+      const [, month, day, year, hourText, minuteText = '0', ampm] = dateTime;
+      let hour = Number(hourText) % 12 + (ampm.toLowerCase() === 'pm' ? 12 : 0);
+      const minute = Number(minuteText);
+      if (minute > 59) return 0;
+      const mon = month ? 'janfebmaraprmayjunjulaugsepoctnovdec'.indexOf(month.slice(0, 3).toLowerCase()) / 3 : -1;
+      if (month && year) target = new Date(Number(year), mon, Number(day), hour, minute).getTime();
+      else if (month) {
+        target = new Date(now.getFullYear(), mon, Number(day), hour, minute).getTime();
+        if (target <= now.getTime()) target = new Date(now.getFullYear() + 1, mon, Number(day), hour, minute).getTime();
+      }
+      else {
+        const d = new Date(now);
+        target = new Date(d.getFullYear(), d.getMonth(), d.getDate(), hour, minute).getTime();
+        if (target <= now.getTime()) target += 86_400_000;
+      }
+    }
+    if (!Number.isFinite(target) || target <= now.getTime()) return 0;
+    return Math.min(Math.round((target - now.getTime()) / 1000), 31 * 86_400);
+  }
   let sec = 0;
   for (const [, n, u] of m[1].matchAll(/(\d+(?:\.\d+)?)\s*([hms])/gi)) sec += Number(n) * { h: 3600, m: 60, s: 1 }[u.toLowerCase()];
   return Math.min(Math.round(sec), 7 * 86_400);
@@ -161,7 +190,7 @@ export async function runCli(name, p, opts) {
   return res;
 }
 
-async function runCliOnce(name, p, { mode, prompt, cwd, timeoutMs, idleTimeoutMs = 0, runDir, quotaRe, allowCommands = [], signal, liveLog }) {
+async function runCliOnce(name, p, { mode, prompt, cwd, timeoutMs, idleTimeoutMs = 0, runDir, quotaRe, allowCommands = [], signal, liveLog, account }) {
   const preset = { ...(CLI_PRESETS[p.preset] || {}), ...p };
   if (!which(preset.bin)) return { ok: false, text: '', reason: 'not installed', log: '' };
   const promptFile = path.join(runDir, `${name}.prompt.md`);
@@ -186,7 +215,7 @@ async function runCliOnce(name, p, { mode, prompt, cwd, timeoutMs, idleTimeoutMs
     '-c', `model_providers.${gw}.wire_api="responses"`] : [];
   const args = expandArgs(template, { prompt: promptArg, promptFile, outFile, ioDir: path.dirname(promptFile), cwd: realCwd, model: p.model, sessionSettings, gatewayArgs,
     timeout: timeoutMs ? `${Math.max(1, Math.round(timeoutMs / 60_000))}m` : '0' }, preset.modelArgs || []);
-  const env = workerEnv(preset, mode, realCwd);
+  const env = workerEnv(preset, mode, realCwd, accountEnv(p.preset, account));
   const onData = liveLog ? (d) => { try { fs.appendFileSync(liveLog, d); } catch { /* the page just shows less */ } } : undefined;
   const r = await run(preset.bin, args, { cwd, input: preset.stdin ? prompt : undefined, timeoutMs, idleTimeoutMs, env, signal, onData });
   if (r.cancelled) return { ok: false, text: '', reason: 'cancelled', log: `$ ${preset.bin} (stopped: another attempt finished first)` };
@@ -230,6 +259,8 @@ async function runCliOnce(name, p, { mode, prompt, cwd, timeoutMs, idleTimeoutMs
   if (r.timedOut) return { ok: false, text, reason: r.idle ? `idle (no output for ${fmtMin(idleTimeoutMs)})` : `timeout (${fmtMin(timeoutMs)})`, log, ...extra };
   if (r.error) return { ok: false, text, reason: 'spawn error', log };
   if (r.code !== 0) {
+    if (account && /not logged in|authentication required|please (?:log|sign) in|401 unauthorized|invalid.*token|token.*expired/i.test(`${r.stdout}\n${r.stderr}`))
+      return { ok: false, text, reason: 'needs sign-in', log, ...extra };
     return { ok: false, text, reason: quotaRe.test(r.stdout + r.stderr) ? 'quota' : `exit ${r.code}`, log, ...extra };
   }
   if (text.trim().length < 20) return { ok: false, text, reason: 'empty output', log, ...extra };

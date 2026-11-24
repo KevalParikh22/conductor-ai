@@ -11,7 +11,9 @@ export const READ_ONLY_COMMANDS = ['git diff', 'git log', 'git show', 'git statu
 // denying all of it locked agy out of the very files it was asked to edit.
 const SECRET_FILE_RULES = ['read_file({cwd}/.env)', 'read_file({cwd}/.conductor-ai/.env)', 'read_file({cwd}/auth.json)',
   'read_file({cwd}/app/etc/env.php)', 'read_file({conductorHome}/secrets.env)', 'read_file({conductorHome}/config.json)',
-  'read_file({conductorHome}/state.json)', 'read_file({conductorHome}/usage.jsonl)'];
+  'read_file({conductorHome}/state.json)', 'read_file({conductorHome}/usage.jsonl)',
+  // each account folder holds that account's login (src/accounts.js)
+  'read_file({conductorHome}/accounts)'];
 
 // Build, lint and test commands a write worker may run without asking (inside its sandbox: no network). Headless
 // runs can't answer a permission prompt, so an unlisted command is denied and the task fails. The project's
@@ -393,7 +395,7 @@ export const DEFAULT_SETTINGS = {
   maxReportBytes: 8000, // report.md the controller reads; the full output is kept in report.full.md
   smartSelect: true, // reorder each chain for the cheapest capable provider (see src/selector.js)
   maxContextBytes: 60000,
-  quotaPattern: 'quota|rate.?limit|usage limit|RESOURCE_EXHAUSTED|too many requests|\\b429\\b|limit reached|exceeded your|insufficient (credit|balance)|try again (later|in )',
+  quotaPattern: 'quota|rate.?limit|usage limit|RESOURCE_EXHAUSTED|too many requests|\\b429\\b|limit reached|exceeded your|insufficient (credit|balance)|try again (later|in )|hit your .{0,24}limit|out of usage credits|exhausted your quota|usage_limit_reached',
 };
 
 export const DEFAULT_CONFIG = {

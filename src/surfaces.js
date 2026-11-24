@@ -27,6 +27,7 @@ export const ACTIONS = [
   { id: 'doctor', title: 'Check installs, keys, live answers and permissions', cli: 'conductor-ai doctor [--live]', mcp: 'conductor_ai_doctor', ui: 'POST /api/test' },
   { id: 'guard', title: "Block the controller's commit while verify fails", cli: 'conductor-ai guard [on|off|status]', mcp: { na: "a controller must not be able to switch off its own guard" }, ui: 'GET /api/guard' },
   { id: 'providers', title: 'Add a provider from the catalog', cli: 'conductor-ai add <id> · conductor-ai providers', mcp: { na: 'needs an API key: never through a model' }, ui: 'POST /api/providers/add' },
+  { id: 'accounts', title: 'Several signed-in accounts for one CLI (Codex, Claude Code): add, sign in, check, order', cli: 'conductor-ai accounts [add|login|check|rename|rm|order|on|off]', mcp: { na: 'accounts are your own logins: conductor_ai_status shows them, only you change them' }, ui: 'GET /api/accounts' },
   { id: 'keys', title: 'Set or remove API keys', cli: 'conductor-ai keys', mcp: { na: 'secrets never pass through a model' }, ui: 'PUT /api/secrets' },
   { id: 'models', title: "A provider's current models", cli: 'conductor-ai models <provider>', mcp: { na: 'part of setup, not of a task' }, ui: 'POST /api/provider-models' },
   { id: 'local', title: 'Find local model servers', cli: 'conductor-ai local', mcp: { na: 'part of setup, not of a task' }, ui: 'GET /api/local' },

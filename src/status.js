@@ -5,6 +5,7 @@ import * as git from './git.js';
 import { detectVerify } from './verify.js';
 import { untilText } from './util.js';
 import { allControllers } from './controllers.js';
+import { accountStatus } from './accounts.js';
 
 /** Structured status, used by the CLI, the MCP server and the UI. */
 export function statusData(cfg) {
@@ -17,6 +18,7 @@ export function statusData(cfg) {
       optional, // on by default, no key yet: not broken
       cooling: c ? { until: c.until, reason: c.reason } : null, // paused by a rate limit: not broken either
       name, type: p.type, preset: p.preset, model: p.model || '', enabled: !!p.enabled,
+      accounts: accountStatus(cfg, name),
       location: providerLocation(p), kind: providerKind(p), ready: r.ready && !c, reason: c ? `cooling down until ${untilText(c.until)} (${c.reason}): conductor-ai cooldown --clear ${name}` : optional ? `optional: add ${p.apiKeyEnv} to use it` : r.reason,
       label: p.type === 'cli' ? (CLI_PRESETS[p.preset]?.label || p.bin) : name, notes: p.notes || '',
     };
@@ -47,6 +49,10 @@ export function statusReport(cfg) {
   L.push('', 'providers:');
   for (const p of d.providers.filter((x) => x.enabled)) {
     L.push(`  ${mark(p)} ${p.name.padEnd(16)} ${p.location.padEnd(12)} ${(p.model || 'default').padEnd(24)} ${p.reason}`);
+    for (const a of p.accounts) {
+      const state = a.state === 'unchecked' ? 'not checked' : a.state === 'needs-sign-in' ? 'needs sign-in' : a.state === 'disabled' ? 'off' : a.state === 'cooling' ? `cooling down until ${untilText(a.until)}` : 'ready';
+      L.push(`    ${p.name} [${a.label}] ${state}`);
+    }
   }
   const off = d.providers.filter((x) => !x.enabled).map((x) => x.name);
   if (off.length) L.push(`  (disabled: ${off.join(', ')})`);

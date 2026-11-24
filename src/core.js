@@ -24,7 +24,7 @@ import { compactDiff } from './diffview.js';
 import { snapshot as snapshotLocal } from './localfiles.js';
 import { skillsForTask } from './skills.js';
 import { createWorktree, openWorktree, commitWorktree, removeWorktree, readWorktreeMeta, writeWorktreeMeta } from './worktree.js';
-import { writeJSON, timestamp, rel, untilText, run as runCmd } from './util.js';
+import { writeJSON, timestamp, rel, untilText, run as runCmd, GLOBAL_DIR, readJSON } from './util.js';
 import { stepText } from './progress.js';
 import { budgetBlock, estimateCost, recordUsage, recordSaving } from './usage.js';
 import { nextStep } from './nextsteps.js';
@@ -33,6 +33,7 @@ import { getCooldowns, setCooldown, modelKey, withSlot } from './cooldowns.js';
 import { outcome, EXIT_UNVERIFIED, EXIT_WAITING, unverifiedBlocks } from './outcome.js';
 import { isProtected, trimReport, parseFileBlocks, applyFileBlocks, checkEvidence, writeRefusal } from './files.js';
 import { localWindow, estimateTokens } from './local.js';
+import { listAccounts, markSignedIn } from './accounts.js';
 // moved out unchanged (V12); re-exported so every importer of core.js keeps working
 export { extractTask, extractSection, openQuestions, taskFiles, expandBraces, notesForFiles, parseDuration } from './plan.js';
 export { getCooldowns, setCooldown, clearCooldowns, withSlot } from './cooldowns.js';
@@ -117,17 +118,27 @@ export function workerTimeout(p, kind, settings, { etaMs = 0, timeoutMs = 0 } = 
 export function resolveChain(cfg, role, { provider, chain } = {}) {
   let names = chain?.length ? chain : (cfg.roles[role] || []);
   if (provider) names = [provider, ...names.filter((n) => n !== provider)];
+  // a chain rebuilt from an earlier run's names lists a provider once per account: expand each provider once
+  names = [...new Set(names)];
   const cooldowns = getCooldowns();
-  return names.map((name) => {
+  const saved = readJSON(path.join(GLOBAL_DIR, 'state.json'), {}).accounts || {};
+  return names.flatMap((name) => {
     const p = cfg.providers[name];
-    if (!p) return { name, skip: 'unknown provider' };
+    if (!p) return [{ name, key: name, skip: 'unknown provider' }];
     const r = providerReadiness(name, p);
-    if (!r.ready) return { name, p, skip: r.reason };
-    const c = cooldowns[name];
-    if (c) return { name, p, skip: `cooling down until ${untilText(c.until)} (${c.reason})` };
-    const over = budgetBlock(name, p, cfg.settings);
-    if (over) return { name, p, skip: over };
-    return { name, p };
+    const accounts = listAccounts(cfg, name).filter((a) => a.enabled);
+    const entries = accounts.length ? accounts : [{ key: name }];
+    return entries.map((account) => {
+      const key = account.key || name;
+      if (!r.ready) return { name, p, account: account.label ? account : undefined, key, skip: r.reason };
+      const c = cooldowns[key];
+      if (c) return { name, p, account: account.label ? account : undefined, key, skip: `${account.label ? 'account ' : ''}cooling down until ${untilText(c.until)} (${c.reason})` };
+      if (account.label && saved[key]?.signedIn === false)
+        return { name, p, account, key, skip: `needs sign-in: conductor-ai accounts login ${name} ${account.label}` };
+      const over = budgetBlock(name, p, cfg.settings);
+      if (over) return { name, p, account: account.label ? account : undefined, key, skip: over };
+      return { name, p, account: account.label ? account : undefined, key };
+    });
   });
 }
 
@@ -235,7 +246,8 @@ async function escalateIfNeeded(cfg, opts, first) {
   let s = first;
   const rounds = cfg.settings?.escalateRounds ?? 1;
   for (let round = 1; round <= rounds && shouldEscalate(s, opts, cfg.settings || {}); round++) {
-    const rest = (s.chain || []).slice((s.chain || []).indexOf(s.winner) + 1);
+    // another account of the winner's own CLI is the same model: escalate to a different provider
+    const rest = (s.chain || []).slice((s.chain || []).indexOf(s.winner) + 1).filter((n) => n !== s.winner);
     if (!rest.length) break;
     const prev = s;
     const note = `${opts.note ? `${opts.note}\n\n` : ''}A previous worker (${prev.winner}) did this task, and its changes are already in your working copy. They fail these checks:\n${prev.fixBrief}\nKeep what is right, fix what fails, and stay inside the task.`;
@@ -490,7 +502,8 @@ async function dispatchOnce(cfg, opts) {
   // Q7: a provider that failed this kind of work here twice goes to the back (never when the chain was given explicitly)
   if (mode === 'write' && !['chain', 'provider'].includes(picked.how) && cfg.settings?.lessons !== false) {
     const d = demoteByLessons(root, picked.chain.map((c) => c.name), { role, files: [...(opts.files || []), ...taskFiles(section)], after: settings.demoteAfter ?? 2 });
-    if (d.demoted.length) { picked.chain = d.chain.map((n) => picked.chain.find((c) => c.name === n)); summary.lessonsDemoted = d.demoted; }
+    // a provider with accounts has one entry per account: keep all of them, in their order
+    if (d.demoted.length) { picked.chain = [...new Set(d.chain)].flatMap((n) => picked.chain.filter((c) => c.name === n)); summary.lessonsDemoted = d.demoted; }
   }
   const chain = picked.chain;
   summary.chain = chain.filter((c) => !c.skip).map((c) => c.name);
@@ -543,7 +556,7 @@ async function dispatchOnce(cfg, opts) {
 
   providers: for (const c of chain) {
     if (opts.signal?.aborted) { summary.cancelled = true; break; } // V9: another attempt in the race already passed
-    if (c.skip) { summary.attempts.push({ provider: c.name, ok: false, reason: c.skip, skipped: true, next: nextStep(c.skip, { name: c.name, p: c.p }) }); emit({ type: 'skip', provider: c.name, reason: c.skip }); continue; }
+    if (c.skip) { summary.attempts.push({ provider: c.name, ...(c.account ? { account: c.account.label } : {}), ok: false, reason: c.skip, skipped: true, next: nextStep(c.skip, { name: c.name, p: c.p, account: c.account?.label }) }); emit({ type: 'skip', provider: c.name, reason: c.skip }); continue; }
     const kind = providerKind(c.p);
     if (mode === 'read' && kind === 'agent' && !readOnlyEnforced(c.p)) {
       summary.warnings.push(`${c.name} cannot be held to read-only (only the prompt asks it not to edit). Check git status after this run`);
@@ -561,19 +574,21 @@ async function dispatchOnce(cfg, opts) {
       ? `${stable}\n---\n# TASK (role: ${role})\n${chatBody}${skillsChat.text ? `\n${skillsChat.text}` : ''}${extra}${recite}${mode === 'write' ? CHAT_CLOSE : ''}`
       : agentPrompt + (mode === 'write' ? packFor('agent') : '') + extra + recite;
     // the provider's model, then its fallback models: a model that is rate-limited is skipped until its cooldown ends
-    let { models, auto } = await modelsToTry(c.name, c.p, kind);
+    let { models, auto } = await modelsToTry(c.key || c.name, c.p, kind);
     let timeouts = 0;
     const resets = []; // V8: quota reset times seen on this provider's models in this run
     // families whose quota ran out in this run ('' = the CLI's default model, so its default family)
     const quotaFams = new Set();
     const famOf = (m) => modelFamily(m) || c.p.defaultFamily || CLI_PRESETS[c.p.preset]?.defaultFamily || '';
     // its own model is cooling down, but it can list others (agy: another model family may still have quota)
-    if (!models.length && auto && !getCooldowns()[c.name]) { models = await auto(); auto = null; }
+    if (!models.length && auto && !getCooldowns()[c.key || c.name]) { models = await auto(); auto = null; }
     if (!models.length) {
       const reason = 'every model is cooling down';
       summary.attempts.push({ provider: c.name, ok: false, reason, skipped: true }); emit({ type: 'skip', provider: c.name, reason });
       continue;
     }
+    // two accounts of one provider each keep their own log (codex-cli.work2.log), so a quota hit stays readable
+    const logStem = c.account && c.account.label !== 'default' ? `${c.name}.${c.account.label}` : c.name;
     for (let mi = 0; mi < models.length; mi++) {
       if (opts.signal?.aborted) { summary.cancelled = true; break providers; }
       const model = models[mi];
@@ -588,12 +603,12 @@ async function dispatchOnce(cfg, opts) {
       const tooBig = win && promptTokens + (p.maxTokens || 2048) > win.window;
       // one call at a time per local server (it shares one machine); a provider's own maxParallel wins
       // a CLI worker's output as it arrives, for the running run's page (src/runs.js runDetail)
-      const liveLog = path.join(runDir, `${c.name}${mi ? `.${mi + 1}` : ''}.live.log`);
-      const slotKey = local ? `local:${(() => { try { return new URL(c.p.baseUrl).host; } catch { return c.name; } })()}` : c.name;
+      const liveLog = path.join(runDir, `${logStem}${mi ? `.${mi + 1}` : ''}.live.log`);
+      const slotKey = local ? `local:${(() => { try { return new URL(c.p.baseUrl).host; } catch { return c.name; } })()}` : (c.key || c.name);
       let res = kind === 'chat' && !p.model
         ? { ok: false, text: '', reason: 'no model set, and its model list could not be fetched', log: '' }
         : tooBig ? { ok: false, text: '', reason: `context too small: the prompt needs ~${promptTokens + (p.maxTokens || 2048)} tokens with the answer, ${p.model} runs with ${win.window} (${win.server})`, log: '' }
-        : await withSlot(slotKey, c.p.maxParallel ?? CLI_PRESETS[c.p.preset]?.maxParallel ?? (local ? 1 : undefined), () => runProvider(c.name, p, { mode, prompt: userPrompt, stableChars: stable.length, system: chatSystem, cwd: work, runDir: ioDir, quotaRe,
+        : await withSlot(slotKey, c.p.maxParallel ?? CLI_PRESETS[c.p.preset]?.maxParallel ?? (local ? 1 : undefined), () => runProvider(c.name, p, { mode, prompt: userPrompt, stableChars: stable.length, system: chatSystem, cwd: work, runDir: ioDir, quotaRe, account: c.account,
           allowCommands: buildCommands(settings), ...limitFor(c.p, kind), signal: opts.signal, manualAnswer: opts.manualAnswer, liveLog }), () => emit({ type: 'wait', provider: c.name }));
       if (p !== c.p && p.model && !res.model) res.model = p.model;
       // V13: the server counted far fewer prompt tokens than were sent: it cut the prompt (any server, window known or not)
@@ -605,7 +620,7 @@ async function dispatchOnce(cfg, opts) {
       if (putBack.length) summary.warnings.push(`${c.name} changed conductor-ai's own files, which workers must not edit. conductor-ai put them back: ${putBack.join(', ')}`);
       if (tampered.length) summary.warnings.push(`${c.name} changed git hooks or config, which can run programs. conductor-ai put them back: ${tampered.join(', ')}`);
       if (headBefore && git.head(work) !== headBefore) summary.warnings.push(`${c.name} made git commits itself (HEAD moved from ${headBefore.slice(0, 8)}). Check them with git log before merging`);
-      fs.writeFileSync(path.join(runDir, `${c.name}${mi ? `.${mi + 1}` : ''}.log`), res.log || '');
+      fs.writeFileSync(path.join(runDir, `${logStem}${mi ? `.${mi + 1}` : ''}.log`), res.log || '');
       fs.rmSync(liveLog, { force: true }); // the full log above replaces it
 
       if (res.ok && kind === 'chat' && mode === 'write') {
@@ -618,7 +633,7 @@ async function dispatchOnce(cfg, opts) {
             history: [{ role: 'assistant', content: res.text.slice(0, 8000) }, { role: 'user', content: failedEdits.length ? chatEditRepair(failedEdits) : CHAT_REPAIR }] });
           const sum = (a, b) => (a || b ? Object.fromEntries([...new Set([...Object.keys(a || {}), ...Object.keys(b || {})])].map((k) => [k, (a?.[k] || 0) + (b?.[k] || 0)])) : undefined);
           res = { ...(again.ok ? again : { ...res, text: res.text }), tokens: sum(res.tokens, again.tokens), log: `${res.log}\n\n==== repair turn ====\n${again.log || ''}`, repaired: true };
-          fs.writeFileSync(path.join(runDir, `${c.name}${mi ? `.${mi + 1}` : ''}.log`), res.log || '');
+          fs.writeFileSync(path.join(runDir, `${logStem}${mi ? `.${mi + 1}` : ''}.log`), res.log || '');
           if (again.ok) {
             const r2 = applyFileBlocks(work, parseFileBlocks(again.text), protectedExtra);
             applied = [...new Set([...applied, ...r2.applied])];
@@ -652,6 +667,7 @@ async function dispatchOnce(cfg, opts) {
         }
       }
       const attempt = { provider: c.name, kind, ok: res.ok, reason: res.ok ? 'ok' : res.reason, seconds: Math.round((Date.now() - t0) / 100) / 10 };
+      if (c.account) attempt.account = c.account.label;
       if (p.model) attempt.model = p.model;
       if (res.repaired) attempt.repaired = true;
       if (res.edits) attempt.edits = { files: res.edits.length, hunks: res.edits.reduce((t, e) => t + e.hunks, 0), savedChars: res.edits.reduce((t, e) => t + e.savedChars, 0) };
@@ -679,7 +695,7 @@ async function dispatchOnce(cfg, opts) {
       }
       // a call stopped because another attempt won the race says nothing about this provider's speed or reliability
       if (res.reason !== 'cancelled' && c.p.type !== 'manual') {
-        const entry = { provider: c.name, model: res.model || p.model || null, kind: kind === 'agent' ? 'agent' : 'chat', role, size: runSize, project: path.basename(root),
+        const entry = { provider: c.name, account: c.account?.label, model: res.model || p.model || null, kind: kind === 'agent' ? 'agent' : 'chat', role, size: runSize, project: path.basename(root),
           ok: res.ok, reason: attempt.reason, seconds: attempt.seconds, tokens: res.tokens || null, cost: attempt.cost ?? null };
         // a write worker's reply is only a success once its work passes the checks: recorded after them (below)
         if (res.ok && mode === 'write') pendingUsage = entry; else recordUsage(entry);
@@ -689,17 +705,24 @@ async function dispatchOnce(cfg, opts) {
 
       if (res.ok) {
         summary.attempts.push(attempt);
-        summary.winner = c.name; summary.model = res.model || p.model || '(default)';
+        summary.winner = c.name; summary.account = c.account?.label; summary.model = res.model || p.model || '(default)';
         winnerText = res.text;
         emit({ type: 'ok', provider: c.name });
         break providers;
       }
       const quota = res.reason === 'quota';
+      if (res.reason === 'needs sign-in' && c.account) {
+        markSignedIn(c.key, false);
+        attempt.next = nextStep(attempt.reason, { name: c.name, account: c.account.label });
+        summary.attempts.push(attempt);
+        emit({ type: 'fail', provider: c.name, reason: attempt.reason });
+        continue providers;
+      }
       // another model can help when this one is rate-limited, or (for APIs) when it stalled or answered nothing
       const timedOut = /^timeout/.test(res.reason || '');
       if (timedOut) timeouts++;
       // a free route that hung twice is cooled down, so the next call (the next task, a review) doesn't wait on it again
-      if (timedOut && timeouts === 2 && kind === 'chat' && settings.hangCooldownMin !== 0) setCooldown(c.name, settings.hangCooldownMin ?? 15, 'timed out twice');
+      if (timedOut && timeouts === 2 && kind === 'chat' && settings.hangCooldownMin !== 0) setCooldown(c.key || c.name, settings.hangCooldownMin ?? 15, 'timed out twice');
       // one more model after a timeout; a second timeout means the provider itself is hanging, so move on
       // V8: two models whose quotas reset at the same moment share one quota (the account's): stop trying models
       // …but only once no family is left untried: agy's Claude and GPT-OSS models share one quota and reset together,
@@ -715,12 +738,12 @@ async function dispatchOnce(cfg, opts) {
       const tryNext = nextModel !== undefined && modelProblem;
       if (quota) {
         const mins = res.retryAfterSec ? Math.max(1, Math.ceil(res.retryAfterSec / 60)) : (settings.cooldownMinutes || 30);
-        if (models.length > 1 || mi) setCooldown(modelKey(c.name, p.model), mins, 'rate limited');
+        if (models.length > 1 || mi) setCooldown(modelKey(c.key || c.name, p.model), mins, 'rate limited');
         // the provider itself cools down only when it has no other model left to try
-        if (!tryNext) setCooldown(c.name, mins, accountWide ? 'quota used up for the whole account' : 'rate limited');
+        if (!tryNext) setCooldown(c.key || c.name, mins, accountWide ? 'quota used up for the whole account' : 'rate limited');
         attempt.reason += ` (cooldown ${mins}m)`;
       }
-      attempt.next = nextStep(attempt.reason, { name: c.name, p: c.p, log: rel(root, path.join(runDir, `${c.name}${mi ? `.${mi + 1}` : ''}.log`)) });
+      attempt.next = nextStep(attempt.reason, { name: c.name, p: c.p, log: rel(root, path.join(runDir, `${logStem}${mi ? `.${mi + 1}` : ''}.log`)) });
       if (mode === 'write' && (useWorktree || !opts.allowDirty) && git.isDirty(work)) {
         if (git.stashPush(work, `conductor-ai: failed attempt by ${c.name} ${opts.taskId || role} ${timestamp()}`)) attempt.stashed = true;
       }
