@@ -59,12 +59,12 @@ test('bad additions are refused with a plain message', () => {
   assert.throws(() => addAccount('codex-cli', '../x'), (e) => e instanceof UsageError && /lowercase letters, digits/.test(e.message));
   assert.throws(() => addAccount('nope', 'x'), (e) => e instanceof UsageError && /unknown provider/.test(e.message));
   assert.throws(() => addAccount('opencode', 'x'), (e) => e instanceof UsageError && /cannot have accounts/.test(e.message));
-  assert.throws(() => addAccount('antigravity-cli', '../x'), /invalid account label/);
+  // off Linux, Antigravity accounts are refused before the label is looked at (CI runs macOS and Windows too)
+  assert.throws(() => addAccount('antigravity-cli', '../x'), process.platform === 'linux' ? /invalid account label/ : /Linux only/);
 });
 
-test('Antigravity accounts are isolated under HOME and checked through agy usage status', async () => {
+test('Antigravity accounts are isolated under HOME and checked through agy usage status', { skip: process.platform !== 'linux' && 'Antigravity accounts are Linux only' }, async () => {
   reset();
-  if (process.platform !== 'linux') return;
   addAccount('antigravity-cli', 'g2');
   assert.deepEqual(labels('antigravity-cli'), ['default', 'g2']);
   assert.ok(fs.existsSync(accountDir('antigravity-cli', 'g2')));

@@ -33,9 +33,14 @@ test('add, then list: the new account is not checked yet, and the first add show
   assert.match(list.stdout, /default\s+not checked/);
 });
 
-test('first Antigravity account add includes Google terms', () => {
+test('first Antigravity account add includes Google terms (Linux), and is refused elsewhere', () => {
   reset();
   const r = cli(['accounts', 'add', 'antigravity-cli', 'g2']);
+  if (process.platform !== 'linux') {
+    assert.equal(r.status, 2);
+    assert.match(r.stderr, /Linux only/);
+    return;
+  }
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /https:\/\/antigravity\.google\/terms/);
 });
