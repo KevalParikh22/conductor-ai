@@ -64,6 +64,14 @@ test('a batch when piped: the plain lines batch always printed', () => {
   assert.equal(s.out, 'conductor-ai [T1]: starting (first choice: good)\nconductor-ai [T1]: trying good…\nconductor-ai [T1]: done\n');
 });
 
+test('a batch when piped names a model passed over because it is cooling down', () => {
+  const s = stream(false);
+  const b = batchProgress(['T1'], { stream: s });
+  b.event({ task: 'T1', type: 'model-skip', provider: 'antigravity-cli', model: 'claude-sonnet-4-6', until: '11:51 PM', reason: 'rate limited', next: 'gemini-3.8-flash-high' });
+  b.stop();
+  assert.equal(s.out, 'conductor-ai [T1]: antigravity-cli: claude-sonnet-4-6 is cooling down until 11:51 PM (rate limited), using gemini-3.8-flash-high instead\n');
+});
+
 test('a batch race: the row names the worker that won, not the one that started last, and ignores the loser', () => {
   const s = stream(true); let t = 0;
   const b = batchProgress(['T1'], { stream: s, now: () => t });

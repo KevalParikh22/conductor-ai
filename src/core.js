@@ -93,7 +93,10 @@ export async function modelsToTry(name, p, kind) {
       ? async () => (await cliFallbacks(name, { ...preset, ...p }, { except: first, defaultFamily: p.defaultFamily ?? preset.defaultFamily, run: runCmd }))
         .filter((m) => !cooling[modelKey(name, m)] && !all.includes(m))
       : null;
-  return { models: all.length > 1 || auto ? left : all, auto };
+  const models = all.length > 1 || auto ? left : all;
+  // the models left out because they are cooling down, so the run can say why it isn't using them
+  const skipped = all.filter((m) => !models.includes(m)).map((m) => ({ model: m, ...cooling[modelKey(name, m)] }));
+  return { models, auto, skipped };
 }
 
 /**
@@ -574,7 +577,7 @@ async function dispatchOnce(cfg, opts) {
       ? `${stable}\n---\n# TASK (role: ${role})\n${chatBody}${skillsChat.text ? `\n${skillsChat.text}` : ''}${extra}${recite}${mode === 'write' ? CHAT_CLOSE : ''}`
       : agentPrompt + (mode === 'write' ? packFor('agent') : '') + extra + recite;
     // the provider's model, then its fallback models: a model that is rate-limited is skipped until its cooldown ends
-    let { models, auto } = await modelsToTry(c.key || c.name, c.p, kind);
+    let { models, auto, skipped: coolingModels } = await modelsToTry(c.key || c.name, c.p, kind);
     let timeouts = 0;
     const resets = []; // V8: quota reset times seen on this provider's models in this run
     // families whose quota ran out in this run ('' = the CLI's default model, so its default family)
@@ -586,6 +589,10 @@ async function dispatchOnce(cfg, opts) {
       const reason = 'every model is cooling down';
       summary.attempts.push({ provider: c.name, ok: false, reason, skipped: true }); emit({ type: 'skip', provider: c.name, reason });
       continue;
+    }
+    // a rate-limited model was passed over: say so, or the switch to another model is invisible
+    for (const m of coolingModels || []) {
+      emit({ type: 'model-skip', provider: c.name, model: m.model || 'its default model', until: m.until ? untilText(m.until) : '', reason: m.reason || 'rate limited', next: models[0] || 'its default model' });
     }
     // two accounts of one provider each keep their own log (codex-cli.work2.log), so a quota hit stays readable
     const logStem = c.account && c.account.label !== 'default' ? `${c.name}.${c.account.label}` : c.name;

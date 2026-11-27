@@ -127,3 +127,31 @@ test('permission preflight: an agent that can run npm test passes; one that is r
   assert.deepEqual(no.denied, ['command']);
   assert.match(no.reason, /^refused: command/);
 });
+
+test('a model passed over because it is cooling down is named, with the model used instead', async () => {
+  // found 2026-11-27 recording the quota-fallback clip: agy's claude-sonnet-4-6 was cooling down, the run quietly used
+  // another family, and nothing on screen said why
+  fakeBins({ 'agy-sonnet-out': fakeAgy([]) });
+  clearCooldowns();
+  const { setCooldown, modelKey } = await import('../src/cooldowns.js');
+  setCooldown(modelKey('agy', 'claude-sonnet-4-6'), 60, 'rate limited');
+  const { dir } = makeRepo();
+  const events = [];
+  const s = await dispatch(cfgWith(dir, { agy: { ...agy('agy-sonnet-out'), model: 'claude-sonnet-4-6' } }), { role: 'ask', task: 'q', chain: ['agy'], onEvent: (e) => events.push(e) });
+  assert.equal(s.winner, 'agy');
+  const skip = events.find((e) => e.type === 'model-skip');
+  assert.ok(skip, 'a model-skip event');
+  assert.equal(skip.model, 'claude-sonnet-4-6');
+  assert.equal(skip.reason, 'rate limited');
+  assert.equal(skip.next, s.model);
+  assert.notEqual(s.model, 'claude-sonnet-4-6');
+});
+
+test('no model-skip event when nothing is cooling down', async () => {
+  fakeBins({ 'agy-fine': fakeAgy([]) });
+  clearCooldowns();
+  const { dir } = makeRepo();
+  const events = [];
+  await dispatch(cfgWith(dir, { agy: { ...agy('agy-fine'), model: 'claude-sonnet-4-6' } }), { role: 'ask', task: 'q', chain: ['agy'], onEvent: (e) => events.push(e) });
+  assert.ok(!events.some((e) => e.type === 'model-skip'));
+});
